@@ -12,6 +12,9 @@ env:
   NEXT_PUBLIC_APP_URL: http://localhost:3000
   NEXT_PUBLIC_APP_NAME: LiveWell
   AI_PROVIDER: mock
+  DATABASE_URL: postgresql://test:test@localhost:5432/test
+  NEXTAUTH_SECRET: test-secret-32-chars-minimum-here
+  AUTH_TRUST_HOST: 'true'
 
 jobs:
   quality:
@@ -42,7 +45,3 @@ jobs:
 
       - name: Build (includes typecheck)
         run: npm run build
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/test
-          NEXTAUTH_SECRET: test-secret-32-chars-minimum-here
-          AUTH_TRUST_HOST: 'true'
