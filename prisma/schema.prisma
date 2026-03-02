@@ -15,8 +15,44 @@ model User {
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
   conversations Conversation[]
+  profile       UserProfile?
 
   @@map("users")
+}
+
+model UserProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Personal
+  birthDate   DateTime? @map("birth_date")
+  gender      String?   // 'M' | 'F' | 'altro'
+  height      Float?    // cm
+  weight      Float?    // kg
+
+  // Health
+  health      Json?     // { conditions, allergies, medications, bloodType, notes }
+
+  // Nutrition
+  nutrition   Json?     // { dietType, intolerances, preferences, caloricGoal, mealsPerDay }
+
+  // Training
+  training    Json?     // { fitnessLevel, equipment, weeklyDays, injuries, sport }
+
+  // Mindfulness
+  mindfulness Json?     // { stressLevel, meditationExp, techniques, sleepHours }
+
+  // Goals
+  goals       Json?     // { shortTerm, mediumTerm, longTerm }
+
+  // Settings
+  settings    Json?     // { notifications, theme, language }
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_profiles")
 }
 
 model Conversation {
