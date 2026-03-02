@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { orchestrate, buildContext } from '@/lib/ai'
+import type { AIMessage } from '@/lib/ai'
 
 const attachmentSchema = z.object({
   url: z.string(),
@@ -77,33 +79,49 @@ export async function POST(request: Request): Promise<Response> {
     },
   })
 
+  // Load conversation history for context
+  const history = await prisma.message.findMany({
+    where: { conversationId: convId },
+    orderBy: { createdAt: 'asc' },
+    select: { role: true, content: true },
+    take: 20, // Last 20 messages for context window
+  })
+
+  const aiMessages: AIMessage[] = history.map((m) => ({
+    role: m.role as 'user' | 'assistant',
+    content: m.content,
+  }))
+
+  // Build conversation context
+  const context = buildContext(aiMessages, userId)
+
+  // Map attachments for orchestrator
+  const aiAttachments = attachments?.map((a) => ({
+    type: a.type,
+    url: a.url,
+    fileName: a.fileName,
+    barcodeValue: a.barcodeValue,
+  }))
+
+  // Run orchestrator
+  const aiResponse = await orchestrate(message, context, aiAttachments)
+
   // SSE stream response
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {
-      // Send conversation ID first
+      // Send conversation metadata
       controller.enqueue(
-        encoder.encode(`data: ${JSON.stringify({ type: 'meta', conversationId: convId })}\n\n`),
+        encoder.encode(`data: ${JSON.stringify({
+          type: 'meta',
+          conversationId: convId,
+          specialist: aiResponse.specialist,
+          audit: aiResponse.audit,
+        })}\n\n`),
       )
 
-      // Build context from attachments
-      let context = ''
-      if (attachments && attachments.length > 0) {
-        for (const att of attachments) {
-          if (att.type === 'barcode' && att.barcodeValue) {
-            context += `[L'utente ha scansionato un codice a barre: ${att.barcodeValue}] `
-          } else if (att.type === 'image') {
-            context += `[L'utente ha allegato un'immagine: ${att.fileName}] `
-          }
-        }
-      }
-
-      // Mock AI response — replaced by real Gemini orchestrator in STEP 7+8
-      const mockReply = context
-        ? `Ho ricevuto il tuo messaggio con allegati. ${context}Il team di specialisti AI analizzerà questi dati presto (STEP 7-8).`
-        : 'Ho ricevuto il tuo messaggio. Il team di specialisti AI sarà collegato presto (STEP 7-8). Per ora, posso confermare che il sistema di chat funziona correttamente!'
-
-      const words = mockReply.split(' ')
+      // Stream response word by word
+      const words = aiResponse.content.split(' ')
       let accumulated = ''
 
       for (const word of words) {
@@ -111,7 +129,7 @@ export async function POST(request: Request): Promise<Response> {
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ type: 'delta', content: word + ' ' })}\n\n`),
         )
-        await new Promise((r) => setTimeout(r, 50))
+        await new Promise((r) => setTimeout(r, 30))
       }
 
       // Save assistant message to DB
