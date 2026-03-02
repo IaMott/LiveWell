@@ -20,9 +20,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@auth/prisma-adapter": "^2.11.1",
-    "@prisma/adapter-pg": "^7.4.2",
-    "@prisma/client": "^7.4.2",
+    "@prisma/client": "^5.22.0",
     "@tailwindcss/postcss": "^4.2.1",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
@@ -55,7 +53,7 @@
     "jsdom": "^26.0.0",
     "lint-staged": "^15.4.3",
     "prettier": "^3.5.2",
-    "prisma": "^7.4.2",
+    "prisma": "^5.22.0",
     "typescript": "^5",
     "vitest": "^3.0.7"
   },
