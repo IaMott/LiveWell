@@ -1,5 +1,5 @@
 import { ChatContainer } from '@/components/chat/ChatContainer'
 
-export default function RootPage() {
+export default function HomePage() {
   return <ChatContainer />
 }

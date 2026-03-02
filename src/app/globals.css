@@ -107,3 +107,14 @@ body {
   border-radius: 3px;
   opacity: 0.3;
 }
+
+/* ── Hidden scrollbar utility ─────────────────────────── */
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
