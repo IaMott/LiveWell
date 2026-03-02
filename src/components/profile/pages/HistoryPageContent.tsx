@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -47,9 +48,9 @@ export function HistoryPageContent() {
         <div className="rounded-[var(--radius-card)] border border-surface-dim bg-surface-dim/50 p-8 text-center">
           <MessageSquare className="mx-auto mb-2 h-8 w-8 text-on-surface-muted" />
           <p className="text-sm text-on-surface-muted">Nessuna conversazione ancora.</p>
-          <a href="/" className="mt-2 inline-block text-sm font-medium text-brand-500 hover:text-brand-600">
+          <Link href="/" className="mt-2 inline-block text-sm font-medium text-brand-500 hover:text-brand-600">
             Inizia una conversazione
-          </a>
+          </Link>
         </div>
       ) : (
         <div className="space-y-2">
@@ -65,7 +66,7 @@ export function HistoryPageContent() {
             })
 
             return (
-              <a
+              <Link
                 key={conv.id}
                 href={`/?c=${conv.id}`}
                 className={cn(
@@ -82,7 +83,7 @@ export function HistoryPageContent() {
                   </div>
                   <span className="shrink-0 text-xs text-on-surface-muted">{date}</span>
                 </div>
-              </a>
+              </Link>
             )
           })}
         </div>
