@@ -1,13 +1,13 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { ScanBarcode } from 'lucide-react'
+import { ScanBarcode, Mic } from 'lucide-react'
 
 export interface MessageAttachment {
   url: string
   fileName: string
   mimeType: string
-  type: 'image' | 'barcode'
+  type: 'image' | 'barcode' | 'audio'
   barcodeValue?: string
 }
 
@@ -40,16 +40,36 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         {/* Attachments */}
         {message.attachments && message.attachments.length > 0 && (
           <div className="mb-2 flex flex-col gap-2">
-            {message.attachments.map((att, i) =>
-              att.type === 'image' ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={i}
-                  src={att.url}
-                  alt={att.fileName}
-                  className="max-h-48 rounded-lg object-contain"
-                />
-              ) : (
+            {message.attachments.map((att, i) => {
+              if (att.type === 'image') {
+                return (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={i}
+                    src={att.url}
+                    alt={att.fileName}
+                    className="max-h-48 rounded-lg object-contain"
+                  />
+                )
+              }
+              if (att.type === 'audio') {
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      'flex items-center gap-2 rounded-lg px-3 py-2 text-xs',
+                      isUser ? 'bg-white/10' : 'bg-surface-dim',
+                    )}
+                  >
+                    <Mic className="h-4 w-4 shrink-0" />
+                    {att.url && (
+                      // eslint-disable-next-line jsx-a11y/media-has-caption
+                      <audio src={att.url} controls className="h-8 max-w-[200px]" />
+                    )}
+                  </div>
+                )
+              }
+              return (
                 <div
                   key={i}
                   className={cn(
@@ -60,8 +80,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                   <ScanBarcode className="h-4 w-4 shrink-0" />
                   <span className="font-mono">{att.barcodeValue}</span>
                 </div>
-              ),
-            )}
+              )
+            })}
           </div>
         )}
 

@@ -10,7 +10,7 @@ const attachmentSchema = z.object({
   fileName: z.string(),
   fileSize: z.number(),
   mimeType: z.string(),
-  type: z.enum(['image', 'barcode']),
+  type: z.enum(['image', 'barcode', 'audio']),
   barcodeValue: z.string().optional(),
 })
 

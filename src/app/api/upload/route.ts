@@ -3,8 +3,11 @@ import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { auth } from '@/lib/auth'
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+const ALLOWED_TYPES = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/mpeg',
+]
 
 export async function POST(request: Request): Promise<NextResponse> {
   const session = await auth()
@@ -21,14 +24,14 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   if (!ALLOWED_TYPES.includes(file.type)) {
     return NextResponse.json(
-      { error: 'Tipo file non supportato. Usa JPEG, PNG, WebP o GIF.' },
+      { error: 'Tipo file non supportato.' },
       { status: 400 },
     )
   }
 
   if (file.size > MAX_FILE_SIZE) {
     return NextResponse.json(
-      { error: 'File troppo grande. Massimo 5 MB.' },
+      { error: 'File troppo grande. Massimo 10 MB.' },
       { status: 400 },
     )
   }
@@ -36,8 +39,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
 
-  // Generate unique filename
-  const ext = file.name.split('.').pop() || 'jpg'
+  const ext = file.name.split('.').pop() || 'bin'
   const uniqueName = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${ext}`
 
   const uploadDir = join(process.cwd(), 'public', 'uploads')

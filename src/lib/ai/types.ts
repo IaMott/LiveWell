@@ -46,7 +46,7 @@ export interface AIMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   attachments?: {
-    type: 'image' | 'barcode'
+    type: 'image' | 'barcode' | 'audio'
     url: string
     fileName: string
     barcodeValue?: string

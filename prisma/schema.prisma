@@ -47,7 +47,7 @@ model Message {
 
 model Attachment {
   id        String   @id @default(cuid())
-  type      String   // 'image' | 'barcode'
+  type      String   // 'image' | 'barcode' | 'audio'
   fileName  String   @map("file_name")
   fileSize  Int      @map("file_size")
   mimeType  String   @map("mime_type")

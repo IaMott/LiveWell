@@ -182,6 +182,8 @@ export async function orchestrate(
         enrichedMessage += `\n[Codice a barre scansionato: ${att.barcodeValue}]`
       } else if (att.type === 'image') {
         enrichedMessage += `\n[Immagine allegata: ${att.fileName}]`
+      } else if (att.type === 'audio') {
+        enrichedMessage += `\n[Messaggio vocale allegato: ${att.fileName}]`
       }
     }
   }

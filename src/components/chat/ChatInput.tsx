@@ -1,16 +1,16 @@
 'use client'
 
 import { useState, useRef, useCallback, type FormEvent, type KeyboardEvent } from 'react'
-import { Send, Paperclip, ScanBarcode } from 'lucide-react'
+import { Send, Paperclip, ScanBarcode, Mic } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { BarcodeScanner, ImageUpload, type UploadedFile } from './attachments'
+import { BarcodeScanner, ImageUpload, AudioRecorder, type UploadedFile } from './attachments'
 
 export interface ChatAttachment {
   url: string
   fileName: string
   fileSize: number
   mimeType: string
-  type: 'image' | 'barcode'
+  type: 'image' | 'barcode' | 'audio'
   barcodeValue?: string
 }
 
@@ -24,6 +24,7 @@ export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
   const [value, setValue] = useState('')
   const [showScanner, setShowScanner] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
+  const [showRecorder, setShowRecorder] = useState(false)
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -42,6 +43,7 @@ export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
       onSend(trimmed || '(allegato)', attachments.length > 0 ? attachments : undefined)
       setValue('')
       setAttachments([])
+      setShowRecorder(false)
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto'
       }
@@ -83,6 +85,24 @@ export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
     ])
   }, [])
 
+  const handleAudioTranscription = useCallback((text: string) => {
+    setValue((prev) => (prev ? `${prev} ` : '') + text)
+    setShowRecorder(false)
+  }, [])
+
+  const handleAudioReady = useCallback((file: File, url: string) => {
+    setAttachments((prev) => [
+      ...prev,
+      {
+        url,
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type,
+        type: 'audio' as const,
+      },
+    ])
+  }, [])
+
   const removeAttachment = useCallback((index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index))
   }, [])
@@ -117,6 +137,8 @@ export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
                 >
                   {att.type === 'barcode' ? (
                     <ScanBarcode className="h-3.5 w-3.5 text-brand-500" />
+                  ) : att.type === 'audio' ? (
+                    <Mic className="h-3.5 w-3.5 text-brand-500" />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={att.url} alt="" className="h-6 w-6 rounded object-cover" />
@@ -147,6 +169,17 @@ export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
             </div>
           )}
 
+          {/* Audio recorder panel */}
+          {showRecorder && (
+            <div className="mb-2 rounded-xl border border-surface-dim bg-surface p-3">
+              <AudioRecorder
+                onTranscription={handleAudioTranscription}
+                onAudioReady={handleAudioReady}
+                disabled={disabled}
+              />
+            </div>
+          )}
+
           {/* Input row */}
           <div className="flex items-end gap-2">
             {/* Attachment buttons */}
@@ -156,6 +189,7 @@ export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
                 onClick={() => {
                   setShowUpload(!showUpload)
                   setShowScanner(false)
+                  setShowRecorder(false)
                 }}
                 disabled={disabled}
                 className={cn(
@@ -173,6 +207,7 @@ export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
                 onClick={() => {
                   setShowScanner(true)
                   setShowUpload(false)
+                  setShowRecorder(false)
                 }}
                 disabled={disabled}
                 className={cn(
@@ -184,6 +219,25 @@ export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
                 aria-label="Scansiona codice a barre"
               >
                 <ScanBarcode className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRecorder(!showRecorder)
+                  setShowUpload(false)
+                  setShowScanner(false)
+                }}
+                disabled={disabled}
+                className={cn(
+                  'flex h-11 w-11 items-center justify-center rounded-full',
+                  'text-on-surface-muted transition-colors',
+                  'hover:bg-surface-dim hover:text-on-surface',
+                  'disabled:opacity-40',
+                  showRecorder && 'bg-red-500/10 text-red-500',
+                )}
+                aria-label="Registra messaggio vocale"
+              >
+                <Mic className="h-5 w-5" />
               </button>
             </div>
 
