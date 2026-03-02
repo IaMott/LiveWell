@@ -2,19 +2,21 @@
 
 import { useRef, useEffect } from 'react'
 import { MessageBubble, type ChatMessage } from './MessageBubble'
+import { TypingIndicator } from './TypingIndicator'
 import { cn } from '@/lib/utils'
 
 interface MessageListProps {
   messages: ChatMessage[]
+  isStreaming?: boolean
   className?: string
 }
 
-export function MessageList({ messages, className }: MessageListProps) {
+export function MessageList({ messages, isStreaming, className }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length])
+  }, [messages])
 
   if (messages.length === 0) {
     return (
@@ -35,6 +37,9 @@ export function MessageList({ messages, className }: MessageListProps) {
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
+        {isStreaming && messages[messages.length - 1]?.content === '' && (
+          <TypingIndicator />
+        )}
         <div ref={bottomRef} />
       </div>
     </div>
