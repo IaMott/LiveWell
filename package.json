@@ -20,6 +20,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@google/genai": "^1.43.0",
     "@prisma/client": "^5.22.0",
     "@tailwindcss/postcss": "^4.2.1",
     "@zxing/browser": "^0.1.5",

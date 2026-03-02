@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { orchestrate, buildContext } from '@/lib/ai'
+import { orchestrateStream, buildContext } from '@/lib/ai'
 import type { AIMessage } from '@/lib/ai'
 
 const attachmentSchema = z.object({
@@ -49,7 +49,6 @@ export async function POST(request: Request): Promise<Response> {
     })
     convId = conv.id
   } else {
-    // Verify ownership
     const conv = await prisma.conversation.findFirst({
       where: { id: convId, userId },
     })
@@ -84,7 +83,7 @@ export async function POST(request: Request): Promise<Response> {
     where: { conversationId: convId },
     orderBy: { createdAt: 'asc' },
     select: { role: true, content: true },
-    take: 20, // Last 20 messages for context window
+    take: 20,
   })
 
   const aiMessages: AIMessage[] = history.map((m) => ({
@@ -103,48 +102,62 @@ export async function POST(request: Request): Promise<Response> {
     barcodeValue: a.barcodeValue,
   }))
 
-  // Run orchestrator
-  const aiResponse = await orchestrate(message, context, aiAttachments)
-
-  // SSE stream response
+  // SSE stream response using orchestrator streaming
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {
-      // Send conversation metadata
-      controller.enqueue(
-        encoder.encode(`data: ${JSON.stringify({
-          type: 'meta',
-          conversationId: convId,
-          specialist: aiResponse.specialist,
-          audit: aiResponse.audit,
-        })}\n\n`),
-      )
-
-      // Stream response word by word
-      const words = aiResponse.content.split(' ')
       let accumulated = ''
 
-      for (const word of words) {
-        accumulated += (accumulated ? ' ' : '') + word
+      try {
+        // Send conversation ID immediately
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'delta', content: word + ' ' })}\n\n`),
+          encoder.encode(`data: ${JSON.stringify({ type: 'meta', conversationId: convId })}\n\n`),
         )
-        await new Promise((r) => setTimeout(r, 30))
+
+        for await (const event of orchestrateStream(message, context, aiAttachments)) {
+          if (event.type === 'routing') {
+            // Send specialist routing info
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({
+                type: 'routing',
+                specialist: event.data.specialist,
+                audit: event.data.audit,
+              })}\n\n`),
+            )
+          } else if (event.type === 'delta') {
+            accumulated += event.content
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: 'delta', content: event.content })}\n\n`),
+            )
+          }
+        }
+
+        // Save assistant message to DB
+        if (accumulated) {
+          await prisma.message.create({
+            data: {
+              role: 'assistant',
+              content: accumulated,
+              conversationId: convId!,
+            },
+          })
+        }
+
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`),
+        )
+      } catch (err) {
+        console.error('[Chat API] Stream error:', err)
+        const errorMsg = 'Errore durante la generazione della risposta. Riprova.'
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'delta', content: errorMsg })}\n\n`),
+        )
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`),
+        )
+      } finally {
+        controller.close()
       }
-
-      // Save assistant message to DB
-      await prisma.message.create({
-        data: {
-          role: 'assistant',
-          content: accumulated,
-          conversationId: convId!,
-        },
-      })
-
-      controller.enqueue(
-        encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`),
-      )
-      controller.close()
     },
   })
 

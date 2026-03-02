@@ -9,6 +9,7 @@ import type {
 } from './types'
 import { specialists } from './specialists'
 import { buildSpecialistPrompt, buildOrchestratorPrompt } from './prompts'
+import { generateResponse, isGeminiConfigured } from './gemini'
 
 // --- Red flag patterns for risk triage ---
 const RED_FLAG_PATTERNS = [
@@ -76,7 +77,6 @@ export function classifyDomain(message: string): Domain {
 export function selectSpecialist(domain: Domain, message: string): SpecialistId {
   const lower = message.toLowerCase()
 
-  // Domain → primary specialist mapping
   const domainMap: Record<Domain, SpecialistId> = {
     nutrizione: 'dietista',
     allenamento: 'personal_trainer',
@@ -87,9 +87,7 @@ export function selectSpecialist(domain: Domain, message: string): SpecialistId 
     generale: 'intervistatore',
   }
 
-  // Check for more specific specialists within the domain
   if (domain === 'mindset') {
-    // Clinical vs non-clinical distinction
     const clinicalKeywords = ['ansia', 'depressione', 'panico', 'trauma', 'fobia', 'ossessione', 'disturbo', 'terapia']
     if (clinicalKeywords.some((k) => lower.includes(k))) {
       return 'psicologo'
@@ -117,7 +115,6 @@ export function selectSpecialist(domain: Domain, message: string): SpecialistId 
 
 /** Determine if conversation needs interview first */
 function needsInterview(context: ConversationContext): boolean {
-  // First message or no domain established yet → interview
   if (context.messages.length <= 2) return true
   if (!context.domain || context.domain === 'generale') return true
   if (context.missingData.length > 2) return true
@@ -134,7 +131,6 @@ export function routeMessage(
   const primary = selectSpecialist(domain, message)
   const interview = needsInterview(context)
 
-  // R2+ → route to psicologo with safety-first
   if (riskLevel === 'R2' || riskLevel === 'R3') {
     return {
       primarySpecialist: 'psicologo',
@@ -146,7 +142,6 @@ export function routeMessage(
     }
   }
 
-  // If interview needed, route to intervistatore with support from domain specialist
   if (interview && riskLevel === 'R0') {
     return {
       primarySpecialist: 'intervistatore',
@@ -168,10 +163,7 @@ export function routeMessage(
   }
 }
 
-/** Generate AI response using orchestrator logic.
- *  In STEP 7: rule-based mock with specialist-aware responses.
- *  In STEP 8: replaced by Gemini API calls.
- */
+/** Generate AI response using orchestrator logic with Gemini */
 export async function orchestrate(
   userMessage: string,
   context: ConversationContext,
@@ -182,27 +174,39 @@ export async function orchestrate(
     ? await buildSpecialistPrompt('intervistatore', { ...context, domain: routing.domain })
     : await buildSpecialistPrompt(routing.primarySpecialist, { ...context, domain: routing.domain })
 
-  // Build attachment context
-  let attachmentContext = ''
+  // Build attachment context into the user message
+  let enrichedMessage = userMessage
   if (attachments && attachments.length > 0) {
     for (const att of attachments) {
       if (att.type === 'barcode' && att.barcodeValue) {
-        attachmentContext += `\n[Codice a barre scansionato: ${att.barcodeValue}]`
+        enrichedMessage += `\n[Codice a barre scansionato: ${att.barcodeValue}]`
       } else if (att.type === 'image') {
-        attachmentContext += `\n[Immagine allegata: ${att.fileName}]`
+        enrichedMessage += `\n[Immagine allegata: ${att.fileName}]`
       }
     }
   }
 
-  // STEP 7: Mock response based on routing
-  // STEP 8 will replace this with actual Gemini API call
-  const response = generateMockResponse(routing, userMessage, attachmentContext)
+  // Build messages for Gemini (conversation history + current message)
+  const geminiMessages: AIMessage[] = [
+    ...context.messages.slice(0, -1), // history without last (which is the current user msg)
+    { role: 'user', content: enrichedMessage },
+  ]
 
-  // Log is available for audit but not shown to user
-  void systemPrompt // Will be used by Gemini in STEP 8
+  let content: string
+
+  if (isGeminiConfigured()) {
+    try {
+      content = await generateResponse(systemPrompt, geminiMessages)
+    } catch (err) {
+      console.error('[Orchestrator] Gemini error, falling back to mock:', err)
+      content = generateFallbackResponse(routing, enrichedMessage)
+    }
+  } else {
+    content = generateFallbackResponse(routing, enrichedMessage)
+  }
 
   return {
-    content: response,
+    content,
     specialist: routing.primarySpecialist,
     audit: {
       riskLevel: routing.riskLevel,
@@ -212,15 +216,74 @@ export async function orchestrate(
   }
 }
 
-/** Generate mock specialist-aware response (replaced by Gemini in STEP 8) */
-function generateMockResponse(
+/** Streaming orchestrate — yields text chunks from Gemini */
+export async function* orchestrateStream(
+  userMessage: string,
+  context: ConversationContext,
+  attachments?: AIMessage['attachments'],
+): AsyncGenerator<{ type: 'routing'; data: { specialist: SpecialistId; audit: AIResponse['audit'] } } | { type: 'delta'; content: string }> {
+  const routing = routeMessage(userMessage, context)
+  const systemPrompt = routing.needsInterview
+    ? await buildSpecialistPrompt('intervistatore', { ...context, domain: routing.domain })
+    : await buildSpecialistPrompt(routing.primarySpecialist, { ...context, domain: routing.domain })
+
+  // Enrich message with attachment context
+  let enrichedMessage = userMessage
+  if (attachments && attachments.length > 0) {
+    for (const att of attachments) {
+      if (att.type === 'barcode' && att.barcodeValue) {
+        enrichedMessage += `\n[Codice a barre scansionato: ${att.barcodeValue}]`
+      } else if (att.type === 'image') {
+        enrichedMessage += `\n[Immagine allegata: ${att.fileName}]`
+      }
+    }
+  }
+
+  const geminiMessages: AIMessage[] = [
+    ...context.messages.slice(0, -1),
+    { role: 'user', content: enrichedMessage },
+  ]
+
+  // Emit routing info first
+  yield {
+    type: 'routing',
+    data: {
+      specialist: routing.primarySpecialist,
+      audit: {
+        riskLevel: routing.riskLevel,
+        pattern: routing.needsInterview ? 'interview' : 'hub-and-spoke',
+        reasoning: routing.reasoning,
+      },
+    },
+  }
+
+  if (isGeminiConfigured()) {
+    try {
+      const { generateStream } = await import('./gemini')
+      for await (const chunk of generateStream(systemPrompt, geminiMessages)) {
+        yield { type: 'delta', content: chunk }
+      }
+      return
+    } catch (err) {
+      console.error('[Orchestrator] Gemini stream error, falling back:', err)
+    }
+  }
+
+  // Fallback: yield mock response word by word
+  const fallback = generateFallbackResponse(routing, enrichedMessage)
+  const words = fallback.split(' ')
+  for (const word of words) {
+    yield { type: 'delta', content: word + ' ' }
+  }
+}
+
+/** Fallback response when Gemini is not available */
+function generateFallbackResponse(
   routing: RoutingDecision,
-  _userMessage: string,
-  attachmentContext: string,
+  _enrichedMessage: string,
 ): string {
   const { primarySpecialist, riskLevel, domain, needsInterview } = routing
 
-  // R2 risk — safety response
   if (riskLevel === 'R2' || riskLevel === 'R3') {
     return (
       '🧠 **Psicologo del team LiveWell**\n\n' +
@@ -234,7 +297,6 @@ function generateMockResponse(
     )
   }
 
-  // Interview mode
   if (needsInterview) {
     const domainIntros: Record<Domain, string> = {
       nutrizione: 'Per poterti aiutare al meglio con la nutrizione, avrei bisogno di conoscerti un po\' meglio.',
@@ -245,7 +307,6 @@ function generateMockResponse(
       riabilitazione: 'Per aiutarti nel percorso di recupero, vorrei capire meglio la tua situazione.',
       generale: 'Benvenuto nel team LiveWell! Per aiutarti al meglio, vorrei capire cosa cerchi.',
     }
-
     const intro = domainIntros[domain] || domainIntros.generale
     return (
       `🎙️ **Intervistatore LiveWell**\n\n${intro}\n\n` +
@@ -253,7 +314,6 @@ function generateMockResponse(
     )
   }
 
-  // Direct specialist response
   const specNames: Partial<Record<SpecialistId, { emoji: string; name: string }>> = {
     dietista: { emoji: '🥗', name: 'Dietista' },
     personal_trainer: { emoji: '💪', name: 'Personal Trainer' },
@@ -269,20 +329,12 @@ function generateMockResponse(
   }
 
   const spec = specNames[primarySpecialist] || { emoji: '🤖', name: 'Assistente' }
-  let response = `${spec.emoji} **${spec.name} del team LiveWell**\n\n`
-
-  if (attachmentContext) {
-    response += `Ho ricevuto i tuoi allegati.${attachmentContext}\n\n`
-  }
-
-  response +=
-    `Ho preso nota del tuo messaggio. Il sistema di intelligenza artificiale sarà ` +
-    `connesso nel prossimo aggiornamento (STEP 8 — Gemini). ` +
-    `Per ora posso confermare che il routing verso ${spec.name} funziona correttamente ` +
-    `per il dominio "${domain}".`
-
-  return response
+  return (
+    `${spec.emoji} **${spec.name} del team LiveWell**\n\n` +
+    `Gemini AI non è configurato (GEMINI_API_KEY mancante). ` +
+    `Il routing verso ${spec.name} per il dominio "${domain}" funziona correttamente. ` +
+    `Configura GEMINI_API_KEY per attivare le risposte AI reali.`
+  )
 }
 
-/** Get the orchestrator system prompt (for Gemini in STEP 8) */
 export { buildOrchestratorPrompt, buildSpecialistPrompt }

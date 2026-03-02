@@ -8,6 +8,7 @@ export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
+  const [activeSpecialist, setActiveSpecialist] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const sendMessage = useCallback(
@@ -102,6 +103,8 @@ export function useChat() {
               const event = JSON.parse(json)
               if (event.type === 'meta' && event.conversationId) {
                 setConversationId(event.conversationId)
+              } else if (event.type === 'routing' && event.specialist) {
+                setActiveSpecialist(event.specialist)
               } else if (event.type === 'delta') {
                 setMessages((prev) =>
                   prev.map((m) =>
@@ -162,6 +165,7 @@ export function useChat() {
     messages,
     isStreaming,
     conversationId,
+    activeSpecialist,
     sendMessage,
     loadConversation,
     newConversation,
