@@ -3,9 +3,19 @@ import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+const attachmentSchema = z.object({
+  url: z.string(),
+  fileName: z.string(),
+  fileSize: z.number(),
+  mimeType: z.string(),
+  type: z.enum(['image', 'barcode']),
+  barcodeValue: z.string().optional(),
+})
+
 const chatSchema = z.object({
   message: z.string().min(1).max(4000),
   conversationId: z.string().optional(),
+  attachments: z.array(attachmentSchema).optional(),
 })
 
 export async function POST(request: Request): Promise<Response> {
@@ -23,7 +33,7 @@ export async function POST(request: Request): Promise<Response> {
     )
   }
 
-  const { message, conversationId } = result.data
+  const { message, conversationId, attachments } = result.data
   const userId = session.user.id
 
   // Get or create conversation
@@ -46,12 +56,24 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
-  // Save user message
+  // Save user message with attachments
   await prisma.message.create({
     data: {
       role: 'user',
       content: message,
       conversationId: convId,
+      attachments: attachments
+        ? {
+            create: attachments.map((a) => ({
+              type: a.type,
+              fileName: a.fileName,
+              fileSize: a.fileSize,
+              mimeType: a.mimeType,
+              url: a.url,
+              metadata: a.barcodeValue ? JSON.stringify({ barcodeValue: a.barcodeValue }) : null,
+            })),
+          }
+        : undefined,
     },
   })
 
@@ -64,9 +86,22 @@ export async function POST(request: Request): Promise<Response> {
         encoder.encode(`data: ${JSON.stringify({ type: 'meta', conversationId: convId })}\n\n`),
       )
 
+      // Build context from attachments
+      let context = ''
+      if (attachments && attachments.length > 0) {
+        for (const att of attachments) {
+          if (att.type === 'barcode' && att.barcodeValue) {
+            context += `[L'utente ha scansionato un codice a barre: ${att.barcodeValue}] `
+          } else if (att.type === 'image') {
+            context += `[L'utente ha allegato un'immagine: ${att.fileName}] `
+          }
+        }
+      }
+
       // Mock AI response — replaced by real Gemini orchestrator in STEP 7+8
-      const mockReply =
-        'Ho ricevuto il tuo messaggio. Il team di specialisti AI sarà collegato presto (STEP 7-8). Per ora, posso confermare che il sistema di chat funziona correttamente!'
+      const mockReply = context
+        ? `Ho ricevuto il tuo messaggio con allegati. ${context}Il team di specialisti AI analizzerà questi dati presto (STEP 7-8).`
+        : 'Ho ricevuto il tuo messaggio. Il team di specialisti AI sarà collegato presto (STEP 7-8). Per ora, posso confermare che il sistema di chat funziona correttamente!'
 
       const words = mockReply.split(' ')
       let accumulated = ''

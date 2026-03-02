@@ -23,6 +23,16 @@ export async function GET(
           role: true,
           content: true,
           createdAt: true,
+          attachments: {
+            select: {
+              id: true,
+              type: true,
+              fileName: true,
+              mimeType: true,
+              url: true,
+              metadata: true,
+            },
+          },
         },
       },
     },

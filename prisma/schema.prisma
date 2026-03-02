@@ -38,8 +38,25 @@ model Message {
   content        String
   conversationId String       @map("conversation_id")
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  attachments    Attachment[]
   createdAt      DateTime     @default(now()) @map("created_at")
 
   @@index([conversationId])
   @@map("messages")
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  type      String   // 'image' | 'barcode'
+  fileName  String   @map("file_name")
+  fileSize  Int      @map("file_size")
+  mimeType  String   @map("mime_type")
+  url       String
+  metadata  String?  // JSON: barcode value, image dimensions, etc.
+  messageId String   @map("message_id")
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([messageId])
+  @@map("attachments")
 }

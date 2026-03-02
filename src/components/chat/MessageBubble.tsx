@@ -1,12 +1,22 @@
 'use client'
 
 import { cn } from '@/lib/utils'
+import { ScanBarcode } from 'lucide-react'
+
+export interface MessageAttachment {
+  url: string
+  fileName: string
+  mimeType: string
+  type: 'image' | 'barcode'
+  barcodeValue?: string
+}
 
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
+  attachments?: MessageAttachment[]
 }
 
 interface MessageBubbleProps {
@@ -27,7 +37,37 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             : 'bg-bubble-assistant text-bubble-assistant-text rounded-bl-md',
         )}
       >
-        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        {/* Attachments */}
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="mb-2 flex flex-col gap-2">
+            {message.attachments.map((att, i) =>
+              att.type === 'image' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={i}
+                  src={att.url}
+                  alt={att.fileName}
+                  className="max-h-48 rounded-lg object-contain"
+                />
+              ) : (
+                <div
+                  key={i}
+                  className={cn(
+                    'flex items-center gap-2 rounded-lg px-3 py-2 text-xs',
+                    isUser ? 'bg-white/10' : 'bg-surface-dim',
+                  )}
+                >
+                  <ScanBarcode className="h-4 w-4 shrink-0" />
+                  <span className="font-mono">{att.barcodeValue}</span>
+                </div>
+              ),
+            )}
+          </div>
+        )}
+
+        {message.content && (
+          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        )}
         <time
           className={cn(
             'mt-1 block text-right text-[0.6875rem]',

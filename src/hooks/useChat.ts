@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import type { ChatMessage } from '@/components/chat/MessageBubble'
+import type { ChatMessage, MessageAttachment } from '@/components/chat/MessageBubble'
+import type { ChatAttachment } from '@/components/chat/ChatInput'
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -10,8 +11,17 @@ export function useChat() {
   const abortRef = useRef<AbortController | null>(null)
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, attachments?: ChatAttachment[]) => {
       if (isStreaming) return
+
+      // Map ChatAttachment to MessageAttachment for display
+      const msgAttachments: MessageAttachment[] | undefined = attachments?.map((a) => ({
+        url: a.url,
+        fileName: a.fileName,
+        mimeType: a.mimeType,
+        type: a.type,
+        barcodeValue: a.barcodeValue,
+      }))
 
       // Add user message immediately
       const userMsg: ChatMessage = {
@@ -19,6 +29,7 @@ export function useChat() {
         role: 'user',
         content,
         timestamp: new Date(),
+        attachments: msgAttachments,
       }
       setMessages((prev) => [...prev, userMsg])
       setIsStreaming(true)
@@ -35,10 +46,24 @@ export function useChat() {
 
       try {
         abortRef.current = new AbortController()
+
+        // Build payload with attachment references
+        const payload: Record<string, unknown> = { message: content, conversationId }
+        if (attachments && attachments.length > 0) {
+          payload.attachments = attachments.map((a) => ({
+            url: a.url,
+            fileName: a.fileName,
+            fileSize: a.fileSize,
+            mimeType: a.mimeType,
+            type: a.type,
+            barcodeValue: a.barcodeValue,
+          }))
+        }
+
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: content, conversationId }),
+          body: JSON.stringify(payload),
           signal: abortRef.current.signal,
         })
 
