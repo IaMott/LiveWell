@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { MoodProvider } from '@/components/mood/MoodProvider'
 import './globals.css'
 
 const geistSans = Geist({
@@ -38,7 +39,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="it" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>{children}</body>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <MoodProvider>{children}</MoodProvider>
+      </body>
     </html>
   )
 }
