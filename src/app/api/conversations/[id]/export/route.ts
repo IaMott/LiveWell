@@ -55,7 +55,7 @@ export async function GET(
   text += '='.repeat(50) + '\n'
   text += 'Generato da LiveWell - Il tuo assistente benessere\n'
 
-  return new Response(text, {
+  return new NextResponse(text, {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'Content-Disposition': `attachment; filename="livewell-${id.slice(0, 8)}.txt"`,

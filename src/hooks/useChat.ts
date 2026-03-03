@@ -166,7 +166,6 @@ export function useChat() {
     isStreaming,
     conversationId,
     activeSpecialist,
-    conversationId,
     sendMessage,
     loadConversation,
     newConversation,
