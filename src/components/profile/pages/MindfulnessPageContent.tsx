@@ -32,7 +32,7 @@ function MindfulnessForm({ profile, saving, error, success, saveSection }: {
   saving: boolean
   error: string
   success: string
-  saveSection: (section: string, data: Record<string, unknown>) => void
+  saveSection: (section: string, data: object) => void
 }) {
   const m = (profile?.mindfulness || {}) as Partial<MindfulnessData>
   const [form, setForm] = useState<MindfulnessData>({

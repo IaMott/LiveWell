@@ -15,7 +15,7 @@ function GoalsForm({ profile, saving, error, success, saveSection }: {
   saving: boolean
   error: string
   success: string
-  saveSection: (section: string, data: Record<string, unknown>) => void
+  saveSection: (section: string, data: object) => void
 }) {
   const g = (profile?.goals || {}) as Partial<GoalsData>
   const [form, setForm] = useState<GoalsData>({

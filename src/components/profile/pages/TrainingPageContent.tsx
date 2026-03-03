@@ -26,7 +26,7 @@ function TrainingForm({ profile, saving, error, success, saveSection }: {
   saving: boolean
   error: string
   success: string
-  saveSection: (section: string, data: Record<string, unknown>) => void
+  saveSection: (section: string, data: object) => void
 }) {
   const t = (profile?.training || {}) as Partial<TrainingData>
   const [form, setForm] = useState<TrainingData>({

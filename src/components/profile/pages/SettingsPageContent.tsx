@@ -16,7 +16,7 @@ function SettingsForm({ profile, saving, error, success, saveSection }: {
   saving: boolean
   error: string
   success: string
-  saveSection: (section: string, data: Record<string, unknown>) => void
+  saveSection: (section: string, data: object) => void
 }) {
   const s = (profile?.settings || {}) as Partial<SettingsData>
   const [form, setForm] = useState<SettingsData>({

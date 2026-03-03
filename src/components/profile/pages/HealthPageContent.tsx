@@ -19,7 +19,7 @@ function HealthForm({ profile, saving, error, success, saveSection }: {
   saving: boolean
   error: string
   success: string
-  saveSection: (section: string, data: Record<string, unknown>) => void
+  saveSection: (section: string, data: object) => void
 }) {
   const h = (profile?.health || {}) as Partial<HealthData>
   const [form, setForm] = useState<HealthData>({

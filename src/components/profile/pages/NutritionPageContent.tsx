@@ -28,7 +28,7 @@ function NutritionForm({ profile, saving, error, success, saveSection }: {
   saving: boolean
   error: string
   success: string
-  saveSection: (section: string, data: Record<string, unknown>) => void
+  saveSection: (section: string, data: object) => void
 }) {
   const n = (profile?.nutrition || {}) as Partial<NutritionData>
   const [form, setForm] = useState<NutritionData>({

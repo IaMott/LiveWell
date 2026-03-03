@@ -9,7 +9,7 @@ function PersonalForm({ profile, saving, error, success, saveSection }: {
   saving: boolean
   error: string
   success: string
-  saveSection: (section: string, data: Record<string, unknown>) => void
+  saveSection: (section: string, data: object) => void
 }) {
   const [name, setName] = useState('')
   const [birthDate, setBirthDate] = useState(profile?.birthDate ? profile.birthDate.slice(0, 10) : '')

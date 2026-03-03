@@ -31,7 +31,7 @@ export function useProfile() {
   }, [])
 
   const saveSection = useCallback(
-    async (section: string, data: Record<string, unknown>) => {
+    async (section: string, data: object) => {
       setSaving(true)
       setError('')
       setSuccess('')
