@@ -51,15 +51,20 @@ export interface AIMessage {
 
 /** User profile data from database */
 export interface ProfileData {
-  birthDate?: string | null
+  birthDate?: Date | string | null
   gender?: string | null
   height?: number | null
   weight?: number | null
-  health?: Record<string, unknown> | null
-  nutrition?: Record<string, unknown> | null
-  training?: Record<string, unknown> | null
-  mindfulness?: Record<string, unknown> | null
-  goals?: Record<string, unknown> | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  health?: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  nutrition?: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  training?: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  mindfulness?: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  goals?: any
 }
 
 /** Conversation context for the orchestrator */
