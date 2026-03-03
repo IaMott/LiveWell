@@ -1,15 +1,61 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ChatMessage, MessageAttachment } from '@/components/chat/MessageBubble'
 import type { ChatAttachment } from '@/components/chat/ChatInput'
+
+const STORAGE_KEY = 'livewell_conversation_id'
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [activeSpecialist, setActiveSpecialist] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const abortRef = useRef<AbortController | null>(null)
+  const initialLoadDone = useRef(false)
+
+  // Persist conversationId to localStorage whenever it changes
+  useEffect(() => {
+    if (conversationId) {
+      localStorage.setItem(STORAGE_KEY, conversationId)
+    }
+  }, [conversationId])
+
+  // On mount, restore the last conversation from DB
+  useEffect(() => {
+    if (initialLoadDone.current) return
+    initialLoadDone.current = true
+
+    const savedId = localStorage.getItem(STORAGE_KEY)
+    if (savedId) {
+      fetch(`/api/conversations/${savedId}`)
+        .then((res) => {
+          if (!res.ok) throw new Error('not found')
+          return res.json()
+        })
+        .then(({ conversation }) => {
+          setConversationId(savedId)
+          setMessages(
+            conversation.messages.map(
+              (m: { id: string; role: string; content: string; createdAt: string }) => ({
+                id: m.id,
+                role: m.role as 'user' | 'assistant',
+                content: m.content,
+                timestamp: new Date(m.createdAt),
+              }),
+            ),
+          )
+        })
+        .catch(() => {
+          // Conversation deleted or expired — start fresh
+          localStorage.removeItem(STORAGE_KEY)
+        })
+        .finally(() => setIsLoading(false))
+    } else {
+      setIsLoading(false)
+    }
+  }, [])
 
   const sendMessage = useCallback(
     async (content: string, attachments?: ChatAttachment[]) => {
@@ -159,11 +205,13 @@ export function useChat() {
   const newConversation = useCallback(() => {
     setMessages([])
     setConversationId(null)
+    localStorage.removeItem(STORAGE_KEY)
   }, [])
 
   return {
     messages,
     isStreaming,
+    isLoading,
     conversationId,
     activeSpecialist,
     sendMessage,
