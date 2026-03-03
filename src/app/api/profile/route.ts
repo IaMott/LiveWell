@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
+
+const MAX_SECTION_SIZE = 10_000 // 10 KB max per section
 
 const profileUpdateSchema = z.object({
   section: z.enum([
@@ -13,7 +16,10 @@ const profileUpdateSchema = z.object({
     'goals',
     'settings',
   ]),
-  data: z.record(z.unknown()),
+  data: z.record(z.unknown()).refine(
+    (data) => JSON.stringify(data).length <= MAX_SECTION_SIZE,
+    'Dati profilo troppo grandi (max 10 KB)',
+  ),
 })
 
 export async function GET(): Promise<NextResponse> {
@@ -52,6 +58,10 @@ export async function PUT(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
   }
 
+  // Rate limit: 20 profile updates per minute per user
+  const rl = rateLimit(`profile:${session.user.id}`, { max: 20 })
+  if (!rl.success) return rateLimitResponse(rl.resetAt)
+
   const body = await request.json()
   const result = profileUpdateSchema.safeParse(body)
   if (!result.success) {
@@ -70,14 +80,20 @@ export async function PUT(request: Request): Promise<NextResponse> {
 
   if (section === 'personal') {
     if (data.birthDate) updateData.birthDate = new Date(data.birthDate as string)
-    if (data.gender !== undefined) updateData.gender = data.gender as string
-    if (data.height !== undefined) updateData.height = Number(data.height)
-    if (data.weight !== undefined) updateData.weight = Number(data.weight)
+    if (data.gender !== undefined) updateData.gender = String(data.gender).slice(0, 20)
+    if (data.height !== undefined) {
+      const h = Number(data.height)
+      if (!isNaN(h) && h >= 0 && h <= 300) updateData.height = h
+    }
+    if (data.weight !== undefined) {
+      const w = Number(data.weight)
+      if (!isNaN(w) && w >= 0 && w <= 500) updateData.weight = w
+    }
     // Also update User.name
     if (data.name !== undefined) {
       await prisma.user.update({
         where: { id: userId },
-        data: { name: data.name as string },
+        data: { name: String(data.name).slice(0, 100) },
       })
     }
   } else {

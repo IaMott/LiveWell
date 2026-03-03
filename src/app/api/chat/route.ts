@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { orchestrateStream, buildContext } from '@/lib/ai'
 import type { AIMessage } from '@/lib/ai'
 import { createNotification, shouldNotify } from '@/lib/notifications'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 const attachmentSchema = z.object({
   url: z.string(),
@@ -18,7 +19,7 @@ const attachmentSchema = z.object({
 const chatSchema = z.object({
   message: z.string().min(1).max(4000),
   conversationId: z.string().optional(),
-  attachments: z.array(attachmentSchema).optional(),
+  attachments: z.array(attachmentSchema).max(5).optional(),
 })
 
 export async function POST(request: Request): Promise<Response> {
@@ -26,6 +27,10 @@ export async function POST(request: Request): Promise<Response> {
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
   }
+
+  // Rate limit: 30 messages per minute per user
+  const rl = rateLimit(`chat:${session.user.id}`, { max: 30 })
+  if (!rl.success) return rateLimitResponse(rl.resetAt)
 
   const body = await request.json()
   const result = chatSchema.safeParse(body)

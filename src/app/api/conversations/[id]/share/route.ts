@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 export async function POST(
   _request: Request,
@@ -11,6 +12,10 @@ export async function POST(
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
   }
+
+  // Rate limit: 10 share creations per minute per user
+  const rl = rateLimit(`share-create:${session.user.id}`, { max: 10 })
+  if (!rl.success) return rateLimitResponse(rl.resetAt)
 
   const { id } = await params
 
