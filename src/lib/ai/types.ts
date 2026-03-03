@@ -28,9 +28,6 @@ export type Domain =
   | 'riabilitazione'
   | 'generale'
 
-/** Interview state machine */
-export type InterviewState = 'S0' | 'S1' | 'S2' | 'S3' | 'S4' | 'S5'
-
 /** Orchestrator routing decision */
 export interface RoutingDecision {
   primarySpecialist: SpecialistId
@@ -38,7 +35,6 @@ export interface RoutingDecision {
   domain: Domain
   riskLevel: RiskLevel
   reasoning: string
-  needsInterview: boolean
 }
 
 /** Message with context for AI processing */
@@ -53,15 +49,28 @@ export interface AIMessage {
   }[]
 }
 
+/** User profile data from database */
+export interface ProfileData {
+  birthDate?: string | null
+  gender?: string | null
+  height?: number | null
+  weight?: number | null
+  health?: Record<string, unknown> | null
+  nutrition?: Record<string, unknown> | null
+  training?: Record<string, unknown> | null
+  mindfulness?: Record<string, unknown> | null
+  goals?: Record<string, unknown> | null
+}
+
 /** Conversation context for the orchestrator */
 export interface ConversationContext {
   messages: AIMessage[]
   domain?: Domain
-  interviewState?: InterviewState
   knownData: Record<string, string>
   missingData: string[]
   riskSignal: 'none' | 'possible' | 'confirmed'
   userId: string
+  profileData?: ProfileData
 }
 
 /** AI provider response (abstract — implemented by Gemini in STEP 8) */

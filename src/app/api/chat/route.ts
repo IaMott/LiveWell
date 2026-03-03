@@ -5,7 +5,6 @@ import { prisma } from '@/lib/prisma'
 import { orchestrateStream, buildContext } from '@/lib/ai'
 import type { AIMessage } from '@/lib/ai'
 import { createNotification, shouldNotify } from '@/lib/notifications'
-import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 const attachmentSchema = z.object({
   url: z.string(),
@@ -18,8 +17,8 @@ const attachmentSchema = z.object({
 
 const chatSchema = z.object({
   message: z.string().min(1).max(4000),
-  conversationId: z.string().nullish(),
-  attachments: z.array(attachmentSchema).max(5).optional(),
+  conversationId: z.string().optional(),
+  attachments: z.array(attachmentSchema).optional(),
 })
 
 export async function POST(request: Request): Promise<Response> {
@@ -27,10 +26,6 @@ export async function POST(request: Request): Promise<Response> {
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
   }
-
-  // Rate limit: 30 messages per minute per user
-  const rl = rateLimit(`chat:${session.user.id}`, { max: 30 })
-  if (!rl.success) return rateLimitResponse(rl.resetAt)
 
   const body = await request.json()
   const result = chatSchema.safeParse(body)
@@ -97,8 +92,24 @@ export async function POST(request: Request): Promise<Response> {
     content: m.content,
   }))
 
-  // Build conversation context
-  const context = buildContext(aiMessages, userId)
+  // Load user profile for context-aware responses
+  const userProfile = await prisma.userProfile.findUnique({
+    where: { userId },
+    select: {
+      birthDate: true,
+      gender: true,
+      height: true,
+      weight: true,
+      health: true,
+      nutrition: true,
+      training: true,
+      mindfulness: true,
+      goals: true,
+    },
+  })
+
+  // Build conversation context with profile data
+  const context = buildContext(aiMessages, userId, userProfile)
 
   // Map attachments for orchestrator
   const aiAttachments = attachments?.map((a) => ({

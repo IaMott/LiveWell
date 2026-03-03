@@ -8,8 +8,11 @@ import type {
   AIResponse,
 } from './types'
 import { specialists } from './specialists'
-import { buildSpecialistPrompt, buildOrchestratorPrompt } from './prompts'
+import { buildSpecialistPrompt, buildConsultationPrompt } from './prompts'
 import { generateResponse, isGeminiConfigured } from './gemini'
+
+/** Max internal consultation rounds between specialists */
+const MAX_CONSULTATION_ROUNDS = 3
 
 // --- Red flag patterns for risk triage ---
 const RED_FLAG_PATTERNS = [
@@ -84,7 +87,7 @@ export function selectSpecialist(domain: Domain, message: string): SpecialistId 
     cucina: 'chef',
     salute: 'mmg',
     riabilitazione: 'fisioterapista',
-    generale: 'intervistatore',
+    generale: 'analista_contesto',
   }
 
   if (domain === 'mindset') {
@@ -113,12 +116,39 @@ export function selectSpecialist(domain: Domain, message: string): SpecialistId 
   return domainMap[domain]
 }
 
-/** Determine if conversation needs interview first */
-function needsInterview(context: ConversationContext): boolean {
-  if (context.messages.length <= 2) return true
-  if (!context.domain || context.domain === 'generale') return true
-  if (context.missingData.length > 2) return true
-  return false
+/** Determine support specialists that should be consulted */
+function selectSupportSpecialists(domain: Domain, primary: SpecialistId, message: string): SpecialistId[] {
+  const lower = message.toLowerCase()
+  const support: SpecialistId[] = []
+
+  // Cross-domain routing: nutrition + training often go together
+  if (domain === 'nutrizione' && (lower.includes('allena') || lower.includes('palestra') || lower.includes('sport'))) {
+    if (primary !== 'personal_trainer') support.push('personal_trainer')
+  }
+  if (domain === 'allenamento' && (lower.includes('dieta') || lower.includes('mangiare') || lower.includes('alimentazione'))) {
+    if (primary !== 'dietista') support.push('dietista')
+  }
+
+  // Rehabilitation often needs both physio + fisiatra
+  if (domain === 'riabilitazione') {
+    if (primary === 'fisioterapista') support.push('fisiatra')
+    else if (primary === 'fisiatra') support.push('fisioterapista')
+  }
+
+  // Mental health: psicologo + mental_coach complement each other
+  if (domain === 'mindset') {
+    if (primary === 'psicologo') support.push('mental_coach')
+    else if (primary === 'mental_coach' && (lower.includes('stress') || lower.includes('ansia'))) {
+      support.push('psicologo')
+    }
+  }
+
+  // Cooking + nutrition
+  if (domain === 'cucina' && (lower.includes('dieta') || lower.includes('calorie') || lower.includes('sano'))) {
+    support.push('dietista')
+  }
+
+  return support.slice(0, 2) // Max 2 support specialists
 }
 
 /** Main routing function */
@@ -129,7 +159,6 @@ export function routeMessage(
   const riskLevel = triageRisk(message)
   const domain = context.domain || classifyDomain(message)
   const primary = selectSpecialist(domain, message)
-  const interview = needsInterview(context)
 
   if (riskLevel === 'R2' || riskLevel === 'R3') {
     return {
@@ -138,29 +167,78 @@ export function routeMessage(
       domain: 'mindset',
       riskLevel,
       reasoning: 'Red flag rilevato: routing a Psicologo con supporto MMG',
-      needsInterview: false,
     }
   }
 
-  if (interview && riskLevel === 'R0') {
-    return {
-      primarySpecialist: 'intervistatore',
-      supportSpecialists: primary !== 'intervistatore' ? [primary] : [],
-      domain,
-      riskLevel,
-      reasoning: `MVD incompleto: avvio intervista per dominio ${domain}`,
-      needsInterview: true,
-    }
-  }
+  const support = selectSupportSpecialists(domain, primary, message)
 
   return {
     primarySpecialist: primary,
-    supportSpecialists: [],
+    supportSpecialists: support,
     domain,
     riskLevel,
-    reasoning: `Routing diretto a ${primary} per dominio ${domain}`,
-    needsInterview: false,
+    reasoning: support.length > 0
+      ? `Consulto team: ${primary} (primario) + ${support.join(', ')} per dominio ${domain}`
+      : `Routing a ${primary} per dominio ${domain}`,
   }
+}
+
+/** Run multi-specialist consultation (non-streaming, internal) */
+async function runConsultation(
+  routing: RoutingDecision,
+  context: ConversationContext,
+  enrichedMessage: string,
+): Promise<string> {
+  if (routing.supportSpecialists.length === 0 || !isGeminiConfigured()) {
+    return ''
+  }
+
+  const consultations: string[] = []
+
+  for (const supportId of routing.supportSpecialists) {
+    try {
+      const supportPrompt = await buildConsultationPrompt(supportId, context, routing.primarySpecialist)
+      const geminiMessages: AIMessage[] = [
+        ...context.messages.slice(0, -1),
+        { role: 'user', content: enrichedMessage },
+      ]
+
+      let opinion = ''
+      for (let round = 0; round < MAX_CONSULTATION_ROUNDS; round++) {
+        opinion = await generateResponse(supportPrompt, geminiMessages)
+        // If the opinion is substantial (not just "ok" or very short), use it
+        if (opinion.length > 30) break
+      }
+
+      if (opinion) {
+        consultations.push(`[Parere di ${supportId}]: ${opinion}`)
+      }
+    } catch (err) {
+      console.error(`[Orchestrator] Consultation error for ${supportId}:`, err)
+    }
+  }
+
+  return consultations.join('\n\n')
+}
+
+/** Enrich message with attachment descriptions */
+function enrichMessage(
+  userMessage: string,
+  attachments?: AIMessage['attachments'],
+): string {
+  let enriched = userMessage
+  if (attachments && attachments.length > 0) {
+    for (const att of attachments) {
+      if (att.type === 'barcode' && att.barcodeValue) {
+        enriched += `\n[Codice a barre scansionato: ${att.barcodeValue}]`
+      } else if (att.type === 'image') {
+        enriched += `\n[Immagine allegata: ${att.fileName}]`
+      } else if (att.type === 'audio') {
+        enriched += `\n[Messaggio vocale allegato: ${att.fileName}]`
+      }
+    }
+  }
+  return enriched
 }
 
 /** Generate AI response using orchestrator logic with Gemini */
@@ -170,27 +248,19 @@ export async function orchestrate(
   attachments?: AIMessage['attachments'],
 ): Promise<AIResponse> {
   const routing = routeMessage(userMessage, context)
-  const systemPrompt = routing.needsInterview
-    ? await buildSpecialistPrompt('intervistatore', { ...context, domain: routing.domain })
-    : await buildSpecialistPrompt(routing.primarySpecialist, { ...context, domain: routing.domain })
+  const enrichedMessage = enrichMessage(userMessage, attachments)
 
-  // Build attachment context into the user message
-  let enrichedMessage = userMessage
-  if (attachments && attachments.length > 0) {
-    for (const att of attachments) {
-      if (att.type === 'barcode' && att.barcodeValue) {
-        enrichedMessage += `\n[Codice a barre scansionato: ${att.barcodeValue}]`
-      } else if (att.type === 'image') {
-        enrichedMessage += `\n[Immagine allegata: ${att.fileName}]`
-      } else if (att.type === 'audio') {
-        enrichedMessage += `\n[Messaggio vocale allegato: ${att.fileName}]`
-      }
-    }
-  }
+  // Run consultation with support specialists
+  const consultationNotes = await runConsultation(routing, context, enrichedMessage)
 
-  // Build messages for Gemini (conversation history + current message)
+  const systemPrompt = await buildSpecialistPrompt(
+    routing.primarySpecialist,
+    { ...context, domain: routing.domain },
+    consultationNotes,
+  )
+
   const geminiMessages: AIMessage[] = [
-    ...context.messages.slice(0, -1), // history without last (which is the current user msg)
+    ...context.messages.slice(0, -1),
     { role: 'user', content: enrichedMessage },
   ]
 
@@ -212,7 +282,7 @@ export async function orchestrate(
     specialist: routing.primarySpecialist,
     audit: {
       riskLevel: routing.riskLevel,
-      pattern: routing.needsInterview ? 'interview' : 'hub-and-spoke',
+      pattern: routing.supportSpecialists.length > 0 ? 'multi-specialist' : 'direct',
       reasoning: routing.reasoning,
     },
   }
@@ -225,26 +295,7 @@ export async function* orchestrateStream(
   attachments?: AIMessage['attachments'],
 ): AsyncGenerator<{ type: 'routing'; data: { specialist: SpecialistId; audit: AIResponse['audit'] } } | { type: 'delta'; content: string }> {
   const routing = routeMessage(userMessage, context)
-  const systemPrompt = routing.needsInterview
-    ? await buildSpecialistPrompt('intervistatore', { ...context, domain: routing.domain })
-    : await buildSpecialistPrompt(routing.primarySpecialist, { ...context, domain: routing.domain })
-
-  // Enrich message with attachment context
-  let enrichedMessage = userMessage
-  if (attachments && attachments.length > 0) {
-    for (const att of attachments) {
-      if (att.type === 'barcode' && att.barcodeValue) {
-        enrichedMessage += `\n[Codice a barre scansionato: ${att.barcodeValue}]`
-      } else if (att.type === 'image') {
-        enrichedMessage += `\n[Immagine allegata: ${att.fileName}]`
-      }
-    }
-  }
-
-  const geminiMessages: AIMessage[] = [
-    ...context.messages.slice(0, -1),
-    { role: 'user', content: enrichedMessage },
-  ]
+  const enrichedMessage = enrichMessage(userMessage, attachments)
 
   // Emit routing info first
   yield {
@@ -253,11 +304,25 @@ export async function* orchestrateStream(
       specialist: routing.primarySpecialist,
       audit: {
         riskLevel: routing.riskLevel,
-        pattern: routing.needsInterview ? 'interview' : 'hub-and-spoke',
+        pattern: routing.supportSpecialists.length > 0 ? 'multi-specialist' : 'direct',
         reasoning: routing.reasoning,
       },
     },
   }
+
+  // Run internal consultation (non-streaming) with support specialists
+  const consultationNotes = await runConsultation(routing, context, enrichedMessage)
+
+  const systemPrompt = await buildSpecialistPrompt(
+    routing.primarySpecialist,
+    { ...context, domain: routing.domain },
+    consultationNotes,
+  )
+
+  const geminiMessages: AIMessage[] = [
+    ...context.messages.slice(0, -1),
+    { role: 'user', content: enrichedMessage },
+  ]
 
   if (isGeminiConfigured()) {
     try {
@@ -284,11 +349,10 @@ function generateFallbackResponse(
   routing: RoutingDecision,
   _enrichedMessage: string,
 ): string {
-  const { primarySpecialist, riskLevel, domain, needsInterview } = routing
+  const { primarySpecialist, riskLevel, domain } = routing
 
   if (riskLevel === 'R2' || riskLevel === 'R3') {
     return (
-      '🧠 **Psicologo del team LiveWell**\n\n' +
       'Ho notato nel tuo messaggio alcuni elementi che mi preoccupano. ' +
       'La tua sicurezza è la nostra priorità assoluta.\n\n' +
       'Ti consiglio di contattare:\n' +
@@ -296,23 +360,6 @@ function generateFallbackResponse(
       '- **Telefono Azzurro**: 19696\n' +
       '- **Pronto Soccorso** per emergenze immediate\n\n' +
       'Se vuoi, possiamo parlarne insieme in modo più approfondito. Sono qui per te.'
-    )
-  }
-
-  if (needsInterview) {
-    const domainIntros: Record<Domain, string> = {
-      nutrizione: 'Per poterti aiutare al meglio con la nutrizione, avrei bisogno di conoscerti un po\' meglio.',
-      allenamento: 'Per crearti un programma di allenamento efficace, vorrei capire meglio la tua situazione.',
-      mindset: 'Per supportarti al meglio nel tuo percorso di crescita, vorrei farti qualche domanda.',
-      cucina: 'Per darti consigli culinari su misura, vorrei capire le tue esigenze e possibilità.',
-      salute: 'Per poterti orientare al meglio, avrei bisogno di alcune informazioni.',
-      riabilitazione: 'Per aiutarti nel percorso di recupero, vorrei capire meglio la tua situazione.',
-      generale: 'Benvenuto nel team LiveWell! Per aiutarti al meglio, vorrei capire cosa cerchi.',
-    }
-    const intro = domainIntros[domain] || domainIntros.generale
-    return (
-      `🎙️ **Intervistatore LiveWell**\n\n${intro}\n\n` +
-      'Qual è il risultato più importante che vorresti ottenere nelle prossime settimane?'
     )
   }
 
@@ -328,15 +375,15 @@ function generateFallbackResponse(
     mmg: { emoji: '🩺', name: 'Medico di Medicina Generale' },
     gastroenterologo: { emoji: '🫁', name: 'Gastroenterologo' },
     chinesologo: { emoji: '🤸', name: 'Chinesologo' },
+    analista_contesto: { emoji: '🔍', name: 'Analista del Contesto' },
   }
 
   const spec = specNames[primarySpecialist] || { emoji: '🤖', name: 'Assistente' }
   return (
-    `${spec.emoji} **${spec.name} del team LiveWell**\n\n` +
     `Gemini AI non è configurato (GEMINI_API_KEY mancante). ` +
     `Il routing verso ${spec.name} per il dominio "${domain}" funziona correttamente. ` +
     `Configura GEMINI_API_KEY per attivare le risposte AI reali.`
   )
 }
 
-export { buildOrchestratorPrompt, buildSpecialistPrompt }
+export { buildSpecialistPrompt }

@@ -10,5 +10,5 @@ export type {
   ConversationContext,
   AIMessage,
   AIResponse,
-  InterviewState,
+  ProfileData,
 } from './types'
