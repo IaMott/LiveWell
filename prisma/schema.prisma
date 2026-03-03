@@ -74,13 +74,15 @@ model UserProfile {
 }
 
 model Conversation {
-  id        String    @id @default(cuid())
-  title     String?
-  userId    String    @map("user_id")
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  messages  Message[]
+  id         String    @id @default(cuid())
+  title      String?
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shareToken String?   @unique @map("share_token")
+  sharedAt   DateTime? @map("shared_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  messages   Message[]
 
   @@index([userId])
   @@map("conversations")
