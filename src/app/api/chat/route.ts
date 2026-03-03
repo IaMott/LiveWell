@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { orchestrateStream, buildContext } from '@/lib/ai'
 import type { AIMessage } from '@/lib/ai'
+import { createNotification, shouldNotify } from '@/lib/notifications'
 
 const attachmentSchema = z.object({
   url: z.string(),
@@ -107,6 +108,7 @@ export async function POST(request: Request): Promise<Response> {
   const stream = new ReadableStream({
     async start(controller) {
       let accumulated = ''
+      let activeSpecialist: string | undefined
 
       try {
         // Send conversation ID immediately
@@ -116,6 +118,7 @@ export async function POST(request: Request): Promise<Response> {
 
         for await (const event of orchestrateStream(message, context, aiAttachments)) {
           if (event.type === 'routing') {
+            activeSpecialist = event.data.specialist
             // Send specialist routing info
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({
@@ -141,6 +144,18 @@ export async function POST(request: Request): Promise<Response> {
               conversationId: convId!,
             },
           })
+
+          // Generate notification if response contains actionable content
+          const notif = shouldNotify(accumulated, activeSpecialist)
+          if (notif) {
+            await createNotification({
+              userId,
+              type: 'specialist',
+              title: notif.title,
+              message: notif.message,
+              metadata: { conversationId: convId, specialistId: activeSpecialist },
+            }).catch(() => {}) // Non-blocking
+          }
         }
 
         controller.enqueue(
