@@ -5,7 +5,12 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [react()],
   test: {
-    environment: 'jsdom',
+    environment: 'node',
+    environmentMatchGlobs: [['tests/**/*.test.tsx', 'jsdom']],
+    pool: 'forks',
+    maxWorkers: 1,
+    testTimeout: 15000,
+    hookTimeout: 15000,
     setupFiles: ['./tests/setup.ts'],
     globals: true,
     coverage: {

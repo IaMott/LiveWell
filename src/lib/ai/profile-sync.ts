@@ -1,6 +1,8 @@
 import type { Domain, SpecialistId } from './types'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
+import { createHash } from 'crypto'
+import { safeParseProfileSectionUpdate } from '@/lib/profile/schema'
 
 type AttachmentInput = {
   type: 'image' | 'barcode' | 'audio'
@@ -20,6 +22,7 @@ type SyncInput = {
   knownData: Record<string, string>
   attachments?: AttachmentInput[]
   specialistTurns?: Array<{ specialistId: SpecialistId; content: string }>
+  syncId?: string
 }
 
 type JsonObj = Record<string, unknown>
@@ -35,8 +38,18 @@ function asObj(value: unknown): JsonObj {
   return {}
 }
 
-function appendHistory(section: JsonObj, entry: JsonObj): JsonObj {
+function appendHistory(section: JsonObj, entry: JsonObj, syncId: string): JsonObj {
   const history = Array.isArray(section._history) ? [...section._history] : []
+  if (
+    history.some(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        (item as Record<string, unknown>).syncId === syncId,
+    )
+  ) {
+    return section
+  }
   history.push(entry)
   return { ...section, _history: history }
 }
@@ -64,6 +77,29 @@ function mapDomainToSection(domain: Domain): 'health' | 'nutrition' | 'training'
   return 'goals'
 }
 
+function attachmentKey(value: Partial<AttachmentInput> & { syncId?: string }): string {
+  return [
+    value.syncId ?? '',
+    value.type ?? '',
+    value.url ?? '',
+    value.fileName ?? '',
+  ].join('|')
+}
+
+function buildSyncId(input: SyncInput): string {
+  if (input.syncId?.trim()) return input.syncId.trim()
+  return createHash('sha1')
+    .update(
+      JSON.stringify({
+        conversationId: input.conversationId,
+        userMessage: input.userMessage,
+        assistantMessage: input.assistantMessage,
+        domain: input.domain,
+      }),
+    )
+    .digest('hex')
+}
+
 export async function syncProfileFromConversation(input: SyncInput): Promise<void> {
   const profile = await prisma.userProfile.findUnique({
     where: { userId: input.userId },
@@ -81,17 +117,25 @@ export async function syncProfileFromConversation(input: SyncInput): Promise<voi
     },
   })
 
+  const syncId = buildSyncId(input)
   const sectionKey = mapDomainToSection(input.domain)
-  const health = asObj(profile?.health)
-  const nutrition = asObj(profile?.nutrition)
-  const training = asObj(profile?.training)
-  const mindfulness = asObj(profile?.mindfulness)
-  const goals = asObj(profile?.goals)
-  const settings = asObj(profile?.settings)
+  const health = safeParseProfileSectionUpdate('health', profile?.health)
+  const nutrition = safeParseProfileSectionUpdate('nutrition', profile?.nutrition)
+  const training = safeParseProfileSectionUpdate('training', profile?.training)
+  const mindfulness = safeParseProfileSectionUpdate('mindfulness', profile?.mindfulness)
+  const goals = safeParseProfileSectionUpdate('goals', profile?.goals)
+  const settings = safeParseProfileSectionUpdate('settings', profile?.settings)
+  const existingSyncLedger = Array.isArray(settings.aiSyncLedger)
+    ? settings.aiSyncLedger
+    : []
+  if (existingSyncLedger.some((value) => value === syncId)) {
+    return
+  }
 
   const nowIso = new Date().toISOString()
   const attachmentCatalog = (input.attachments ?? []).map((att) => ({
     ...att,
+    syncId,
     domain: input.domain,
     conversationId: input.conversationId,
     timestamp: nowIso,
@@ -100,6 +144,7 @@ export async function syncProfileFromConversation(input: SyncInput): Promise<voi
   const historyEntry: JsonObj = {
     timestamp: nowIso,
     conversationId: input.conversationId,
+    syncId,
     domain: input.domain,
     primarySpecialist: input.primarySpecialist,
     contributors: input.contributors,
@@ -117,12 +162,17 @@ export async function syncProfileFromConversation(input: SyncInput): Promise<voi
     goals,
   }
 
-  sectionUpdates[sectionKey] = appendHistory(sectionUpdates[sectionKey], historyEntry)
+  sectionUpdates[sectionKey] = appendHistory(
+    sectionUpdates[sectionKey],
+    historyEntry,
+    syncId,
+  )
 
   // Keep a global audit trail in settings
   const auditLog = Array.isArray(settings.aiAuditLog) ? [...settings.aiAuditLog] : []
   auditLog.push({
     timestamp: nowIso,
+    syncId,
     action: 'ai_profile_sync',
     domain: input.domain,
     specialist: input.primarySpecialist,
@@ -136,23 +186,53 @@ export async function syncProfileFromConversation(input: SyncInput): Promise<voi
   const attachmentHistory = Array.isArray(settings.attachmentHistory)
     ? [...settings.attachmentHistory]
     : []
-  attachmentHistory.push(...attachmentCatalog)
+  const existingAttachmentKeys = new Set(
+    attachmentHistory
+      .filter((item): item is JsonObj => !!item && typeof item === 'object')
+      .map((item) =>
+        attachmentKey({
+          syncId: String(item.syncId ?? ''),
+          type: String(item.type ?? '') as AttachmentInput['type'],
+          url: String(item.url ?? ''),
+          fileName: String(item.fileName ?? ''),
+        }),
+      ),
+  )
+  for (const attachment of attachmentCatalog) {
+    const key = attachmentKey(attachment)
+    if (existingAttachmentKeys.has(key)) continue
+    attachmentHistory.push(attachment)
+    existingAttachmentKeys.add(key)
+  }
   settings.attachmentHistory = attachmentHistory
 
   // Specialist memory separated by conversation and specialist.
   const specialistMemoryRoot = asObj(settings.aiSpecialistMemory)
   const convMemory = asObj(specialistMemoryRoot[input.conversationId])
+  const memoryLedgerRoot = asObj(settings.aiSpecialistMemoryLedger)
+  const convMemoryLedger = asObj(memoryLedgerRoot[input.conversationId])
   for (const turn of input.specialistTurns ?? []) {
     const existing = Array.isArray(convMemory[turn.specialistId])
       ? [...(convMemory[turn.specialistId] as string[])]
       : []
+    const existingLedger = Array.isArray(convMemoryLedger[turn.specialistId])
+      ? [...(convMemoryLedger[turn.specialistId] as string[])]
+      : []
     if (turn.content.trim()) {
-      existing.push(turn.content.trim())
+      if (!existingLedger.includes(syncId)) {
+        existing.push(turn.content.trim())
+        existingLedger.push(syncId)
+      }
     }
     convMemory[turn.specialistId] = existing.slice(-30)
+    convMemoryLedger[turn.specialistId] = existingLedger.slice(-60)
   }
   specialistMemoryRoot[input.conversationId] = convMemory
+  memoryLedgerRoot[input.conversationId] = convMemoryLedger
   settings.aiSpecialistMemory = specialistMemoryRoot
+  settings.aiSpecialistMemoryLedger = memoryLedgerRoot
+
+  settings.aiSyncLedger = [...existingSyncLedger, syncId].slice(-200)
 
   await prisma.userProfile.upsert({
     where: { userId: input.userId },

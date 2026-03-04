@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { createHash } from 'crypto'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { orchestrateStream, buildContext } from '@/lib/ai'
@@ -60,7 +61,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Save user message with attachments
-  await prisma.message.create({
+  const createdUserMessage = await prisma.message.create({
     data: {
       role: 'user',
       content: message,
@@ -232,6 +233,9 @@ export async function POST(request: Request): Promise<Response> {
           await syncProfileFromConversation({
             userId,
             conversationId: convId!,
+            syncId: createHash('sha1')
+              .update(`${convId}:${createdUserMessage.id}:${message}`)
+              .digest('hex'),
             userMessage: message,
             assistantMessage:
               perAgentAccumulated.size > 0
