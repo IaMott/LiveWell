@@ -15,6 +15,30 @@ type ProfileState = {
   settings?: Record<string, unknown> | null
 }
 
+type UpsertMockArgs = {
+  create: {
+    birthDate?: Date | null
+    gender?: string | null
+    height?: number | null
+    weight?: number | null
+    health?: Record<string, unknown>
+    nutrition?: Record<string, unknown>
+    training?: Record<string, unknown>
+    mindfulness?: Record<string, unknown>
+    goals?: Record<string, unknown>
+    settings?: Record<string, unknown>
+  }
+  update: {
+    health?: Record<string, unknown>
+    nutrition?: Record<string, unknown>
+    training?: Record<string, unknown>
+    mindfulness?: Record<string, unknown>
+    goals?: Record<string, unknown>
+    settings?: Record<string, unknown>
+    [key: string]: unknown
+  }
+}
+
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     userProfile: {
@@ -33,30 +57,31 @@ describe('syncProfileFromConversation', () => {
 
     vi.mocked(prisma.userProfile.findUnique).mockImplementation(async () => state as never)
 
-    vi.mocked(prisma.userProfile.upsert).mockImplementation(async (args: any) => {
+    vi.mocked(prisma.userProfile.upsert).mockImplementation(async (args) => {
+      const typedArgs = args as UpsertMockArgs
       if (!state) {
         state = {
-          birthDate: args.create.birthDate ?? null,
-          gender: args.create.gender ?? null,
-          height: args.create.height ?? null,
-          weight: args.create.weight ?? null,
-          health: args.create.health as Record<string, unknown>,
-          nutrition: args.create.nutrition as Record<string, unknown>,
-          training: args.create.training as Record<string, unknown>,
-          mindfulness: args.create.mindfulness as Record<string, unknown>,
-          goals: args.create.goals as Record<string, unknown>,
-          settings: args.create.settings as Record<string, unknown>,
+          birthDate: typedArgs.create.birthDate ?? null,
+          gender: typedArgs.create.gender ?? null,
+          height: typedArgs.create.height ?? null,
+          weight: typedArgs.create.weight ?? null,
+          health: typedArgs.create.health as Record<string, unknown>,
+          nutrition: typedArgs.create.nutrition as Record<string, unknown>,
+          training: typedArgs.create.training as Record<string, unknown>,
+          mindfulness: typedArgs.create.mindfulness as Record<string, unknown>,
+          goals: typedArgs.create.goals as Record<string, unknown>,
+          settings: typedArgs.create.settings as Record<string, unknown>,
         }
       } else {
         state = {
           ...state,
-          ...args.update,
-          health: (args.update.health as Record<string, unknown>) ?? state.health,
-          nutrition: (args.update.nutrition as Record<string, unknown>) ?? state.nutrition,
-          training: (args.update.training as Record<string, unknown>) ?? state.training,
-          mindfulness: (args.update.mindfulness as Record<string, unknown>) ?? state.mindfulness,
-          goals: (args.update.goals as Record<string, unknown>) ?? state.goals,
-          settings: (args.update.settings as Record<string, unknown>) ?? state.settings,
+          ...typedArgs.update,
+          health: (typedArgs.update.health as Record<string, unknown>) ?? state.health,
+          nutrition: (typedArgs.update.nutrition as Record<string, unknown>) ?? state.nutrition,
+          training: (typedArgs.update.training as Record<string, unknown>) ?? state.training,
+          mindfulness: (typedArgs.update.mindfulness as Record<string, unknown>) ?? state.mindfulness,
+          goals: (typedArgs.update.goals as Record<string, unknown>) ?? state.goals,
+          settings: (typedArgs.update.settings as Record<string, unknown>) ?? state.settings,
         }
       }
       return state as never
