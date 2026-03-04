@@ -22,7 +22,7 @@
 
 ## Focus attuale
 - Hardening delete conversazioni verificato (400 su query invalida).
-- Lock anti-concorrenza UI e test cancel/error presenti su storico.
+- Lock anti-concorrenza UI completo con guard esplicita su bulk delete.
 - Copertura minima sufficiente per merge PR.
 
 ## Rischi aperti
@@ -30,4 +30,4 @@
 - Necessaria validazione funzionale in chat dopo deploy PR.
 
 ## Last Updated
-2026-03-04 18:45
+2026-03-04 18:46

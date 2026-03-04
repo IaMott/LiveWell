@@ -36,3 +36,7 @@
 - Fatto: review lock anti-concorrenza e nuovi test UI cancel/error su HistoryPageContent.
 - Output chiave: nessun blocker per merge; individuato solo miglioramento residuale low-risk su guard re-entrancy bulk delete (`if (isDeleting) return`).
 - Prossimo passo: opzionale micro-fix guard in handleDeleteAll.
+## 2026-03-04 18:46 — backend-developer
+- Fatto: applicato micro-hardening opzionale in HistoryPageContent con guard `if (isDeleting || deletingId) return` in handleDeleteAll.
+- Output chiave: prevenuta re-entrancy bulk delete anche in caso di invocazione programmatica durante delete in corso.
+- Prossimo passo: attendere CI PR.

@@ -27,7 +27,7 @@ export function HistoryPageContent() {
   }, [])
 
   async function handleDeleteAll() {
-    if (deletingId) return
+    if (isDeleting || deletingId) return
     const confirmed = window.confirm(
       'Vuoi eliminare tutto lo storico delle conversazioni? Questa azione non puo essere annullata.',
     )

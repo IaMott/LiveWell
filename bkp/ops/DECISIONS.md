@@ -78,3 +78,8 @@
 - **Date**: 2026-03-04 17:21
 - **Decision**: durante delete bulk o single, i pulsanti di delete restano disabilitati fino a completamento operazione.
 - **Rationale**: evitare race condition UI e doppie richieste concorrenti che possono produrre stato inconsistente.
+
+## ADR-024: Guard re-entrancy esplicita su delete bulk storico
+- **Date**: 2026-03-04 18:46
+- **Decision**: `handleDeleteAll` blocca esecuzione se `isDeleting` e gia true.
+- **Rationale**: chiudere completamente la finestra di race su invocazioni concorrenti del bulk delete.
