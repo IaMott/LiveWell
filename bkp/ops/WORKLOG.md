@@ -48,3 +48,7 @@
 - Fatto: merge PR #1 completato su main via merge commit locale + push origin/main.
 - Output chiave: commit finale su main = 6e82dee6d8b2d0fee45e5294313cdd32b7eac5f7.
 - Prossimo passo: verifica deploy production fuori sandbox (qui DNS/API esterne limitate).
+## 2026-03-04 19:32 — code-reviewer
+- Fatto: conferma post-merge su main del micro-hardening in HistoryPageContent e verifica regressioni da merge con storie non correlate.
+- Output chiave: commit `9aa40b2` confermato su `origin/main`; nessuna regressione codice rilevata (delta vs branch PR limitato a `bkp/ops`).
+- Prossimo passo: nessun blocco tecnico residuo su questo scope.

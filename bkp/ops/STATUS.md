@@ -12,7 +12,7 @@
 | 6 | File Upload (barcode, images) | ✅ Done | |
 | 7 | Orchestrator agent | ✅ Done | |
 | 8 | Gemini integration | ✅ Done | |
-| 9 | Audio/Video + Multi-agent architecture | ✅ Done | 6e82dee |
+| 9 | Audio/Video + Multi-agent architecture | ✅ Done | 9aa40b2 |
 | 10 | Profile Modules | ⬜ | — |
 | 11 | Notifications | ⬜ | — |
 | 12 | Sharing/PDF | ⬜ | — |
@@ -21,12 +21,12 @@
 | 15 | Docs & handoff | ⬜ | — |
 
 ## Focus attuale
-- PR #1 mergeata su `main`.
-- Commit finale `main`: `6e82dee6d8b2d0fee45e5294313cdd32b7eac5f7`.
-- Verifica produzione da completare da ambiente con accesso esterno (DNS/API non disponibili nel sandbox corrente).
+- Post-merge validato su `main`.
+- Micro-hardening delete storico confermato senza regressioni.
+- Nessun blocker tecnico aperto su questo scope.
 
 ## Rischi aperti
-- Verifica URL production non eseguibile in questa sessione per limiti rete/DNS.
+- Nessun rischio bloccante rilevato nel perimetro review corrente.
 
 ## Last Updated
-2026-03-04 19:14
+2026-03-04 19:32
