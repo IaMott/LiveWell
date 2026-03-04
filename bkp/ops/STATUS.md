@@ -12,7 +12,7 @@
 | 6 | File Upload (barcode, images) | ✅ Done | |
 | 7 | Orchestrator agent | ✅ Done | |
 | 8 | Gemini integration | ✅ Done | |
-| 9 | Audio/Video + Multi-agent architecture | ▶ In corso | pending |
+| 9 | Audio/Video + Multi-agent architecture | ▶ In corso | merge-ready |
 | 10 | Profile Modules | ⬜ | — |
 | 11 | Notifications | ⬜ | — |
 | 12 | Sharing/PDF | ⬜ | — |
@@ -21,13 +21,12 @@
 | 15 | Docs & handoff | ⬜ | — |
 
 ## Focus attuale
-- Hardening delete conversazioni verificato (400 su query invalida).
-- Lock anti-concorrenza UI completo con guard esplicita su bulk delete.
-- Copertura minima sufficiente per merge PR.
+- Hardening delete conversazioni completato e verificato.
+- Lock anti-concorrenza UI stabile con test cancel/error.
+- PR #1 con check tutti PASS, pronta per merge.
 
 ## Rischi aperti
-- Comandi `tsc/eslint` locali possono restare appesi sull'ambiente utente.
-- Necessaria validazione funzionale in chat dopo deploy PR.
+- Nessun blocker tecnico aperto su questo scope.
 
 ## Last Updated
-2026-03-04 18:46
+2026-03-04 19:00

@@ -40,3 +40,7 @@
 - Fatto: applicato micro-hardening opzionale in HistoryPageContent con guard `if (isDeleting || deletingId) return` in handleDeleteAll.
 - Output chiave: prevenuta re-entrancy bulk delete anche in caso di invocazione programmatica durante delete in corso.
 - Prossimo passo: attendere CI PR.
+## 2026-03-04 19:00 — code-reviewer
+- Fatto: review finale micro-hardening `handleDeleteAll` e verifica check PR.
+- Output chiave: fix conforme, nessuna regressione rilevata, check PR tutti PASS (GitHub Actions + Vercel).
+- Prossimo passo: PR pronta per merge su main.
