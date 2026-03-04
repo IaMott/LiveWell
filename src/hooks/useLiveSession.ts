@@ -40,7 +40,8 @@ export function useLiveSession(): UseLiveSessionReturn {
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
   // Refs for cleanup
-  const sessionRef = useRef<ReturnType<Awaited<ReturnType<typeof import('@google/genai')>['GoogleGenAI']['prototype']['live']['connect']>> | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sessionRef = useRef<any>(null)
   const captureCtxRef = useRef<AudioContext | null>(null)
   const playbackCtxRef = useRef<AudioContext | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
