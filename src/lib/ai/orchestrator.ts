@@ -30,6 +30,31 @@ const POSSIBLE_RISK_PATTERNS = [
   /infortunio.*grave/i, /frattura/i, /operazione/i, /chirurgia/i,
 ]
 
+const MVD_QUESTIONS: Record<string, string> = {
+  obiettivo: 'Per iniziare bene, qual e il risultato concreto che vuoi ottenere nei prossimi 3 mesi?',
+  età: 'Mi confermi la tua eta?',
+  sesso: 'Mi confermi il tuo sesso biologico (uomo o donna)?',
+  peso: 'Mi dici il tuo peso attuale in kg?',
+  altezza: 'Mi dici la tua altezza in cm?',
+  allergie_o_intolleranze: 'Hai allergie o intolleranze alimentari da considerare?',
+  patologie_o_farmaci: 'Hai patologie diagnosticate o farmaci in uso che dobbiamo considerare?',
+  routine_pasti: 'Com e organizzata oggi la tua routine dei pasti durante la giornata?',
+  idratazione: 'Quanta acqua bevi mediamente in un giorno?',
+  attività_fisica_attuale: 'Che attivita fisica stai facendo adesso e con quale frequenza?',
+  livello_allenamento: 'Come valuti il tuo livello attuale di allenamento (principiante/intermedio/avanzato)?',
+  frequenza_allenamento: 'Quanti giorni a settimana riesci ad allenarti in modo realistico?',
+  infortuni_o_limitazioni: 'Hai infortuni o limitazioni fisiche attive da rispettare?',
+  attrezzatura_disponibile: 'Che attrezzatura hai a disposizione per allenarti/cucinare?',
+  tempo_disponibile_settimanale: 'Quanto tempo reale hai ogni settimana da dedicare al percorso?',
+  stress_percepito: 'Quanto ti senti stressato in questo periodo, anche in modo indicativo?',
+  ore_sonno: 'Quante ore dormi mediamente per notte?',
+  ostacolo_principale: 'Qual e l ostacolo principale che ti fa perdere continuita?',
+  sintomo_o_obiettivo_salute: 'Qual e il sintomo o l obiettivo di salute principale su cui vuoi lavorare?',
+  esami_recenti_o_referti: 'Hai esami recenti o referti utili da considerare?',
+  dolore_localizzazione: 'Dove senti dolore o fastidio in questo momento?',
+  dolore_intensità: 'Quanto e intenso il dolore da 0 a 10?',
+}
+
 /** Triage risk level from message content */
 export function triageRisk(message: string): RiskLevel {
   for (const pattern of RED_FLAG_PATTERNS) {
@@ -151,6 +176,44 @@ function selectSupportSpecialists(domain: Domain, primary: SpecialistId, message
   return support.slice(0, 2) // Max 2 support specialists
 }
 
+function formatContributorName(id: SpecialistId): string {
+  const labels: Record<SpecialistId, string> = {
+    orchestratore: 'Orchestratore',
+    intervistatore: 'Intervistatore',
+    dietista: 'Dietista',
+    personal_trainer: 'Personal Trainer',
+    psicologo: 'Psicologo',
+    mental_coach: 'Mental Coach',
+    chef: 'Chef',
+    fisioterapista: 'Fisioterapista',
+    fisiatra: 'Fisiatra',
+    medico_sport: 'Medico dello Sport',
+    mmg: 'MMG',
+    gastroenterologo: 'Gastroenterologo',
+    chinesologo: 'Chinesologo',
+    analista_contesto: 'Analista del Contesto',
+  }
+  return labels[id]
+}
+
+function dedupeSpecialists(ids: SpecialistId[]): SpecialistId[] {
+  return [...new Set(ids)]
+}
+
+function buildContributorFooter(contributors: SpecialistId[]): string {
+  if (contributors.length === 0) return ''
+  const names = contributors.map(formatContributorName).join(', ')
+  return `\n\nRiferimenti professionali integrati: ${names}.`
+}
+
+function buildMvdQuestion(context: ConversationContext): string {
+  const nextMissing = context.missingData[0]
+  if (!nextMissing) {
+    return 'Procediamo: dimmi pure il prossimo dettaglio che vuoi approfondire.'
+  }
+  return MVD_QUESTIONS[nextMissing] ?? `Per completare il quadro mi serve un dato: ${nextMissing}.`
+}
+
 /** Main routing function */
 export function routeMessage(
   message: string,
@@ -167,6 +230,16 @@ export function routeMessage(
       domain: 'mindset',
       riskLevel,
       reasoning: 'Red flag rilevato: routing a Psicologo con supporto MMG',
+    }
+  }
+
+  if (context.missingData.length > 0) {
+    return {
+      primarySpecialist: 'intervistatore',
+      supportSpecialists: [],
+      domain,
+      riskLevel,
+      reasoning: `MVD incompleto (${context.missingData.length} dati mancanti): intervista guidata prima del piano`,
     }
   }
 
@@ -249,6 +322,24 @@ export async function orchestrate(
 ): Promise<AIResponse> {
   const routing = routeMessage(userMessage, context)
   const enrichedMessage = enrichMessage(userMessage, attachments)
+  const contributors = dedupeSpecialists([
+    routing.primarySpecialist,
+    ...routing.supportSpecialists,
+  ])
+
+  if (routing.primarySpecialist === 'intervistatore' && context.missingData.length > 0) {
+    const content = buildMvdQuestion(context)
+    return {
+      content,
+      specialist: 'intervistatore',
+      contributors: ['intervistatore'],
+      audit: {
+        riskLevel: routing.riskLevel,
+        pattern: 'mvd-gating',
+        reasoning: routing.reasoning,
+      },
+    }
+  }
 
   // Run consultation with support specialists
   const consultationNotes = await runConsultation(routing, context, enrichedMessage)
@@ -278,8 +369,9 @@ export async function orchestrate(
   }
 
   return {
-    content,
+    content: content + buildContributorFooter(contributors),
     specialist: routing.primarySpecialist,
+    contributors,
     audit: {
       riskLevel: routing.riskLevel,
       pattern: routing.supportSpecialists.length > 0 ? 'multi-specialist' : 'direct',
@@ -293,21 +385,46 @@ export async function* orchestrateStream(
   userMessage: string,
   context: ConversationContext,
   attachments?: AIMessage['attachments'],
-): AsyncGenerator<{ type: 'routing'; data: { specialist: SpecialistId; audit: AIResponse['audit'] } } | { type: 'delta'; content: string }> {
+): AsyncGenerator<
+  | {
+      type: 'routing'
+      data: {
+        specialist: SpecialistId
+        specialists: SpecialistId[]
+        domain: Domain
+        mode: 'interview' | 'integrated'
+        audit: AIResponse['audit']
+      }
+    }
+  | { type: 'delta'; content: string }
+> {
   const routing = routeMessage(userMessage, context)
   const enrichedMessage = enrichMessage(userMessage, attachments)
+  const contributors = dedupeSpecialists([
+    routing.primarySpecialist,
+    ...routing.supportSpecialists,
+  ])
+  const isInterview = routing.primarySpecialist === 'intervistatore' && context.missingData.length > 0
 
   // Emit routing info first
   yield {
     type: 'routing',
     data: {
       specialist: routing.primarySpecialist,
+      specialists: contributors,
+      domain: routing.domain,
+      mode: isInterview ? 'interview' : 'integrated',
       audit: {
         riskLevel: routing.riskLevel,
         pattern: routing.supportSpecialists.length > 0 ? 'multi-specialist' : 'direct',
         reasoning: routing.reasoning,
       },
     },
+  }
+
+  if (isInterview) {
+    yield { type: 'delta', content: buildMvdQuestion(context) }
+    return
   }
 
   // Run internal consultation (non-streaming) with support specialists
@@ -329,6 +446,10 @@ export async function* orchestrateStream(
       const { generateStream } = await import('./gemini')
       for await (const chunk of generateStream(systemPrompt, geminiMessages)) {
         yield { type: 'delta', content: chunk }
+      }
+      const footer = buildContributorFooter(contributors)
+      if (footer) {
+        yield { type: 'delta', content: footer }
       }
       return
     } catch (err) {

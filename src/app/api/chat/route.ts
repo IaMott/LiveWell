@@ -3,8 +3,9 @@ import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { orchestrateStream, buildContext } from '@/lib/ai'
-import type { AIMessage } from '@/lib/ai'
+import type { AIMessage, Domain, SpecialistId } from '@/lib/ai'
 import { createNotification, shouldNotify } from '@/lib/notifications'
+import { syncProfileFromConversation } from '@/lib/ai/profile-sync'
 
 const attachmentSchema = z.object({
   url: z.string(),
@@ -124,7 +125,9 @@ export async function POST(request: Request): Promise<Response> {
   const stream = new ReadableStream({
     async start(controller) {
       let accumulated = ''
-      let activeSpecialist: string | undefined
+      let activeSpecialist: SpecialistId | undefined
+      let activeDomain: Domain | undefined
+      let activeContributors: SpecialistId[] = []
 
       try {
         // Send conversation ID immediately
@@ -135,11 +138,16 @@ export async function POST(request: Request): Promise<Response> {
         for await (const event of orchestrateStream(message, context, aiAttachments)) {
           if (event.type === 'routing') {
             activeSpecialist = event.data.specialist
+            activeDomain = event.data.domain
+            activeContributors = event.data.specialists
             // Send specialist routing info
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({
                 type: 'routing',
                 specialist: event.data.specialist,
+                specialists: event.data.specialists,
+                domain: event.data.domain,
+                mode: event.data.mode,
                 audit: event.data.audit,
               })}\n\n`),
             )
@@ -159,6 +167,21 @@ export async function POST(request: Request): Promise<Response> {
               content: accumulated,
               conversationId: convId!,
             },
+          })
+
+          // Automatic profile sync with full audit/history trail.
+          await syncProfileFromConversation({
+            userId,
+            conversationId: convId!,
+            userMessage: message,
+            assistantMessage: accumulated,
+            domain: activeDomain ?? context.domain ?? 'generale',
+            primarySpecialist: activeSpecialist ?? 'analista_contesto',
+            contributors: activeContributors.length > 0 ? activeContributors : ['analista_contesto'],
+            knownData: context.knownData,
+            attachments: aiAttachments,
+          }).catch((err) => {
+            console.error('[Chat API] Profile sync error:', err)
           })
 
           // Generate notification if response contains actionable content

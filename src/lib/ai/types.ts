@@ -73,6 +73,7 @@ export interface ConversationContext {
   domain?: Domain
   knownData: Record<string, string>
   missingData: string[]
+  requiredData: string[]
   riskSignal: 'none' | 'possible' | 'confirmed'
   userId: string
   profileData?: ProfileData
@@ -82,6 +83,7 @@ export interface ConversationContext {
 export interface AIResponse {
   content: string
   specialist: SpecialistId
+  contributors?: SpecialistId[]
   audit?: {
     riskLevel: RiskLevel
     pattern: string

@@ -49,6 +49,11 @@ node_modules_stale_*/
 tmp/
 temp/
 
+# local agent memory/backups
+bkp/backups/
+bkp/ops/chatlogs/
+bkp/ops/journal/
+
 # test results
 test-results/
 playwright-report/

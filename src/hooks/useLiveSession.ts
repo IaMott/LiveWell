@@ -23,10 +23,11 @@ interface UseLiveSessionReturn {
   isMuted: boolean
   mode: LiveMode | null
   specialist: string | null
+  fallbackMessage: string | null
   transcript: TranscriptEntry[]
   videoRef: RefObject<HTMLVideoElement | null>
   startSession: (mode: LiveMode, conversationId: string | null) => Promise<void>
-  stopSession: () => void
+  stopSession: () => Promise<string | null>
   toggleMute: () => void
 }
 
@@ -36,6 +37,7 @@ export function useLiveSession(): UseLiveSessionReturn {
   const [isMuted, setIsMuted] = useState(false)
   const [mode, setMode] = useState<LiveMode | null>(null)
   const [specialist, setSpecialist] = useState<string | null>(null)
+  const [fallbackMessage, setFallbackMessage] = useState<string | null>(null)
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([])
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -77,9 +79,9 @@ export function useLiveSession(): UseLiveSessionReturn {
 
   /** Save transcript to DB when session ends */
   const saveTranscript = useCallback(async (entries: TranscriptEntry[], convId: string | null) => {
-    if (entries.length === 0) return
+    if (entries.length === 0) return convId
     try {
-      await fetch('/api/live-messages', {
+      const res = await fetch('/api/live-messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -87,8 +89,12 @@ export function useLiveSession(): UseLiveSessionReturn {
           messages: entries.filter((e) => e.content.trim().length > 0),
         }),
       })
+      if (!res.ok) return null
+      const data = (await res.json()) as { conversationId?: string }
+      return data.conversationId ?? convId
     } catch (err) {
       console.error('[LiveSession] Failed to save transcript:', err)
+      return null
     }
   }, [])
 
@@ -136,15 +142,23 @@ export function useLiveSession(): UseLiveSessionReturn {
 
   const startSession = useCallback(
     async (sessionMode: LiveMode, conversationId: string | null) => {
+      setFallbackMessage(null)
       setIsConnecting(true)
       setMode(sessionMode)
       setTranscript([])
       conversationIdRef.current = conversationId
       currentAssistantTextRef.current = ''
 
-      try {
+      const MAX_ATTEMPTS = 2
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+        let openTimeout: ReturnType<typeof setTimeout> | null = null
+        let resolveOpen: (() => void) | null = null
+        const openPromise = new Promise<void>((resolve) => {
+          resolveOpen = resolve
+        })
+        try {
         // 1. Get API key and system prompt
-        const tokenRes = await fetch('/api/live-token', {
+          const tokenRes = await fetch('/api/live-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ conversationId }),
@@ -185,7 +199,7 @@ export function useLiveSession(): UseLiveSessionReturn {
         const { GoogleGenAI, Modality } = await import('@google/genai')
         const ai = new GoogleGenAI({ apiKey })
 
-        const session = await ai.live.connect({
+          const session = await ai.live.connect({
           model,
           config: {
             responseModalities: [Modality.AUDIO],
@@ -199,6 +213,7 @@ export function useLiveSession(): UseLiveSessionReturn {
           callbacks: {
             onopen: () => {
               console.log('[LiveSession] Connected')
+              resolveOpen?.()
               setIsConnecting(false)
               setIsActive(true)
             },
@@ -235,6 +250,15 @@ export function useLiveSession(): UseLiveSessionReturn {
           },
         })
         sessionRef.current = session
+
+          // Hard timeout: if onopen never arrives, fallback to text chat.
+          await Promise.race([
+            openPromise,
+            new Promise<void>((_, reject) => {
+              openTimeout = setTimeout(() => reject(new Error('Live connection timeout')), 15000)
+            }),
+          ])
+          if (openTimeout) clearTimeout(openTimeout)
 
         // 6. Start sending audio chunks
         const nativeSampleRate = captureCtx.sampleRate
@@ -278,25 +302,37 @@ export function useLiveSession(): UseLiveSessionReturn {
             }
           }, 1000) // 1 FPS
         }
-      } catch (err) {
-        console.error('[LiveSession] Start error:', err)
-        cleanup()
-        setIsConnecting(false)
-        setIsActive(false)
-        throw err
+          return
+        } catch (err) {
+          console.error('[LiveSession] Start error:', err)
+          if (openTimeout) clearTimeout(openTimeout)
+          cleanup()
+          setIsConnecting(false)
+          setIsActive(false)
+          if (attempt === MAX_ATTEMPTS) {
+            setFallbackMessage(
+              'Live non disponibile al momento. Passiamo automaticamente alla chat testuale.',
+            )
+            throw err
+          }
+          await new Promise((resolve) => setTimeout(resolve, 700))
+        }
       }
     },
     [cleanup, playAudioChunk],
   )
 
-  const stopSession = useCallback(() => {
+  const stopSession = useCallback(async () => {
     // Save transcript before cleanup
-    saveTranscript(transcript, conversationIdRef.current)
+    const savedConversationId =
+      (await saveTranscript(transcript, conversationIdRef.current)) ?? conversationIdRef.current
     cleanup()
     setIsActive(false)
     setIsConnecting(false)
     setMode(null)
     setSpecialist(null)
+    conversationIdRef.current = savedConversationId ?? null
+    return savedConversationId ?? null
   }, [cleanup, saveTranscript, transcript])
 
   const toggleMute = useCallback(() => {
@@ -310,6 +346,7 @@ export function useLiveSession(): UseLiveSessionReturn {
     isMuted,
     mode,
     specialist,
+    fallbackMessage,
     transcript,
     videoRef,
     startSession,

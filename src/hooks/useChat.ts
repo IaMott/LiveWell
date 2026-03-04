@@ -5,6 +5,21 @@ import type { ChatMessage, MessageAttachment } from '@/components/chat/MessageBu
 import type { ChatAttachment } from '@/components/chat/ChatInput'
 
 const STORAGE_KEY = 'livewell_conversation_id'
+const specialistLabels: Record<string, string> = {
+  intervistatore: 'Intervistatore',
+  dietista: 'Dietista',
+  personal_trainer: 'Personal Trainer',
+  psicologo: 'Psicologo',
+  mental_coach: 'Mental Coach',
+  chef: 'Chef',
+  fisioterapista: 'Fisioterapista',
+  fisiatra: 'Fisiatra',
+  medico_sport: 'Medico dello Sport',
+  mmg: 'MMG',
+  gastroenterologo: 'Gastroenterologo',
+  chinesologo: 'Chinesologo',
+  analista_contesto: 'Analista del Contesto',
+}
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -151,6 +166,16 @@ export function useChat() {
                 setConversationId(event.conversationId)
               } else if (event.type === 'routing' && event.specialist) {
                 setActiveSpecialist(event.specialist)
+                const readableSpecialists = Array.isArray(event.specialists)
+                  ? event.specialists.map((id: string) => specialistLabels[id] ?? id)
+                  : [specialistLabels[event.specialist] ?? event.specialist]
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? { ...m, specialists: readableSpecialists }
+                      : m,
+                  ),
+                )
               } else if (event.type === 'delta') {
                 setMessages((prev) =>
                   prev.map((m) =>

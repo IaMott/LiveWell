@@ -64,7 +64,9 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // Build context and get specialist prompt
   const context = buildContext(aiMessages, userId, userProfile)
-  const routing = routeMessage('conversazione live', context)
+  const liveIntentMessage =
+    aiMessages.slice().reverse().find((m) => m.role === 'user')?.content ?? 'sessione live in corso'
+  const routing = routeMessage(liveIntentMessage, context)
   const systemPrompt = await buildSpecialistPrompt(
     routing.primarySpecialist,
     { ...context, domain: routing.domain },

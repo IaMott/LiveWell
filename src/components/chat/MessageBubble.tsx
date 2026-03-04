@@ -17,6 +17,7 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   attachments?: MessageAttachment[]
+  specialists?: string[]
 }
 
 interface MessageBubbleProps {
@@ -87,6 +88,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
         {message.content && (
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        )}
+        {!isUser && message.specialists && message.specialists.length > 0 && (
+          <p className="mt-2 text-[0.6875rem] text-on-surface-muted">
+            Team: {message.specialists.join(', ')}
+          </p>
         )}
         <time
           className={cn(

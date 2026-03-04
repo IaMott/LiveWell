@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { ShareMenu } from './share'
@@ -11,12 +11,42 @@ import { useLiveSession } from '@/hooks/useLiveSession'
 import type { LiveMode } from '@/hooks/useLiveSession'
 
 export function ChatContainer() {
-  const { messages, isStreaming, isLoading, conversationId, sendMessage, loadConversation } = useChat()
+  const {
+    messages,
+    isStreaming,
+    isLoading,
+    conversationId,
+    activeSpecialist,
+    sendMessage,
+    loadConversation,
+  } = useChat()
   const live = useLiveSession()
+  const specialistLabel = useMemo(() => {
+    if (!activeSpecialist) return null
+    const labels: Record<string, string> = {
+      intervistatore: 'Intervistatore',
+      dietista: 'Dietista',
+      personal_trainer: 'Personal Trainer',
+      psicologo: 'Psicologo',
+      mental_coach: 'Mental Coach',
+      chef: 'Chef',
+      fisioterapista: 'Fisioterapista',
+      fisiatra: 'Fisiatra',
+      medico_sport: 'Medico dello Sport',
+      mmg: 'MMG',
+      gastroenterologo: 'Gastroenterologo',
+      chinesologo: 'Chinesologo',
+      analista_contesto: 'Analista del Contesto',
+    }
+    return labels[activeSpecialist] ?? activeSpecialist
+  }, [activeSpecialist])
 
   const handleStartLive = useCallback(
     async (mode: LiveMode) => {
       try {
+        if (mode === 'video' && !live.isActive) {
+          return
+        }
         await live.startSession(mode, conversationId)
       } catch (err) {
         console.error('[Chat] Failed to start live session:', err)
@@ -25,11 +55,11 @@ export function ChatContainer() {
     [live, conversationId],
   )
 
-  const handleStopLive = useCallback(() => {
-    live.stopSession()
-    // Reload conversation to show saved transcript messages
-    if (conversationId) {
-      setTimeout(() => loadConversation(conversationId), 1000)
+  const handleStopLive = useCallback(async () => {
+    const savedConversationId = await live.stopSession()
+    const idToReload = savedConversationId ?? conversationId
+    if (idToReload) {
+      setTimeout(() => loadConversation(idToReload), 500)
     }
   }, [live, conversationId, loadConversation])
 
@@ -40,9 +70,21 @@ export function ChatContainer() {
           <div className="text-muted-foreground text-sm">Caricamento conversazione...</div>
         </div>
       ) : (
-        <MessageList messages={messages} isStreaming={isStreaming} />
+        <>
+          {specialistLabel && (
+            <div className="px-4 py-2 text-center text-xs text-on-surface-muted">
+              Risposta in corso con supervisione: {specialistLabel}
+            </div>
+          )}
+          <MessageList messages={messages} isStreaming={isStreaming} />
+        </>
       )}
       <div className="relative">
+        {live.fallbackMessage && (
+          <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+            {live.fallbackMessage}
+          </div>
+        )}
         {conversationId && (
           <div className="absolute -top-10 right-4 z-10">
             <ShareMenu conversationId={conversationId} />
@@ -51,6 +93,7 @@ export function ChatContainer() {
         <ChatInput
           onSend={sendMessage}
           onStartLive={handleStartLive}
+          liveAudioActive={live.isActive && live.mode === 'audio'}
           disabled={isStreaming || isLoading}
         />
       </div>

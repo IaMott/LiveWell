@@ -17,11 +17,18 @@ export interface ChatAttachment {
 interface ChatInputProps {
   onSend: (content: string, attachments?: ChatAttachment[]) => void
   onStartLive?: (mode: 'audio' | 'video') => void
+  liveAudioActive?: boolean
   disabled?: boolean
   className?: string
 }
 
-export function ChatInput({ onSend, onStartLive, disabled, className }: ChatInputProps) {
+export function ChatInput({
+  onSend,
+  onStartLive,
+  liveAudioActive,
+  disabled,
+  className,
+}: ChatInputProps) {
   const [value, setValue] = useState('')
   const [showScanner, setShowScanner] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
@@ -257,7 +264,7 @@ export function ChatInput({ onSend, onStartLive, disabled, className }: ChatInpu
               <button
                 type="button"
                 onClick={() => onStartLive?.('video')}
-                disabled={disabled}
+                disabled={disabled || !liveAudioActive}
                 className={cn(
                   'flex h-11 w-11 items-center justify-center rounded-full',
                   'text-on-surface-muted transition-colors',
@@ -265,6 +272,7 @@ export function ChatInput({ onSend, onStartLive, disabled, className }: ChatInpu
                   'disabled:opacity-40',
                 )}
                 aria-label="Chiamata live video"
+                title={liveAudioActive ? 'Attiva video live' : 'Attiva prima la live audio'}
               >
                 <Video className="h-5 w-5" />
               </button>

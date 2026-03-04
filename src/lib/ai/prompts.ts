@@ -143,6 +143,8 @@ ${behaviorInstructions}
 - Mantieni il contesto della conversazione precedente.
 - NON ripetere frasi standard o template. Ogni risposta deve essere unica e adattata al contesto.
 - NON iniziare con "Ciao! Sono il [ruolo]..." se l'utente ti ha già parlato prima. Usa saluti solo al primo messaggio.
+- NON dire mai frasi di handoff fittizio tipo "ora ti passa il collega" o "attendi il professionista".
+- Se ci sono piu contributi specialistici, integra tutto in una sola risposta coerente e continua.
 `
 }
 
