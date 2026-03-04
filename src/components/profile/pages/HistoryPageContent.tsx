@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { MessageSquare } from 'lucide-react'
+import { MessageSquare, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface ConversationSummary {
@@ -15,6 +15,7 @@ interface ConversationSummary {
 export function HistoryPageContent() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     fetch('/api/conversations')
@@ -23,6 +24,23 @@ export function HistoryPageContent() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  async function handleDeleteAll() {
+    const confirmed = window.confirm(
+      'Vuoi eliminare tutto lo storico delle conversazioni? Questa azione non puo essere annullata.',
+    )
+    if (!confirmed) return
+    setIsDeleting(true)
+    try {
+      const res = await fetch('/api/conversations', { method: 'DELETE' })
+      if (!res.ok) throw new Error('delete failed')
+      setConversations([])
+    } catch {
+      window.alert('Impossibile eliminare lo storico. Riprova.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -43,6 +61,17 @@ export function HistoryPageContent() {
       <p className="text-sm text-on-surface-muted">
         Le tue conversazioni precedenti con gli specialisti LiveWell.
       </p>
+      {conversations.length > 0 && (
+        <button
+          type="button"
+          onClick={handleDeleteAll}
+          disabled={isDeleting}
+          className="inline-flex h-9 items-center gap-2 rounded-md border border-rose-300/40 bg-rose-50/40 px-3 text-sm text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Trash2 className="h-4 w-4" />
+          {isDeleting ? 'Eliminazione storico...' : 'Elimina tutto lo storico'}
+        </button>
+      )}
 
       {conversations.length === 0 ? (
         <div className="rounded-[var(--radius-card)] border border-surface-dim bg-surface-dim/50 p-8 text-center">

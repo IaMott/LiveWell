@@ -25,3 +25,25 @@ export async function GET(): Promise<NextResponse> {
 
   return NextResponse.json({ conversations })
 }
+
+export async function DELETE(request: Request): Promise<NextResponse> {
+  const session = await auth()
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
+  }
+
+  const { searchParams } = new URL(request.url)
+  const conversationId = searchParams.get('conversationId')
+
+  if (conversationId) {
+    const deleted = await prisma.conversation.deleteMany({
+      where: { id: conversationId, userId: session.user.id },
+    })
+    return NextResponse.json({ deletedCount: deleted.count })
+  }
+
+  const deleted = await prisma.conversation.deleteMany({
+    where: { userId: session.user.id },
+  })
+  return NextResponse.json({ deletedCount: deleted.count })
+}

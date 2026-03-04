@@ -58,3 +58,8 @@
 - **Date**: 2026-03-04 16:30
 - **Decision**: se output modello contiene segnali di handoff e resta non operativo, sostituire con domanda concreta guidata dal professionista corrente.
 - **Rationale**: impedire interruzioni conversazionali e mantenere progressione reale del dialogo.
+
+## ADR-020: Gestione storico chat utente con reset esplicito
+- **Date**: 2026-03-04 16:42
+- **Decision**: introdotto `DELETE /api/conversations` (bulk e singola via query) + azioni UI `Nuova chat` e `Elimina storico`.
+- **Rationale**: dare controllo esplicito all'utente su reset sessione e cancellazione storico per ripartenza pulita.

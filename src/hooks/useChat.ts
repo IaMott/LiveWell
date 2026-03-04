@@ -286,8 +286,30 @@ export function useChat() {
   }, [])
 
   const newConversation = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort()
+      abortRef.current = null
+    }
+    setIsStreaming(false)
     setMessages([])
     setConversationId(null)
+    setActiveSpecialist(null)
+    localStorage.removeItem(STORAGE_KEY)
+  }, [])
+
+  const clearAllConversations = useCallback(async () => {
+    if (abortRef.current) {
+      abortRef.current.abort()
+      abortRef.current = null
+    }
+    setIsStreaming(false)
+    const res = await fetch('/api/conversations', { method: 'DELETE' })
+    if (!res.ok) {
+      throw new Error('Impossibile eliminare lo storico')
+    }
+    setMessages([])
+    setConversationId(null)
+    setActiveSpecialist(null)
     localStorage.removeItem(STORAGE_KEY)
   }, [])
 
@@ -300,5 +322,6 @@ export function useChat() {
     sendMessage,
     loadConversation,
     newConversation,
+    clearAllConversations,
   }
 }

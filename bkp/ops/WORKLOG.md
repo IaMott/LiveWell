@@ -12,3 +12,7 @@
 - Fatto: hardening anti-loop e refactor routing multi-agent reale (rimozione fallback operativo ad analista, filtraggio support non operativo, anti-stall handoff).
 - Output chiave: eliminato pattern "ti contattera il PT" come stato terminale; ora in caso stall viene forzata domanda operativa concreta del professionista attivo.
 - Prossimo passo: deploy preview e test end-to-end su scenario dimagrimento+allenamento.
+## 2026-03-04 16:42 — frontend-developer
+- Fatto: aggiunta feature "Nuova chat" + "Elimina storico" con API delete conversazioni.
+- Output chiave: utente puo azzerare lo storico completo e ripartire da conversazione pulita sia dalla chat che dalla pagina Storico.
+- Prossimo passo: push su PR e verifica UX in preview.
