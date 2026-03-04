@@ -259,6 +259,64 @@ function normalizeAssistantOutput(content: string): string {
   )
 }
 
+function enforceSingleQuestion(content: string): string {
+  const questionMatches = [...content.matchAll(/\?/g)]
+  if (questionMatches.length <= 1) return content
+  const firstQuestionPos = questionMatches[0]?.index ?? -1
+  if (firstQuestionPos < 0) return content
+  return content.slice(0, firstQuestionPos + 1).trim()
+}
+
+async function runSpecialist(
+  specialistId: SpecialistId,
+  context: ConversationContext,
+  enrichedMessage: string,
+  consultationNotes?: string,
+): Promise<string> {
+  const systemPrompt = await buildSpecialistPrompt(
+    specialistId,
+    { ...context, domain: context.domain },
+    consultationNotes,
+  )
+  const geminiMessages: AIMessage[] = [
+    ...context.messages.slice(0, -1),
+    { role: 'user', content: enrichedMessage },
+  ]
+  const output = isGeminiConfigured()
+    ? await generateResponse(systemPrompt, geminiMessages)
+    : generateFallbackResponse(
+        {
+          primarySpecialist: specialistId,
+          supportSpecialists: [],
+          domain: context.domain ?? 'generale',
+          riskLevel: 'R0',
+          reasoning: 'fallback',
+        },
+        enrichedMessage,
+      )
+  return enforceSingleQuestion(normalizeAssistantOutput(output))
+}
+
+async function buildMultiAgentPanelResponse(
+  contributors: SpecialistId[],
+  context: ConversationContext,
+  enrichedMessage: string,
+): Promise<string> {
+  const parts: string[] = []
+  for (const specialistId of contributors) {
+    try {
+      const specialistOutput = await runSpecialist(specialistId, context, enrichedMessage)
+      parts.push(`${formatContributorName(specialistId)}: ${specialistOutput}`)
+    } catch (err) {
+      console.error(`[Orchestrator] Multi-agent panel error for ${specialistId}:`, err)
+    }
+  }
+  if (parts.length === 0) {
+    return 'Procediamo insieme: dimmi il prossimo dettaglio e costruisco una risposta completa con il team.'
+  }
+  return parts.join('\n\n')
+}
+
 /** Main routing function */
 export function routeMessage(
   message: string,
@@ -388,31 +446,25 @@ export async function orchestrate(
 
   // Run consultation with support specialists
   const consultationNotes = await runConsultation(routing, context, enrichedMessage)
-
-  const systemPrompt = await buildSpecialistPrompt(
-    routing.primarySpecialist,
-    { ...context, domain: routing.domain },
-    consultationNotes,
-  )
-
-  const geminiMessages: AIMessage[] = [
-    ...context.messages.slice(0, -1),
-    { role: 'user', content: enrichedMessage },
-  ]
-
   let content: string
-
-  if (isGeminiConfigured()) {
-    try {
-      content = await generateResponse(systemPrompt, geminiMessages)
-    } catch (err) {
-      console.error('[Orchestrator] Gemini error, falling back to mock:', err)
-      content = generateFallbackResponse(routing, enrichedMessage)
-    }
-  } else {
+  try {
+    content =
+      contributors.length > 1
+        ? await buildMultiAgentPanelResponse(
+            contributors,
+            { ...context, domain: routing.domain },
+            enrichedMessage,
+          )
+        : await runSpecialist(
+            routing.primarySpecialist,
+            { ...context, domain: routing.domain },
+            enrichedMessage,
+            consultationNotes,
+          )
+  } catch (err) {
+    console.error('[Orchestrator] Gemini error, falling back to mock:', err)
     content = generateFallbackResponse(routing, enrichedMessage)
   }
-  content = normalizeAssistantOutput(content)
 
   return {
     content: content + buildContributorFooter(contributors),
@@ -476,23 +528,22 @@ export async function* orchestrateStream(
   // Run internal consultation (non-streaming) with support specialists
   const consultationNotes = await runConsultation(routing, context, enrichedMessage)
 
-  const systemPrompt = await buildSpecialistPrompt(
-    routing.primarySpecialist,
-    { ...context, domain: routing.domain },
-    consultationNotes,
-  )
-
-  const geminiMessages: AIMessage[] = [
-    ...context.messages.slice(0, -1),
-    { role: 'user', content: enrichedMessage },
-  ]
-
   if (isGeminiConfigured()) {
     try {
-      // Prevent structured JSON output leaking to the chat:
-      // generate once, normalize, then stream chunks.
-      const fullResponse = await generateResponse(systemPrompt, geminiMessages)
-      const normalized = normalizeAssistantOutput(fullResponse)
+      const fullResponse =
+        contributors.length > 1
+          ? await buildMultiAgentPanelResponse(
+              contributors,
+              { ...context, domain: routing.domain },
+              enrichedMessage,
+            )
+          : await runSpecialist(
+              routing.primarySpecialist,
+              { ...context, domain: routing.domain },
+              enrichedMessage,
+              consultationNotes,
+            )
+      const normalized = fullResponse
       for (const chunk of normalized.split(/(\s+)/).filter(Boolean)) {
         yield { type: 'delta', content: chunk }
       }
