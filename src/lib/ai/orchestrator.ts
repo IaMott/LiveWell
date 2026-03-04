@@ -125,11 +125,6 @@ function selectContextSupportSpecialists(
     support.push('dietista')
   }
 
-  // Quando mancano dati ma il dominio e gia chiaro, l'intervistatore supporta senza bloccare il professionista.
-  if (context.missingData.length > 0 && domain !== 'generale' && primary !== 'intervistatore') {
-    support.push('intervistatore')
-  }
-
   return support
 }
 
@@ -190,7 +185,7 @@ export function selectSpecialist(domain: Domain, message: string): SpecialistId 
     cucina: 'chef',
     salute: 'mmg',
     riabilitazione: 'fisioterapista',
-    generale: 'analista_contesto',
+    generale: 'intervistatore',
   }
 
   if (domain === 'mindset') {
@@ -278,6 +273,19 @@ function dedupeSpecialists(ids: SpecialistId[]): SpecialistId[] {
   return [...new Set(ids)]
 }
 
+function filterOperationalSupport(
+  primary: SpecialistId,
+  support: SpecialistId[],
+): SpecialistId[] {
+  // "Analista del Contesto" non deve parlare in chat utente nel flusso operativo.
+  const filtered = support.filter((id) => id !== 'analista_contesto')
+  // L'intervistatore entra come primario per raccolta dati, non come "voce ponte" del turn.
+  if (primary !== 'intervistatore') {
+    return filtered.filter((id) => id !== 'intervistatore')
+  }
+  return filtered
+}
+
 function buildContributorFooter(contributors: SpecialistId[]): string {
   if (contributors.length === 0) return ''
   const names = contributors.map(formatContributorName).join(', ')
@@ -350,6 +358,9 @@ function normalizeAssistantOutput(content: string): string {
     /il personal trainer [^.\n]*pronto[^.\n]*[.\n]?/gi,
     /il nostro personal trainer[^.\n]*[.\n]?/gi,
     /confermo che [^.\n]*passat[^.\n]*[.\n]?/gi,
+    /ti (?:contatter[aà]|metter[oò]) [^.\n]*[.\n]?/gi,
+    /puoi iniziare a parlargli[^.\n]*[.\n]?/gi,
+    /ora (?:potr[aà]|puoi) parlare con [^.\n]*[.\n]?/gi,
   ]
   for (const pattern of handoffPatterns) {
     normalized = normalized.replace(pattern, '')
@@ -362,7 +373,7 @@ function normalizeAssistantOutput(content: string): string {
     .trim()
 
   // If still contaminated by transfer language in any sentence, drop those sentences.
-  const blockedWords = /(passat|testimon|subentr|presa in carico|pronto a (darti|risponderti|supportarti)|analista di contesto)/i
+  const blockedWords = /(passat|testimon|subentr|presa in carico|contatter|parlare con (il|la)|pronto a (darti|risponderti|supportarti)|analista di contesto)/i
   normalized = normalized
     .split(/(?<=[.!?])\s+/)
     .filter((s) => !blockedWords.test(s))
@@ -373,6 +384,35 @@ function normalizeAssistantOutput(content: string): string {
     normalized = 'Procediamo subito con indicazioni concrete, senza attese o passaggi fittizi.'
   }
   return normalized
+}
+
+function isLikelyHandoffStall(raw: string, cleaned: string): boolean {
+  const handoffSignals = /(passat|testimon|subentr|contatter|parlare con (il|la)|pronto a darti|pronto a risponderti|pronto a supportarti)/i
+  if (!handoffSignals.test(raw)) return false
+  return cleaned.length < 120
+}
+
+function buildProgressQuestion(specialistId: SpecialistId, context: ConversationContext): string {
+  if (context.missingData.length > 0) {
+    const nextMissing = context.missingData[0]
+    const fromMvd = MVD_QUESTIONS[nextMissing]
+    if (fromMvd) return fromMvd
+  }
+
+  const bySpecialist: Partial<Record<SpecialistId, string>> = {
+    personal_trainer: 'Per partire in modo concreto, quante sessioni a settimana riesci a mantenere con continuita?',
+    dietista: 'Per impostare il piano alimentare, com e composta oggi la tua giornata tipo dei pasti?',
+    mmg: 'Mi descrivi il sintomo principale su cui vuoi un orientamento e da quanto tempo e presente?',
+    psicologo: 'Qual e la situazione specifica che in questo momento ti pesa di piu?',
+    mental_coach: 'Qual e l ostacolo principale che oggi ti fa perdere continuita?',
+    fisioterapista: 'Dove senti il fastidio e quanto lo valuti da 0 a 10?',
+    gastroenterologo: 'Quali sintomi gastrointestinali noti piu spesso e in quali momenti della giornata?',
+  }
+
+  return (
+    bySpecialist[specialistId] ??
+    'Per procedere in modo utile, qual e il dettaglio piu importante su cui vuoi lavorare adesso?'
+  )
 }
 
 function enforceSingleQuestion(content: string): string {
@@ -415,7 +455,11 @@ async function runSpecialist(
         },
         enrichedMessage,
       )
-  return enforceSingleQuestion(normalizeAssistantOutput(output))
+  const normalized = enforceSingleQuestion(normalizeAssistantOutput(output))
+  if (isLikelyHandoffStall(output, normalized)) {
+    return buildProgressQuestion(specialistId, context)
+  }
+  return normalized
 }
 
 async function runContributorsSequentially(
@@ -473,7 +517,10 @@ export function routeMessage(
       requestedSpecialist,
       context,
     )
-    const support = dedupeSpecialists(contextualSupport).filter((s) => s !== requestedSpecialist)
+    const support = filterOperationalSupport(
+      requestedSpecialist,
+      dedupeSpecialists(contextualSupport).filter((s) => s !== requestedSpecialist),
+    )
     return {
       primarySpecialist: requestedSpecialist,
       supportSpecialists: support,
@@ -506,10 +553,10 @@ export function routeMessage(
     }
   }
 
-  const support = dedupeSpecialists([
+  const support = filterOperationalSupport(primary, dedupeSpecialists([
     ...selectSupportSpecialists(domain, primary, message),
     ...selectContextSupportSpecialists(domain, primary, context),
-  ]).filter((s) => s !== primary)
+  ]).filter((s) => s !== primary))
 
   return {
     primarySpecialist: primary,

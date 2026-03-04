@@ -3,23 +3,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ChatMessage, MessageAttachment } from '@/components/chat/MessageBubble'
 import type { ChatAttachment } from '@/components/chat/ChatInput'
+import { specialistDisplayName } from '@/lib/ai/specialist-meta'
 
 const STORAGE_KEY = 'livewell_conversation_id'
-const specialistLabels: Record<string, string> = {
-  intervistatore: 'Intervistatore',
-  dietista: 'Dietista',
-  personal_trainer: 'Personal Trainer',
-  psicologo: 'Psicologo',
-  mental_coach: 'Mental Coach',
-  chef: 'Chef',
-  fisioterapista: 'Fisioterapista',
-  fisiatra: 'Fisiatra',
-  medico_sport: 'Medico dello Sport',
-  mmg: 'MMG',
-  gastroenterologo: 'Gastroenterologo',
-  chinesologo: 'Chinesologo',
-  analista_contesto: 'Analista del Contesto',
-}
 
 function parseAssistantContent(
   content: string,
@@ -27,7 +13,7 @@ function parseAssistantContent(
   const marker = content.match(/^\[\[specialist:([a-z_]+)\]\]\s*/i)
   if (!marker) return { content }
   const specialistId = marker[1]
-  const label = specialistLabels[specialistId] ?? specialistId
+  const label = specialistDisplayName[specialistId] ?? specialistId
   return {
     content: content.replace(/^\[\[specialist:[a-z_]+\]\]\s*/i, ''),
     specialists: [label],
@@ -190,7 +176,7 @@ export function useChat() {
               } else if (event.type === 'routing' && event.specialist) {
                 setActiveSpecialist(event.specialist)
               } else if (event.type === 'agent_turn' && event.specialist) {
-                activeSpecialistLabel = specialistLabels[event.specialist] ?? event.specialist
+                activeSpecialistLabel = specialistDisplayName[event.specialist] ?? event.specialist
                 activeAssistantId = crypto.randomUUID()
                 const newMsg: ChatMessage = {
                   id: activeAssistantId,
@@ -203,7 +189,7 @@ export function useChat() {
               } else if (event.type === 'agent_delta' && event.content) {
                 if (!activeAssistantId) {
                   activeSpecialistLabel =
-                    specialistLabels[event.specialist] ?? event.specialist ?? 'Assistente'
+                    specialistDisplayName[event.specialist] ?? event.specialist ?? 'Assistente'
                   activeAssistantId = crypto.randomUUID()
                   const newMsg: ChatMessage = {
                     id: activeAssistantId,

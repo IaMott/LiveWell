@@ -240,8 +240,8 @@ export async function POST(request: Request): Promise<Response> {
                     .join('\n\n')
                 : accumulated,
             domain: activeDomain ?? context.domain ?? 'generale',
-            primarySpecialist: activeSpecialist ?? 'analista_contesto',
-            contributors: activeContributors.length > 0 ? activeContributors : ['analista_contesto'],
+            primarySpecialist: activeSpecialist ?? 'intervistatore',
+            contributors: activeContributors.length > 0 ? activeContributors : ['intervistatore'],
             knownData: context.knownData,
             attachments: aiAttachments,
             specialistTurns:

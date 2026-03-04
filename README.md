@@ -8,6 +8,14 @@ LiveWell e una web app AI-first con un'unica schermata: la chat. Un Orchestrator
 
 ---
 
+## Documento canonico
+
+Per regole architetturali, handoff reale multi-agent e anti-regressione usa come riferimento:
+
+- `docs/PROJECT_BIBLE.md`
+
+---
+
 ## Funzionalita
 
 - **Chat AI con streaming** — Risposte in tempo reale via SSE con routing automatico a 14 specialisti
@@ -157,7 +165,7 @@ Visita [http://localhost:3000](http://localhost:3000).
 |---|---|---|
 | POST | `/api/chat` | Invia messaggio, ricevi risposta SSE streaming |
 
-**SSE Events:** `meta` (conversationId), `routing` (specialist), `delta` (content chunk), `done`
+**SSE Events:** `meta`, `routing`, `agent_turn`, `agent_delta`, `agent_done`, `delta`, `done`
 
 ### Conversazioni
 

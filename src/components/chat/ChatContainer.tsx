@@ -9,6 +9,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { useChat } from '@/hooks/useChat'
 import { useLiveSession } from '@/hooks/useLiveSession'
 import type { LiveMode } from '@/hooks/useLiveSession'
+import { specialistDisplayName } from '@/lib/ai/specialist-meta'
 
 export function ChatContainer() {
   const {
@@ -23,22 +24,7 @@ export function ChatContainer() {
   const live = useLiveSession()
   const specialistLabel = useMemo(() => {
     if (!activeSpecialist) return null
-    const labels: Record<string, string> = {
-      intervistatore: 'Intervistatore',
-      dietista: 'Dietista',
-      personal_trainer: 'Personal Trainer',
-      psicologo: 'Psicologo',
-      mental_coach: 'Mental Coach',
-      chef: 'Chef',
-      fisioterapista: 'Fisioterapista',
-      fisiatra: 'Fisiatra',
-      medico_sport: 'Medico dello Sport',
-      mmg: 'MMG',
-      gastroenterologo: 'Gastroenterologo',
-      chinesologo: 'Chinesologo',
-      analista_contesto: 'Analista del Contesto',
-    }
-    return labels[activeSpecialist] ?? activeSpecialist
+    return specialistDisplayName[activeSpecialist] ?? activeSpecialist
   }, [activeSpecialist])
 
   const handleStartLive = useCallback(

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { Phone, PhoneOff, Mic, MicOff, Video } from 'lucide-react'
 import type { LiveMode } from '@/hooks/useLiveSession'
+import { specialistDisplayName, specialistEmoji } from '@/lib/ai/specialist-meta'
 
 interface TranscriptEntry {
   role: 'user' | 'assistant'
@@ -19,22 +20,6 @@ interface LiveSessionOverlayProps {
   videoRef: React.RefObject<HTMLVideoElement | null>
   onStop: () => void
   onToggleMute: () => void
-}
-
-const specialistNames: Record<string, { name: string; emoji: string }> = {
-  dietista: { name: 'Dietista', emoji: '🥗' },
-  personal_trainer: { name: 'Personal Trainer', emoji: '💪' },
-  psicologo: { name: 'Psicologo', emoji: '🧠' },
-  mental_coach: { name: 'Mental Coach', emoji: '🎯' },
-  chef: { name: 'Chef', emoji: '👨‍🍳' },
-  fisioterapista: { name: 'Fisioterapista', emoji: '🦴' },
-  fisiatra: { name: 'Fisiatra', emoji: '⚕️' },
-  medico_sport: { name: 'Medico dello Sport', emoji: '🏅' },
-  mmg: { name: 'Medico Generale', emoji: '🩺' },
-  gastroenterologo: { name: 'Gastroenterologo', emoji: '🫁' },
-  chinesologo: { name: 'Chinesologo', emoji: '🤸' },
-  analista_contesto: { name: 'Assistente', emoji: '🔍' },
-  intervistatore: { name: 'Intervistatore', emoji: '🎙️' },
 }
 
 export function LiveSessionOverlay({
@@ -57,7 +42,12 @@ export function LiveSessionOverlay({
 
   if (!isActive && !isConnecting) return null
 
-  const spec = specialist ? specialistNames[specialist] : null
+  const spec = specialist
+    ? {
+        name: specialistDisplayName[specialist] ?? 'Assistente',
+        emoji: specialistEmoji[specialist] ?? '🤖',
+      }
+    : null
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/95">

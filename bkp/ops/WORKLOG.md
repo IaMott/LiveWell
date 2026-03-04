@@ -8,3 +8,7 @@
 - Fatto: rimosso il blocco MVD che teneva sempre l'intervistatore come unico attore quando il dominio e chiaro.
 - Output chiave: routing contestuale multi-professionista automatico (dietista+PT su obiettivi dimagrimento/composizione corporea) con intervistatore solo di supporto.
 - Prossimo passo: push e test chat su casi non espliciti (senza richiesta diretta professionista).
+## 2026-03-04 16:30 — backend-developer
+- Fatto: hardening anti-loop e refactor routing multi-agent reale (rimozione fallback operativo ad analista, filtraggio support non operativo, anti-stall handoff).
+- Output chiave: eliminato pattern "ti contattera il PT" come stato terminale; ora in caso stall viene forzata domanda operativa concreta del professionista attivo.
+- Prossimo passo: deploy preview e test end-to-end su scenario dimagrimento+allenamento.

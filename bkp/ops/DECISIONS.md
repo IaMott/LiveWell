@@ -48,3 +48,13 @@
 - **Date**: 2026-03-04 16:21
 - **Decision**: il passaggio di testimone non dipende solo da richiesta esplicita; il routing usa dominio+knownData per attivare automaticamente uno o piu professionisti.
 - **Rationale**: garantire coesistenza reale dei professionisti quando il contesto lo richiede, evitando risposte monolitiche dell'analista.
+
+## ADR-018: Esclusione ruoli di coordinamento dal parlato operativo
+- **Date**: 2026-03-04 16:30
+- **Decision**: `analista_contesto` non e piu fallback operativo in chat utente; `intervistatore` non viene usato come support voice del turn.
+- **Rationale**: evitare loop narrativi di handoff e garantire turni solo di professionisti esecutivi.
+
+## ADR-019: Anti-stall su output handoff
+- **Date**: 2026-03-04 16:30
+- **Decision**: se output modello contiene segnali di handoff e resta non operativo, sostituire con domanda concreta guidata dal professionista corrente.
+- **Rationale**: impedire interruzioni conversazionali e mantenere progressione reale del dialogo.

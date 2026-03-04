@@ -21,13 +21,13 @@
 | 15 | Docs & handoff | ⬜ | — |
 
 ## Focus attuale
-- Passaggio di testimone reale: richiesta esplicita professionista instradata direttamente al professionista target.
-- Chat continua senza cambio-cappello implicito.
-- Persistenza multi-agent e memoria specialistica per conversazione.
+- Handoff reale contestuale tra specialisti esecutivi (niente ruoli ponte narrativi).
+- Anti-stall attivo su risposte che annunciano passaggi senza azione.
+- Documento canonico aggiornato: docs/PROJECT_BIBLE.md
 
 ## Rischi aperti
 - Comandi `tsc/eslint` locali possono restare appesi sull'ambiente utente.
 - Necessaria validazione funzionale in chat dopo deploy PR.
 
 ## Last Updated
-2026-03-04 16:21
+2026-03-04 16:30
