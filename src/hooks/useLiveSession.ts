@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
+import type { LiveServerMessage } from '@google/genai'
 import {
   float32ToPcm16,
   pcm16ToFloat32,
@@ -201,11 +202,8 @@ export function useLiveSession(): UseLiveSessionReturn {
               setIsConnecting(false)
               setIsActive(true)
             },
-            onmessage: (message: Record<string, unknown>) => {
-              const serverContent = message.serverContent as {
-                modelTurn?: { parts?: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }> }
-                turnComplete?: boolean
-              } | undefined
+            onmessage: (message: LiveServerMessage) => {
+              const serverContent = message.serverContent
 
               if (serverContent?.modelTurn?.parts) {
                 for (const part of serverContent.modelTurn.parts) {
