@@ -142,9 +142,21 @@ export function useChat() {
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: 'Errore di rete' }))
+          const errorId = activeAssistantId ?? crypto.randomUUID()
+          if (!activeAssistantId) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: errorId,
+                role: 'assistant',
+                content: '',
+                timestamp: new Date(),
+              },
+            ])
+          }
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === assistantId ? { ...m, content: err.error || 'Errore' } : m,
+              m.id === errorId ? { ...m, content: err.error || 'Errore' } : m,
             ),
           )
           setIsStreaming(false)
