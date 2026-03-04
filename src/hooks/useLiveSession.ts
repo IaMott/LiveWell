@@ -181,13 +181,13 @@ export function useLiveSession(): UseLiveSessionReturn {
         playbackCtxRef.current = new AudioContext({ sampleRate: 24000 })
 
         // 5. Connect to Gemini Live
-        const { GoogleGenAI } = await import('@google/genai')
+        const { GoogleGenAI, Modality } = await import('@google/genai')
         const ai = new GoogleGenAI({ apiKey })
 
         const session = await ai.live.connect({
           model,
           config: {
-            responseModalities: ['AUDIO'],
+            responseModalities: [Modality.AUDIO],
             systemInstruction: { parts: [{ text: systemPrompt }] },
             speechConfig: {
               voiceConfig: {
