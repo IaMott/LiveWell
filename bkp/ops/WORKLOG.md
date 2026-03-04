@@ -44,3 +44,7 @@
 - Fatto: review finale micro-hardening `handleDeleteAll` e verifica check PR.
 - Output chiave: fix conforme, nessuna regressione rilevata, check PR tutti PASS (GitHub Actions + Vercel).
 - Prossimo passo: PR pronta per merge su main.
+## 2026-03-04 19:14 — git-workflow-manager
+- Fatto: merge PR #1 completato su main via merge commit locale + push origin/main.
+- Output chiave: commit finale su main = 6e82dee6d8b2d0fee45e5294313cdd32b7eac5f7.
+- Prossimo passo: verifica deploy production fuori sandbox (qui DNS/API esterne limitate).

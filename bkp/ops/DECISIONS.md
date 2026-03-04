@@ -83,3 +83,8 @@
 - **Date**: 2026-03-04 18:46
 - **Decision**: `handleDeleteAll` blocca esecuzione se `isDeleting` e gia true.
 - **Rationale**: chiudere completamente la finestra di race su invocazioni concorrenti del bulk delete.
+
+## ADR-025: Merge PR #1 eseguito via git locale per indisponibilita GitHub API in sessione
+- **Date**: 2026-03-04 19:14
+- **Decision**: eseguito merge equivalente PR #1 con `git merge` su main e push diretto su origin/main.
+- **Rationale**: `gh` non raggiungeva `api.github.com`; merge richiesto comunque completato con workflow git affidabile.

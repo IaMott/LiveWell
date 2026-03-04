@@ -1,6 +1,6 @@
 # LiveWell — Project Status
 
-## Current Step: STEP 9 ▶ In corso (multi-agent reale)
+## Current Step: STEP 9 ✅ Completato (multi-agent + storico + hardening)
 
 | Step | Description | Status | Commit |
 |------|-------------|--------|--------|
@@ -12,7 +12,7 @@
 | 6 | File Upload (barcode, images) | ✅ Done | |
 | 7 | Orchestrator agent | ✅ Done | |
 | 8 | Gemini integration | ✅ Done | |
-| 9 | Audio/Video + Multi-agent architecture | ▶ In corso | merge-ready |
+| 9 | Audio/Video + Multi-agent architecture | ✅ Done | 6e82dee |
 | 10 | Profile Modules | ⬜ | — |
 | 11 | Notifications | ⬜ | — |
 | 12 | Sharing/PDF | ⬜ | — |
@@ -21,12 +21,12 @@
 | 15 | Docs & handoff | ⬜ | — |
 
 ## Focus attuale
-- Hardening delete conversazioni completato e verificato.
-- Lock anti-concorrenza UI stabile con test cancel/error.
-- PR #1 con check tutti PASS, pronta per merge.
+- PR #1 mergeata su `main`.
+- Commit finale `main`: `6e82dee6d8b2d0fee45e5294313cdd32b7eac5f7`.
+- Verifica produzione da completare da ambiente con accesso esterno (DNS/API non disponibili nel sandbox corrente).
 
 ## Rischi aperti
-- Nessun blocker tecnico aperto su questo scope.
+- Verifica URL production non eseguibile in questa sessione per limiti rete/DNS.
 
 ## Last Updated
-2026-03-04 19:00
+2026-03-04 19:14
