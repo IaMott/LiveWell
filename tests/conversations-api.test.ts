@@ -99,4 +99,66 @@ describe('Conversations API delete', () => {
     expect(res.status).toBe(404)
     expect(body).toEqual({ error: 'Conversazione non trovata' })
   })
+
+  it('restituisce 401 su bulk delete se utente non autenticato', async () => {
+    vi.mocked(auth).mockResolvedValue(null as never)
+
+    const req = new Request('http://localhost/api/conversations', {
+      method: 'DELETE',
+    })
+    const res = await deleteConversations(req)
+    const body = await res.json()
+
+    expect(res.status).toBe(401)
+    expect(body).toEqual({ error: 'Non autenticato' })
+    expect(prisma.conversation.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it('restituisce 401 su delete per id se utente non autenticato', async () => {
+    vi.mocked(auth).mockResolvedValue(null as never)
+
+    const req = new Request('http://localhost/api/conversations/c42', {
+      method: 'DELETE',
+    })
+    const res = await deleteConversationById(req, {
+      params: Promise.resolve({ id: 'c42' }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(401)
+    expect(body).toEqual({ error: 'Non autenticato' })
+    expect(prisma.conversation.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it('restituisce 400 quando conversationId e presente ma vuoto', async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: { id: 'u1' },
+    } as never)
+
+    const req = new Request('http://localhost/api/conversations?conversationId=', {
+      method: 'DELETE',
+    })
+    const res = await deleteConversations(req)
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body).toEqual({ error: 'conversationId non valido' })
+    expect(prisma.conversation.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it('restituisce 400 quando conversationId contiene solo spazi', async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: { id: 'u1' },
+    } as never)
+
+    const req = new Request('http://localhost/api/conversations?conversationId=%20%20', {
+      method: 'DELETE',
+    })
+    const res = await deleteConversations(req)
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body).toEqual({ error: 'conversationId non valido' })
+    expect(prisma.conversation.deleteMany).not.toHaveBeenCalled()
+  })
 })

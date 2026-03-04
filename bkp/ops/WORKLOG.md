@@ -20,3 +20,7 @@
 - Fatto: aggiunta eliminazione singola conversazione via API dedicata e pulsante cestino per ogni item nello Storico.
 - Output chiave: mantenuta cancellazione totale e introdotta cancellazione puntuale con aggiornamento UI immediato.
 - Prossimo passo: push PR e verifica da preview.
+## 2026-03-04 16:55 — backend-developer
+- Fatto: hardening endpoint DELETE /api/conversations su query conversationId vuota/blank con 400; estesi test API (401 + invalid query) e aggiunto test UI HistoryPageContent per delete singola/totale.
+- Output chiave: evitata cancellazione bulk involontaria quando `conversationId` e presente ma invalido.
+- Prossimo passo: attendere CI PR e validazione manuale preview.

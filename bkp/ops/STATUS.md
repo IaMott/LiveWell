@@ -22,12 +22,12 @@
 
 ## Focus attuale
 - Handoff reale contestuale tra specialisti esecutivi (niente ruoli ponte narrativi).
-- Anti-stall attivo su risposte che annunciano passaggi senza azione.
-- Storico chat con azioni complete: nuova chat, bulk delete, single delete.
+- Storico chat hardening: new chat, bulk delete, single delete, validazione strict query.
+- Copertura test estesa su API conversazioni e UI storico.
 
 ## Rischi aperti
 - Comandi `tsc/eslint` locali possono restare appesi sull'ambiente utente.
 - Necessaria validazione funzionale in chat dopo deploy PR.
 
 ## Last Updated
-2026-03-04 16:47
+2026-03-04 16:55

@@ -35,9 +35,17 @@ export async function DELETE(request: Request): Promise<NextResponse> {
   const { searchParams } = new URL(request.url)
   const conversationId = searchParams.get('conversationId')
 
-  if (conversationId) {
+  if (conversationId !== null) {
+    const normalizedConversationId = conversationId.trim()
+    if (!normalizedConversationId) {
+      return NextResponse.json(
+        { error: 'conversationId non valido' },
+        { status: 400 },
+      )
+    }
+
     const deleted = await prisma.conversation.deleteMany({
-      where: { id: conversationId, userId: session.user.id },
+      where: { id: normalizedConversationId, userId: session.user.id },
     })
     return NextResponse.json({ deletedCount: deleted.count })
   }
