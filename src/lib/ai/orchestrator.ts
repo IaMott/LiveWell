@@ -214,6 +214,51 @@ function buildMvdQuestion(context: ConversationContext): string {
   return MVD_QUESTIONS[nextMissing] ?? `Per completare il quadro mi serve un dato: ${nextMissing}.`
 }
 
+function stripCodeFences(text: string): string {
+  return text
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim()
+}
+
+function looksLikeStructuredOutput(text: string): boolean {
+  const clean = stripCodeFences(text)
+  return clean.startsWith('{') && (clean.includes('"final_report"') || clean.includes('"audit_log"'))
+}
+
+function extractNaturalFromStructuredJson(text: string): string | null {
+  try {
+    const clean = stripCodeFences(text)
+    const parsed = JSON.parse(clean) as {
+      final_report?: {
+        summary?: string
+        recommendations?: string[]
+      }
+    }
+    const summary = parsed.final_report?.summary?.trim()
+    if (!summary) return null
+    const recommendations = (parsed.final_report?.recommendations ?? [])
+      .slice(0, 3)
+      .map((item) => `- ${item}`)
+      .join('\n')
+    return recommendations
+      ? `${summary}\n\nProssimi passi consigliati:\n${recommendations}`
+      : summary
+  } catch {
+    return null
+  }
+}
+
+function normalizeAssistantOutput(content: string): string {
+  const trimmed = content.trim()
+  if (!looksLikeStructuredOutput(trimmed)) return trimmed
+  return (
+    extractNaturalFromStructuredJson(trimmed) ??
+    'Procediamo in modo diretto: ti rispondo in linguaggio naturale e continuo, senza formato tecnico.'
+  )
+}
+
 /** Main routing function */
 export function routeMessage(
   message: string,
@@ -367,6 +412,7 @@ export async function orchestrate(
   } else {
     content = generateFallbackResponse(routing, enrichedMessage)
   }
+  content = normalizeAssistantOutput(content)
 
   return {
     content: content + buildContributorFooter(contributors),
@@ -443,8 +489,11 @@ export async function* orchestrateStream(
 
   if (isGeminiConfigured()) {
     try {
-      const { generateStream } = await import('./gemini')
-      for await (const chunk of generateStream(systemPrompt, geminiMessages)) {
+      // Prevent structured JSON output leaking to the chat:
+      // generate once, normalize, then stream chunks.
+      const fullResponse = await generateResponse(systemPrompt, geminiMessages)
+      const normalized = normalizeAssistantOutput(fullResponse)
+      for (const chunk of normalized.split(/(\s+)/).filter(Boolean)) {
         yield { type: 'delta', content: chunk }
       }
       const footer = buildContributorFooter(contributors)
