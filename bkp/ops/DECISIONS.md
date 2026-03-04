@@ -133,3 +133,8 @@
 - **Date**: 2026-03-04 21:25
 - **Decision**: i fix finali su settings sono approvati in review; merge consentito solo dopo conferma test verdi su CI/runner esterno.
 - **Rationale**: in sessione locale il runner Vitest resta appeso senza output, quindi manca evidenza runtime affidabile.
+
+## ADR-035: Sprint 10.1 chiuso con merge PR #2 su main
+- **Date**: 2026-03-04 21:58
+- **Decision**: completato merge di `feat/step10-sprint10-1-finalize` su `main` dopo check CI verdi e deploy Vercel completato.
+- **Rationale**: tutti i blocker Sprint 10.1 (settings allowlist, anti-override metadati, fallback legacy, dedup allegati) risultano chiusi e validati in pipeline remota.

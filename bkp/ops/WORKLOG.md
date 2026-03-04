@@ -80,3 +80,7 @@
 - Fatto: verifica finale fix Sprint 10.1 su allowlist `settings`, blocco override chiavi tecniche e test regressivo payload malevolo.
 - Output chiave: fix funzionale confermato a livello codice e copertura test mirata adeguata sul caso malevolo; nessun nuovo blocker applicativo rilevato su questi punti.
 - Prossimo passo: confermare esecuzione test in CI/runner esterno (hang Vitest locale) e procedere al merge se verde.
+## 2026-03-04 21:58 — git-workflow-manager
+- Fatto: PR #2 (`feat/step10-sprint10-1-finalize`) verificata, fix CI applicato (`test: remove explicit any in profile sync regression`), check verdi e merge completato su `main`.
+- Output chiave: commit finale su `origin/main` = `79a4506b1e252ddfde3bd0948be83be363af896a`; CI main `success` (run `22688944054`); deploy Vercel `success` su `https://vercel.com/iamotts-projects/livewell/DxWRhrHkudrFWuYTnry1PmXsZADv`.
+- Prossimo passo: avvio Sprint 10.2 (storico sezione profilo + UX moduli + mapping allegati contestuale).

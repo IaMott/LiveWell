@@ -13,7 +13,7 @@
 | 7 | Orchestrator agent | ✅ Done | |
 | 8 | Gemini integration | ✅ Done | |
 | 9 | Audio/Video + Multi-agent architecture | ✅ Done | 9aa40b2 |
-| 10 | Profile Modules | ▶ In corso | — |
+| 10 | Profile Modules | ▶ In corso | 79a4506 |
 | 11 | Notifications | ⬜ | — |
 | 12 | Sharing/PDF | ⬜ | — |
 | 13 | Security hardening | ⬜ | — |
@@ -21,13 +21,13 @@
 | 15 | Docs & handoff | ⬜ | — |
 
 ## Focus attuale
-- Review finale Sprint 10.1 completata sul fix `settings` (allowlist stretta + blocco override metadati tecnici).
-- Test regressivo malevolo presente e coerente con il rischio originario.
-- Merge readiness tecnica: OK lato codice, pending conferma test CI.
+- Sprint 10.1 chiuso formalmente: schema/validatori profilo, hardening `/api/profile`, idempotenza sync chat->profilo e hardening settings anti-override.
+- Merge PR #2 completato su `main` con commit `79a4506b1e252ddfde3bd0948be83be363af896a`.
+- CI `main` e deploy Vercel post-merge entrambi `success`.
 
 ## Rischi aperti
-- Runner test locale in questa sessione resta bloccato senza output (`vitest`), quindi manca validazione runtime locale.
-- Necessaria conferma pipeline CI verde prima del merge definitivo.
+- Nessun blocker residuo su Sprint 10.1.
+- Prossimo rischio operativo: garantire coerenza UI/storico per Sprint 10.2 (timeline sezione + allegati contestuali).
 
 ## Last Updated
-2026-03-04 21:25
+2026-03-04 21:58
