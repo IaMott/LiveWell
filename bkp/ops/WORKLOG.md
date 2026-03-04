@@ -32,3 +32,7 @@
 - Fatto: aggiunti test UI mancanti su HistoryPageContent (confirm annullata, error fetch singola/totale) e lock anti-concorrenza tra delete bulk e single.
 - Output chiave: prevenuti click concorrenti durante cancellazioni e coperti i branch UX di annullamento/errore con test dedicati.
 - Prossimo passo: push e verifica CI preview.
+## 2026-03-04 18:45 — code-reviewer
+- Fatto: review lock anti-concorrenza e nuovi test UI cancel/error su HistoryPageContent.
+- Output chiave: nessun blocker per merge; individuato solo miglioramento residuale low-risk su guard re-entrancy bulk delete (`if (isDeleting) return`).
+- Prossimo passo: opzionale micro-fix guard in handleDeleteAll.
