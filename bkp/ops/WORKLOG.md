@@ -24,3 +24,7 @@
 - Fatto: hardening endpoint DELETE /api/conversations su query conversationId vuota/blank con 400; estesi test API (401 + invalid query) e aggiunto test UI HistoryPageContent per delete singola/totale.
 - Output chiave: evitata cancellazione bulk involontaria quando `conversationId` e presente ma invalido.
 - Prossimo passo: attendere CI PR e validazione manuale preview.
+## 2026-03-04 16:57 — code-reviewer
+- Fatto: review hardening delete conversazioni (API + test API/UI + UX/localStorage).
+- Output chiave: fix `400` su query invalida confermato corretto; nessun finding critico bloccante rilevato.
+- Prossimo passo: eventuale hardening opzionale su richieste concorrenti in UI storico e test addizionali per path cancel/error.

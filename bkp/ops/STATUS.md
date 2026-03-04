@@ -21,13 +21,13 @@
 | 15 | Docs & handoff | ⬜ | — |
 
 ## Focus attuale
-- Handoff reale contestuale tra specialisti esecutivi (niente ruoli ponte narrativi).
-- Storico chat hardening: new chat, bulk delete, single delete, validazione strict query.
-- Copertura test estesa su API conversazioni e UI storico.
+- Hardening delete conversazioni verificato in review (query invalida => 400).
+- Copertura test API e UI su storico migliorata e reviewata.
+- Nessuna regressione bloccante rilevata su permessi o localStorage.
 
 ## Rischi aperti
 - Comandi `tsc/eslint` locali possono restare appesi sull'ambiente utente.
 - Necessaria validazione funzionale in chat dopo deploy PR.
 
 ## Last Updated
-2026-03-04 16:55
+2026-03-04 16:57
