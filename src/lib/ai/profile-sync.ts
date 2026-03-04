@@ -1,5 +1,6 @@
 import type { Domain, SpecialistId } from './types'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 
 type AttachmentInput = {
   type: 'image' | 'barcode' | 'audio'
@@ -21,6 +22,10 @@ type SyncInput = {
 }
 
 type JsonObj = Record<string, unknown>
+
+function toPrismaJson(value: JsonObj): Prisma.InputJsonValue {
+  return value as unknown as Prisma.InputJsonValue
+}
 
 function asObj(value: unknown): JsonObj {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -140,23 +145,23 @@ export async function syncProfileFromConversation(input: SyncInput): Promise<voi
       gender: normalizeGender(input.knownData.sesso),
       height: parseNumberFromMetric(input.knownData.altezza),
       weight: parseNumberFromMetric(input.knownData.peso),
-      health: sectionUpdates.health,
-      nutrition: sectionUpdates.nutrition,
-      training: sectionUpdates.training,
-      mindfulness: sectionUpdates.mindfulness,
-      goals: sectionUpdates.goals,
-      settings,
+      health: toPrismaJson(sectionUpdates.health),
+      nutrition: toPrismaJson(sectionUpdates.nutrition),
+      training: toPrismaJson(sectionUpdates.training),
+      mindfulness: toPrismaJson(sectionUpdates.mindfulness),
+      goals: toPrismaJson(sectionUpdates.goals),
+      settings: toPrismaJson(settings),
     },
     update: {
       gender: normalizeGender(input.knownData.sesso) ?? profile?.gender ?? undefined,
       height: parseNumberFromMetric(input.knownData.altezza) ?? profile?.height ?? undefined,
       weight: parseNumberFromMetric(input.knownData.peso) ?? profile?.weight ?? undefined,
-      health: sectionUpdates.health,
-      nutrition: sectionUpdates.nutrition,
-      training: sectionUpdates.training,
-      mindfulness: sectionUpdates.mindfulness,
-      goals: sectionUpdates.goals,
-      settings,
+      health: toPrismaJson(sectionUpdates.health),
+      nutrition: toPrismaJson(sectionUpdates.nutrition),
+      training: toPrismaJson(sectionUpdates.training),
+      mindfulness: toPrismaJson(sectionUpdates.mindfulness),
+      goals: toPrismaJson(sectionUpdates.goals),
+      settings: toPrismaJson(settings),
     },
   })
 }
