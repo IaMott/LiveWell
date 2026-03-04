@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, type FormEvent, type KeyboardEvent } from 'react'
-import { Send, Paperclip, ScanBarcode, Mic } from 'lucide-react'
+import { Send, Paperclip, ScanBarcode, Mic, Phone, Video } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BarcodeScanner, ImageUpload, AudioRecorder, type UploadedFile } from './attachments'
 
@@ -16,11 +16,12 @@ export interface ChatAttachment {
 
 interface ChatInputProps {
   onSend: (content: string, attachments?: ChatAttachment[]) => void
+  onStartLive?: (mode: 'audio' | 'video') => void
   disabled?: boolean
   className?: string
 }
 
-export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
+export function ChatInput({ onSend, onStartLive, disabled, className }: ChatInputProps) {
   const [value, setValue] = useState('')
   const [showScanner, setShowScanner] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
@@ -238,6 +239,34 @@ export function ChatInput({ onSend, disabled, className }: ChatInputProps) {
                 aria-label="Registra messaggio vocale"
               >
                 <Mic className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onStartLive?.('audio')}
+                disabled={disabled}
+                className={cn(
+                  'flex h-11 w-11 items-center justify-center rounded-full',
+                  'text-on-surface-muted transition-colors',
+                  'hover:bg-green-500/10 hover:text-green-500',
+                  'disabled:opacity-40',
+                )}
+                aria-label="Chiamata live audio"
+              >
+                <Phone className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onStartLive?.('video')}
+                disabled={disabled}
+                className={cn(
+                  'flex h-11 w-11 items-center justify-center rounded-full',
+                  'text-on-surface-muted transition-colors',
+                  'hover:bg-green-500/10 hover:text-green-500',
+                  'disabled:opacity-40',
+                )}
+                aria-label="Chiamata live video"
+              >
+                <Video className="h-5 w-5" />
               </button>
             </div>
 

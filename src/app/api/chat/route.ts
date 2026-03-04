@@ -17,7 +17,7 @@ const attachmentSchema = z.object({
 
 const chatSchema = z.object({
   message: z.string().min(1).max(4000),
-  conversationId: z.string().optional(),
+  conversationId: z.string().nullish(),
   attachments: z.array(attachmentSchema).optional(),
 })
 
