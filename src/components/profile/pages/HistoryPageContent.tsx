@@ -27,6 +27,7 @@ export function HistoryPageContent() {
   }, [])
 
   async function handleDeleteAll() {
+    if (deletingId) return
     const confirmed = window.confirm(
       'Vuoi eliminare tutto lo storico delle conversazioni? Questa azione non puo essere annullata.',
     )
@@ -45,6 +46,7 @@ export function HistoryPageContent() {
   }
 
   async function handleDeleteOne(conversationId: string) {
+    if (isDeleting || deletingId) return
     const confirmed = window.confirm(
       'Vuoi eliminare questa conversazione? Questa azione non puo essere annullata.',
     )
@@ -88,7 +90,7 @@ export function HistoryPageContent() {
         <button
           type="button"
           onClick={handleDeleteAll}
-          disabled={isDeleting}
+          disabled={isDeleting || deletingId !== null}
           className="inline-flex h-9 items-center gap-2 rounded-md border border-rose-300/40 bg-rose-50/40 px-3 text-sm text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Trash2 className="h-4 w-4" />
@@ -137,7 +139,7 @@ export function HistoryPageContent() {
                     <button
                       type="button"
                       onClick={() => handleDeleteOne(conv.id)}
-                      disabled={deletingId === conv.id}
+                      disabled={isDeleting || deletingId !== null}
                       className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-rose-300/40 bg-rose-50/40 text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                       aria-label="Elimina conversazione"
                     >

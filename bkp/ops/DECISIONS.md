@@ -73,3 +73,8 @@
 - **Date**: 2026-03-04 16:55
 - **Decision**: se `conversationId` e presente ma vuoto/blank, endpoint risponde 400 e non esegue delete.
 - **Rationale**: prevenire regressione ad alto impatto con cancellazione totale involontaria dello storico.
+
+## ADR-023: Lock UI anti-concorrenza per operazioni delete nello storico
+- **Date**: 2026-03-04 17:21
+- **Decision**: durante delete bulk o single, i pulsanti di delete restano disabilitati fino a completamento operazione.
+- **Rationale**: evitare race condition UI e doppie richieste concorrenti che possono produrre stato inconsistente.

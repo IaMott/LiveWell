@@ -22,12 +22,12 @@
 
 ## Focus attuale
 - Hardening delete conversazioni verificato in review (query invalida => 400).
-- Copertura test API e UI su storico migliorata e reviewata.
-- Nessuna regressione bloccante rilevata su permessi o localStorage.
+- Test UI storico estesi a cancel/error e lock anti-concorrenza delete.
+- Nessuna regressione bloccante rilevata su permessi/localStorage.
 
 ## Rischi aperti
 - Comandi `tsc/eslint` locali possono restare appesi sull'ambiente utente.
 - Necessaria validazione funzionale in chat dopo deploy PR.
 
 ## Last Updated
-2026-03-04 16:57
+2026-03-04 17:21

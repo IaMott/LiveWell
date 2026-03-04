@@ -28,3 +28,7 @@
 - Fatto: review hardening delete conversazioni (API + test API/UI + UX/localStorage).
 - Output chiave: fix `400` su query invalida confermato corretto; nessun finding critico bloccante rilevato.
 - Prossimo passo: eventuale hardening opzionale su richieste concorrenti in UI storico e test addizionali per path cancel/error.
+## 2026-03-04 17:21 — backend-developer
+- Fatto: aggiunti test UI mancanti su HistoryPageContent (confirm annullata, error fetch singola/totale) e lock anti-concorrenza tra delete bulk e single.
+- Output chiave: prevenuti click concorrenti durante cancellazioni e coperti i branch UX di annullamento/errore con test dedicati.
+- Prossimo passo: push e verifica CI preview.
