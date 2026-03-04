@@ -74,6 +74,7 @@ export interface ConversationContext {
   knownData: Record<string, string>
   missingData: string[]
   requiredData: string[]
+  specialistMemory?: Record<string, string[]>
   riskSignal: 'none' | 'possible' | 'confirmed'
   userId: string
   profileData?: ProfileData

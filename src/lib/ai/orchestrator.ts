@@ -55,6 +55,11 @@ const MVD_QUESTIONS: Record<string, string> = {
   dolore_intensità: 'Quanto e intenso il dolore da 0 a 10?',
 }
 
+interface SpecialistTurn {
+  specialistId: SpecialistId
+  content: string
+}
+
 /** Triage risk level from message content */
 export function triageRisk(message: string): RiskLevel {
   for (const pattern of RED_FLAG_PATTERNS) {
@@ -273,6 +278,11 @@ async function runSpecialist(
   enrichedMessage: string,
   consultationNotes?: string,
 ): Promise<string> {
+  const memory = context.specialistMemory?.[specialistId]
+  const memoryBlock =
+    memory && memory.length > 0
+      ? `\n\n[Memoria interna ${formatContributorName(specialistId)}]\n${memory.slice(-5).join('\n')}`
+      : ''
   const systemPrompt = await buildSpecialistPrompt(
     specialistId,
     { ...context, domain: context.domain },
@@ -280,7 +290,7 @@ async function runSpecialist(
   )
   const geminiMessages: AIMessage[] = [
     ...context.messages.slice(0, -1),
-    { role: 'user', content: enrichedMessage },
+    { role: 'user', content: `${enrichedMessage}${memoryBlock}` },
   ]
   const output = isGeminiConfigured()
     ? await generateResponse(systemPrompt, geminiMessages)
@@ -297,20 +307,42 @@ async function runSpecialist(
   return enforceSingleQuestion(normalizeAssistantOutput(output))
 }
 
+async function runContributorsSequentially(
+  contributors: SpecialistId[],
+  context: ConversationContext,
+  enrichedMessage: string,
+  consultationNotes: string,
+): Promise<SpecialistTurn[]> {
+  const turns: SpecialistTurn[] = []
+  for (const specialistId of contributors) {
+    try {
+      const content = await runSpecialist(
+        specialistId,
+        context,
+        enrichedMessage,
+        specialistId === contributors[0] ? consultationNotes : undefined,
+      )
+      turns.push({ specialistId, content })
+    } catch (err) {
+      console.error(`[Orchestrator] Specialist turn error for ${specialistId}:`, err)
+    }
+  }
+  return turns
+}
+
 async function buildMultiAgentPanelResponse(
   contributors: SpecialistId[],
   context: ConversationContext,
   enrichedMessage: string,
+  consultationNotes: string,
 ): Promise<string> {
-  const parts: string[] = []
-  for (const specialistId of contributors) {
-    try {
-      const specialistOutput = await runSpecialist(specialistId, context, enrichedMessage)
-      parts.push(`${formatContributorName(specialistId)}: ${specialistOutput}`)
-    } catch (err) {
-      console.error(`[Orchestrator] Multi-agent panel error for ${specialistId}:`, err)
-    }
-  }
+  const turns = await runContributorsSequentially(
+    contributors,
+    context,
+    enrichedMessage,
+    consultationNotes,
+  )
+  const parts = turns.map((turn) => `${formatContributorName(turn.specialistId)}: ${turn.content}`)
   if (parts.length === 0) {
     return 'Procediamo insieme: dimmi il prossimo dettaglio e costruisco una risposta completa con il team.'
   }
@@ -454,6 +486,7 @@ export async function orchestrate(
             contributors,
             { ...context, domain: routing.domain },
             enrichedMessage,
+            consultationNotes,
           )
         : await runSpecialist(
             routing.primarySpecialist,
@@ -494,6 +527,9 @@ export async function* orchestrateStream(
         audit: AIResponse['audit']
       }
     }
+  | { type: 'agent_turn'; specialist: SpecialistId }
+  | { type: 'agent_delta'; specialist: SpecialistId; content: string }
+  | { type: 'agent_done'; specialist: SpecialistId }
   | { type: 'delta'; content: string }
 > {
   const routing = routeMessage(userMessage, context)
@@ -528,33 +564,25 @@ export async function* orchestrateStream(
   // Run internal consultation (non-streaming) with support specialists
   const consultationNotes = await runConsultation(routing, context, enrichedMessage)
 
-  if (isGeminiConfigured()) {
-    try {
-      const fullResponse =
-        contributors.length > 1
-          ? await buildMultiAgentPanelResponse(
-              contributors,
-              { ...context, domain: routing.domain },
-              enrichedMessage,
-            )
-          : await runSpecialist(
-              routing.primarySpecialist,
-              { ...context, domain: routing.domain },
-              enrichedMessage,
-              consultationNotes,
-            )
-      const normalized = fullResponse
-      for (const chunk of normalized.split(/(\s+)/).filter(Boolean)) {
-        yield { type: 'delta', content: chunk }
-      }
-      const footer = buildContributorFooter(contributors)
-      if (footer) {
-        yield { type: 'delta', content: footer }
+  try {
+    const turns = await runContributorsSequentially(
+      contributors,
+      { ...context, domain: routing.domain },
+      enrichedMessage,
+      consultationNotes,
+    )
+    if (turns.length > 0) {
+      for (const turn of turns) {
+        yield { type: 'agent_turn', specialist: turn.specialistId }
+        for (const chunk of turn.content.split(/(\s+)/).filter(Boolean)) {
+          yield { type: 'agent_delta', specialist: turn.specialistId, content: chunk }
+        }
+        yield { type: 'agent_done', specialist: turn.specialistId }
       }
       return
-    } catch (err) {
-      console.error('[Orchestrator] Gemini stream error, falling back:', err)
     }
+  } catch (err) {
+    console.error('[Orchestrator] Gemini stream error, falling back:', err)
   }
 
   // Fallback: yield mock response word by word

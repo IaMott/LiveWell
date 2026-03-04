@@ -21,6 +21,19 @@ const specialistLabels: Record<string, string> = {
   analista_contesto: 'Analista del Contesto',
 }
 
+function parseAssistantContent(
+  content: string,
+): { content: string; specialists?: string[] } {
+  const marker = content.match(/^\[\[specialist:([a-z_]+)\]\]\s*/i)
+  if (!marker) return { content }
+  const specialistId = marker[1]
+  const label = specialistLabels[specialistId] ?? specialistId
+  return {
+    content: content.replace(/^\[\[specialist:[a-z_]+\]\]\s*/i, ''),
+    specialists: [label],
+  }
+}
+
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -53,12 +66,16 @@ export function useChat() {
           setConversationId(savedId)
           setMessages(
             conversation.messages.map(
-              (m: { id: string; role: string; content: string; createdAt: string }) => ({
-                id: m.id,
-                role: m.role as 'user' | 'assistant',
-                content: m.content,
-                timestamp: new Date(m.createdAt),
-              }),
+              (m: { id: string; role: string; content: string; createdAt: string }) => {
+                const parsed = m.role === 'assistant' ? parseAssistantContent(m.content) : { content: m.content }
+                return {
+                  id: m.id,
+                  role: m.role as 'user' | 'assistant',
+                  content: parsed.content,
+                  specialists: parsed.specialists,
+                  timestamp: new Date(m.createdAt),
+                }
+              },
             ),
           )
         })
@@ -96,15 +113,9 @@ export function useChat() {
       setMessages((prev) => [...prev, userMsg])
       setIsStreaming(true)
 
-      // Create placeholder assistant message
-      const assistantId = crypto.randomUUID()
-      const assistantMsg: ChatMessage = {
-        id: assistantId,
-        role: 'assistant',
-        content: '',
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, assistantMsg])
+      // Created dynamically when agent turns are emitted.
+      let activeAssistantId: string | null = null
+      let activeSpecialistLabel: string | null = null
 
       try {
         abortRef.current = new AbortController()
@@ -166,20 +177,53 @@ export function useChat() {
                 setConversationId(event.conversationId)
               } else if (event.type === 'routing' && event.specialist) {
                 setActiveSpecialist(event.specialist)
-                const readableSpecialists = Array.isArray(event.specialists)
-                  ? event.specialists.map((id: string) => specialistLabels[id] ?? id)
-                  : [specialistLabels[event.specialist] ?? event.specialist]
+              } else if (event.type === 'agent_turn' && event.specialist) {
+                activeSpecialistLabel = specialistLabels[event.specialist] ?? event.specialist
+                activeAssistantId = crypto.randomUUID()
+                const newMsg: ChatMessage = {
+                  id: activeAssistantId,
+                  role: 'assistant',
+                  content: '',
+                  specialists: [activeSpecialistLabel],
+                  timestamp: new Date(),
+                }
+                setMessages((prev) => [...prev, newMsg])
+              } else if (event.type === 'agent_delta' && event.content) {
+                if (!activeAssistantId) {
+                  activeSpecialistLabel =
+                    specialistLabels[event.specialist] ?? event.specialist ?? 'Assistente'
+                  activeAssistantId = crypto.randomUUID()
+                  const newMsg: ChatMessage = {
+                    id: activeAssistantId,
+                    role: 'assistant',
+                    content: '',
+                    specialists: [activeSpecialistLabel],
+                    timestamp: new Date(),
+                  }
+                  setMessages((prev) => [...prev, newMsg])
+                }
+                const targetId = activeAssistantId
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === assistantId
-                      ? { ...m, specialists: readableSpecialists }
-                      : m,
+                    m.id === targetId ? { ...m, content: m.content + event.content } : m,
                   ),
                 )
               } else if (event.type === 'delta') {
+                if (!activeAssistantId) {
+                  activeAssistantId = crypto.randomUUID()
+                  const newMsg: ChatMessage = {
+                    id: activeAssistantId,
+                    role: 'assistant',
+                    content: '',
+                    specialists: activeSpecialistLabel ? [activeSpecialistLabel] : undefined,
+                    timestamp: new Date(),
+                  }
+                  setMessages((prev) => [...prev, newMsg])
+                }
+                const targetId = activeAssistantId
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === assistantId
+                    m.id === targetId
                       ? { ...m, content: m.content + event.content }
                       : m,
                   ),
@@ -195,9 +239,21 @@ export function useChat() {
         if (err instanceof DOMException && err.name === 'AbortError') {
           // User cancelled
         } else {
+          const errorId = activeAssistantId ?? crypto.randomUUID()
+          if (!activeAssistantId) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: errorId,
+                role: 'assistant',
+                content: '',
+                timestamp: new Date(),
+              },
+            ])
+          }
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === assistantId
+              m.id === errorId
                 ? { ...m, content: 'Errore di connessione. Riprova.' }
                 : m,
             ),
@@ -218,12 +274,16 @@ export function useChat() {
     const { conversation } = await res.json()
     setConversationId(id)
     setMessages(
-      conversation.messages.map((m: { id: string; role: string; content: string; createdAt: string }) => ({
-        id: m.id,
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-        timestamp: new Date(m.createdAt),
-      })),
+      conversation.messages.map((m: { id: string; role: string; content: string; createdAt: string }) => {
+        const parsed = m.role === 'assistant' ? parseAssistantContent(m.content) : { content: m.content }
+        return {
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: parsed.content,
+          specialists: parsed.specialists,
+          timestamp: new Date(m.createdAt),
+        }
+      }),
     )
   }, [])
 

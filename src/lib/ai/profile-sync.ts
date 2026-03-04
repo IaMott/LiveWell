@@ -19,6 +19,7 @@ type SyncInput = {
   contributors: SpecialistId[]
   knownData: Record<string, string>
   attachments?: AttachmentInput[]
+  specialistTurns?: Array<{ specialistId: SpecialistId; content: string }>
 }
 
 type JsonObj = Record<string, unknown>
@@ -137,6 +138,21 @@ export async function syncProfileFromConversation(input: SyncInput): Promise<voi
     : []
   attachmentHistory.push(...attachmentCatalog)
   settings.attachmentHistory = attachmentHistory
+
+  // Specialist memory separated by conversation and specialist.
+  const specialistMemoryRoot = asObj(settings.aiSpecialistMemory)
+  const convMemory = asObj(specialistMemoryRoot[input.conversationId])
+  for (const turn of input.specialistTurns ?? []) {
+    const existing = Array.isArray(convMemory[turn.specialistId])
+      ? [...(convMemory[turn.specialistId] as string[])]
+      : []
+    if (turn.content.trim()) {
+      existing.push(turn.content.trim())
+    }
+    convMemory[turn.specialistId] = existing.slice(-30)
+  }
+  specialistMemoryRoot[input.conversationId] = convMemory
+  settings.aiSpecialistMemory = specialistMemoryRoot
 
   await prisma.userProfile.upsert({
     where: { userId: input.userId },

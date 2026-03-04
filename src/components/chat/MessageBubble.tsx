@@ -91,7 +91,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         )}
         {!isUser && message.specialists && message.specialists.length > 0 && (
           <p className="mt-2 text-[0.6875rem] text-on-surface-muted">
-            Team: {message.specialists.join(', ')}
+            Professionista: {message.specialists.join(', ')}
           </p>
         )}
         <time

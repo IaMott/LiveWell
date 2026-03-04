@@ -126,6 +126,7 @@ export function buildContext(
   userId: string,
   profileData?: ProfileData | null,
   existingDomain?: Domain,
+  specialistMemory?: Record<string, string[]>,
 ): ConversationContext {
   // Determine domain from latest user message or existing
   const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
@@ -193,6 +194,7 @@ export function buildContext(
     knownData,
     missingData,
     requiredData,
+    specialistMemory,
     riskSignal: 'none',
     userId,
     profileData: profileData || undefined,
