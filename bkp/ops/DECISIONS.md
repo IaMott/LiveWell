@@ -93,3 +93,43 @@
 - **Date**: 2026-03-04 19:32
 - **Decision**: STEP 9 dichiarato completato; STEP 10 avviato con backlog prioritario in `bkp/ops/STEP10_BACKLOG.md`.
 - **Rationale**: consolidare i risultati post-merge e avviare sviluppo modulare del profilo con ordine esecutivo e dipendenze chiare.
+
+## ADR-027: Schema profilo canonico centralizzato + validatori condivisi
+- **Date**: 2026-03-04 20:17
+- **Decision**: introdotto `src/lib/profile/schema.ts` come singola fonte di verita per sezioni profilo (`personal/health/nutrition/training/mindfulness/goals/settings`) con parse/normalize riusabile da API e sync AI.
+- **Rationale**: eliminare divergenze tra UI/API/sync, ridurre sanitizzazioni duplicate e prevenire payload incoerenti.
+
+## ADR-028: Idempotenza obbligatoria sync chat->profilo
+- **Date**: 2026-03-04 20:17
+- **Decision**: aggiunto `syncId` per turno chat (deterministico in chat route), ledger `settings.aiSyncLedger` e deduplica su history di sezione, audit, attachment catalog e memoria specialisti.
+- **Rationale**: evitare duplicazioni dovute a retry/riinvio stream mantenendo coerenza storica e audit trail affidabile.
+
+## ADR-029: Profile settings update deve preservare metadati AI interni
+- **Date**: 2026-03-04 20:22
+- **Decision**: nelle update utente di `section=settings`, effettuare merge sul record esistente mantenendo chiavi tecniche (`aiAuditLog`, `aiSyncLedger`, `aiSpecialistMemory`, `attachmentHistory`, ecc.) e validando solo i campi user-facing.
+- **Rationale**: evitare perdita storico/audit/memoria specialisti durante salvataggi UI impostazioni.
+
+## ADR-030: Safe-normalization profilo in lettura per compatibilita legacy
+- **Date**: 2026-03-04 20:29
+- **Decision**: GET `/api/profile` usa parse safe con fallback a default sezione in caso di JSON legacy non conforme.
+- **Rationale**: evitare errori 500 e garantire continuita UX anche con dati storici eterogenei.
+
+## ADR-031: Stabilizzazione test runner Vitest per API/UI mix
+- **Date**: 2026-03-04 20:29
+- **Decision**: default test env `node`, mapping `jsdom` solo per `*.test.tsx`, `pool: forks`, `maxWorkers:1`, timeout espliciti.
+- **Rationale**: ridurre rischio deadlock/hang nei test backend con dipendenze Next/Prisma e mantenere affidabili i test UI.
+
+## ADR-032: Settings API deve bloccare override metadati AI da input utente
+- **Date**: 2026-03-04 20:37
+- **Decision**: in `PUT /api/profile` (section `settings`) consentire merge solo su chiavi user-facing (`notifications`, `theme`, `language`) ignorando/rigettando chiavi tecniche `ai*`, `attachmentHistory` e simili.
+- **Rationale**: prevenire corruzione/azzeramento audit e memoria specialisti tramite payload non trusted.
+
+## ADR-033: Allowlist obbligatoria per `settings` user-facing
+- **Date**: 2026-03-04 21:03
+- **Decision**: in `PUT /api/profile` con `section=settings` si aggiornano solo `notifications`, `theme`, `language`; eventuali chiavi extra dal payload vengono ignorate.
+- **Rationale**: prevenire override/corruzione di metadati AI interni (`ai*`, `attachmentHistory`, ledger) tramite input non trusted.
+
+## ADR-034: Readiness merge Sprint 10.1 condizionata da esito CI
+- **Date**: 2026-03-04 21:25
+- **Decision**: i fix finali su settings sono approvati in review; merge consentito solo dopo conferma test verdi su CI/runner esterno.
+- **Rationale**: in sessione locale il runner Vitest resta appeso senza output, quindi manca evidenza runtime affidabile.

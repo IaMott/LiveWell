@@ -3,23 +3,19 @@ import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { rateLimit, rateLimitResponse } from '@/lib/rate-limit'
+import {
+  jsonSize,
+  parseProfileSectionUpdate,
+  profileSectionEnum,
+  safeParseProfileSectionUpdate,
+  type ProfileSection,
+} from '@/lib/profile/schema'
 
 const MAX_SECTION_SIZE = 10_000 // 10 KB max per section
 
 const profileUpdateSchema = z.object({
-  section: z.enum([
-    'personal',
-    'health',
-    'nutrition',
-    'training',
-    'mindfulness',
-    'goals',
-    'settings',
-  ]),
-  data: z.record(z.unknown()).refine(
-    (data) => JSON.stringify(data).length <= MAX_SECTION_SIZE,
-    'Dati profilo troppo grandi (max 10 KB)',
-  ),
+  section: profileSectionEnum,
+  data: z.unknown(),
 })
 
 export async function GET(): Promise<NextResponse> {
@@ -42,14 +38,35 @@ export async function GET(): Promise<NextResponse> {
       gender: profile.gender,
       height: profile.height,
       weight: profile.weight,
-      health: profile.health,
-      nutrition: profile.nutrition,
-      training: profile.training,
-      mindfulness: profile.mindfulness,
-      goals: profile.goals,
-      settings: profile.settings,
+      health: safeParseProfileSectionUpdate('health', profile.health),
+      nutrition: safeParseProfileSectionUpdate('nutrition', profile.nutrition),
+      training: safeParseProfileSectionUpdate('training', profile.training),
+      mindfulness: safeParseProfileSectionUpdate('mindfulness', profile.mindfulness),
+      goals: safeParseProfileSectionUpdate('goals', profile.goals),
+      settings: safeParseProfileSectionUpdate('settings', profile.settings),
     },
   })
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  return {}
+}
+
+type UserSettings = {
+  notifications: boolean
+  theme: 'system' | 'light' | 'dark'
+  language: 'it' | 'en'
+}
+
+function pickUserSettingsFields(value: Record<string, unknown>): UserSettings {
+  return {
+    notifications: value.notifications === false ? false : true,
+    theme: value.theme === 'light' || value.theme === 'dark' ? value.theme : 'system',
+    language: value.language === 'en' ? 'en' : 'it',
+  }
 }
 
 export async function PUT(request: Request): Promise<NextResponse> {
@@ -62,7 +79,13 @@ export async function PUT(request: Request): Promise<NextResponse> {
   const rl = rateLimit(`profile:${session.user.id}`, { max: 20 })
   if (!rl.success) return rateLimitResponse(rl.resetAt)
 
-  const body = await request.json()
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Body JSON non valido' }, { status: 400 })
+  }
+
   const result = profileUpdateSchema.safeParse(body)
   if (!result.success) {
     return NextResponse.json(
@@ -74,31 +97,68 @@ export async function PUT(request: Request): Promise<NextResponse> {
   const { section, data } = result.data
   const userId = session.user.id
 
+  let parsedData: Record<string, unknown>
+  try {
+    parsedData = parseProfileSectionUpdate(section, data)
+  } catch {
+    return NextResponse.json({ error: 'Dati sezione non validi' }, { status: 400 })
+  }
+
+  if (jsonSize(parsedData) > MAX_SECTION_SIZE) {
+    return NextResponse.json(
+      { error: 'Dati profilo troppo grandi (max 10 KB)' },
+      { status: 400 },
+    )
+  }
+
   // Build the update payload based on section
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateData: Record<string, any> = {}
 
   if (section === 'personal') {
-    if (data.birthDate) updateData.birthDate = new Date(data.birthDate as string)
-    if (data.gender !== undefined) updateData.gender = String(data.gender).slice(0, 20)
-    if (data.height !== undefined) {
-      const h = Number(data.height)
-      if (!isNaN(h) && h >= 0 && h <= 300) updateData.height = h
+    const personalData = parsedData as {
+      name?: string
+      birthDate?: string | null
+      gender?: string | null
+      height?: number | null
+      weight?: number | null
     }
-    if (data.weight !== undefined) {
-      const w = Number(data.weight)
-      if (!isNaN(w) && w >= 0 && w <= 500) updateData.weight = w
+
+    if (personalData.birthDate !== undefined) {
+      updateData.birthDate = personalData.birthDate
+        ? new Date(personalData.birthDate)
+        : null
     }
+    if (personalData.gender !== undefined) {
+      updateData.gender = personalData.gender
+    }
+    if (personalData.height !== undefined) {
+      updateData.height = personalData.height
+    }
+    if (personalData.weight !== undefined) {
+      updateData.weight = personalData.weight
+    }
+
     // Also update User.name
-    if (data.name !== undefined) {
+    if (personalData.name !== undefined) {
       await prisma.user.update({
         where: { id: userId },
-        data: { name: String(data.name).slice(0, 100) },
+        data: { name: personalData.name },
       })
     }
   } else {
-    // JSON sections: health, nutrition, training, mindfulness, goals, settings
-    updateData[section] = data
+    if (section === 'settings') {
+      const existingProfile = await prisma.userProfile.findUnique({
+        where: { userId },
+        select: { settings: true },
+      })
+      const existingSettings = asRecord(existingProfile?.settings)
+      const userSettings = pickUserSettingsFields(parsedData)
+      updateData.settings = { ...existingSettings, ...userSettings }
+    } else {
+      updateData[section as Exclude<ProfileSection, 'personal' | 'settings'>] =
+        parsedData
+    }
   }
 
   const profile = await prisma.userProfile.upsert({

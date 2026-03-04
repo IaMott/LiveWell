@@ -56,3 +56,27 @@
 - Fatto: chiusura formale STEP 9 e definizione backlog prioritario STEP 10 (Profile Modules) con piano esecutivo a task brevi.
 - Output chiave: creato `bkp/ops/STEP10_BACKLOG.md` + STATUS allineato su STEP 10 in corso.
 - Prossimo passo: avvio Sprint 10.1 (schema profilo, validazione API, sync chat->profilo).
+## 2026-03-04 20:17 — backend-developer
+- Fatto: Sprint 10.1 implementato su schema profilo, hardening `/api/profile`, merge chat->profilo idempotente con ledger sync e nuovi test (API + integrazione).
+- Output chiave: introdotti validatori Zod condivisi (`src/lib/profile/schema.ts`), validazione server-side per sezione, protezione JSON invalido/oversize, sync profile con `syncId` anti-duplicazione su history/audit/allegati/memoria specialisti.
+- Prossimo passo: sbloccare esecuzione test in locale/CI (vitest resta appeso in questo ambiente) e avviare Sprint 10.2 (storico per sezione + UX moduli profilo).
+## 2026-03-04 20:22 — code-reviewer
+- Fatto: review tecnica Sprint 10.1 (schema condiviso, hardening `/api/profile`, merge idempotente chat->profilo) con analisi regressioni compatibilità dati, edge-case e qualità test.
+- Output chiave: rilevati 3 finding prioritari: possibile wipe metadati AI su update `settings`, deduplica allegati errata per sync con più attachment, rischio 500 su GET profilo con dati legacy non conformi agli enum/tipi Zod.
+- Prossimo passo: fix backend su merge `settings` preservando chiavi extra + dedup allegati per chiave univoca attachment; aggiungere test mancanti e stabilizzare runner vitest (node/jsdom split + timeout).
+## 2026-03-04 20:29 — backend-developer
+- Fatto: applicati fix bloccanti review Sprint 10.1: merge `settings` preservando metadati AI, safe-normalization GET `/api/profile`, deduplica allegati su chiave composta (`syncId|type|url|fileName`).
+- Output chiave: eliminato rischio perdita storico AI su update impostazioni; ridotto rischio 500 su dati legacy invalidi; mantenuti multi-allegati nello stesso sync senza duplicazioni su retry.
+- Prossimo passo: rieseguire suite test in runner CI/shell pulita (in questo ambiente `vitest` resta appeso) e validare Sprint 10.1 per close.
+## 2026-03-04 20:37 — code-reviewer
+- Fatto: review follow-up dei fix Sprint 10.1 su `/api/profile`, `profile-sync`, test regressivi e config Vitest.
+- Output chiave: fix principali confermati, ma trovato blocker residuo: payload utente `settings` puo ancora sovrascrivere metadati AI interni per via di schema `.passthrough()` + merge diretto.
+- Prossimo passo: hardening definitivo con allowlist campi user-facing (`notifications/theme/language`) prima del merge.
+## 2026-03-04 21:03 — backend-developer
+- Fatto: chiuso blocker residuo su `/api/profile` settings con allowlist stretta (`notifications/theme/language`) e blocco override chiavi tecniche provenienti da payload utente.
+- Output chiave: aggiunto test regressivo su payload malevolo (`aiAuditLog`, `aiSyncLedger`, `attachmentHistory`) con verifica preservazione metadati esistenti.
+- Prossimo passo: validare i test su CI/runner esterno (in questa sessione Vitest resta appeso senza output anche su test singolo).
+## 2026-03-04 21:25 — code-reviewer
+- Fatto: verifica finale fix Sprint 10.1 su allowlist `settings`, blocco override chiavi tecniche e test regressivo payload malevolo.
+- Output chiave: fix funzionale confermato a livello codice e copertura test mirata adeguata sul caso malevolo; nessun nuovo blocker applicativo rilevato su questi punti.
+- Prossimo passo: confermare esecuzione test in CI/runner esterno (hang Vitest locale) e procedere al merge se verde.
