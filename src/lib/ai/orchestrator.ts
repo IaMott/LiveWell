@@ -263,15 +263,39 @@ function normalizeAssistantOutput(content: string): string {
       extractNaturalFromStructuredJson(trimmed) ??
       'Procediamo in modo diretto: ti rispondo in linguaggio naturale e continuo, senza formato tecnico.'
   }
-  // Block fake handoff wording.
+  // Block fake handoff wording and role-play transfer narratives.
+  const handoffPatterns = [
+    /passo la palla[^.\n]*[.\n]?/gi,
+    /passo il testimone[^.\n]*[.\n]?/gi,
+    /ho passato[^.\n]*[.\n]?/gi,
+    /mi ha passato[^.\n]*[.\n]?/gi,
+    /ha passato[^.\n]*informazioni[^.\n]*[.\n]?/gi,
+    /ha preso in carico[^.\n]*[.\n]?/gi,
+    /subentr[a-z]*[^.\n]*[.\n]?/gi,
+    /ora (ti )?risponder[aà] [^.\n]*[.\n]?/gi,
+    /attendi[^.\n]*[.\n]?/gi,
+    /il personal trainer [^.\n]*pronto[^.\n]*[.\n]?/gi,
+    /il nostro personal trainer[^.\n]*[.\n]?/gi,
+    /confermo che [^.\n]*passat[^.\n]*[.\n]?/gi,
+  ]
+  for (const pattern of handoffPatterns) {
+    normalized = normalized.replace(pattern, '')
+  }
+
+  // Remove generic role-intro lines; role is already visible in UI bubble label.
   normalized = normalized
-    .replace(/passo la palla[^.\n]*[.\n]?/gi, '')
-    .replace(/passo il testimone[^.\n]*[.\n]?/gi, '')
-    .replace(/il personal trainer[^.\n]*pronto[^.\n]*[.\n]?/gi, '')
-    .replace(/ha preso in carico[^.\n]*[.\n]?/gi, '')
-    .replace(/ora (ti )?risponder[aà] [^.\n]*[.\n]?/gi, '')
-    .replace(/attendi[^.\n]*[.\n]?/gi, '')
+    .replace(/^c(?:iao|iao)!?\s*sono\s+il\s+[^.\n]*\.\s*/i, '')
+    .replace(/^c(?:iao|iao)!?\s*sono\s+la\s+[^.\n]*\.\s*/i, '')
     .trim()
+
+  // If still contaminated by transfer language in any sentence, drop those sentences.
+  const blockedWords = /(passat|testimon|subentr|presa in carico|pronto a (darti|risponderti|supportarti)|analista di contesto)/i
+  normalized = normalized
+    .split(/(?<=[.!?])\s+/)
+    .filter((s) => !blockedWords.test(s))
+    .join(' ')
+    .trim()
+
   if (!normalized) {
     normalized = 'Procediamo subito con indicazioni concrete, senza attese o passaggi fittizi.'
   }
