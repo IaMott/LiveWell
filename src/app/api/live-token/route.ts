@@ -58,7 +58,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     })
     aiMessages = history.map((m) => ({
       role: m.role as 'user' | 'assistant',
-      content: m.content,
+      content:
+        m.role === 'assistant'
+          ? m.content.replace(/^\[\[specialist:[a-z_]+\]\]\s*/i, '')
+          : m.content,
     }))
   }
 

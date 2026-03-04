@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String         @map("password_hash")
+  name          String?
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  conversations Conversation[]
+  profile       UserProfile?
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // 'specialist' | 'reminder' | 'milestone' | 'system'
+  title     String
+  message   String
+  metadata  Json?    // { specialistId, conversationId, actionUrl }
+  read      Boolean  @default(false)
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, read])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model UserProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Personal
+  birthDate   DateTime? @map("birth_date")
+  gender      String?   // 'M' | 'F' | 'altro'
+  height      Float?    // cm
+  weight      Float?    // kg
+
+  // Health
+  health      Json?     // { conditions, allergies, medications, bloodType, notes }
+
+  // Nutrition
+  nutrition   Json?     // { dietType, intolerances, preferences, caloricGoal, mealsPerDay }
+
+  // Training
+  training    Json?     // { fitnessLevel, equipment, weeklyDays, injuries, sport }
+
+  // Mindfulness
+  mindfulness Json?     // { stressLevel, meditationExp, techniques, sleepHours }
+
+  // Goals
+  goals       Json?     // { shortTerm, mediumTerm, longTerm }
+
+  // Settings
+  settings    Json?     // { notifications, theme, language }
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_profiles")
+}
+
+model Conversation {
+  id         String    @id @default(cuid())
+  title      String?
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shareToken String?   @unique @map("share_token")
+  sharedAt   DateTime? @map("shared_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  messages   Message[]
+
+  @@index([userId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  role           String       // 'user' | 'assistant'
+  content        String
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  attachments    Attachment[]
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  type      String   // 'image' | 'barcode' | 'audio'
+  fileName  String   @map("file_name")
+  fileSize  Int      @map("file_size")
+  mimeType  String   @map("mime_type")
+  url       String
+  metadata  String?  // JSON: barcode value, image dimensions, etc.
+  messageId String   @map("message_id")
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([messageId])
+  @@map("attachments")
+}

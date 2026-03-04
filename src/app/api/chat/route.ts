@@ -90,7 +90,10 @@ export async function POST(request: Request): Promise<Response> {
 
   const aiMessages: AIMessage[] = history.map((m) => ({
     role: m.role as 'user' | 'assistant',
-    content: m.content,
+    content:
+      m.role === 'assistant'
+        ? m.content.replace(/^\[\[specialist:[a-z_]+\]\]\s*/i, '')
+        : m.content,
   }))
 
   // Load user profile for context-aware responses
@@ -106,11 +109,23 @@ export async function POST(request: Request): Promise<Response> {
       training: true,
       mindfulness: true,
       goals: true,
+      settings: true,
     },
   })
 
+  const specialistMemoryByConversation =
+    (userProfile?.settings as Record<string, unknown> | null)?.aiSpecialistMemory as
+      | Record<string, Record<string, string[]>>
+      | undefined
+
   // Build conversation context with profile data
-  const context = buildContext(aiMessages, userId, userProfile)
+  const context = buildContext(
+    aiMessages,
+    userId,
+    userProfile,
+    undefined,
+    specialistMemoryByConversation?.[convId ?? ''] ?? {},
+  )
 
   // Map attachments for orchestrator
   const aiAttachments = attachments?.map((a) => ({
@@ -128,6 +143,8 @@ export async function POST(request: Request): Promise<Response> {
       let activeSpecialist: SpecialistId | undefined
       let activeDomain: Domain | undefined
       let activeContributors: SpecialistId[] = []
+      const perAgentAccumulated = new Map<SpecialistId, string>()
+      const turnOrder: SpecialistId[] = []
 
       try {
         // Send conversation ID immediately
@@ -151,6 +168,34 @@ export async function POST(request: Request): Promise<Response> {
                 audit: event.data.audit,
               })}\n\n`),
             )
+          } else if (event.type === 'agent_turn') {
+            if (!perAgentAccumulated.has(event.specialist)) {
+              perAgentAccumulated.set(event.specialist, '')
+            }
+            turnOrder.push(event.specialist)
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({
+                type: 'agent_turn',
+                specialist: event.specialist,
+              })}\n\n`),
+            )
+          } else if (event.type === 'agent_delta') {
+            const previous = perAgentAccumulated.get(event.specialist) ?? ''
+            perAgentAccumulated.set(event.specialist, previous + event.content)
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({
+                type: 'agent_delta',
+                specialist: event.specialist,
+                content: event.content,
+              })}\n\n`),
+            )
+          } else if (event.type === 'agent_done') {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({
+                type: 'agent_done',
+                specialist: event.specialist,
+              })}\n\n`),
+            )
           } else if (event.type === 'delta') {
             accumulated += event.content
             controller.enqueue(
@@ -160,26 +205,49 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         // Save assistant message to DB
-        if (accumulated) {
-          await prisma.message.create({
-            data: {
-              role: 'assistant',
-              content: accumulated,
-              conversationId: convId!,
-            },
-          })
+        if (accumulated || perAgentAccumulated.size > 0) {
+          if (perAgentAccumulated.size > 0) {
+            for (const specialist of turnOrder) {
+              const text = (perAgentAccumulated.get(specialist) ?? '').trim()
+              if (!text) continue
+              await prisma.message.create({
+                data: {
+                  role: 'assistant',
+                  content: `[[specialist:${specialist}]] ${text}`,
+                  conversationId: convId!,
+                },
+              })
+            }
+          } else {
+            await prisma.message.create({
+              data: {
+                role: 'assistant',
+                content: accumulated,
+                conversationId: convId!,
+              },
+            })
+          }
 
           // Automatic profile sync with full audit/history trail.
           await syncProfileFromConversation({
             userId,
             conversationId: convId!,
             userMessage: message,
-            assistantMessage: accumulated,
+            assistantMessage:
+              perAgentAccumulated.size > 0
+                ? turnOrder
+                    .map((s) => `${s}: ${(perAgentAccumulated.get(s) ?? '').trim()}`)
+                    .join('\n\n')
+                : accumulated,
             domain: activeDomain ?? context.domain ?? 'generale',
-            primarySpecialist: activeSpecialist ?? 'analista_contesto',
-            contributors: activeContributors.length > 0 ? activeContributors : ['analista_contesto'],
+            primarySpecialist: activeSpecialist ?? 'intervistatore',
+            contributors: activeContributors.length > 0 ? activeContributors : ['intervistatore'],
             knownData: context.knownData,
             attachments: aiAttachments,
+            specialistTurns:
+              perAgentAccumulated.size > 0
+                ? turnOrder.map((s) => ({ specialistId: s, content: (perAgentAccumulated.get(s) ?? '').trim() }))
+                : [],
           }).catch((err) => {
             console.error('[Chat API] Profile sync error:', err)
           })

@@ -55,6 +55,79 @@ const MVD_QUESTIONS: Record<string, string> = {
   dolore_intensità: 'Quanto e intenso il dolore da 0 a 10?',
 }
 
+interface SpecialistTurn {
+  specialistId: SpecialistId
+  content: string
+}
+
+function detectRequestedSpecialist(message: string): SpecialistId | null {
+  const lower = message.toLowerCase()
+  if (/\b(medico|dottore|mmg|medicina generale)\b/.test(lower)) return 'mmg'
+  if (/\b(dietista|nutrizionist)\b/.test(lower)) return 'dietista'
+  if (/\b(personal trainer|trainer|pt)\b/.test(lower)) return 'personal_trainer'
+  if (/\b(psicolog|psicoterap)\b/.test(lower)) return 'psicologo'
+  if (/\b(mental coach)\b/.test(lower)) return 'mental_coach'
+  if (/\b(fisioterapista)\b/.test(lower)) return 'fisioterapista'
+  if (/\b(fisiatra)\b/.test(lower)) return 'fisiatra'
+  if (/\b(gastroenterolog)\b/.test(lower)) return 'gastroenterologo'
+  if (/\b(chinesolog)\b/.test(lower)) return 'chinesologo'
+  if (/\b(chef)\b/.test(lower)) return 'chef'
+  return null
+}
+
+function specialistDefaultDomain(specialist: SpecialistId): Domain {
+  const map: Partial<Record<SpecialistId, Domain>> = {
+    mmg: 'salute',
+    dietista: 'nutrizione',
+    personal_trainer: 'allenamento',
+    psicologo: 'mindset',
+    mental_coach: 'mindset',
+    fisioterapista: 'riabilitazione',
+    fisiatra: 'riabilitazione',
+    gastroenterologo: 'salute',
+    chinesologo: 'allenamento',
+    chef: 'cucina',
+  }
+  return map[specialist] ?? 'generale'
+}
+
+function isWeightLossGoal(knownData: Record<string, string>): boolean {
+  const goal = (knownData.obiettivo ?? '').toLowerCase()
+  return /dimagr|perdita peso|perdere peso|massa grassa/.test(goal)
+}
+
+function selectContextSupportSpecialists(
+  domain: Domain,
+  primary: SpecialistId,
+  context: ConversationContext,
+): SpecialistId[] {
+  const support: SpecialistId[] = []
+  const hasNutritionContext = Boolean(context.knownData.routine_pasti || context.knownData.idratazione)
+  const hasTrainingContext = Boolean(
+    context.knownData.attività_fisica_attuale || context.knownData.frequenza_allenamento,
+  )
+  const weightLossGoal = isWeightLossGoal(context.knownData)
+
+  // In percorsi di composizione corporea, nutrizione e allenamento devono coesistere.
+  if (
+    (domain === 'nutrizione' || primary === 'dietista') &&
+    (hasTrainingContext || weightLossGoal) &&
+    primary !== 'personal_trainer'
+  ) {
+    support.push('personal_trainer')
+  }
+
+  if (
+    (domain === 'allenamento' || primary === 'personal_trainer') &&
+    (hasNutritionContext || weightLossGoal) &&
+    primary !== 'dietista'
+  ) {
+    support.push('dietista')
+  }
+
+  return support
+}
+
 /** Triage risk level from message content */
 export function triageRisk(message: string): RiskLevel {
   for (const pattern of RED_FLAG_PATTERNS) {
@@ -112,7 +185,7 @@ export function selectSpecialist(domain: Domain, message: string): SpecialistId 
     cucina: 'chef',
     salute: 'mmg',
     riabilitazione: 'fisioterapista',
-    generale: 'analista_contesto',
+    generale: 'intervistatore',
   }
 
   if (domain === 'mindset') {
@@ -200,6 +273,19 @@ function dedupeSpecialists(ids: SpecialistId[]): SpecialistId[] {
   return [...new Set(ids)]
 }
 
+function filterOperationalSupport(
+  primary: SpecialistId,
+  support: SpecialistId[],
+): SpecialistId[] {
+  // "Analista del Contesto" non deve parlare in chat utente nel flusso operativo.
+  const filtered = support.filter((id) => id !== 'analista_contesto')
+  // L'intervistatore entra come primario per raccolta dati, non come "voce ponte" del turn.
+  if (primary !== 'intervistatore') {
+    return filtered.filter((id) => id !== 'intervistatore')
+  }
+  return filtered
+}
+
 function buildContributorFooter(contributors: SpecialistId[]): string {
   if (contributors.length === 0) return ''
   const names = contributors.map(formatContributorName).join(', ')
@@ -214,12 +300,236 @@ function buildMvdQuestion(context: ConversationContext): string {
   return MVD_QUESTIONS[nextMissing] ?? `Per completare il quadro mi serve un dato: ${nextMissing}.`
 }
 
+function stripCodeFences(text: string): string {
+  return text
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim()
+}
+
+function looksLikeStructuredOutput(text: string): boolean {
+  const clean = stripCodeFences(text)
+  return clean.startsWith('{') && (clean.includes('"final_report"') || clean.includes('"audit_log"'))
+}
+
+function extractNaturalFromStructuredJson(text: string): string | null {
+  try {
+    const clean = stripCodeFences(text)
+    const parsed = JSON.parse(clean) as {
+      final_report?: {
+        summary?: string
+        recommendations?: string[]
+      }
+    }
+    const summary = parsed.final_report?.summary?.trim()
+    if (!summary) return null
+    const recommendations = (parsed.final_report?.recommendations ?? [])
+      .slice(0, 3)
+      .map((item) => `- ${item}`)
+      .join('\n')
+    return recommendations
+      ? `${summary}\n\nProssimi passi consigliati:\n${recommendations}`
+      : summary
+  } catch {
+    return null
+  }
+}
+
+function normalizeAssistantOutput(content: string): string {
+  const trimmed = content.trim()
+  let normalized = trimmed
+  if (looksLikeStructuredOutput(trimmed)) {
+    normalized =
+      extractNaturalFromStructuredJson(trimmed) ??
+      'Procediamo in modo diretto: ti rispondo in linguaggio naturale e continuo, senza formato tecnico.'
+  }
+  // Block fake handoff wording and role-play transfer narratives.
+  const handoffPatterns = [
+    /passo la palla[^.\n]*[.\n]?/gi,
+    /passo il testimone[^.\n]*[.\n]?/gi,
+    /ho passato[^.\n]*[.\n]?/gi,
+    /mi ha passato[^.\n]*[.\n]?/gi,
+    /ha passato[^.\n]*informazioni[^.\n]*[.\n]?/gi,
+    /ha preso in carico[^.\n]*[.\n]?/gi,
+    /subentr[a-z]*[^.\n]*[.\n]?/gi,
+    /ora (ti )?risponder[aà] [^.\n]*[.\n]?/gi,
+    /attendi[^.\n]*[.\n]?/gi,
+    /il personal trainer [^.\n]*pronto[^.\n]*[.\n]?/gi,
+    /il nostro personal trainer[^.\n]*[.\n]?/gi,
+    /confermo che [^.\n]*passat[^.\n]*[.\n]?/gi,
+    /ti (?:contatter[aà]|metter[oò]) [^.\n]*[.\n]?/gi,
+    /puoi iniziare a parlargli[^.\n]*[.\n]?/gi,
+    /ora (?:potr[aà]|puoi) parlare con [^.\n]*[.\n]?/gi,
+  ]
+  for (const pattern of handoffPatterns) {
+    normalized = normalized.replace(pattern, '')
+  }
+
+  // Remove generic role-intro lines; role is already visible in UI bubble label.
+  normalized = normalized
+    .replace(/^c(?:iao|iao)!?\s*sono\s+il\s+[^.\n]*\.\s*/i, '')
+    .replace(/^c(?:iao|iao)!?\s*sono\s+la\s+[^.\n]*\.\s*/i, '')
+    .trim()
+
+  // If still contaminated by transfer language in any sentence, drop those sentences.
+  const blockedWords = /(passat|testimon|subentr|presa in carico|contatter|parlare con (il|la)|pronto a (darti|risponderti|supportarti)|analista di contesto)/i
+  normalized = normalized
+    .split(/(?<=[.!?])\s+/)
+    .filter((s) => !blockedWords.test(s))
+    .join(' ')
+    .trim()
+
+  if (!normalized) {
+    normalized = 'Procediamo subito con indicazioni concrete, senza attese o passaggi fittizi.'
+  }
+  return normalized
+}
+
+function isLikelyHandoffStall(raw: string, cleaned: string): boolean {
+  const handoffSignals = /(passat|testimon|subentr|contatter|parlare con (il|la)|pronto a darti|pronto a risponderti|pronto a supportarti)/i
+  if (!handoffSignals.test(raw)) return false
+  return cleaned.length < 120
+}
+
+function buildProgressQuestion(specialistId: SpecialistId, context: ConversationContext): string {
+  if (context.missingData.length > 0) {
+    const nextMissing = context.missingData[0]
+    const fromMvd = MVD_QUESTIONS[nextMissing]
+    if (fromMvd) return fromMvd
+  }
+
+  const bySpecialist: Partial<Record<SpecialistId, string>> = {
+    personal_trainer: 'Per partire in modo concreto, quante sessioni a settimana riesci a mantenere con continuita?',
+    dietista: 'Per impostare il piano alimentare, com e composta oggi la tua giornata tipo dei pasti?',
+    mmg: 'Mi descrivi il sintomo principale su cui vuoi un orientamento e da quanto tempo e presente?',
+    psicologo: 'Qual e la situazione specifica che in questo momento ti pesa di piu?',
+    mental_coach: 'Qual e l ostacolo principale che oggi ti fa perdere continuita?',
+    fisioterapista: 'Dove senti il fastidio e quanto lo valuti da 0 a 10?',
+    gastroenterologo: 'Quali sintomi gastrointestinali noti piu spesso e in quali momenti della giornata?',
+  }
+
+  return (
+    bySpecialist[specialistId] ??
+    'Per procedere in modo utile, qual e il dettaglio piu importante su cui vuoi lavorare adesso?'
+  )
+}
+
+function enforceSingleQuestion(content: string): string {
+  const questionMatches = [...content.matchAll(/\?/g)]
+  if (questionMatches.length <= 1) return content
+  const firstQuestionPos = questionMatches[0]?.index ?? -1
+  if (firstQuestionPos < 0) return content
+  return content.slice(0, firstQuestionPos + 1).trim()
+}
+
+async function runSpecialist(
+  specialistId: SpecialistId,
+  context: ConversationContext,
+  enrichedMessage: string,
+  consultationNotes?: string,
+): Promise<string> {
+  const memory = context.specialistMemory?.[specialistId]
+  const memoryBlock =
+    memory && memory.length > 0
+      ? `\n\n[Memoria interna ${formatContributorName(specialistId)}]\n${memory.slice(-5).join('\n')}`
+      : ''
+  const systemPrompt = await buildSpecialistPrompt(
+    specialistId,
+    { ...context, domain: context.domain },
+    consultationNotes,
+  )
+  const geminiMessages: AIMessage[] = [
+    ...context.messages.slice(0, -1),
+    { role: 'user', content: `${enrichedMessage}${memoryBlock}` },
+  ]
+  const output = isGeminiConfigured()
+    ? await generateResponse(systemPrompt, geminiMessages)
+    : generateFallbackResponse(
+        {
+          primarySpecialist: specialistId,
+          supportSpecialists: [],
+          domain: context.domain ?? 'generale',
+          riskLevel: 'R0',
+          reasoning: 'fallback',
+        },
+        enrichedMessage,
+      )
+  const normalized = enforceSingleQuestion(normalizeAssistantOutput(output))
+  if (isLikelyHandoffStall(output, normalized)) {
+    return buildProgressQuestion(specialistId, context)
+  }
+  return normalized
+}
+
+async function runContributorsSequentially(
+  contributors: SpecialistId[],
+  context: ConversationContext,
+  enrichedMessage: string,
+  consultationNotes: string,
+): Promise<SpecialistTurn[]> {
+  const turns: SpecialistTurn[] = []
+  for (const specialistId of contributors) {
+    try {
+      const content = await runSpecialist(
+        specialistId,
+        context,
+        enrichedMessage,
+        specialistId === contributors[0] ? consultationNotes : undefined,
+      )
+      turns.push({ specialistId, content })
+    } catch (err) {
+      console.error(`[Orchestrator] Specialist turn error for ${specialistId}:`, err)
+    }
+  }
+  return turns
+}
+
+async function buildMultiAgentPanelResponse(
+  contributors: SpecialistId[],
+  context: ConversationContext,
+  enrichedMessage: string,
+  consultationNotes: string,
+): Promise<string> {
+  const turns = await runContributorsSequentially(
+    contributors,
+    context,
+    enrichedMessage,
+    consultationNotes,
+  )
+  const parts = turns.map((turn) => `${formatContributorName(turn.specialistId)}: ${turn.content}`)
+  if (parts.length === 0) {
+    return 'Procediamo insieme: dimmi il prossimo dettaglio e costruisco una risposta completa con il team.'
+  }
+  return parts.join('\n\n')
+}
+
 /** Main routing function */
 export function routeMessage(
   message: string,
   context: ConversationContext,
 ): RoutingDecision {
   const riskLevel = triageRisk(message)
+  const requestedSpecialist = detectRequestedSpecialist(message)
+  if (requestedSpecialist) {
+    const contextualSupport = selectContextSupportSpecialists(
+      specialistDefaultDomain(requestedSpecialist),
+      requestedSpecialist,
+      context,
+    )
+    const support = filterOperationalSupport(
+      requestedSpecialist,
+      dedupeSpecialists(contextualSupport).filter((s) => s !== requestedSpecialist),
+    )
+    return {
+      primarySpecialist: requestedSpecialist,
+      supportSpecialists: support,
+      domain: specialistDefaultDomain(requestedSpecialist),
+      riskLevel,
+      reasoning: `Richiesta esplicita utente: risposta diretta da ${requestedSpecialist}`,
+    }
+  }
+
   const domain = context.domain || classifyDomain(message)
   const primary = selectSpecialist(domain, message)
 
@@ -233,7 +543,7 @@ export function routeMessage(
     }
   }
 
-  if (context.missingData.length > 0) {
+  if (context.missingData.length > 0 && domain === 'generale') {
     return {
       primarySpecialist: 'intervistatore',
       supportSpecialists: [],
@@ -243,7 +553,10 @@ export function routeMessage(
     }
   }
 
-  const support = selectSupportSpecialists(domain, primary, message)
+  const support = filterOperationalSupport(primary, dedupeSpecialists([
+    ...selectSupportSpecialists(domain, primary, message),
+    ...selectContextSupportSpecialists(domain, primary, context),
+  ]).filter((s) => s !== primary))
 
   return {
     primarySpecialist: primary,
@@ -343,28 +656,24 @@ export async function orchestrate(
 
   // Run consultation with support specialists
   const consultationNotes = await runConsultation(routing, context, enrichedMessage)
-
-  const systemPrompt = await buildSpecialistPrompt(
-    routing.primarySpecialist,
-    { ...context, domain: routing.domain },
-    consultationNotes,
-  )
-
-  const geminiMessages: AIMessage[] = [
-    ...context.messages.slice(0, -1),
-    { role: 'user', content: enrichedMessage },
-  ]
-
   let content: string
-
-  if (isGeminiConfigured()) {
-    try {
-      content = await generateResponse(systemPrompt, geminiMessages)
-    } catch (err) {
-      console.error('[Orchestrator] Gemini error, falling back to mock:', err)
-      content = generateFallbackResponse(routing, enrichedMessage)
-    }
-  } else {
+  try {
+    content =
+      contributors.length > 1
+        ? await buildMultiAgentPanelResponse(
+            contributors,
+            { ...context, domain: routing.domain },
+            enrichedMessage,
+            consultationNotes,
+          )
+        : await runSpecialist(
+            routing.primarySpecialist,
+            { ...context, domain: routing.domain },
+            enrichedMessage,
+            consultationNotes,
+          )
+  } catch (err) {
+    console.error('[Orchestrator] Gemini error, falling back to mock:', err)
     content = generateFallbackResponse(routing, enrichedMessage)
   }
 
@@ -396,6 +705,9 @@ export async function* orchestrateStream(
         audit: AIResponse['audit']
       }
     }
+  | { type: 'agent_turn'; specialist: SpecialistId }
+  | { type: 'agent_delta'; specialist: SpecialistId; content: string }
+  | { type: 'agent_done'; specialist: SpecialistId }
   | { type: 'delta'; content: string }
 > {
   const routing = routeMessage(userMessage, context)
@@ -430,31 +742,25 @@ export async function* orchestrateStream(
   // Run internal consultation (non-streaming) with support specialists
   const consultationNotes = await runConsultation(routing, context, enrichedMessage)
 
-  const systemPrompt = await buildSpecialistPrompt(
-    routing.primarySpecialist,
-    { ...context, domain: routing.domain },
-    consultationNotes,
-  )
-
-  const geminiMessages: AIMessage[] = [
-    ...context.messages.slice(0, -1),
-    { role: 'user', content: enrichedMessage },
-  ]
-
-  if (isGeminiConfigured()) {
-    try {
-      const { generateStream } = await import('./gemini')
-      for await (const chunk of generateStream(systemPrompt, geminiMessages)) {
-        yield { type: 'delta', content: chunk }
-      }
-      const footer = buildContributorFooter(contributors)
-      if (footer) {
-        yield { type: 'delta', content: footer }
+  try {
+    const turns = await runContributorsSequentially(
+      contributors,
+      { ...context, domain: routing.domain },
+      enrichedMessage,
+      consultationNotes,
+    )
+    if (turns.length > 0) {
+      for (const turn of turns) {
+        yield { type: 'agent_turn', specialist: turn.specialistId }
+        for (const chunk of turn.content.split(/(\s+)/).filter(Boolean)) {
+          yield { type: 'agent_delta', specialist: turn.specialistId, content: chunk }
+        }
+        yield { type: 'agent_done', specialist: turn.specialistId }
       }
       return
-    } catch (err) {
-      console.error('[Orchestrator] Gemini stream error, falling back:', err)
     }
+  } catch (err) {
+    console.error('[Orchestrator] Gemini stream error, falling back:', err)
   }
 
   // Fallback: yield mock response word by word

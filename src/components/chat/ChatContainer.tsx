@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { Plus, Trash2 } from 'lucide-react'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { ShareMenu } from './share'
@@ -9,6 +10,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { useChat } from '@/hooks/useChat'
 import { useLiveSession } from '@/hooks/useLiveSession'
 import type { LiveMode } from '@/hooks/useLiveSession'
+import { specialistDisplayName } from '@/lib/ai/specialist-meta'
 
 export function ChatContainer() {
   const {
@@ -19,26 +21,14 @@ export function ChatContainer() {
     activeSpecialist,
     sendMessage,
     loadConversation,
+    newConversation,
+    clearAllConversations,
   } = useChat()
+  const [isClearingHistory, setIsClearingHistory] = useState(false)
   const live = useLiveSession()
   const specialistLabel = useMemo(() => {
     if (!activeSpecialist) return null
-    const labels: Record<string, string> = {
-      intervistatore: 'Intervistatore',
-      dietista: 'Dietista',
-      personal_trainer: 'Personal Trainer',
-      psicologo: 'Psicologo',
-      mental_coach: 'Mental Coach',
-      chef: 'Chef',
-      fisioterapista: 'Fisioterapista',
-      fisiatra: 'Fisiatra',
-      medico_sport: 'Medico dello Sport',
-      mmg: 'MMG',
-      gastroenterologo: 'Gastroenterologo',
-      chinesologo: 'Chinesologo',
-      analista_contesto: 'Analista del Contesto',
-    }
-    return labels[activeSpecialist] ?? activeSpecialist
+    return specialistDisplayName[activeSpecialist] ?? activeSpecialist
   }, [activeSpecialist])
 
   const handleStartLive = useCallback(
@@ -63,6 +53,26 @@ export function ChatContainer() {
     }
   }, [live, conversationId, loadConversation])
 
+  const handleNewChat = useCallback(() => {
+    newConversation()
+  }, [newConversation])
+
+  const handleClearHistory = useCallback(async () => {
+    const confirmed = window.confirm(
+      'Vuoi eliminare tutto lo storico chat? Questa azione non puo essere annullata.',
+    )
+    if (!confirmed) return
+    setIsClearingHistory(true)
+    try {
+      await clearAllConversations()
+    } catch (err) {
+      console.error('[Chat] Failed to clear history:', err)
+      window.alert('Impossibile eliminare lo storico. Riprova.')
+    } finally {
+      setIsClearingHistory(false)
+    }
+  }, [clearAllConversations])
+
   return (
     <AppShell>
       {isLoading ? (
@@ -86,7 +96,24 @@ export function ChatContainer() {
           </div>
         )}
         {conversationId && (
-          <div className="absolute -top-10 right-4 z-10">
+          <div className="absolute -top-10 right-4 z-10 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleNewChat}
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-surface-dim bg-surface px-2 text-xs text-on-surface-muted transition-colors hover:text-on-surface"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Nuova chat
+            </button>
+            <button
+              type="button"
+              onClick={handleClearHistory}
+              disabled={isClearingHistory}
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-rose-300/40 bg-rose-50/40 px-2 text-xs text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {isClearingHistory ? 'Eliminazione...' : 'Elimina storico'}
+            </button>
             <ShareMenu conversationId={conversationId} />
           </div>
         )}
