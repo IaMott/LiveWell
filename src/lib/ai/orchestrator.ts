@@ -60,6 +60,37 @@ interface SpecialistTurn {
   content: string
 }
 
+function detectRequestedSpecialist(message: string): SpecialistId | null {
+  const lower = message.toLowerCase()
+  if (/\b(medico|dottore|mmg|medicina generale)\b/.test(lower)) return 'mmg'
+  if (/\b(dietista|nutrizionist)\b/.test(lower)) return 'dietista'
+  if (/\b(personal trainer|trainer|pt)\b/.test(lower)) return 'personal_trainer'
+  if (/\b(psicolog|psicoterap)\b/.test(lower)) return 'psicologo'
+  if (/\b(mental coach)\b/.test(lower)) return 'mental_coach'
+  if (/\b(fisioterapista)\b/.test(lower)) return 'fisioterapista'
+  if (/\b(fisiatra)\b/.test(lower)) return 'fisiatra'
+  if (/\b(gastroenterolog)\b/.test(lower)) return 'gastroenterologo'
+  if (/\b(chinesolog)\b/.test(lower)) return 'chinesologo'
+  if (/\b(chef)\b/.test(lower)) return 'chef'
+  return null
+}
+
+function specialistDefaultDomain(specialist: SpecialistId): Domain {
+  const map: Partial<Record<SpecialistId, Domain>> = {
+    mmg: 'salute',
+    dietista: 'nutrizione',
+    personal_trainer: 'allenamento',
+    psicologo: 'mindset',
+    mental_coach: 'mindset',
+    fisioterapista: 'riabilitazione',
+    fisiatra: 'riabilitazione',
+    gastroenterologo: 'salute',
+    chinesologo: 'allenamento',
+    chef: 'cucina',
+  }
+  return map[specialist] ?? 'generale'
+}
+
 /** Triage risk level from message content */
 export function triageRisk(message: string): RiskLevel {
   for (const pattern of RED_FLAG_PATTERNS) {
@@ -393,6 +424,17 @@ export function routeMessage(
   context: ConversationContext,
 ): RoutingDecision {
   const riskLevel = triageRisk(message)
+  const requestedSpecialist = detectRequestedSpecialist(message)
+  if (requestedSpecialist) {
+    return {
+      primarySpecialist: requestedSpecialist,
+      supportSpecialists: [],
+      domain: specialistDefaultDomain(requestedSpecialist),
+      riskLevel,
+      reasoning: `Richiesta esplicita utente: risposta diretta da ${requestedSpecialist}`,
+    }
+  }
+
   const domain = context.domain || classifyDomain(message)
   const primary = selectSpecialist(domain, message)
 
