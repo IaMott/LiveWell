@@ -52,3 +52,7 @@
 - Fatto: conferma post-merge su main del micro-hardening in HistoryPageContent e verifica regressioni da merge con storie non correlate.
 - Output chiave: commit `9aa40b2` confermato su `origin/main`; nessuna regressione codice rilevata (delta vs branch PR limitato a `bkp/ops`).
 - Prossimo passo: nessun blocco tecnico residuo su questo scope.
+## 2026-03-04 19:32 — project-manager
+- Fatto: chiusura formale STEP 9 e definizione backlog prioritario STEP 10 (Profile Modules) con piano esecutivo a task brevi.
+- Output chiave: creato `bkp/ops/STEP10_BACKLOG.md` + STATUS allineato su STEP 10 in corso.
+- Prossimo passo: avvio Sprint 10.1 (schema profilo, validazione API, sync chat->profilo).

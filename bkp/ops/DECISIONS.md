@@ -88,3 +88,8 @@
 - **Date**: 2026-03-04 19:14
 - **Decision**: eseguito merge equivalente PR #1 con `git merge` su main e push diretto su origin/main.
 - **Rationale**: `gh` non raggiungeva `api.github.com`; merge richiesto comunque completato con workflow git affidabile.
+
+## ADR-026: Chiusura formale STEP 9 e avvio STEP 10 con backlog strutturato
+- **Date**: 2026-03-04 19:32
+- **Decision**: STEP 9 dichiarato completato; STEP 10 avviato con backlog prioritario in `bkp/ops/STEP10_BACKLOG.md`.
+- **Rationale**: consolidare i risultati post-merge e avviare sviluppo modulare del profilo con ordine esecutivo e dipendenze chiare.

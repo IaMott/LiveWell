@@ -1,6 +1,6 @@
 # LiveWell — Project Status
 
-## Current Step: STEP 9 ✅ Completato (multi-agent + storico + hardening)
+## Current Step: STEP 10 ▶ In corso (Profile Modules)
 
 | Step | Description | Status | Commit |
 |------|-------------|--------|--------|
@@ -13,7 +13,7 @@
 | 7 | Orchestrator agent | ✅ Done | |
 | 8 | Gemini integration | ✅ Done | |
 | 9 | Audio/Video + Multi-agent architecture | ✅ Done | 9aa40b2 |
-| 10 | Profile Modules | ⬜ | — |
+| 10 | Profile Modules | ▶ In corso | — |
 | 11 | Notifications | ⬜ | — |
 | 12 | Sharing/PDF | ⬜ | — |
 | 13 | Security hardening | ⬜ | — |
@@ -21,12 +21,13 @@
 | 15 | Docs & handoff | ⬜ | — |
 
 ## Focus attuale
-- Post-merge validato su `main`.
-- Micro-hardening delete storico confermato senza regressioni.
-- Nessun blocker tecnico aperto su questo scope.
+- STEP 9 chiuso formalmente (multi-agent + storico + hardening + merge main).
+- STEP 10 avviato con backlog prioritario esecutivo (`bkp/ops/STEP10_BACKLOG.md`).
+- Priorita immediata: normalizzazione schema profilo + hardening API `/api/profile`.
 
 ## Rischi aperti
-- Nessun rischio bloccante rilevato nel perimetro review corrente.
+- Possibili inconsistenze tra struttura JSON profilo attuale e mapping chat->profilo.
+- Necessaria copertura test API/UI profilo prima di avanzare su feature non bloccanti.
 
 ## Last Updated
 2026-03-04 19:32
