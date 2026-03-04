@@ -257,11 +257,25 @@ function extractNaturalFromStructuredJson(text: string): string | null {
 
 function normalizeAssistantOutput(content: string): string {
   const trimmed = content.trim()
-  if (!looksLikeStructuredOutput(trimmed)) return trimmed
-  return (
-    extractNaturalFromStructuredJson(trimmed) ??
-    'Procediamo in modo diretto: ti rispondo in linguaggio naturale e continuo, senza formato tecnico.'
-  )
+  let normalized = trimmed
+  if (looksLikeStructuredOutput(trimmed)) {
+    normalized =
+      extractNaturalFromStructuredJson(trimmed) ??
+      'Procediamo in modo diretto: ti rispondo in linguaggio naturale e continuo, senza formato tecnico.'
+  }
+  // Block fake handoff wording.
+  normalized = normalized
+    .replace(/passo la palla[^.\n]*[.\n]?/gi, '')
+    .replace(/passo il testimone[^.\n]*[.\n]?/gi, '')
+    .replace(/il personal trainer[^.\n]*pronto[^.\n]*[.\n]?/gi, '')
+    .replace(/ha preso in carico[^.\n]*[.\n]?/gi, '')
+    .replace(/ora (ti )?risponder[aà] [^.\n]*[.\n]?/gi, '')
+    .replace(/attendi[^.\n]*[.\n]?/gi, '')
+    .trim()
+  if (!normalized) {
+    normalized = 'Procediamo subito con indicazioni concrete, senza attese o passaggi fittizi.'
+  }
+  return normalized
 }
 
 function enforceSingleQuestion(content: string): string {

@@ -128,9 +128,19 @@ export function buildContext(
   existingDomain?: Domain,
   specialistMemory?: Record<string, string[]>,
 ): ConversationContext {
-  // Determine domain from latest user message or existing
-  const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
-  const domain = existingDomain || (lastUserMsg ? classifyDomain(lastUserMsg.content) : 'generale')
+  // Determine domain from latest user message, but keep continuity when latest message is generic.
+  const userMessages = messages.filter((m) => m.role === 'user')
+  const lastUserMsg = [...userMessages].reverse()[0]
+  let domain = existingDomain || (lastUserMsg ? classifyDomain(lastUserMsg.content) : 'generale')
+  if (domain === 'generale') {
+    for (let i = userMessages.length - 1; i >= 0; i -= 1) {
+      const inferred = classifyDomain(userMessages[i].content)
+      if (inferred !== 'generale') {
+        domain = inferred
+        break
+      }
+    }
+  }
 
   // Build known data from profile first
   const knownData: Record<string, string> = {}
