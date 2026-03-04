@@ -16,3 +16,7 @@
 - Fatto: aggiunta feature "Nuova chat" + "Elimina storico" con API delete conversazioni.
 - Output chiave: utente puo azzerare lo storico completo e ripartire da conversazione pulita sia dalla chat che dalla pagina Storico.
 - Prossimo passo: push su PR e verifica UX in preview.
+## 2026-03-04 16:47 — backend-developer
+- Fatto: aggiunta eliminazione singola conversazione via API dedicata e pulsante cestino per ogni item nello Storico.
+- Output chiave: mantenuta cancellazione totale e introdotta cancellazione puntuale con aggiornamento UI immediato.
+- Prossimo passo: push PR e verifica da preview.

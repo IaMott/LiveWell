@@ -63,3 +63,8 @@
 - **Date**: 2026-03-04 16:42
 - **Decision**: introdotto `DELETE /api/conversations` (bulk e singola via query) + azioni UI `Nuova chat` e `Elimina storico`.
 - **Rationale**: dare controllo esplicito all'utente su reset sessione e cancellazione storico per ripartenza pulita.
+
+## ADR-021: Delete singola conversazione via route dedicata
+- **Date**: 2026-03-04 16:47
+- **Decision**: introdotto `DELETE /api/conversations/[id]` con risposta 404 se non trovata.
+- **Rationale**: separare chiaramente la cancellazione puntuale dalla bulk delete, semplificando UI e test.

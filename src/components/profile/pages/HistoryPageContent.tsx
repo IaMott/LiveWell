@@ -16,6 +16,7 @@ export function HistoryPageContent() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/conversations')
@@ -35,10 +36,32 @@ export function HistoryPageContent() {
       const res = await fetch('/api/conversations', { method: 'DELETE' })
       if (!res.ok) throw new Error('delete failed')
       setConversations([])
+      window.localStorage.removeItem('livewell_conversation_id')
     } catch {
       window.alert('Impossibile eliminare lo storico. Riprova.')
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  async function handleDeleteOne(conversationId: string) {
+    const confirmed = window.confirm(
+      'Vuoi eliminare questa conversazione? Questa azione non puo essere annullata.',
+    )
+    if (!confirmed) return
+    setDeletingId(conversationId)
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('delete failed')
+      setConversations((prev) => prev.filter((c) => c.id !== conversationId))
+      const activeConversationId = window.localStorage.getItem('livewell_conversation_id')
+      if (activeConversationId === conversationId) {
+        window.localStorage.removeItem('livewell_conversation_id')
+      }
+    } catch {
+      window.alert('Impossibile eliminare la conversazione. Riprova.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -95,24 +118,34 @@ export function HistoryPageContent() {
             })
 
             return (
-              <Link
+              <div
                 key={conv.id}
-                href={`/?c=${conv.id}`}
                 className={cn(
-                  'block rounded-[var(--radius-card)] border border-surface-dim p-4',
+                  'rounded-[var(--radius-card)] border border-surface-dim p-4',
                   'transition-colors hover:bg-surface-dim/50',
                 )}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <Link href={`/?c=${conv.id}`} className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-on-surface">
                       {conv.title || 'Conversazione senza titolo'}
                     </p>
                     <p className="mt-0.5 truncate text-xs text-on-surface-muted">{preview}</p>
+                  </Link>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-xs text-on-surface-muted">{date}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteOne(conv.id)}
+                      disabled={deletingId === conv.id}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-rose-300/40 bg-rose-50/40 text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      aria-label="Elimina conversazione"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                  <span className="shrink-0 text-xs text-on-surface-muted">{date}</span>
                 </div>
-              </Link>
+              </div>
             )
           })}
         </div>
