@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, type RefObject } from 'react'
 import type { LiveServerMessage } from '@google/genai'
 import {
   float32ToPcm16,
@@ -24,7 +24,7 @@ interface UseLiveSessionReturn {
   mode: LiveMode | null
   specialist: string | null
   transcript: TranscriptEntry[]
-  videoRef: React.RefObject<HTMLVideoElement | null>
+  videoRef: RefObject<HTMLVideoElement | null>
   startSession: (mode: LiveMode, conversationId: string | null) => Promise<void>
   stopSession: () => void
   toggleMute: () => void
@@ -244,7 +244,7 @@ export function useLiveSession(): UseLiveSessionReturn {
           const inputData = e.inputBuffer.getChannelData(0)
           const downsampled = downsample(inputData, nativeSampleRate, 16000)
           const pcm16 = float32ToPcm16(downsampled)
-          const base64 = arrayBufferToBase64(pcm16.buffer)
+          const base64 = arrayBufferToBase64(pcm16.buffer as ArrayBuffer)
 
           try {
             session.sendRealtimeInput({
