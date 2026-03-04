@@ -91,6 +91,48 @@ function specialistDefaultDomain(specialist: SpecialistId): Domain {
   return map[specialist] ?? 'generale'
 }
 
+function isWeightLossGoal(knownData: Record<string, string>): boolean {
+  const goal = (knownData.obiettivo ?? '').toLowerCase()
+  return /dimagr|perdita peso|perdere peso|massa grassa/.test(goal)
+}
+
+function selectContextSupportSpecialists(
+  domain: Domain,
+  primary: SpecialistId,
+  context: ConversationContext,
+): SpecialistId[] {
+  const support: SpecialistId[] = []
+  const hasNutritionContext = Boolean(context.knownData.routine_pasti || context.knownData.idratazione)
+  const hasTrainingContext = Boolean(
+    context.knownData.attività_fisica_attuale || context.knownData.frequenza_allenamento,
+  )
+  const weightLossGoal = isWeightLossGoal(context.knownData)
+
+  // In percorsi di composizione corporea, nutrizione e allenamento devono coesistere.
+  if (
+    (domain === 'nutrizione' || primary === 'dietista') &&
+    (hasTrainingContext || weightLossGoal) &&
+    primary !== 'personal_trainer'
+  ) {
+    support.push('personal_trainer')
+  }
+
+  if (
+    (domain === 'allenamento' || primary === 'personal_trainer') &&
+    (hasNutritionContext || weightLossGoal) &&
+    primary !== 'dietista'
+  ) {
+    support.push('dietista')
+  }
+
+  // Quando mancano dati ma il dominio e gia chiaro, l'intervistatore supporta senza bloccare il professionista.
+  if (context.missingData.length > 0 && domain !== 'generale' && primary !== 'intervistatore') {
+    support.push('intervistatore')
+  }
+
+  return support
+}
+
 /** Triage risk level from message content */
 export function triageRisk(message: string): RiskLevel {
   for (const pattern of RED_FLAG_PATTERNS) {
@@ -426,9 +468,15 @@ export function routeMessage(
   const riskLevel = triageRisk(message)
   const requestedSpecialist = detectRequestedSpecialist(message)
   if (requestedSpecialist) {
+    const contextualSupport = selectContextSupportSpecialists(
+      specialistDefaultDomain(requestedSpecialist),
+      requestedSpecialist,
+      context,
+    )
+    const support = dedupeSpecialists(contextualSupport).filter((s) => s !== requestedSpecialist)
     return {
       primarySpecialist: requestedSpecialist,
-      supportSpecialists: [],
+      supportSpecialists: support,
       domain: specialistDefaultDomain(requestedSpecialist),
       riskLevel,
       reasoning: `Richiesta esplicita utente: risposta diretta da ${requestedSpecialist}`,
@@ -448,7 +496,7 @@ export function routeMessage(
     }
   }
 
-  if (context.missingData.length > 0) {
+  if (context.missingData.length > 0 && domain === 'generale') {
     return {
       primarySpecialist: 'intervistatore',
       supportSpecialists: [],
@@ -458,7 +506,10 @@ export function routeMessage(
     }
   }
 
-  const support = selectSupportSpecialists(domain, primary, message)
+  const support = dedupeSpecialists([
+    ...selectSupportSpecialists(domain, primary, message),
+    ...selectContextSupportSpecialists(domain, primary, context),
+  ]).filter((s) => s !== primary)
 
   return {
     primarySpecialist: primary,
