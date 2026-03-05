@@ -153,3 +153,8 @@
 - **Date**: 2026-03-05 11:22
 - **Decision**: `HistoryPageContent` unifica feedback `loading/success/error` e integra timeline profilo filtrabile per sezione.
 - **Rationale**: coerenza UX tra sezioni profilo e maggiore trasparenza delle modifiche automatiche AI.
+
+## ADR-039: PR #3 (Sprint 10.2) merge-ready
+- **Date**: 2026-03-05 11:28
+- **Decision**: approvata merge-readiness di Sprint 10.2; nessun blocker tecnico su storico profilo sezione, mapping allegati e UX stati.
+- **Rationale**: CI e deploy preview verdi; rischi residui classificati non bloccanti e copribili in Sprint 10.3 con test additivi.

@@ -13,7 +13,7 @@
 | 7 | Orchestrator agent | ✅ Done | |
 | 8 | Gemini integration | ✅ Done | |
 | 9 | Audio/Video + Multi-agent architecture | ✅ Done | 9aa40b2 |
-| 10 | Profile Modules | ▶ In corso | f6a68a6 |
+| 10 | Profile Modules | ▶ In corso | 9ece1a6 |
 | 11 | Notifications | ⬜ | — |
 | 12 | Sharing/PDF | ⬜ | — |
 | 13 | Security hardening | ⬜ | — |
@@ -21,13 +21,12 @@
 | 15 | Docs & handoff | ⬜ | — |
 
 ## Focus attuale
-- Sprint 10.1 chiuso e deployato.
-- Sprint 10.2 avviato: endpoint storico profilo per sezione, mapping allegati contestuale, UX storico profilo/chat uniforme.
-- Test API/UI aggiornati per i nuovi flussi storico.
+- Sprint 10.2 implementato e reviewato su PR #3.
+- Esito review: merge-ready (nessun blocker), check CI e Vercel `pass`.
+- In attesa merge PR #3 su main e passaggio a Sprint 10.3.
 
 ## Rischi aperti
-- Runner test locale in questa sessione resta in hang (`vitest run` senza output): validazione completa demandata a CI remota.
-- Da verificare in preview che la timeline storico profilo rispetti i volumi reali di dati (limit/filtro sezione).
+- Gap non bloccanti di test: coverage dedicata su `profile-sync` (`attachmentBySection`) e su interazione filtro timeline in `HistoryPageContent`.
 
 ## Last Updated
-2026-03-05 11:22
+2026-03-05 11:28

@@ -88,3 +88,7 @@
 - Fatto: avvio Sprint 10.2 implementando storico profilo per sezione (`GET /api/profile/history`), mapping allegati -> sezione in `profile-sync` e UX storico profilo/chat con stati uniformi loading/success/error.
 - Output chiave: endpoint interrogabile per sezione con timeline unificata + allegati mappati; pagina `HistoryPageContent` estesa con filtro sezioni e timeline profilo; test API/UI aggiornati su nuovi flussi.
 - Prossimo passo: push branch Sprint 10.2, aprire PR e validare check CI (runner locale vitest ancora in hang).
+## 2026-03-05 11:28 — code-reviewer
+- Fatto: review completa PR #3 su endpoint storico profilo, mapping `attachmentBySection`, UX stato storico e test API/UI.
+- Output chiave: nessun blocker rilevato; check PR #3 tutti `pass` (CI + Vercel). Segnalati solo gap non bloccanti di copertura test su `attachmentBySection` in `profile-sync` e su filtro timeline UI.
+- Prossimo passo: merge PR #3 su main e apertura Sprint 10.3.
