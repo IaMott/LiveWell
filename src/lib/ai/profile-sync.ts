@@ -86,6 +86,11 @@ function attachmentKey(value: Partial<AttachmentInput> & { syncId?: string }): s
   ].join('|')
 }
 
+function toJsonObjects(value: unknown): JsonObj[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is JsonObj => !!item && typeof item === 'object')
+}
+
 function buildSyncId(input: SyncInput): string {
   if (input.syncId?.trim()) return input.syncId.trim()
   return createHash('sha1')
@@ -136,6 +141,7 @@ export async function syncProfileFromConversation(input: SyncInput): Promise<voi
   const attachmentCatalog = (input.attachments ?? []).map((att) => ({
     ...att,
     syncId,
+    section: sectionKey,
     domain: input.domain,
     conversationId: input.conversationId,
     timestamp: nowIso,
@@ -205,6 +211,28 @@ export async function syncProfileFromConversation(input: SyncInput): Promise<voi
     existingAttachmentKeys.add(key)
   }
   settings.attachmentHistory = attachmentHistory
+
+  // Attachment mapping by profile section for fast contextual lookup in UI/API.
+  const attachmentBySectionRoot = asObj(settings.attachmentBySection)
+  const sectionAttachmentHistory = toJsonObjects(attachmentBySectionRoot[sectionKey])
+  const sectionAttachmentKeys = new Set(
+    sectionAttachmentHistory.map((item) =>
+      attachmentKey({
+        syncId: String(item.syncId ?? ''),
+        type: String(item.type ?? '') as AttachmentInput['type'],
+        url: String(item.url ?? ''),
+        fileName: String(item.fileName ?? ''),
+      }),
+    ),
+  )
+  for (const attachment of attachmentCatalog) {
+    const key = attachmentKey(attachment)
+    if (sectionAttachmentKeys.has(key)) continue
+    sectionAttachmentHistory.push(attachment)
+    sectionAttachmentKeys.add(key)
+  }
+  attachmentBySectionRoot[sectionKey] = sectionAttachmentHistory.slice(-200)
+  settings.attachmentBySection = attachmentBySectionRoot
 
   // Specialist memory separated by conversation and specialist.
   const specialistMemoryRoot = asObj(settings.aiSpecialistMemory)

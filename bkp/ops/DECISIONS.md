@@ -138,3 +138,18 @@
 - **Date**: 2026-03-04 21:58
 - **Decision**: completato merge di `feat/step10-sprint10-1-finalize` su `main` dopo check CI verdi e deploy Vercel completato.
 - **Rationale**: tutti i blocker Sprint 10.1 (settings allowlist, anti-override metadati, fallback legacy, dedup allegati) risultano chiusi e validati in pipeline remota.
+
+## ADR-036: Endpoint storico profilo per sezione
+- **Date**: 2026-03-05 11:22
+- **Decision**: introdotto `GET /api/profile/history` con query `section` e `limit`, output `timeline + sectionHistory + attachmentsBySection`.
+- **Rationale**: rendere interrogabile lo storico profilo lato UI/API con filtro per dominio/sezione.
+
+## ADR-037: Indicizzazione allegati per sezione in profile sync
+- **Date**: 2026-03-05 11:22
+- **Decision**: `syncProfileFromConversation` salva allegati con campo `section` e mantiene `settings.attachmentBySection[section]` con deduplica per chiave composta.
+- **Rationale**: collegare allegati chat/live al contesto profilo corretto e facilitarne il rendering nello storico di sezione.
+
+## ADR-038: UX storico profilo/chat con stati uniformi
+- **Date**: 2026-03-05 11:22
+- **Decision**: `HistoryPageContent` unifica feedback `loading/success/error` e integra timeline profilo filtrabile per sezione.
+- **Rationale**: coerenza UX tra sezioni profilo e maggiore trasparenza delle modifiche automatiche AI.

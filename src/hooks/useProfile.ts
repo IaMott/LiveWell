@@ -22,13 +22,26 @@ export function useProfile() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  useEffect(() => {
-    fetch('/api/profile')
-      .then((r) => r.json())
-      .then((d) => setProfile(d.profile))
-      .catch(() => setError('Errore nel caricamento del profilo'))
-      .finally(() => setLoading(false))
+  const loadProfile = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const response = await fetch('/api/profile')
+      if (!response.ok) {
+        throw new Error('Errore nel caricamento del profilo')
+      }
+      const data = await response.json()
+      setProfile(data.profile ?? null)
+    } catch {
+      setError('Errore nel caricamento del profilo')
+    } finally {
+      setLoading(false)
+    }
   }, [])
+
+  useEffect(() => {
+    void loadProfile()
+  }, [loadProfile])
 
   const saveSection = useCallback(
     async (section: string, data: object) => {
@@ -46,9 +59,7 @@ export function useProfile() {
           throw new Error(err.error || 'Errore nel salvataggio')
         }
         // Refresh profile
-        const fresh = await fetch('/api/profile')
-        const d = await fresh.json()
-        setProfile(d.profile)
+        await loadProfile()
         setSuccess('Salvato con successo')
         setTimeout(() => setSuccess(''), 3000)
       } catch (e) {
@@ -57,7 +68,7 @@ export function useProfile() {
         setSaving(false)
       }
     },
-    [],
+    [loadProfile],
   )
 
   return { profile, loading, saving, error, success, saveSection }
