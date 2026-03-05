@@ -13,47 +13,85 @@ vi.mock('next/link', () => ({
 describe('HistoryPageContent', () => {
   const originalFetch = global.fetch
   const originalConfirm = window.confirm
-  const originalAlert = window.alert
 
   beforeEach(() => {
     vi.restoreAllMocks()
     window.localStorage.clear()
     window.confirm = vi.fn(() => true)
-    window.alert = vi.fn()
   })
 
   afterEach(() => {
     global.fetch = originalFetch
     window.confirm = originalConfirm
-    window.alert = originalAlert
   })
 
+  function withBaseProfileHistory(fetchMock: ReturnType<typeof vi.fn>) {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        conversations: [
+          {
+            id: 'c1',
+            title: 'Chat 1',
+            updatedAt: '2026-03-04T16:00:00.000Z',
+            messages: [{ content: 'preview 1', role: 'assistant' }],
+          },
+        ],
+      }),
+    })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        timeline: [
+          {
+            id: 'h1',
+            section: 'nutrition',
+            timestamp: '2026-03-04T16:00:00.000Z',
+            domain: 'nutrizione',
+            primarySpecialist: 'dietista',
+            contributors: [],
+            userMessage: 'msg',
+            assistantSummary: 'summary',
+            attachments: [],
+          },
+        ],
+        attachmentsBySection: {
+          nutrition: [],
+        },
+      }),
+    })
+  }
+
   it('elimina singola conversazione e resetta localStorage se attiva', async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          conversations: [
-            {
-              id: 'c1',
-              title: 'Chat 1',
-              updatedAt: '2026-03-04T16:00:00.000Z',
-              messages: [{ content: 'preview 1', role: 'assistant' }],
-            },
-            {
-              id: 'c2',
-              title: 'Chat 2',
-              updatedAt: '2026-03-04T15:00:00.000Z',
-              messages: [{ content: 'preview 2', role: 'assistant' }],
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ deletedCount: 1 }),
-      }) as typeof global.fetch
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        conversations: [
+          {
+            id: 'c1',
+            title: 'Chat 1',
+            updatedAt: '2026-03-04T16:00:00.000Z',
+            messages: [{ content: 'preview 1', role: 'assistant' }],
+          },
+          {
+            id: 'c2',
+            title: 'Chat 2',
+            updatedAt: '2026-03-04T15:00:00.000Z',
+            messages: [{ content: 'preview 2', role: 'assistant' }],
+          },
+        ],
+      }),
+    })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ timeline: [], attachmentsBySection: {} }),
+    })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ deletedCount: 1 }),
+    })
+    global.fetch = fetchMock as typeof global.fetch
 
     window.localStorage.setItem('livewell_conversation_id', 'c1')
     render(<HistoryPageContent />)
@@ -69,25 +107,13 @@ describe('HistoryPageContent', () => {
   })
 
   it('elimina tutto lo storico e resetta localStorage', async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          conversations: [
-            {
-              id: 'c1',
-              title: 'Chat 1',
-              updatedAt: '2026-03-04T16:00:00.000Z',
-              messages: [{ content: 'preview 1', role: 'assistant' }],
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ deletedCount: 1 }),
-      }) as typeof global.fetch
+    const fetchMock = vi.fn()
+    withBaseProfileHistory(fetchMock)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ deletedCount: 1 }),
+    })
+    global.fetch = fetchMock as typeof global.fetch
 
     window.localStorage.setItem('livewell_conversation_id', 'c1')
     render(<HistoryPageContent />)
@@ -103,81 +129,42 @@ describe('HistoryPageContent', () => {
 
   it('non esegue delete singola se conferma annullata', async () => {
     window.confirm = vi.fn(() => false)
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          conversations: [
-            {
-              id: 'c1',
-              title: 'Chat 1',
-              updatedAt: '2026-03-04T16:00:00.000Z',
-              messages: [{ content: 'preview 1', role: 'assistant' }],
-            },
-          ],
-        }),
-      }) as unknown as typeof global.fetch
-    global.fetch = fetchMock
+    const fetchMock = vi.fn()
+    withBaseProfileHistory(fetchMock)
+    global.fetch = fetchMock as unknown as typeof global.fetch
 
     render(<HistoryPageContent />)
     await screen.findByText('Chat 1')
 
     fireEvent.click(screen.getByRole('button', { name: 'Elimina conversazione' }))
 
-    expect(fetchMock).toHaveBeenCalledTimes(1) // solo load iniziale
+    expect(fetchMock).toHaveBeenCalledTimes(2) // conversazioni + history
     expect(screen.getByText('Chat 1')).toBeInTheDocument()
   })
 
   it('non esegue delete totale se conferma annullata', async () => {
     window.confirm = vi.fn(() => false)
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          conversations: [
-            {
-              id: 'c1',
-              title: 'Chat 1',
-              updatedAt: '2026-03-04T16:00:00.000Z',
-              messages: [{ content: 'preview 1', role: 'assistant' }],
-            },
-          ],
-        }),
-      }) as unknown as typeof global.fetch
-    global.fetch = fetchMock
+    const fetchMock = vi.fn()
+    withBaseProfileHistory(fetchMock)
+    global.fetch = fetchMock as unknown as typeof global.fetch
 
     render(<HistoryPageContent />)
     await screen.findByText('Chat 1')
 
     fireEvent.click(screen.getByRole('button', { name: /Elimina tutto lo storico/i }))
 
-    expect(fetchMock).toHaveBeenCalledTimes(1) // solo load iniziale
+    expect(fetchMock).toHaveBeenCalledTimes(2) // conversazioni + history
     expect(screen.getByText('Chat 1')).toBeInTheDocument()
   })
 
-  it('mostra alert e mantiene lista invariata su errore delete singola', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          conversations: [
-            {
-              id: 'c1',
-              title: 'Chat 1',
-              updatedAt: '2026-03-04T16:00:00.000Z',
-              messages: [{ content: 'preview 1', role: 'assistant' }],
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: 'boom' }),
-      }) as unknown as typeof global.fetch
-    global.fetch = fetchMock
+  it('mostra errore e mantiene lista invariata su errore delete singola', async () => {
+    const fetchMock = vi.fn()
+    withBaseProfileHistory(fetchMock)
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: 'boom' }),
+    })
+    global.fetch = fetchMock as unknown as typeof global.fetch
 
     render(<HistoryPageContent />)
     await screen.findByText('Chat 1')
@@ -185,32 +172,19 @@ describe('HistoryPageContent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Elimina conversazione' }))
 
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalled()
+      expect(screen.getByText('Impossibile eliminare la conversazione. Riprova.')).toBeInTheDocument()
     })
     expect(screen.getByText('Chat 1')).toBeInTheDocument()
   })
 
-  it('mostra alert e mantiene lista invariata su errore delete totale', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          conversations: [
-            {
-              id: 'c1',
-              title: 'Chat 1',
-              updatedAt: '2026-03-04T16:00:00.000Z',
-              messages: [{ content: 'preview 1', role: 'assistant' }],
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: 'boom' }),
-      }) as unknown as typeof global.fetch
-    global.fetch = fetchMock
+  it('mostra errore e mantiene lista invariata su errore delete totale', async () => {
+    const fetchMock = vi.fn()
+    withBaseProfileHistory(fetchMock)
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: 'boom' }),
+    })
+    global.fetch = fetchMock as unknown as typeof global.fetch
 
     render(<HistoryPageContent />)
     await screen.findByText('Chat 1')
@@ -218,7 +192,7 @@ describe('HistoryPageContent', () => {
     fireEvent.click(screen.getByRole('button', { name: /Elimina tutto lo storico/i }))
 
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalled()
+      expect(screen.getByText('Impossibile eliminare lo storico conversazioni. Riprova.')).toBeInTheDocument()
     })
     expect(screen.getByText('Chat 1')).toBeInTheDocument()
   })
@@ -233,23 +207,10 @@ describe('HistoryPageContent', () => {
         })
     })
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          conversations: [
-            {
-              id: 'c1',
-              title: 'Chat 1',
-              updatedAt: '2026-03-04T16:00:00.000Z',
-              messages: [{ content: 'preview 1', role: 'assistant' }],
-            },
-          ],
-        }),
-      })
-      .mockReturnValueOnce(deleteAllPromise) as unknown as typeof global.fetch
-    global.fetch = fetchMock
+    const fetchMock = vi.fn()
+    withBaseProfileHistory(fetchMock)
+    fetchMock.mockReturnValueOnce(deleteAllPromise)
+    global.fetch = fetchMock as unknown as typeof global.fetch
 
     render(<HistoryPageContent />)
     await screen.findByText('Chat 1')

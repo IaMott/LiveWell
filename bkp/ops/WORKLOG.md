@@ -84,3 +84,7 @@
 - Fatto: PR #2 (`feat/step10-sprint10-1-finalize`) verificata, fix CI applicato (`test: remove explicit any in profile sync regression`), check verdi e merge completato su `main`.
 - Output chiave: commit finale su `origin/main` = `79a4506b1e252ddfde3bd0948be83be363af896a`; CI main `success` (run `22688944054`); deploy Vercel `success` su `https://vercel.com/iamotts-projects/livewell/DxWRhrHkudrFWuYTnry1PmXsZADv`.
 - Prossimo passo: avvio Sprint 10.2 (storico sezione profilo + UX moduli + mapping allegati contestuale).
+## 2026-03-05 11:22 — backend-developer
+- Fatto: avvio Sprint 10.2 implementando storico profilo per sezione (`GET /api/profile/history`), mapping allegati -> sezione in `profile-sync` e UX storico profilo/chat con stati uniformi loading/success/error.
+- Output chiave: endpoint interrogabile per sezione con timeline unificata + allegati mappati; pagina `HistoryPageContent` estesa con filtro sezioni e timeline profilo; test API/UI aggiornati su nuovi flussi.
+- Prossimo passo: push branch Sprint 10.2, aprire PR e validare check CI (runner locale vitest ancora in hang).

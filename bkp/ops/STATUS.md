@@ -13,7 +13,7 @@
 | 7 | Orchestrator agent | ✅ Done | |
 | 8 | Gemini integration | ✅ Done | |
 | 9 | Audio/Video + Multi-agent architecture | ✅ Done | 9aa40b2 |
-| 10 | Profile Modules | ▶ In corso | 79a4506 |
+| 10 | Profile Modules | ▶ In corso | f6a68a6 |
 | 11 | Notifications | ⬜ | — |
 | 12 | Sharing/PDF | ⬜ | — |
 | 13 | Security hardening | ⬜ | — |
@@ -21,13 +21,13 @@
 | 15 | Docs & handoff | ⬜ | — |
 
 ## Focus attuale
-- Sprint 10.1 chiuso formalmente: schema/validatori profilo, hardening `/api/profile`, idempotenza sync chat->profilo e hardening settings anti-override.
-- Merge PR #2 completato su `main` con commit `79a4506b1e252ddfde3bd0948be83be363af896a`.
-- CI `main` e deploy Vercel post-merge entrambi `success`.
+- Sprint 10.1 chiuso e deployato.
+- Sprint 10.2 avviato: endpoint storico profilo per sezione, mapping allegati contestuale, UX storico profilo/chat uniforme.
+- Test API/UI aggiornati per i nuovi flussi storico.
 
 ## Rischi aperti
-- Nessun blocker residuo su Sprint 10.1.
-- Prossimo rischio operativo: garantire coerenza UI/storico per Sprint 10.2 (timeline sezione + allegati contestuali).
+- Runner test locale in questa sessione resta in hang (`vitest run` senza output): validazione completa demandata a CI remota.
+- Da verificare in preview che la timeline storico profilo rispetti i volumi reali di dati (limit/filtro sezione).
 
 ## Last Updated
-2026-03-04 21:58
+2026-03-05 11:22
