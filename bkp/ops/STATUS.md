@@ -21,13 +21,13 @@
 | 15 | Docs & handoff | ⬜ | — |
 
 ## Focus attuale
-- Sprint 10.1 chiuso e deployato.
-- Sprint 10.2 avviato: endpoint storico profilo per sezione, mapping allegati contestuale, UX storico profilo/chat uniforme.
-- Test API/UI aggiornati per i nuovi flussi storico.
+- Sprint 10.2 chiuso con merge PR #3 su `main` (storico profilo per sezione + mapping allegati contestuale + UX stati uniformi).
+- CI su `main` verde dopo merge (`actions run 22715108060`).
+- Preparazione Sprint 10.3 dal backlog STEP 10.
 
 ## Rischi aperti
 - Runner test locale in questa sessione resta in hang (`vitest run` senza output): validazione completa demandata a CI remota.
-- Da verificare in preview che la timeline storico profilo rispetti i volumi reali di dati (limit/filtro sezione).
+- Verifica deploy production via API Vercel/GitHub non completabile in questa sessione per errore di rete intermittente verso `api.github.com`.
 
 ## Last Updated
-2026-03-05 11:22
+2026-03-05 12:11

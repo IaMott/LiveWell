@@ -153,3 +153,8 @@
 - **Date**: 2026-03-05 11:22
 - **Decision**: `HistoryPageContent` unifica feedback `loading/success/error` e integra timeline profilo filtrabile per sezione.
 - **Rationale**: coerenza UX tra sezioni profilo e maggiore trasparenza delle modifiche automatiche AI.
+
+## ADR-039: Chiusura Sprint 10.2 con merge PR #3
+- **Date**: 2026-03-05 12:11
+- **Decision**: PR #3 (`feat/step10-sprint10-2-profile-history`) unita su `main`; baseline aggiornata al commit `b176a7934ed3f5cd345b43b1aa5c8b551f5f1f16`.
+- **Rationale**: endpoint storico profilo, mapping allegati per sezione e UX stati uniformi risultano validati dai check CI e pronti come base per Sprint 10.3.

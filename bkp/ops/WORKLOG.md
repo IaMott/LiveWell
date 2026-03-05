@@ -88,3 +88,7 @@
 - Fatto: avvio Sprint 10.2 implementando storico profilo per sezione (`GET /api/profile/history`), mapping allegati -> sezione in `profile-sync` e UX storico profilo/chat con stati uniformi loading/success/error.
 - Output chiave: endpoint interrogabile per sezione con timeline unificata + allegati mappati; pagina `HistoryPageContent` estesa con filtro sezioni e timeline profilo; test API/UI aggiornati su nuovi flussi.
 - Prossimo passo: push branch Sprint 10.2, aprire PR e validare check CI (runner locale vitest ancora in hang).
+## 2026-03-05 12:11 — git-workflow-manager
+- Fatto: merge PR #3 completato su `main` e verifica stato pipeline principale.
+- Output chiave: commit merge su `origin/main` confermato (`b176a7934ed3f5cd345b43b1aa5c8b551f5f1f16`), CI `main` in stato `completed/success` (run `22715108060`).
+- Prossimo passo: avvio Sprint 10.3 dal backlog STEP 10 e validazione manuale funzionale in produzione.
