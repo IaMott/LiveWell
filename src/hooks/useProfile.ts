@@ -89,10 +89,11 @@ export function useProfile(options: UseProfileOptions = {}) {
         sections?: ProfileCompletenessItem[]
         overallCompletion?: number
       }
-      if (Array.isArray(data.sections)) {
+      const sections = Array.isArray(data.sections) ? data.sections : []
+      if (sections.length > 0) {
         setCompleteness((current) => {
           const next = { ...current }
-          for (const section of data.sections) {
+          for (const section of sections) {
             next[section.section] = section
           }
           return next

@@ -1,4 +1,4 @@
-import type { Role, ToolCall, ToolResult } from '@/lib/ai/types'
+import type { Role, ToolCall, ToolResult } from '@/lib/ai/runtime-types'
 import { getToolDefinition, type ToolName } from './toolRegistry'
 import { authorizeToolExecution } from './rbac'
 import { consumeConfirmToken, issueConfirmToken } from './confirmTokenService'

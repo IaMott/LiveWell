@@ -5,7 +5,7 @@ import { errorResponse } from '@/lib/security/errorSchema'
 import { orchestrate, type LlmClient } from '@/lib/ai/orchestrator/orchestrator'
 import { loadTeam } from '@/lib/ai/team/loader'
 import { buildContextPack } from '@/lib/ai/context/contextPackBuilder'
-import type { AgentInput, ContextPack, Role, ToolCall, ToolResult } from '@/lib/ai/types'
+import type { AgentInput, ContextPack, Role, ToolCall, ToolResult } from '@/lib/ai/runtime-types'
 import { ALLOWED_TOOL_NAMES } from '@/lib/tools/toolRegistry'
 import { createToolExecutor, type MutationAuditEvent } from '@/lib/tools/toolExecutor'
 import { prisma } from '@/lib/prisma'
@@ -428,8 +428,11 @@ export async function POST(request: Request): Promise<Response> {
     pendingAuditEvents.push(event)
   })
 
+  const toolCallsToExecute =
+    consensus.toolCallsToExecute.length > 0 ? consensus.toolCallsToExecute : requestedToolCalls
+
   const toolResults: ToolResult[] = []
-  for (const call of consensus.toolCallsToExecute) {
+  for (const call of toolCallsToExecute) {
     const result = await executor.executeToolCall(call, {
       requestId: agentInput.requestId,
       conversationId: agentInput.conversationId,
