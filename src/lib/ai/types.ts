@@ -1,93 +1,139 @@
-/** Risk levels for the orchestrator triage */
-export type RiskLevel = 'R0' | 'R1' | 'R2' | 'R3'
+export type Domain = 'general' | 'nutrition' | 'health' | 'training' | 'mindfulness' | 'inspiration'
 
-/** Specialist identifier */
-export type SpecialistId =
-  | 'orchestratore'
-  | 'intervistatore'
-  | 'dietista'
-  | 'personal_trainer'
-  | 'psicologo'
-  | 'mental_coach'
-  | 'chef'
-  | 'fisioterapista'
-  | 'fisiatra'
-  | 'medico_sport'
-  | 'mmg'
-  | 'gastroenterologo'
-  | 'chinesologo'
-  | 'analista_contesto'
+export type Role = 'OWNER' | 'ADMIN' | 'USER'
 
-/** Domain categories for routing */
-export type Domain =
-  | 'nutrizione'
-  | 'allenamento'
-  | 'mindset'
-  | 'cucina'
-  | 'salute'
-  | 'riabilitazione'
-  | 'generale'
-
-/** Orchestrator routing decision */
-export interface RoutingDecision {
-  primarySpecialist: SpecialistId
-  supportSpecialists: SpecialistId[]
-  domain: Domain
-  riskLevel: RiskLevel
-  reasoning: string
+export type ToolCall = {
+  id: string
+  name: string
+  args: unknown
 }
 
-/** Message with context for AI processing */
-export interface AIMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  attachments?: {
-    type: 'image' | 'barcode' | 'audio'
-    url: string
-    fileName: string
-    barcodeValue?: string
-  }[]
+export type ToolResult = {
+  toolCallId: string
+  ok: boolean
+  data?: unknown
+  error?: { code: string; message: string }
+  confirmToken?: string
+  requiresUserConfirmation?: boolean
+  uiEvent?: { title: string; description?: string; domain?: Domain }
 }
 
-/** User profile data from database */
-export interface ProfileData {
-  birthDate?: Date | string | null
-  gender?: string | null
-  height?: number | null
-  weight?: number | null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  health?: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  nutrition?: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  training?: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  mindfulness?: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  goals?: any
+export type AgentId = string
+
+export type AgentProfile = {
+  id: AgentId
+  displayName: string
+  domainTags: Domain[]
+  systemPrompt: string
+  toolsAllowed: string[]
+  escalationRules?: string[]
+  disclaimerStyle?: 'concise' | 'standard' | 'strict'
+  decisionStyle: 'team-led'
 }
 
-/** Conversation context for the orchestrator */
-export interface ConversationContext {
-  messages: AIMessage[]
-  domain?: Domain
-  knownData: Record<string, string>
-  missingData: string[]
-  requiredData: string[]
-  specialistMemory?: Record<string, string[]>
-  riskSignal: 'none' | 'possible' | 'confirmed'
+export type AgentInput = {
+  requestId: string
   userId: string
-  profileData?: ProfileData
+  conversationId: string
+  message: string
+  domainHint?: Domain
+  contextPack: ContextPack
+  constraints?: {
+    locale?: string
+    timezone?: string
+    userPreferences?: Record<string, unknown>
+    practicalConstraints?: Record<string, unknown>
+  }
 }
 
-/** AI provider response (abstract — implemented by Gemini in STEP 8) */
-export interface AIResponse {
-  content: string
-  specialist: SpecialistId
-  contributors?: SpecialistId[]
-  audit?: {
-    riskLevel: RiskLevel
-    pattern: string
-    reasoning: string
+export type AgentProposal = {
+  agentId: AgentId
+  domain: Domain
+  summary: string // short
+  reasoning: string // user-visible, no secrets
+  questions?: string[] // gating questions
+  recommendations?: Array<{
+    title: string
+    steps: string[]
+    rationale: string
+    safetyNotes?: string[]
+    artifactsToSave?: Array<{
+      type: 'nutrition' | 'training' | 'mindfulness' | 'other'
+      title: string
+      contentMarkdown: string
+      relatedResourceIds?: Record<string, string>
+    }>
+  }>
+  toolCalls?: ToolCall[] // proposed, not executed by agents
+  confidence?: number // 0..1
+  citations?: Array<{ title: string; url?: string; note?: string }> // optional
+  flags?: {
+    needsMoreInfo?: boolean
+    potentialRisk?: boolean
+    urgentEscalation?: boolean
+  }
+}
+
+export type ContextPack = {
+  user: {
+    id: string
+    role: Role
+    profile?: Record<string, unknown>
+  }
+  history: {
+    recentMessages: Array<{ role: 'user' | 'assistant'; content: string; createdAt: string }>
+    recentArtifacts: Array<{
+      type: string
+      title: string
+      createdAt: string
+      contentMarkdown?: string
+    }>
+  }
+  trackers: {
+    health?: Record<string, unknown>
+    nutrition?: Record<string, unknown>
+    training?: Record<string, unknown>
+    mindfulness?: Record<string, unknown>
+  }
+  notifications: {
+    unreadCount: number
+    lastSentAt?: string
+  }
+  files?: Array<{
+    id: string
+    filename: string
+    mimeType: string
+    size: number
+    extractedText?: string
+    url?: string
+  }>
+  ui: {
+    moodScore: number // 0..100
+    sectionScores?: Partial<Record<Domain, number>>
+  }
+}
+
+export type ConsensusResult = {
+  domain: Domain
+  finalMessageMarkdown: string
+  toolCallsToExecute: ToolCall[]
+  ui: {
+    domainIcon: Domain
+    moodScore: number
+    sectionScores?: Partial<Record<Domain, number>>
+  }
+  gatingQuestions?: string[]
+  safety: {
+    disclaimers?: string[]
+    escalation?: 'none' | 'recommend-professional' | 'urgent'
+  }
+  artifactsToSave?: Array<{
+    type: 'nutrition' | 'training' | 'mindfulness' | 'other'
+    title: string
+    contentMarkdown: string
+  }>
+  debug?: {
+    selectedAgents: AgentId[]
+    conflicts: string[]
   }
 }
