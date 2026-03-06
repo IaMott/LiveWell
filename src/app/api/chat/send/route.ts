@@ -428,8 +428,11 @@ export async function POST(request: Request): Promise<Response> {
     pendingAuditEvents.push(event)
   })
 
+  const toolCallsToExecute =
+    consensus.toolCallsToExecute.length > 0 ? consensus.toolCallsToExecute : requestedToolCalls
+
   const toolResults: ToolResult[] = []
-  for (const call of consensus.toolCallsToExecute) {
+  for (const call of toolCallsToExecute) {
     const result = await executor.executeToolCall(call, {
       requestId: agentInput.requestId,
       conversationId: agentInput.conversationId,
