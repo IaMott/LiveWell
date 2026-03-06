@@ -1,4 +1,4 @@
-import { ContextPack, Domain, Role } from '../types'
+import { ContextPack, Domain, Role } from '../runtime-types'
 
 type QueryArgs = Record<string, unknown>
 type UnknownRecord = Record<string, unknown>

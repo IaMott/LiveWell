@@ -5,7 +5,7 @@ import {
   ContextPack,
   Domain,
   ToolCall,
-} from '../types'
+} from '../runtime-types'
 
 export type ConsensusEngineOptions = {
   orchestratorId: string

@@ -1,4 +1,4 @@
-import { AgentProfile, AgentInput, AgentProposal, ConsensusResult, Domain } from '../types'
+import { AgentProfile, AgentInput, AgentProposal, ConsensusResult, Domain } from '../runtime-types'
 import { detectDomainFromText } from '../domain/domainDetection'
 import { selectAgentsForRequest, runConsensus } from '../consensus/consensusEngine'
 

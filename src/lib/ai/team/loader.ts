@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { AgentProfile, AgentProfile as AgentProfileType } from '../types'
+import { AgentProfile, AgentProfile as AgentProfileType } from '../runtime-types'
 import { AgentProfileSchema, type AgentProfileFile } from './schema'
 
 export type TeamLoaderOptions = {

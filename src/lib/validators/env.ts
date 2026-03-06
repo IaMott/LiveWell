@@ -50,3 +50,27 @@ function parseEnv(): Env {
 }
 
 export const env = parseEnv()
+
+let cachedServerEnv: {
+  NODE_ENV: string
+  GEMINI_API_KEY?: string
+  NEXTAUTH_SECRET?: string
+  LIVE_MODEL: string
+} | null = null
+
+export function getServerEnv(): {
+  NODE_ENV: string
+  GEMINI_API_KEY?: string
+  NEXTAUTH_SECRET?: string
+  LIVE_MODEL: string
+} {
+  if (!cachedServerEnv) {
+    cachedServerEnv = {
+      NODE_ENV: env.NODE_ENV,
+      GEMINI_API_KEY: env.GEMINI_API_KEY,
+      NEXTAUTH_SECRET: env.NEXTAUTH_SECRET,
+      LIVE_MODEL: process.env.LIVE_MODEL ?? 'gemini-2.0-flash-live',
+    }
+  }
+  return cachedServerEnv
+}

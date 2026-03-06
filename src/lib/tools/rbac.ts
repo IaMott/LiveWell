@@ -1,4 +1,4 @@
-import type { Role } from '@/lib/ai/types'
+import type { Role } from '@/lib/ai/runtime-types'
 import type { ToolName } from './toolRegistry'
 
 type AuthorizationInput = {
