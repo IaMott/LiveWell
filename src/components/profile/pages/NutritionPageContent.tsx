@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import { useProfile, type ProfileData } from '@/hooks/useProfile'
+import { type ProfileData } from '@/hooks/useProfile'
+import { useProfileState } from '../ProfileStateProvider'
 import { ProfileForm, inputClass, labelClass, selectClass } from '../ProfileForm'
+import { SectionCompletenessHint } from '../SectionCompletenessHint'
 
 interface NutritionData {
   dietType: string
@@ -23,7 +25,13 @@ const DIET_TYPES = [
   { value: 'altro', label: 'Altro' },
 ]
 
-function NutritionForm({ profile, saving, error, success, saveSection }: {
+function NutritionForm({
+  profile,
+  saving,
+  error,
+  success,
+  saveSection,
+}: {
   profile: ProfileData | null
   saving: boolean
   error: string
@@ -47,31 +55,78 @@ function NutritionForm({ profile, saving, error, success, saveSection }: {
   return (
     <ProfileForm onSubmit={handleSubmit} saving={saving} error={error} success={success}>
       <div>
-        <label htmlFor="dietType" className={labelClass}>Tipo di dieta</label>
-        <select id="dietType" value={form.dietType} onChange={(e) => setForm({ ...form, dietType: e.target.value })} className={selectClass}>
+        <label htmlFor="dietType" className={labelClass}>
+          Tipo di dieta
+        </label>
+        <select
+          id="dietType"
+          value={form.dietType}
+          onChange={(e) => setForm({ ...form, dietType: e.target.value })}
+          className={selectClass}
+        >
           {DIET_TYPES.map((d) => (
-            <option key={d.value} value={d.value}>{d.label}</option>
+            <option key={d.value} value={d.value}>
+              {d.label}
+            </option>
           ))}
         </select>
       </div>
       <div>
-        <label htmlFor="intolerances" className={labelClass}>Intolleranze alimentari</label>
-        <input id="intolerances" type="text" value={form.intolerances} onChange={(e) => setForm({ ...form, intolerances: e.target.value })} className={inputClass} placeholder="Es. glutine, lattosio, frutta a guscio..." />
+        <label htmlFor="intolerances" className={labelClass}>
+          Intolleranze alimentari
+        </label>
+        <input
+          id="intolerances"
+          type="text"
+          value={form.intolerances}
+          onChange={(e) => setForm({ ...form, intolerances: e.target.value })}
+          className={inputClass}
+          placeholder="Es. glutine, lattosio, frutta a guscio..."
+        />
       </div>
       <div>
-        <label htmlFor="preferences" className={labelClass}>Cibi preferiti o da evitare</label>
-        <textarea id="preferences" rows={2} value={form.preferences} onChange={(e) => setForm({ ...form, preferences: e.target.value })} className={inputClass} placeholder="Es. amo il pesce, evito i funghi..." />
+        <label htmlFor="preferences" className={labelClass}>
+          Cibi preferiti o da evitare
+        </label>
+        <textarea
+          id="preferences"
+          rows={2}
+          value={form.preferences}
+          onChange={(e) => setForm({ ...form, preferences: e.target.value })}
+          className={inputClass}
+          placeholder="Es. amo il pesce, evito i funghi..."
+        />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label htmlFor="caloricGoal" className={labelClass}>Obiettivo calorico (kcal)</label>
-          <input id="caloricGoal" type="number" min="800" max="6000" value={form.caloricGoal} onChange={(e) => setForm({ ...form, caloricGoal: e.target.value })} className={inputClass} placeholder="2000" />
+          <label htmlFor="caloricGoal" className={labelClass}>
+            Obiettivo calorico (kcal)
+          </label>
+          <input
+            id="caloricGoal"
+            type="number"
+            min="800"
+            max="6000"
+            value={form.caloricGoal}
+            onChange={(e) => setForm({ ...form, caloricGoal: e.target.value })}
+            className={inputClass}
+            placeholder="2000"
+          />
         </div>
         <div>
-          <label htmlFor="mealsPerDay" className={labelClass}>Pasti al giorno</label>
-          <select id="mealsPerDay" value={form.mealsPerDay} onChange={(e) => setForm({ ...form, mealsPerDay: e.target.value })} className={selectClass}>
+          <label htmlFor="mealsPerDay" className={labelClass}>
+            Pasti al giorno
+          </label>
+          <select
+            id="mealsPerDay"
+            value={form.mealsPerDay}
+            onChange={(e) => setForm({ ...form, mealsPerDay: e.target.value })}
+            className={selectClass}
+          >
             {['2', '3', '4', '5', '6'].map((n) => (
-              <option key={n} value={n}>{n}</option>
+              <option key={n} value={n}>
+                {n}
+              </option>
             ))}
           </select>
         </div>
@@ -81,7 +136,17 @@ function NutritionForm({ profile, saving, error, success, saveSection }: {
 }
 
 export function NutritionPageContent() {
-  const { profile, loading, saving, error, success, saveSection } = useProfile()
+  const {
+    profile,
+    loading,
+    saving,
+    error,
+    success,
+    saveSection,
+    getSectionCompleteness,
+    completenessLoading,
+    completenessError,
+  } = useProfileState()
 
   return (
     <div className="space-y-4">
@@ -89,6 +154,11 @@ export function NutritionPageContent() {
       <p className="text-sm text-on-surface-muted">
         Preferenze alimentari per consigli nutrizionali su misura.
       </p>
+      <SectionCompletenessHint
+        sectionData={getSectionCompleteness('nutrition')}
+        loading={completenessLoading}
+        error={completenessError}
+      />
       {loading ? (
         <div className="animate-pulse space-y-3">
           {[1, 2, 3].map((i) => (
@@ -96,7 +166,14 @@ export function NutritionPageContent() {
           ))}
         </div>
       ) : (
-        <NutritionForm key={String(!!profile)} profile={profile} saving={saving} error={error} success={success} saveSection={saveSection} />
+        <NutritionForm
+          key={String(!!profile)}
+          profile={profile}
+          saving={saving}
+          error={error}
+          success={success}
+          saveSection={saveSection}
+        />
       )}
     </div>
   )

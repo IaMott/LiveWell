@@ -1,10 +1,18 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import { useProfile, type ProfileData } from '@/hooks/useProfile'
+import { type ProfileData } from '@/hooks/useProfile'
+import { useProfileState } from '../ProfileStateProvider'
 import { ProfileForm, inputClass, labelClass, selectClass } from '../ProfileForm'
+import { SectionCompletenessHint } from '../SectionCompletenessHint'
 
-function PersonalForm({ profile, saving, error, success, saveSection }: {
+function PersonalForm({
+  profile,
+  saving,
+  error,
+  success,
+  saveSection,
+}: {
   profile: ProfileData | null
   saving: boolean
   error: string
@@ -12,7 +20,9 @@ function PersonalForm({ profile, saving, error, success, saveSection }: {
   saveSection: (section: string, data: object) => void
 }) {
   const [name, setName] = useState('')
-  const [birthDate, setBirthDate] = useState(profile?.birthDate ? profile.birthDate.slice(0, 10) : '')
+  const [birthDate, setBirthDate] = useState(
+    profile?.birthDate ? profile.birthDate.slice(0, 10) : '',
+  )
   const [gender, setGender] = useState(profile?.gender || '')
   const [height, setHeight] = useState(profile?.height ? String(profile.height) : '')
   const [weight, setWeight] = useState(profile?.weight ? String(profile.weight) : '')
@@ -31,17 +41,41 @@ function PersonalForm({ profile, saving, error, success, saveSection }: {
   return (
     <ProfileForm onSubmit={handleSubmit} saving={saving} error={error} success={success}>
       <div>
-        <label htmlFor="name" className={labelClass}>Nome</label>
-        <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="Il tuo nome" />
+        <label htmlFor="name" className={labelClass}>
+          Nome
+        </label>
+        <input
+          id="name"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className={inputClass}
+          placeholder="Il tuo nome"
+        />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label htmlFor="birthDate" className={labelClass}>Data di nascita</label>
-          <input id="birthDate" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className={inputClass} />
+          <label htmlFor="birthDate" className={labelClass}>
+            Data di nascita
+          </label>
+          <input
+            id="birthDate"
+            type="date"
+            value={birthDate}
+            onChange={(e) => setBirthDate(e.target.value)}
+            className={inputClass}
+          />
         </div>
         <div>
-          <label htmlFor="gender" className={labelClass}>Sesso</label>
-          <select id="gender" value={gender} onChange={(e) => setGender(e.target.value)} className={selectClass}>
+          <label htmlFor="gender" className={labelClass}>
+            Sesso
+          </label>
+          <select
+            id="gender"
+            value={gender}
+            onChange={(e) => setGender(e.target.value)}
+            className={selectClass}
+          >
             <option value="">Seleziona...</option>
             <option value="M">Maschile</option>
             <option value="F">Femminile</option>
@@ -51,12 +85,36 @@ function PersonalForm({ profile, saving, error, success, saveSection }: {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label htmlFor="height" className={labelClass}>Altezza (cm)</label>
-          <input id="height" type="number" min="100" max="250" step="0.1" value={height} onChange={(e) => setHeight(e.target.value)} className={inputClass} placeholder="175" />
+          <label htmlFor="height" className={labelClass}>
+            Altezza (cm)
+          </label>
+          <input
+            id="height"
+            type="number"
+            min="100"
+            max="250"
+            step="0.1"
+            value={height}
+            onChange={(e) => setHeight(e.target.value)}
+            className={inputClass}
+            placeholder="175"
+          />
         </div>
         <div>
-          <label htmlFor="weight" className={labelClass}>Peso (kg)</label>
-          <input id="weight" type="number" min="20" max="300" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} className={inputClass} placeholder="70" />
+          <label htmlFor="weight" className={labelClass}>
+            Peso (kg)
+          </label>
+          <input
+            id="weight"
+            type="number"
+            min="20"
+            max="300"
+            step="0.1"
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+            className={inputClass}
+            placeholder="70"
+          />
         </div>
       </div>
     </ProfileForm>
@@ -64,7 +122,17 @@ function PersonalForm({ profile, saving, error, success, saveSection }: {
 }
 
 export function PersonalPageContent() {
-  const { profile, loading, saving, error, success, saveSection } = useProfile()
+  const {
+    profile,
+    loading,
+    saving,
+    error,
+    success,
+    saveSection,
+    getSectionCompleteness,
+    completenessLoading,
+    completenessError,
+  } = useProfileState()
 
   return (
     <div className="space-y-4">
@@ -72,6 +140,11 @@ export function PersonalPageContent() {
       <p className="text-sm text-on-surface-muted">
         Informazioni di base utilizzate dagli specialisti per personalizzare i consigli.
       </p>
+      <SectionCompletenessHint
+        sectionData={getSectionCompleteness('personal')}
+        loading={completenessLoading}
+        error={completenessError}
+      />
       {loading ? (
         <div className="animate-pulse space-y-3">
           {[1, 2, 3, 4].map((i) => (
@@ -79,7 +152,14 @@ export function PersonalPageContent() {
           ))}
         </div>
       ) : (
-        <PersonalForm key={String(!!profile)} profile={profile} saving={saving} error={error} success={success} saveSection={saveSection} />
+        <PersonalForm
+          key={String(!!profile)}
+          profile={profile}
+          saving={saving}
+          error={error}
+          success={success}
+          saveSection={saveSection}
+        />
       )}
     </div>
   )

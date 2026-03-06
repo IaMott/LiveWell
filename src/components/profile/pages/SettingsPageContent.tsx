@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import { useProfile, type ProfileData } from '@/hooks/useProfile'
+import { type ProfileData } from '@/hooks/useProfile'
+import { useProfileState } from '../ProfileStateProvider'
 import { ProfileForm, labelClass, selectClass } from '../ProfileForm'
 import { cn } from '@/lib/utils'
 
@@ -11,7 +12,13 @@ interface SettingsData {
   language: string
 }
 
-function SettingsForm({ profile, saving, error, success, saveSection }: {
+function SettingsForm({
+  profile,
+  saving,
+  error,
+  success,
+  saveSection,
+}: {
   profile: ProfileData | null
   saving: boolean
   error: string
@@ -33,22 +40,38 @@ function SettingsForm({ profile, saving, error, success, saveSection }: {
   return (
     <ProfileForm onSubmit={handleSubmit} saving={saving} error={error} success={success}>
       <div>
-        <label htmlFor="theme" className={labelClass}>Tema</label>
-        <select id="theme" value={form.theme} onChange={(e) => setForm({ ...form, theme: e.target.value })} className={selectClass}>
+        <label htmlFor="theme" className={labelClass}>
+          Tema
+        </label>
+        <select
+          id="theme"
+          value={form.theme}
+          onChange={(e) => setForm({ ...form, theme: e.target.value })}
+          className={selectClass}
+        >
           <option value="system">Sistema</option>
           <option value="light">Chiaro</option>
           <option value="dark">Scuro</option>
         </select>
       </div>
       <div>
-        <label htmlFor="language" className={labelClass}>Lingua</label>
-        <select id="language" value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })} className={selectClass}>
+        <label htmlFor="language" className={labelClass}>
+          Lingua
+        </label>
+        <select
+          id="language"
+          value={form.language}
+          onChange={(e) => setForm({ ...form, language: e.target.value })}
+          className={selectClass}
+        >
           <option value="it">Italiano</option>
           <option value="en">English</option>
         </select>
       </div>
       <div className="flex items-center justify-between">
-        <label htmlFor="notifications" className={labelClass}>Notifiche</label>
+        <label htmlFor="notifications" className={labelClass}>
+          Notifiche
+        </label>
         <button
           type="button"
           role="switch"
@@ -72,14 +95,12 @@ function SettingsForm({ profile, saving, error, success, saveSection }: {
 }
 
 export function SettingsPageContent() {
-  const { profile, loading, saving, error, success, saveSection } = useProfile()
+  const { profile, loading, saving, error, success, saveSection } = useProfileState()
 
   return (
     <div className="space-y-4">
       <h2 className="pt-4 text-xl font-semibold text-on-surface">Impostazioni</h2>
-      <p className="text-sm text-on-surface-muted">
-        Preferenze dell&apos;app e privacy.
-      </p>
+      <p className="text-sm text-on-surface-muted">Preferenze dell&apos;app e privacy.</p>
       {loading ? (
         <div className="animate-pulse space-y-3">
           {[1, 2, 3].map((i) => (
@@ -87,7 +108,14 @@ export function SettingsPageContent() {
           ))}
         </div>
       ) : (
-        <SettingsForm key={String(!!profile)} profile={profile} saving={saving} error={error} success={success} saveSection={saveSection} />
+        <SettingsForm
+          key={String(!!profile)}
+          profile={profile}
+          saving={saving}
+          error={error}
+          success={success}
+          saveSection={saveSection}
+        />
       )}
     </div>
   )

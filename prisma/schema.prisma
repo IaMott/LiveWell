@@ -17,6 +17,8 @@ model User {
   conversations Conversation[]
   profile       UserProfile?
   notifications Notification[]
+  confirmActions ConfirmAction[]
+  toolAuditLogs ToolAuditLog[]
 
   @@map("users")
 }
@@ -83,6 +85,7 @@ model Conversation {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
   messages   Message[]
+  toolAuditLogs ToolAuditLog[]
 
   @@index([userId])
   @@map("conversations")
@@ -115,4 +118,41 @@ model Attachment {
 
   @@index([messageId])
   @@map("attachments")
+}
+
+model ConfirmAction {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolName    String    @map("tool_name")
+  payload     Json
+  payloadHash String    @map("payload_hash")
+  expiresAt   DateTime  @map("expires_at")
+  consumedAt  DateTime? @map("consumed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, toolName])
+  @@index([expiresAt])
+  @@map("confirm_actions")
+}
+
+model ToolAuditLog {
+  id             String        @id @default(cuid())
+  userId         String        @map("user_id")
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String?       @map("conversation_id")
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  toolCallId     String        @map("tool_call_id")
+  toolName       String        @map("tool_name")
+  inputSummary   String        @map("input_summary")
+  inputHash      String        @map("input_hash")
+  status         String
+  requestId      String        @map("request_id")
+  errorCode      String?       @map("error_code")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([requestId])
+  @@map("tool_audit_logs")
 }

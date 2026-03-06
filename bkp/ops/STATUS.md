@@ -1,33 +1,27 @@
 # LiveWell — Project Status
 
-## Current Step: STEP 10 ▶ In corso (Profile Modules)
+## Current Step: STEP 10 ▶ Verification final CLOSED (negative)
 
-| Step | Description | Status | Commit |
-|------|-------------|--------|--------|
-| 1 | Bootstrap (Next.js, CI, lint, test) | ✅ Done | |
-| 2 | Design System + Chat UI + Mood Engine | ✅ Done | |
-| 3 | Routing + Profile Shell responsive | ✅ Done | |
-| 4 | Auth + DB (next-auth, Prisma 5, PostgreSQL) | ✅ Done | |
-| 5 | Chat Core (SSE streaming, history) | ✅ Done | |
-| 6 | File Upload (barcode, images) | ✅ Done | |
-| 7 | Orchestrator agent | ✅ Done | |
-| 8 | Gemini integration | ✅ Done | |
-| 9 | Audio/Video + Multi-agent architecture | ✅ Done | 9aa40b2 |
-| 10 | Profile Modules | ▶ In corso | f6a68a6 |
-| 11 | Notifications | ⬜ | — |
-| 12 | Sharing/PDF | ⬜ | — |
-| 13 | Security hardening | ⬜ | — |
-| 14 | Deploy & monitoring | ⬜ | — |
-| 15 | Docs & handoff | ⬜ | — |
+## Esito definitivo
 
-## Focus attuale
-- Sprint 10.2 chiuso con merge PR #3 su `main` (storico profilo per sezione + mapping allegati contestuale + UX stati uniformi).
-- CI su `main` verde dopo merge (`actions run 22715108060`).
-- Preparazione Sprint 10.3 dal backlog STEP 10.
+- Publish Step 6 NON risulta completato.
 
-## Rischi aperti
-- Runner test locale in questa sessione resta in hang (`vitest run` senza output): validazione completa demandata a CI remota.
-- Verifica deploy production via API Vercel/GitHub non completabile in questa sessione per errore di rete intermittente verso `api.github.com`.
+## Evidenze definitive
 
-## Last Updated
-2026-03-05 12:11
+- `git rev-parse HEAD` = `d2144f01dd15d196cc8df879f5f659b60ca8e64c` (nessun nuovo SHA Step 6 su main).
+- `gh run list --limit 20` mostra run fino a Sprint 10.2 (nessun run Step 6).
+- `gh api .../commits/<NUOVO_SHA>/status` fallisce (placeholder non sostituito).
+- `gh api .../deployments?per_page=5` mostra deployment legati a commit storici (fino a `d2144f01...`).
+- `npx prisma migrate status` fallisce: `DATABASE_URL` mancante.
+
+## Next immediato
+
+- pubblicare davvero Step 6 (commit/push/PR/merge su main),
+- ottenere nuovo SHA main,
+- verificare CI verde associata,
+- eseguire migrate deploy in ambiente target,
+- completare smoke checklist.
+
+## Ultimo aggiornamento
+
+2026-03-06 12:36
