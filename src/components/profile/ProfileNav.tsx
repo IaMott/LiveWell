@@ -2,17 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import {
-  User,
-  Heart,
-  Apple,
-  Dumbbell,
-  Brain,
-  Target,
-  Clock,
-  Settings,
-} from 'lucide-react'
+import { User, Heart, Apple, Dumbbell, Brain, Target, Clock, Settings } from './profile-icons'
 import { cn } from '@/lib/utils'
+import { useProfileState } from './ProfileStateProvider'
 
 const sections = [
   { slug: 'personal', label: 'Personale', icon: User },
@@ -27,9 +19,13 @@ const sections = [
 
 export function ProfileNav() {
   const pathname = usePathname()
+  const { completeness, completenessLoading, completenessError } = useProfileState()
 
   return (
-    <nav className="flex gap-1 overflow-x-auto px-4 py-3 scrollbar-none" aria-label="Sezioni profilo">
+    <nav
+      className="flex gap-1 overflow-x-auto px-4 py-3 scrollbar-none"
+      aria-label="Sezioni profilo"
+    >
       {sections.map(({ slug, label, icon: Icon }) => {
         const href = `/profile/${slug}`
         const isActive = pathname === href
@@ -47,6 +43,21 @@ export function ProfileNav() {
           >
             <Icon className="h-4 w-4" />
             <span>{label}</span>
+            {slug in completeness ? (
+              <span
+                className={cn(
+                  'rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none',
+                  isActive ? 'bg-white/20 text-white' : 'bg-surface text-on-surface-muted',
+                )}
+                aria-label={`completezza ${label}`}
+              >
+                {completenessLoading
+                  ? '...'
+                  : completenessError
+                    ? '!'
+                    : `${completeness[slug as keyof typeof completeness].completion}%`}
+              </span>
+            ) : null}
           </Link>
         )
       })}

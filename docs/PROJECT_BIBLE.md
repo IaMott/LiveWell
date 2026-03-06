@@ -1,80 +1,253 @@
-# LiveWell Project Bible
+# PROJECT BIBLE — Invariants & Runtime Contracts
 
-## 1. Scopo del prodotto
-LiveWell e una piattaforma di coaching benessere multi-professionista guidata da AI.
-L'utente interagisce in chat con un team di specialisti reali (turni distinti), non con un singolo agente che "finge" handoff.
+Questo documento definisce le **regole invarianti del sistema** e i **contratti runtime** che non devono essere violati dal codice.
 
-## 2. Invarianti obbligatorie
-1. Niente handoff fittizi.
-2. Niente frasi tipo "ti passo il collega", "ti contattera il PT", "ora subentra X".
-3. Se il contesto richiede piu competenze, devono comparire piu turni specialistici.
-4. Ogni bolla assistant deve avere un autore professionista esplicito.
-5. La conversazione deve proseguire operativamente: niente stalli narrativi.
-6. Le modifiche profilo AI devono essere tracciate con audit/storico.
+Non descrive:
 
-## 3. Architettura canonica
-Flusso messaggio:
-1. `src/app/api/chat/route.ts` salva messaggio utente e costruisce contesto.
-2. `src/lib/ai/context.ts` calcola `domain`, `knownData`, `missingData`, `requiredData`, memoria specialistica.
-3. `src/lib/ai/orchestrator.ts` decide routing (`primarySpecialist`, `supportSpecialists`) e produce turni.
-4. Stream SSE:
-   - `routing`
-   - `agent_turn`
-   - `agent_delta`
-   - `agent_done`
-   - `done`
-5. `src/hooks/useChat.ts` crea una bolla per turno specialistico.
-6. Risposte assistant salvate con marker `[[specialist:<id>]]`.
+- il comportamento di prodotto
+- l’architettura tecnica
+- la logica degli agenti
 
-## 4. Routing e turnazione: regole operative
-1. Richiesta esplicita utente (es. "voglio un medico") forza subito lo specialista target.
-2. Handoff contestuale: se obiettivo/dati indicano co-dominio (es. nutrizione + allenamento), coinvolgere automaticamente specialisti multipli.
-3. `intervistatore` e usato per raccolta dati, non come "voce ponte" che annuncia altri professionisti.
-4. `analista_contesto` non deve comparire come autore nel flusso utente operativo.
+Questi aspetti sono definiti in:
 
-## 5. Anti-loop e anti-stallo
-1. Pulizia output: bloccare pattern di handoff fittizio.
-2. Se un output risulta "stall" (annuncio senza azione), sostituire con domanda operativa concreta.
-3. Una domanda per turno in fase raccolta dati.
-4. Nessun cambio di tema senza chiusura minima dello stato corrente.
+- `PRD.md`
+- `ARCHITECTURE.md`
+- `AGENT_SYSTEM_SPEC.md`
 
-## 6. Memoria e audit
-1. Memoria specialistica per conversazione:
-   - `settings.aiSpecialistMemory[conversationId][specialistId]`
-2. Audit aggiornamenti profilo:
-   - `settings.aiAuditLog`
-3. Storico allegati contestualizzato:
-   - `settings.aiAttachmentHistory`
+Questo file contiene solo **regole fondamentali che devono rimanere sempre vere**.
 
-## 7. File critici (single source of truth)
-1. `src/lib/ai/orchestrator.ts` - routing, handoff reale, anti-loop.
-2. `src/lib/ai/context.ts` - MVD, continuita dominio, estrazione dati.
-3. `src/app/api/chat/route.ts` - stream, persistenza turni, sync profilo.
-4. `src/hooks/useChat.ts` - rendering turni specialistici in UI.
-5. `src/lib/ai/profile-sync.ts` - scrittura profilo/storico/audit.
-6. `src/lib/ai/prompts.ts` - regole runtime di output naturale.
+---
 
-## 8. Regole di modifica (per evitare regressioni)
-1. Non introdurre fallback verso `analista_contesto` nel path di chat utente.
-2. Non aggiungere testo di handoff nei prompt specialistici.
-3. Ogni modifica orchestrator deve preservare eventi `agent_turn/agent_delta/agent_done`.
-4. Se si aggiungono specialisti, aggiornare:
-   - `src/lib/ai/types.ts`
-   - `src/lib/ai/specialists.ts`
-   - mapping label in UI (`useChat.ts`, `ChatContainer.tsx`, `LiveSessionOverlay.tsx`)
+# 1. Gerarchia dei documenti (Source of Truth)
 
-## 9. Smoke scenario obbligatorio
-1. Utente: "voglio dimagrire e mangiare meglio"
-2. Utente: "mi alleno 2/3 volte a settimana, pesi e cardio"
-3. Utente: "cosa proponete?"
-Atteso:
-1. turni specialistici reali (almeno Dietista + Personal Trainer),
-2. nessun annuncio "ti passo/ti contattera",
-3. output operativo, non narrativo.
+Ordine di autorità dei documenti:
 
-## 10. Troubleshooting rapido
-Se ricompare loop handoff:
-1. controllare `routeMessage` in `orchestrator.ts`,
-2. controllare filtraggio support specialist (`filterOperationalSupport`),
-3. controllare normalizzazione output (`normalizeAssistantOutput` + anti-stall),
-4. verificare eventi SSE in `/api/chat` e render in `useChat.ts`.
+1️⃣ **AGENTS.md**  
+Source of truth assoluta per workflow di sviluppo e regole operative degli agenti di coding.
+
+2️⃣ **PRD.md**  
+Descrive cosa deve fare il prodotto e i vincoli UX/behavior.
+
+3️⃣ **ARCHITECTURE.md**  
+Descrive come è costruito il sistema.
+
+4️⃣ **AGENT_SYSTEM_SPEC.md**  
+Descrive il sistema di orchestrazione e collaborazione tra agenti.
+
+5️⃣ **PROJECT_BIBLE.md**  
+Definisce solo invarianti e contratti runtime.
+
+Se esiste un conflitto tra documenti:
+
+- prevale sempre **AGENTS.md**
+
+---
+
+# 2. Principio fondamentale: Chat-First System
+
+L'interazione utente avviene **solo tramite chat**.
+
+L’utente non compila manualmente l’applicazione.
+
+Tutti i dati dell’app vengono:
+
+- raccolti
+- interpretati
+- salvati
+- aggiornati
+
+dagli agenti tramite il sistema di **Tool Execution**.
+
+Il resto dell’app serve solo per:
+
+- visualizzare
+- rendicontare
+- condividere
+- esportare
+
+le informazioni generate tramite chat.
+
+---
+
+# 3. Team di Agenti Reali (No Fake Personas)
+
+Gli specialisti non sono “personaggi simulati”.
+
+Sono **agenti separati e indipendenti** che collaborano tramite orchestratore.
+
+L'orchestratore non deve mai simulare specialisti.
+
+È vietato generare messaggi come:
+
+"Passo la parola al nutrizionista"
+"Il mio collega allenatore dice..."
+
+Ogni risposta deve indicare chiaramente l’autore reale.
+
+Esempio corretto:
+
+[Nutrizionista]
+Suggerisco di aumentare leggermente le proteine a colazione.
+
+---
+
+# 4. Nessun Hardcode degli Agenti
+
+Gli agenti specialisti **non possono essere hardcoded nel codice**.
+
+Devono essere caricati dinamicamente da:
+
+/TEAM/<agent-id>/
+
+Ogni agente è definito da:
+
+profile.json
+prompt.md
+
+Il caricamento è gestito dal **TeamLoader** definito in:
+
+AGENT_SYSTEM_SPEC.md
+
+L’interfaccia utente e il sistema devono leggere le informazioni sugli agenti **dal registry runtime**, non da mapping statici.
+
+---
+
+# 5. Tool Execution Safety
+
+Gli agenti **non hanno accesso diretto** a:
+
+- database
+- filesystem
+- variabili d’ambiente
+- storage
+
+Ogni modifica deve passare tramite **Tool Execution Server-Side**.
+
+Regole obbligatorie:
+
+- allowlist tool
+- validazione schema
+- RBAC
+- audit log
+- rate limit
+- confirm token per azioni distruttive
+
+Queste regole non possono essere bypassate.
+
+---
+
+# 6. Audit Obbligatorio
+
+Qualsiasi modifica ai dati utente deve essere tracciata.
+
+Esempi:
+
+- aggiornamento profilo
+- creazione piano alimentare
+- log allenamento
+- modifica dati salute
+- creazione ricette
+- aggiornamento obiettivi
+
+Ogni evento genera:
+
+AuditLog
+
+con:
+
+- userId
+- agentId
+- toolName
+- timestamp
+- payload sintetico
+
+---
+
+# 7. Streaming Runtime Contract (Chat)
+
+Le risposte della chat devono essere inviate tramite streaming.
+
+Il sistema deve supportare eventi strutturati.
+
+Eventi possibili:
+
+routing
+agent_turn
+agent_delta
+tool_event
+assistant_message
+error
+done
+
+Questo consente alla UI di:
+
+- mostrare chi sta parlando
+- aggiornare il testo progressivamente
+- mostrare eventi tool
+- gestire stato conversazione
+
+---
+
+# 8. UI Topic Signal
+
+Il sistema può emettere eventi semantici per l’interfaccia.
+
+Esempio:
+
+TopicState
+
+che indica il dominio della conversazione.
+
+La UI usa questo evento per:
+
+- evidenziare l’icona del dominio
+- aggiornare lo stato visivo della chat
+
+Questo meccanismo non deve dipendere dalla UI ma dal runtime agent system.
+
+---
+
+# 9. Privacy e Sensibilità dei Dati
+
+Non devono essere inviati dati sensibili tramite:
+
+- notifiche push
+- SMS
+- link pubblici
+
+I link condivisi devono essere:
+
+- read-only
+- revocabili
+- con token non indovinabile
+
+---
+
+# 10. Guardrail Salute
+
+Gli agenti non possono:
+
+- fare diagnosi
+- prescrivere trattamenti medici
+- sostituire professionisti reali
+
+Se emergono segnali di rischio serio:
+
+- l’agente deve attivare un messaggio di sicurezza
+- invitare a contattare un professionista reale o emergenza.
+
+---
+
+# 11. Regola di Stabilità del Sistema
+
+Qualsiasi modifica al sistema deve preservare queste invarianti:
+
+- chat-first interaction
+- team di agenti reali
+- nessun hardcode degli specialisti
+- tool execution sicuro
+- audit obbligatorio
+- streaming runtime contract
+
+Se una modifica rompe uno di questi principi,
+la modifica è considerata **non conforme al progetto**.

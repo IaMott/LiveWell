@@ -15,14 +15,51 @@ export interface ProfileData {
   settings: Record<string, unknown> | null
 }
 
-export function useProfile() {
+export type ProfileCompletenessSection =
+  | 'personal'
+  | 'health'
+  | 'nutrition'
+  | 'training'
+  | 'mindfulness'
+  | 'goals'
+
+export interface ProfileCompletenessItem {
+  section: ProfileCompletenessSection
+  completion: number
+  missingFields: string[]
+  nextField: string | null
+}
+
+interface UseProfileOptions {
+  loadProfile?: boolean
+  loadCompleteness?: boolean
+}
+
+export function useProfile(options: UseProfileOptions = {}) {
+  const { loadProfile: shouldLoadProfile = true, loadCompleteness: shouldLoadCompleteness = true } =
+    options
+
   const [profile, setProfile] = useState<ProfileData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(shouldLoadProfile)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [completeness, setCompleteness] = useState<
+    Record<ProfileCompletenessSection, ProfileCompletenessItem>
+  >({
+    personal: { section: 'personal', completion: 0, missingFields: [], nextField: null },
+    health: { section: 'health', completion: 0, missingFields: [], nextField: null },
+    nutrition: { section: 'nutrition', completion: 0, missingFields: [], nextField: null },
+    training: { section: 'training', completion: 0, missingFields: [], nextField: null },
+    mindfulness: { section: 'mindfulness', completion: 0, missingFields: [], nextField: null },
+    goals: { section: 'goals', completion: 0, missingFields: [], nextField: null },
+  })
+  const [completenessLoading, setCompletenessLoading] = useState(shouldLoadCompleteness)
+  const [completenessError, setCompletenessError] = useState('')
+  const [overallCompletion, setOverallCompletion] = useState(0)
 
   const loadProfile = useCallback(async () => {
+    if (!shouldLoadProfile) return
     setLoading(true)
     setError('')
     try {
@@ -37,11 +74,46 @@ export function useProfile() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [shouldLoadProfile])
+
+  const loadCompleteness = useCallback(async () => {
+    if (!shouldLoadCompleteness) return
+    setCompletenessLoading(true)
+    setCompletenessError('')
+    try {
+      const response = await fetch('/api/profile/completeness')
+      if (!response.ok) {
+        throw new Error('Errore nel caricamento della completezza profilo')
+      }
+      const data = (await response.json()) as {
+        sections?: ProfileCompletenessItem[]
+        overallCompletion?: number
+      }
+      if (Array.isArray(data.sections)) {
+        setCompleteness((current) => {
+          const next = { ...current }
+          for (const section of data.sections) {
+            next[section.section] = section
+          }
+          return next
+        })
+      }
+      setOverallCompletion(typeof data.overallCompletion === 'number' ? data.overallCompletion : 0)
+    } catch {
+      setCompletenessError('Errore nel caricamento completezza')
+    } finally {
+      setCompletenessLoading(false)
+    }
+  }, [shouldLoadCompleteness])
 
   useEffect(() => {
-    void loadProfile()
-  }, [loadProfile])
+    if (shouldLoadProfile) {
+      void loadProfile()
+    }
+    if (shouldLoadCompleteness) {
+      void loadCompleteness()
+    }
+  }, [loadProfile, loadCompleteness, shouldLoadProfile, shouldLoadCompleteness])
 
   const saveSection = useCallback(
     async (section: string, data: object) => {
@@ -58,8 +130,7 @@ export function useProfile() {
           const err = await res.json()
           throw new Error(err.error || 'Errore nel salvataggio')
         }
-        // Refresh profile
-        await loadProfile()
+        await Promise.all([loadProfile(), loadCompleteness()])
         setSuccess('Salvato con successo')
         setTimeout(() => setSuccess(''), 3000)
       } catch (e) {
@@ -68,8 +139,26 @@ export function useProfile() {
         setSaving(false)
       }
     },
-    [loadProfile],
+    [loadCompleteness, loadProfile],
   )
 
-  return { profile, loading, saving, error, success, saveSection }
+  const getSectionCompleteness = useCallback(
+    (section: ProfileCompletenessSection): ProfileCompletenessItem => completeness[section],
+    [completeness],
+  )
+
+  return {
+    profile,
+    loading,
+    saving,
+    error,
+    success,
+    saveSection,
+    completeness,
+    overallCompletion,
+    completenessLoading,
+    completenessError,
+    getSectionCompleteness,
+    refreshCompleteness: loadCompleteness,
+  }
 }

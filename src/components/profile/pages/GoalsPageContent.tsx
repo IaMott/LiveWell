@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import { useProfile, type ProfileData } from '@/hooks/useProfile'
+import { type ProfileData } from '@/hooks/useProfile'
+import { useProfileState } from '../ProfileStateProvider'
 import { ProfileForm, inputClass, labelClass } from '../ProfileForm'
+import { SectionCompletenessHint } from '../SectionCompletenessHint'
 
 interface GoalsData {
   shortTerm: string
@@ -10,7 +12,13 @@ interface GoalsData {
   longTerm: string
 }
 
-function GoalsForm({ profile, saving, error, success, saveSection }: {
+function GoalsForm({
+  profile,
+  saving,
+  error,
+  success,
+  saveSection,
+}: {
   profile: ProfileData | null
   saving: boolean
   error: string
@@ -32,23 +40,60 @@ function GoalsForm({ profile, saving, error, success, saveSection }: {
   return (
     <ProfileForm onSubmit={handleSubmit} saving={saving} error={error} success={success}>
       <div>
-        <label htmlFor="shortTerm" className={labelClass}>Breve termine (1-3 mesi)</label>
-        <textarea id="shortTerm" rows={3} value={form.shortTerm} onChange={(e) => setForm({ ...form, shortTerm: e.target.value })} className={inputClass} placeholder="Es. perdere 3kg, iniziare a correre, dormire meglio..." />
+        <label htmlFor="shortTerm" className={labelClass}>
+          Breve termine (1-3 mesi)
+        </label>
+        <textarea
+          id="shortTerm"
+          rows={3}
+          value={form.shortTerm}
+          onChange={(e) => setForm({ ...form, shortTerm: e.target.value })}
+          className={inputClass}
+          placeholder="Es. perdere 3kg, iniziare a correre, dormire meglio..."
+        />
       </div>
       <div>
-        <label htmlFor="mediumTerm" className={labelClass}>Medio termine (3-12 mesi)</label>
-        <textarea id="mediumTerm" rows={3} value={form.mediumTerm} onChange={(e) => setForm({ ...form, mediumTerm: e.target.value })} className={inputClass} placeholder="Es. correre una 10km, raggiungere il peso forma..." />
+        <label htmlFor="mediumTerm" className={labelClass}>
+          Medio termine (3-12 mesi)
+        </label>
+        <textarea
+          id="mediumTerm"
+          rows={3}
+          value={form.mediumTerm}
+          onChange={(e) => setForm({ ...form, mediumTerm: e.target.value })}
+          className={inputClass}
+          placeholder="Es. correre una 10km, raggiungere il peso forma..."
+        />
       </div>
       <div>
-        <label htmlFor="longTerm" className={labelClass}>Lungo termine (1+ anno)</label>
-        <textarea id="longTerm" rows={3} value={form.longTerm} onChange={(e) => setForm({ ...form, longTerm: e.target.value })} className={inputClass} placeholder="Es. completare una maratona, stile di vita sano sostenibile..." />
+        <label htmlFor="longTerm" className={labelClass}>
+          Lungo termine (1+ anno)
+        </label>
+        <textarea
+          id="longTerm"
+          rows={3}
+          value={form.longTerm}
+          onChange={(e) => setForm({ ...form, longTerm: e.target.value })}
+          className={inputClass}
+          placeholder="Es. completare una maratona, stile di vita sano sostenibile..."
+        />
       </div>
     </ProfileForm>
   )
 }
 
 export function GoalsPageContent() {
-  const { profile, loading, saving, error, success, saveSection } = useProfile()
+  const {
+    profile,
+    loading,
+    saving,
+    error,
+    success,
+    saveSection,
+    getSectionCompleteness,
+    completenessLoading,
+    completenessError,
+  } = useProfileState()
 
   return (
     <div className="space-y-4">
@@ -56,6 +101,11 @@ export function GoalsPageContent() {
       <p className="text-sm text-on-surface-muted">
         Definisci i tuoi traguardi per guidare i consigli degli specialisti.
       </p>
+      <SectionCompletenessHint
+        sectionData={getSectionCompleteness('goals')}
+        loading={completenessLoading}
+        error={completenessError}
+      />
       {loading ? (
         <div className="animate-pulse space-y-3">
           {[1, 2, 3].map((i) => (
@@ -63,7 +113,14 @@ export function GoalsPageContent() {
           ))}
         </div>
       ) : (
-        <GoalsForm key={String(!!profile)} profile={profile} saving={saving} error={error} success={success} saveSection={saveSection} />
+        <GoalsForm
+          key={String(!!profile)}
+          profile={profile}
+          saving={saving}
+          error={error}
+          success={success}
+          saveSection={saveSection}
+        />
       )}
     </div>
   )
