@@ -7,6 +7,7 @@ export const DomainSchema = z.enum([
   'training',
   'mindfulness',
   'inspiration',
+  'coordination',
 ])
 
 export const AgentProfileSchema = z.object({

@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { AgentProfile, AgentProfile as AgentProfileType } from '../runtime-types'
+import { AgentProfile, AgentProfile as AgentProfileType } from '../types'
 import { AgentProfileSchema, type AgentProfileFile } from './schema'
 
 export type TeamLoaderOptions = {
@@ -38,6 +38,33 @@ function loadOneAgent(agentDir: string): AgentProfileType {
   return profile
 }
 
+// Collect all agent directories from TEAM root, supporting both:
+// - flat:   TEAM/<agent-id>/profile.json
+// - nested: TEAM/<domain-group>/<agent-id>/profile.json
+function collectAgentDirs(teamDir: string): string[] {
+  const dirs: string[] = []
+  const entries = fs.readdirSync(teamDir, { withFileTypes: true })
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const childDir = path.join(teamDir, entry.name)
+    if (fs.existsSync(path.join(childDir, 'profile.json'))) {
+      // Leaf agent dir (flat layout)
+      dirs.push(childDir)
+    } else {
+      // Domain group dir — recurse one level
+      const subEntries = fs.readdirSync(childDir, { withFileTypes: true })
+      for (const sub of subEntries) {
+        if (!sub.isDirectory()) continue
+        const subDir = path.join(childDir, sub.name)
+        if (fs.existsSync(path.join(subDir, 'profile.json'))) {
+          dirs.push(subDir)
+        }
+      }
+    }
+  }
+  return dirs
+}
+
 export function loadTeam(opts: TeamLoaderOptions): AgentProfile[] {
   const teamDir = opts.teamDirAbsolute
   if (!fs.existsSync(teamDir)) {
@@ -45,9 +72,7 @@ export function loadTeam(opts: TeamLoaderOptions): AgentProfile[] {
     throw new Error(`TEAM directory not found: ${teamDir}`)
   }
 
-  const entries = fs.readdirSync(teamDir, { withFileTypes: true })
-  const agentDirs = entries.filter((e) => e.isDirectory()).map((e) => path.join(teamDir, e.name))
-
+  const agentDirs = collectAgentDirs(teamDir)
   const agents: AgentProfile[] = []
   const errors: string[] = []
 

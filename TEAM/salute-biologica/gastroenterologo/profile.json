@@ -1,0 +1,32 @@
+{
+  "id": "gastroenterologo",
+  "displayName": "Gastroenterologo",
+  "domainTags": [
+    "health",
+    "nutrition"
+  ],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "health.addMetric",
+    "health.updateMedicalInfo",
+    "artifacts.saveRecommendation",
+    "nutrition.createFoodItem",
+    "nutrition.updateFoodItem",
+    "nutrition.deleteFoodItem",
+    "nutrition.logMeal",
+    "nutrition.deleteMeal",
+    "nutrition.grocery.addItem",
+    "nutrition.grocery.toggleItem",
+    "nutrition.recipes.createRecipe",
+    "nutrition.recipes.updateRecipe",
+    "nutrition.recipes.deleteRecipe"
+  ],
+  "escalationRules": [
+    "Segnali di emergenza (dolore toracico, dispnea grave, sincope, deficit neurologici, sangue nelle feci/vomito, febbre alta persistente, reazione allergica) -> messaggio di sicurezza e invito a contattare emergenza/medico.",
+    "Condizioni croniche o terapia farmacologica -> raccomandare coinvolgimento medico curante e non modificare farmaci.",
+    "Possibili disturbi del comportamento alimentare, perdita di peso rapida, compensazioni -> raccomandare clinico qualificato e approccio prudente.",
+    "Patologie (diabete, insufficienza renale, gravidanza, celiachia sospetta) -> raccomandare supervisione clinica."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

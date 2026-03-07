@@ -1,4 +1,4 @@
-import { AgentProfile, AgentInput, AgentProposal, ConsensusResult, Domain } from '../runtime-types'
+import { AgentProfile, AgentInput, AgentProposal, ConsensusResult, Domain } from '../types'
 import { detectDomainFromText } from '../domain/domainDetection'
 import { selectAgentsForRequest, runConsensus } from '../consensus/consensusEngine'
 
@@ -19,7 +19,7 @@ export type OrchestratorDeps = {
 }
 
 function buildAgentUserPrompt(input: AgentInput): string {
-  return [
+  const parts: string[] = [
     `USER MESSAGE:`,
     input.message,
     ``,
@@ -30,13 +30,40 @@ function buildAgentUserPrompt(input: AgentInput): string {
       .slice(-6)
       .map((m) => `${m.role}: ${m.content}`)
       .join(' | ')}`,
+  ]
+
+  // Gap 1: detect previous gating questions from last assistant turn → instruct agent to
+  // propose user.updateProfile if the user's message answers any of them
+  const lastAssistant = input.contextPack.history.recentMessages
+    .filter((m) => m.role === 'assistant')
+    .slice(-1)[0]
+  if (lastAssistant) {
+    const prevQuestions = lastAssistant.content
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.endsWith('?'))
+      .slice(0, 6)
+    if (prevQuestions.length > 0) {
+      parts.push(``, `PREVIOUS TEAM QUESTIONS (from last turn):`)
+      prevQuestions.forEach((q) => parts.push(`- ${q}`))
+      parts.push(
+        `If the user message answers any of these questions, include a "user.updateProfile" tool call`,
+        `in your toolCalls[] with { fields: { <key>: <value> } } for each extracted value.`,
+        `Only include fields you can extract with confidence from the user message.`,
+      )
+    }
+  }
+
+  parts.push(
     ``,
     `INSTRUCTIONS:`,
-    `- You are a specialist agent in a team-led system.`,
-    `- Ask gating questions if key info is missing.`,
+    `- You are a specialist agent. Respond ONLY within your domain scope. Do NOT ask about or propose recommendations for other domains.`,
+    `- Ask gating questions only for data that YOUR specific domain requires.`,
     `- Provide evidence-based recommendations. If uncertain, say so.`,
     `- Propose tool calls only if clearly helpful; do not claim execution.`,
-  ].join('\n')
+  )
+
+  return parts.join('\n')
 }
 
 async function runOneAgent(

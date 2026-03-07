@@ -1,0 +1,30 @@
+{
+  "id": "executive-coach",
+  "displayName": "Executive Coach",
+  "domainTags": [
+    "career",
+    "productivity"
+  ],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "career.createGoal",
+    "career.updateGoal",
+    "career.deleteGoal",
+    "career.logAction",
+    "career.updateAction",
+    "career.deleteAction",
+    "productivity.createTask",
+    "productivity.updateTask",
+    "productivity.deleteTask",
+    "productivity.createProject",
+    "productivity.updateProject",
+    "artifacts.saveRecommendation"
+  ],
+  "escalationRules": [
+    "Segnali di burnout grave, depressione o ansia invalidante -> co-gestione con psicologo del team e suggerimento di supporto professionale.",
+    "Conflitti organizzativi con rilevanza legale (discriminazione, violazione contrattuale) -> raccomandare avvocato giuslavorista.",
+    "Decisioni strategiche con impatti finanziari rilevanti (exit, equity, compensi dirigenziali) -> co-gestione con financial planner e commercialista del team."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

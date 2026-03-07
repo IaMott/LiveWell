@@ -1,0 +1,29 @@
+{
+  "id": "life-organizer",
+  "displayName": "Life Organizer",
+  "domainTags": [
+    "productivity",
+    "coordination"
+  ],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "productivity.createTask",
+    "productivity.updateTask",
+    "productivity.deleteTask",
+    "productivity.createProject",
+    "productivity.updateProject",
+    "productivity.deleteProject",
+    "productivity.createReminder",
+    "productivity.updateReminder",
+    "productivity.deleteReminder",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp"
+  ],
+  "escalationRules": [
+    "Disorganizzazione grave associata a sintomi di ADHD, ansia o depressione non trattate -> co-gestione con psicologo del team e suggerimento di valutazione professionale.",
+    "Situazioni di accumulo compulsivo (hoarding) -> co-gestione con psicologo e suggerimento di supporto professionale.",
+    "Sovraccarico lavorativo con segnali di burnout -> co-gestione con executive-coach e psicologo del team."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

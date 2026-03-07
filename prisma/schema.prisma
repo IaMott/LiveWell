@@ -12,28 +12,38 @@ model User {
   email         String         @unique
   passwordHash  String         @map("password_hash")
   name          String?
+  role          String         @default("USER") // 'USER' | 'ADMIN' | 'OWNER'
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
-  conversations Conversation[]
-  profile       UserProfile?
-  notifications Notification[]
-  confirmActions ConfirmAction[]
-  toolAuditLogs ToolAuditLog[]
+
+  conversations           Conversation[]
+  profile                 UserProfile?
+  notifications           Notification[]
+  confirmActions          ConfirmAction[]
+  toolAuditLogs           ToolAuditLog[]
+  bodyMetricEntries       BodyMetricEntry[]
+  meals                   Meal[]
+  workoutPlans            WorkoutPlan[]
+  workoutSessions         WorkoutSession[]
+  mindfulnessEntries      MindfulnessEntry[]
+  fileAssets              FileAsset[]
+  recommendationArtifacts RecommendationArtifact[]
+  geoPreference           GeoPreference?
 
   @@map("users")
 }
 
 model Notification {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String   // 'specialist' | 'reminder' | 'milestone' | 'system'
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String    // 'specialist' | 'reminder' | 'milestone' | 'system'
   title     String
   message   String
-  metadata  Json?    // { specialistId, conversationId, actionUrl }
-  read      Boolean  @default(false)
+  metadata  Json?     // { specialistId, conversationId, actionUrl }
+  read      Boolean   @default(false)
   readAt    DateTime? @map("read_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   @@index([userId, read])
   @@index([createdAt])
@@ -45,29 +55,16 @@ model UserProfile {
   userId    String   @unique @map("user_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Personal
   birthDate   DateTime? @map("birth_date")
-  gender      String?   // 'M' | 'F' | 'altro'
-  height      Float?    // cm
-  weight      Float?    // kg
-
-  // Health
-  health      Json?     // { conditions, allergies, medications, bloodType, notes }
-
-  // Nutrition
-  nutrition   Json?     // { dietType, intolerances, preferences, caloricGoal, mealsPerDay }
-
-  // Training
-  training    Json?     // { fitnessLevel, equipment, weeklyDays, injuries, sport }
-
-  // Mindfulness
-  mindfulness Json?     // { stressLevel, meditationExp, techniques, sleepHours }
-
-  // Goals
-  goals       Json?     // { shortTerm, mediumTerm, longTerm }
-
-  // Settings
-  settings    Json?     // { notifications, theme, language }
+  gender      String?
+  height      Float?
+  weight      Float?
+  health      Json?
+  nutrition   Json?
+  training    Json?
+  mindfulness Json?
+  goals       Json?
+  settings    Json?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -84,8 +81,11 @@ model Conversation {
   sharedAt   DateTime? @map("shared_at")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
-  messages   Message[]
-  toolAuditLogs ToolAuditLog[]
+
+  messages                Message[]
+  toolAuditLogs           ToolAuditLog[]
+  fileAssets              FileAsset[]
+  recommendationArtifacts RecommendationArtifact[]
 
   @@index([userId])
   @@map("conversations")
@@ -106,12 +106,12 @@ model Message {
 
 model Attachment {
   id        String   @id @default(cuid())
-  type      String   // 'image' | 'barcode' | 'audio'
+  type      String
   fileName  String   @map("file_name")
   fileSize  Int      @map("file_size")
   mimeType  String   @map("mime_type")
   url       String
-  metadata  String?  // JSON: barcode value, image dimensions, etc.
+  metadata  String?
   messageId String   @map("message_id")
   message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now()) @map("created_at")
@@ -155,4 +155,141 @@ model ToolAuditLog {
   @@index([conversationId, createdAt])
   @@index([requestId])
   @@map("tool_audit_logs")
+}
+
+// ─────────────────────────────────────────
+// Tracker models (required by ContextPack)
+// ─────────────────────────────────────────
+
+model BodyMetricEntry {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metricType String   @map("metric_type")
+  value      Float
+  unit       String?
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId, recordedAt])
+  @@map("body_metric_entries")
+}
+
+model Meal {
+  id              String   @id @default(cuid())
+  createdByUserId String   @map("created_by_user_id")
+  createdByUser   User     @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  mealType        String   @map("meal_type")
+  date            DateTime @default(now())
+  items           Json
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([createdByUserId, date])
+  @@map("meals")
+}
+
+model WorkoutPlan {
+  id         String           @id @default(cuid())
+  userId     String           @map("user_id")
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  weeklyDays Int              @map("weekly_days")
+  sessions   Json
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  workoutSessions WorkoutSession[]
+
+  @@index([userId])
+  @@map("workout_plans")
+}
+
+model WorkoutSession {
+  id              String       @id @default(cuid())
+  userId          String       @map("user_id")
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId          String?      @map("plan_id")
+  plan            WorkoutPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  durationMin     Int          @map("duration_min")
+  perceivedEffort Int?         @map("perceived_effort")
+  notes           String?
+  date            DateTime     @default(now())
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  @@index([userId, date])
+  @@map("workout_sessions")
+}
+
+model MindfulnessEntry {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mood      Int?
+  stress    Int?
+  content   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("mindfulness_entries")
+}
+
+// ─────────────────────────────────────────
+// File storage + AI artifacts
+// ─────────────────────────────────────────
+
+model FileAsset {
+  id             String        @id @default(cuid())
+  userId         String        @map("user_id")
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String?       @map("conversation_id")
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  filename       String
+  mimeType       String        @map("mime_type")
+  size           Int
+  url            String?
+  extractedText  String?       @map("extracted_text")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([conversationId])
+  @@map("file_assets")
+}
+
+model RecommendationArtifact {
+  id                    String        @id @default(cuid())
+  userId                String        @map("user_id")
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relatedConversationId String?       @map("related_conversation_id")
+  relatedConversation   Conversation? @relation(fields: [relatedConversationId], references: [id], onDelete: SetNull)
+  type                  String
+  title                 String
+  contentMarkdown       String        @map("content_markdown")
+  createdAt             DateTime      @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([relatedConversationId])
+  @@map("recommendation_artifacts")
+}
+
+// ─────────────────────────────────────────
+// Geolocation (privacy-first, opt-in only)
+// ─────────────────────────────────────────
+
+model GeoPreference {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled   Boolean  @default(false)
+  // Coarse location — precision intentionally limited (≈1km max)
+  country   String?
+  region    String?
+  city      String?
+  timezone  String?
+  latCoarse Float?   @map("lat_coarse") // rounded to 2 decimal places
+  lonCoarse Float?   @map("lon_coarse")
+  accuracy  String?  // 'country' | 'region' | 'city' | 'coarse'
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("geo_preferences")
 }

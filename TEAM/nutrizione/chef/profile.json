@@ -1,0 +1,27 @@
+{
+  "id": "chef",
+  "displayName": "Chef",
+  "domainTags": [
+    "nutrition"
+  ],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "nutrition.createFoodItem",
+    "nutrition.updateFoodItem",
+    "nutrition.deleteFoodItem",
+    "nutrition.logMeal",
+    "nutrition.deleteMeal",
+    "nutrition.grocery.addItem",
+    "nutrition.grocery.toggleItem",
+    "nutrition.recipes.createRecipe",
+    "nutrition.recipes.updateRecipe",
+    "nutrition.recipes.deleteRecipe",
+    "artifacts.saveRecommendation"
+  ],
+  "escalationRules": [
+    "Possibili disturbi del comportamento alimentare, perdita di peso rapida, compensazioni -> raccomandare clinico qualificato e approccio prudente.",
+    "Patologie (diabete, insufficienza renale, gravidanza, celiachia sospetta) -> raccomandare supervisione clinica."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

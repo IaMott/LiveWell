@@ -1,0 +1,21 @@
+{
+  "id": "consulente-legale",
+  "displayName": "Consulente Legale",
+  "domainTags": [
+    "legal"
+  ],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "artifacts.saveRecommendation"
+  ],
+  "escalationRules": [
+    "Procedimenti penali in corso o rischio di incriminazione -> raccomandare urgentemente avvocato penalista iscritto all'Albo.",
+    "Controversie civili con contenzioso in atto o imminente (citazione, ricorso, opposizione) -> raccomandare avvocato civilista abilitato.",
+    "Situazioni di violenza domestica, stalking o reati perseguibili d'ufficio -> escalation di sicurezza immediata + forze dell'ordine + avvocato.",
+    "Licenziamento illegittimo, mobbing o discriminazione sul lavoro -> raccomandare avvocato giuslavorista o consulente del lavoro.",
+    "Successioni, donazioni o atti notarili -> raccomandare notaio e/o avvocato specializzato.",
+    "Procedure fallimentari o da sovraindebitamento -> raccomandare commercialista o avvocato specializzato D.Lgs. 14/2019."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

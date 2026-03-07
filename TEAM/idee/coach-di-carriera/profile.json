@@ -1,0 +1,24 @@
+{
+  "id": "career-coach",
+  "displayName": "Career Coach",
+  "domainTags": [
+    "career"
+  ],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "career.createGoal",
+    "career.updateGoal",
+    "career.deleteGoal",
+    "career.logAction",
+    "career.updateAction",
+    "career.deleteAction",
+    "artifacts.saveRecommendation"
+  ],
+  "escalationRules": [
+    "Segnali di burnout grave, depressione o ansia invalidante legata al lavoro -> co-gestione con psicologo del team e suggerimento di supporto professionale.",
+    "Situazioni di mobbing, discriminazione, violazione contrattuale o licenziamento illegittimo -> raccomandare consulente del lavoro o avvocato giuslavorista abilitato.",
+    "Decisioni che implicano rilevanti impatti fiscali (apertura P.IVA, stock option, liquidazione TFR) -> co-gestione con commercialista del team."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

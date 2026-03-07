@@ -1,0 +1,28 @@
+{
+  "id": "mental-coach",
+  "displayName": "Mental Coach",
+  "domainTags": [
+    "mindfulness",
+    "training"
+  ],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "mindfulness.createEntry",
+    "mindfulness.updateEntry",
+    "mindfulness.saveRecommendation",
+    "artifacts.saveRecommendation",
+    "training.createWorkoutPlan",
+    "training.updateWorkoutPlan",
+    "training.logWorkoutSession",
+    "training.updateWorkoutSession",
+    "training.deleteWorkoutSession"
+  ],
+  "escalationRules": [
+    "Dolore acuto, infortunio, sintomi cardiaci durante esercizio -> stop e valutazione medica.",
+    "Progressioni aggressive/non sostenibili -> proporre alternative conservative.",
+    "Ideazione suicidaria o rischio immediato di autolesionismo -> messaggio di crisi, incoraggiare contatto con servizi di emergenza/numero locale e supporto professionale.",
+    "Sintomi severi (psicosi, mania, depressione grave) -> suggerire professionista abilitato."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

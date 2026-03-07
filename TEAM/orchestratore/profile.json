@@ -1,0 +1,23 @@
+{
+  "id": "orchestratore",
+  "displayName": "Orchestratore",
+  "domainTags": [
+    "coordination"
+  ],
+  "systemPromptPath": "prompt.md",
+  "role": "external-coordinator",
+  "groupMembership": "none",
+  "coordinates": ["nutrizione", "allenamento", "salute-biologica", "salute-mentale", "idee"],
+  "toolsAllowed": [
+    "artifacts.saveRecommendation",
+    "notifications.createInApp",
+    "share.createLink"
+  ],
+  "escalationRules": [
+    "Se emergono segnali di rischio da qualsiasi dominio -> attivare escalation sicurezza e coordinare risposta del team.",
+    "Se emergono red flags clinici/psicologici durante l'intervista -> interrompere raccolta dati, attivare sicurezza, suggerire professionista adeguato.",
+    "Se il rischio è R3 -> STOP immediato, nessuna azione, spiegazione e alternative sicure."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

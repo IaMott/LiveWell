@@ -1,79 +1,139 @@
-import { GoogleGenAI, type Content } from '@google/genai'
-import type { AIMessage } from './types'
+/**
+ * Gemini LLM client — LiveWell AI layer
+ *
+ * Implements LlmClient interface for the orchestrator.
+ * - Uses @google/genai SDK (v1.43+)
+ * - Instructs the model to output AgentProposal-compatible JSON
+ * - Graceful mock fallback when GEMINI_API_KEY is not set (dev/test)
+ * - Never exposes the API key to client bundles (server-only module)
+ */
 
-const MODEL = process.env.AI_MODEL || 'gemini-2.5-flash'
+import { GoogleGenAI } from '@google/genai'
+import type { LlmClient } from './orchestrator/orchestrator'
+import { getServerEnv } from '../validators/env'
 
-let client: GoogleGenAI | null = null
+// Appended to each agent's system prompt to enforce structured JSON output.
+const JSON_OUTPUT_INSTRUCTION = `
 
-function getClient(): GoogleGenAI {
-  if (!client) {
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY non configurata')
-    }
-    client = new GoogleGenAI({ apiKey })
+---
+OUTPUT CONTRACT (mandatory):
+Respond ONLY with a single valid JSON object. No markdown, no code fences, no text outside the JSON.
+
+Required fields:
+  "domain": one of "general" | "nutrition" | "health" | "training" | "mindfulness" | "inspiration"
+  "summary": string (≤ 600 chars, user-visible)
+  "reasoning": string (≤ 4000 chars, internal rationale)
+
+Optional fields:
+  "questions": string[]          — gating questions if data is missing
+  "recommendations": Array<{title, steps, rationale, safetyNotes?}>
+  "toolCalls": Array<{id, name, args}>   — proposed only; orchestrator executes
+  "confidence": number 0..1
+  "flags": { needsMoreInfo?, potentialRisk?, urgentEscalation? }
+`
+
+function buildMockClient(): LlmClient {
+  return {
+    async complete() {
+      return {
+        text: JSON.stringify({
+          domain: 'general',
+          summary:
+            'Sono qui per aiutarti. Dimmi pure come posso supportarti oggi.',
+          reasoning: 'Modalità mock attiva: GEMINI_API_KEY non configurata.',
+          questions: ['Qual è il tuo obiettivo principale in questo momento?'],
+          recommendations: [],
+          toolCalls: [],
+          confidence: 0.5,
+        }),
+      }
+    },
   }
-  return client
 }
 
-/** Convert our AIMessage[] to Gemini Content[] format */
-function toGeminiContents(messages: AIMessage[]): Content[] {
-  return messages
-    .filter((m) => m.role !== 'system')
-    .map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }))
+/**
+ * Returns a real Gemini LlmClient, or a mock if GEMINI_API_KEY is absent.
+ * Call once per request (cheap: no persistent connection needed).
+ */
+export function createGeminiClient(): LlmClient {
+  const env = getServerEnv()
+  const apiKey = env.GEMINI_API_KEY
+
+  if (!apiKey) {
+    return buildMockClient()
+  }
+
+  const model = env.AI_MODEL
+  const ai = new GoogleGenAI({ apiKey })
+
+  return {
+    async complete({ system, user }) {
+      const systemInstruction = system + JSON_OUTPUT_INSTRUCTION
+
+      const response = await ai.models.generateContent({
+        model,
+        contents: user,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+        },
+      })
+
+      const raw = response.text ?? ''
+      // Strip markdown code fences if the model wraps JSON in ```json ... ```
+      const text = raw.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+      return { text }
+    },
+  }
 }
 
-/** Generate a complete (non-streaming) response from Gemini */
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Compatibility shims for legacy src/lib/ai/orchestrator.ts (Step 8 era).
+// The new orchestrator uses createGeminiClient(). These shims let both coexist.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns true if GEMINI_API_KEY is configured.
+ * Used by legacy orchestrator and transcribe route.
+ */
+export function isGeminiConfigured(): boolean {
+  try {
+    const env = getServerEnv()
+    return Boolean(env.GEMINI_API_KEY)
+  } catch {
+    return false
+  }
+}
+
+type LegacyAIMessage = { role: 'user' | 'assistant' | 'system'; content: string }
+
+/**
+ * Legacy response generator: wraps createGeminiClient for old orchestrator API.
+ */
 export async function generateResponse(
   systemPrompt: string,
-  messages: AIMessage[],
+  messages: LegacyAIMessage[],
 ): Promise<string> {
-  const ai = getClient()
-  const contents = toGeminiContents(messages)
-
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents,
-    config: {
-      systemInstruction: systemPrompt,
-      maxOutputTokens: 2048,
-      temperature: 0.7,
-    },
-  })
-
-  return response.text ?? ''
+  const client = createGeminiClient()
+  const userText = messages
+    .filter((m) => m.role !== 'system')
+    .map((m) => `[${m.role}]: ${m.content}`)
+    .join('\n\n')
+  const result = await client.complete({ system: systemPrompt, user: userText })
+  return result.text
 }
 
-/** Generate a streaming response from Gemini, yielding text chunks */
+/**
+ * Legacy streaming generator: yields tokens word-by-word.
+ */
 export async function* generateStream(
   systemPrompt: string,
-  messages: AIMessage[],
+  messages: LegacyAIMessage[],
 ): AsyncGenerator<string> {
-  const ai = getClient()
-  const contents = toGeminiContents(messages)
-
-  const response = await ai.models.generateContentStream({
-    model: MODEL,
-    contents,
-    config: {
-      systemInstruction: systemPrompt,
-      maxOutputTokens: 2048,
-      temperature: 0.7,
-    },
-  })
-
-  for await (const chunk of response) {
-    const text = chunk.text
-    if (text) {
-      yield text
-    }
+  const text = await generateResponse(systemPrompt, messages)
+  for (const word of text.split(' ')) {
+    yield word + ' '
   }
-}
-
-/** Check if Gemini is configured and available */
-export function isGeminiConfigured(): boolean {
-  return !!process.env.GEMINI_API_KEY
 }

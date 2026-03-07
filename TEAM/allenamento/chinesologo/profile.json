@@ -1,0 +1,22 @@
+{
+  "id": "chinesologo",
+  "displayName": "Chinesologo",
+  "domainTags": [
+    "training"
+  ],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "training.createWorkoutPlan",
+    "training.updateWorkoutPlan",
+    "training.logWorkoutSession",
+    "training.updateWorkoutSession",
+    "training.deleteWorkoutSession",
+    "artifacts.saveRecommendation"
+  ],
+  "escalationRules": [
+    "Dolore acuto, infortunio, sintomi cardiaci durante esercizio -> stop e valutazione medica.",
+    "Progressioni aggressive/non sostenibili -> proporre alternative conservative."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

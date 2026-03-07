@@ -1,96 +1,55 @@
-import { NextResponse } from 'next/server'
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { buildContext } from '@/lib/ai'
-import { buildSpecialistPrompt } from '@/lib/ai/prompts'
-import { routeMessage } from '@/lib/ai/orchestrator'
-import type { AIMessage } from '@/lib/ai'
+import { errorResponse } from '@/lib/security/errorSchema'
+import { getAuthUserId } from '@/lib/auth'
+import { assertNoSecretLeak, getServerSecret } from '@/lib/security/secrets'
+import { getServerEnv } from '@/lib/validators/env'
 
-const schema = z.object({
-  conversationId: z.string().nullish(),
+const requestSchema = z.object({
+  conversationId: z.string().min(1).optional(),
 })
 
-export async function POST(request: Request): Promise<NextResponse> {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
+export async function POST(request: Request): Promise<Response> {
+  const userId = await getAuthUserId(request)
+  if (!userId) {
+    return errorResponse(401, 'UNAUTHORIZED', 'Authentication required')
   }
 
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({ error: 'Gemini non configurato' }, { status: 503 })
+  let parsedBody: z.infer<typeof requestSchema>
+  try {
+    const body = (await request.json()) as unknown
+    const parsed = requestSchema.safeParse(body)
+    if (!parsed.success) {
+      return errorResponse(400, 'BAD_REQUEST', 'Invalid request body')
+    }
+    parsedBody = parsed.data
+  } catch {
+    parsedBody = {}
   }
 
-  const body = await request.json()
-  const result = schema.safeParse(body)
-  if (!result.success) {
-    return NextResponse.json({ error: 'Input non valido' }, { status: 400 })
+  const env = getServerEnv()
+  const hasLiveAccess = Boolean(getServerSecret('GEMINI_API_KEY'))
+
+  if (!hasLiveAccess) {
+    return errorResponse(503, 'UNAVAILABLE', 'Live service not available')
   }
 
-  const userId = session.user.id
-  const { conversationId } = result.data
+  const expiresInSec = 60
+  const now = Date.now()
+  const payload = {
+    sessionToken: randomUUID(),
+    model: env.LIVE_MODEL,
+    expiresAt: new Date(now + expiresInSec * 1000).toISOString(),
+    conversationId: parsedBody.conversationId ?? null,
+  }
 
-  // Load user profile
-  const userProfile = await prisma.userProfile.findUnique({
-    where: { userId },
-    select: {
-      birthDate: true,
-      gender: true,
-      height: true,
-      weight: true,
-      health: true,
-      nutrition: true,
-      training: true,
-      mindfulness: true,
-      goals: true,
+  assertNoSecretLeak(payload)
+
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
     },
-  })
-
-  // Load conversation history if available
-  let aiMessages: AIMessage[] = []
-  if (conversationId) {
-    const history = await prisma.message.findMany({
-      where: { conversationId },
-      orderBy: { createdAt: 'asc' },
-      select: { role: true, content: true },
-      take: 20,
-    })
-    aiMessages = history.map((m) => ({
-      role: m.role as 'user' | 'assistant',
-      content:
-        m.role === 'assistant'
-          ? m.content.replace(/^\[\[specialist:[a-z_]+\]\]\s*/i, '')
-          : m.content,
-    }))
-  }
-
-  // Build context and get specialist prompt
-  const context = buildContext(aiMessages, userId, userProfile)
-  const liveIntentMessage =
-    aiMessages.slice().reverse().find((m) => m.role === 'user')?.content ?? 'sessione live in corso'
-  const routing = routeMessage(liveIntentMessage, context)
-  const systemPrompt = await buildSpecialistPrompt(
-    routing.primarySpecialist,
-    { ...context, domain: routing.domain },
-  )
-
-  // Add live-specific instructions to the system prompt
-  const liveSystemPrompt = `${systemPrompt}
-
-### Istruzioni per sessione live (voce)
-- Stai conversando IN TEMPO REALE via voce con l'utente.
-- Rispondi in modo conciso e naturale, come in una conversazione telefonica.
-- Frasi brevi e dirette. Evita muri di testo.
-- Usa un tono colloquiale ma professionale.
-- Se l'utente parla di più argomenti, rispondi uno alla volta.
-- Fai domande brevi per chiarire se necessario.
-`
-
-  return NextResponse.json({
-    apiKey,
-    model: 'gemini-2.0-flash-live',
-    systemPrompt: liveSystemPrompt,
-    specialist: routing.primarySpecialist,
   })
 }

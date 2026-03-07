@@ -1,0 +1,18 @@
+{
+  "id": "analista-contesto",
+  "displayName": "Analista Contesto",
+  "domainTags": [
+    "coordination"
+  ],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "artifacts.saveRecommendation",
+    "notifications.createInApp",
+    "share.createLink"
+  ],
+  "escalationRules": [
+    "Se emergono segnali di rischio da qualsiasi dominio -> attivare escalation sicurezza e coordinare risposta del team."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

@@ -1,13 +1,16 @@
 import path from 'node:path'
 import { z } from 'zod'
-import { checkRateLimit, getClientIp, getUserIdFromRequest } from '@/lib/security/httpGuards'
+import { checkRateLimit, getClientIp } from '@/lib/security/httpGuards'
+import { getAuthUserId, getAuthRole, getAuthOwnerMode } from '@/lib/auth'
 import { errorResponse } from '@/lib/security/errorSchema'
-import { orchestrate, type LlmClient } from '@/lib/ai/orchestrator/orchestrator'
+import { orchestrate } from '@/lib/ai/orchestrator/orchestrator'
+import { createGeminiClient } from '@/lib/ai/gemini'
 import { loadTeam } from '@/lib/ai/team/loader'
 import { buildContextPack } from '@/lib/ai/context/contextPackBuilder'
-import type { AgentInput, ContextPack, Role, ToolCall, ToolResult } from '@/lib/ai/runtime-types'
+import type { AgentInput, ContextPack, Domain, Role, ToolCall, ToolResult } from '@/lib/ai/types'
 import { ALLOWED_TOOL_NAMES } from '@/lib/tools/toolRegistry'
 import { createToolExecutor, type MutationAuditEvent } from '@/lib/tools/toolExecutor'
+import { realToolHandlers, stubToolHandlers } from '@/lib/tools/handlers'
 import { prisma } from '@/lib/prisma'
 
 const requestSchema = z.object({
@@ -21,7 +24,7 @@ type ChatStreamEvent =
   | { type: 'message.delta'; id: string; delta: string }
   | {
       type: 'ui.state'
-      domain: 'general' | 'nutrition' | 'health' | 'training' | 'mindfulness' | 'inspiration'
+      domain: Domain
       moodScore: number
       sectionScores: Record<string, number>
     }
@@ -45,18 +48,9 @@ function isDbPersistenceEnabled(): boolean {
   return process.env.NODE_ENV !== 'test' || process.env.ENABLE_DB_IN_TEST === '1'
 }
 
-function parseRoleFromRequest(request: Request): Role {
-  const roleHeader = request.headers.get('x-user-role')
-  if (roleHeader === 'OWNER' || roleHeader === 'ADMIN' || roleHeader === 'USER') {
-    return roleHeader
-  }
-  return 'USER'
-}
-
-function parseOwnerModeFromRequest(request: Request): boolean {
-  const value = request.headers.get('x-owner-mode-enabled')
-  return value === '1' || value === 'true'
-}
+// Role and owner mode are resolved via getAuthRole / getAuthOwnerMode from auth.ts.
+// In test environment: header-based (x-user-role, x-owner-mode-enabled).
+// In production: session-based (NextAuth JWT).
 
 function parseToolDirective(message: string): ToolCall[] {
   const direct = message.match(/^\/tool\s+([a-zA-Z0-9._-]+)\s+([\s\S]+)$/)
@@ -82,7 +76,9 @@ function buildDefaultContextPack(userId: string, role: Role): ContextPack {
   }
 }
 
-function buildDeterministicLlm(toolCalls: ToolCall[]): LlmClient {
+// buildDeterministicLlm: used only when the user sends an explicit /tool directive.
+// Bypasses LLM entirely and injects the tool calls directly into the AgentProposal.
+function buildDeterministicLlm(toolCalls: ToolCall[]) {
   return {
     async complete() {
       return {
@@ -126,14 +122,7 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
     }
   }
 
-  type GenericFindMany = (args: Record<string, unknown>) => Promise<unknown[]>
   type GenericFindUnique = (args: Record<string, unknown>) => Promise<unknown>
-
-  function getFindMany(modelName: string): GenericFindMany | null {
-    const prismaRecord = prisma as unknown as Record<string, unknown>
-    const delegate = prismaRecord[modelName] as { findMany?: GenericFindMany } | undefined
-    return delegate?.findMany ?? null
-  }
 
   function getFindUnique(modelName: string): GenericFindUnique | null {
     const prismaRecord = prisma as unknown as Record<string, unknown>
@@ -141,19 +130,7 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
     return delegate?.findUnique ?? null
   }
 
-  async function findManyIfAvailable<T>(
-    modelName: string,
-    args: Record<string, unknown>,
-  ): Promise<T[]> {
-    const findMany = getFindMany(modelName)
-    if (!findMany) return []
-    try {
-      return (await findMany(args)) as T[]
-    } catch {
-      return []
-    }
-  }
-
+  // Fallback for models not yet in schema (e.g. medicalInfo)
   async function findUniqueIfAvailable<T>(
     modelName: string,
     args: Record<string, unknown>,
@@ -229,12 +206,12 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
             },
             recommendationArtifact: {
               findMany: async (args) =>
-                findManyIfAvailable<{
-                  type: string
-                  title: string
-                  createdAt: Date
-                  content?: string | null
-                }>('recommendationArtifact', args as Record<string, unknown>),
+                prisma.recommendationArtifact.findMany({
+                  ...(args as object),
+                  select: { type: true, title: true, createdAt: true, contentMarkdown: true },
+                }).then((rows) =>
+                  rows.map((r) => ({ ...r, content: r.contentMarkdown })),
+                ),
             },
             notification: {
               count: async (args) => prisma.notification.count(args as object),
@@ -260,42 +237,53 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
             },
             bodyMetricEntry: {
               findMany: async (args) =>
-                findManyIfAvailable<Record<string, unknown>>(
-                  'bodyMetricEntry',
-                  args as Record<string, unknown>,
-                ),
+                prisma.bodyMetricEntry.findMany(args as object) as Promise<
+                  Record<string, unknown>[]
+                >,
             },
             meal: {
               findMany: async (args) =>
-                findManyIfAvailable<Record<string, unknown>>(
-                  'meal',
-                  args as Record<string, unknown>,
-                ),
+                prisma.meal.findMany(args as object) as Promise<Record<string, unknown>[]>,
             },
             workoutSession: {
               findMany: async (args) =>
-                findManyIfAvailable<Record<string, unknown>>(
-                  'workoutSession',
-                  args as Record<string, unknown>,
-                ),
+                prisma.workoutSession.findMany(args as object) as Promise<
+                  Record<string, unknown>[]
+                >,
             },
             mindfulnessEntry: {
               findMany: async (args) =>
-                findManyIfAvailable<Record<string, unknown>>(
-                  'mindfulnessEntry',
-                  args as Record<string, unknown>,
-                ),
+                prisma.mindfulnessEntry.findMany(args as object) as Promise<
+                  Record<string, unknown>[]
+                >,
             },
             fileAsset: {
               findMany: async (args) =>
-                findManyIfAvailable<{
-                  id: string
-                  filename: string
-                  mimeType: string
-                  size: number
-                  extractedText?: string | null
-                  url?: string | null
-                }>('fileAsset', args as Record<string, unknown>),
+                prisma.fileAsset.findMany({
+                  ...(args as object),
+                  select: {
+                    id: true,
+                    filename: true,
+                    mimeType: true,
+                    size: true,
+                    extractedText: true,
+                    url: true,
+                  },
+                }),
+            },
+            geoPreference: {
+              findUnique: async () =>
+                prisma.geoPreference.findUnique({
+                  where: { userId },
+                  select: {
+                    enabled: true,
+                    country: true,
+                    region: true,
+                    city: true,
+                    timezone: true,
+                    accuracy: true,
+                  },
+                }),
             },
           },
         })
@@ -306,31 +294,15 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
   }
 }
 
-function buildToolExecutor(writeAuditLog: (event: MutationAuditEvent) => Promise<void>) {
-  const handlers = {
-    'share.createLink': async (args: unknown) => {
-      const parsed = args as { resourceType: string; resourceId: string }
-      return {
-        shareUrl: `https://livewell.local/share/${parsed.resourceType}/${parsed.resourceId}`,
-      }
-    },
-    'health.addMetric': async () => ({ saved: true }),
-    'nutrition.logMeal': async () => ({ saved: true }),
-    'nutrition.createFoodItem': async () => ({ saved: true }),
-    'nutrition.recipes.createRecipe': async () => ({ saved: true }),
-    'training.createWorkoutPlan': async () => ({ saved: true }),
-    'training.logWorkoutSession': async () => ({ saved: true }),
-    'mindfulness.createEntry': async () => ({ saved: true }),
-    'artifacts.saveRecommendation': async () => ({ saved: true }),
-    'notifications.createInApp': async () => ({ saved: true }),
-    'user.updateProfile': async () => ({ saved: true }),
-    'export.pdf': async () => ({ url: 'https://livewell.local/export/mock.pdf' }),
-  } satisfies Parameters<typeof createToolExecutor>[0]['handlers']
-
-  return createToolExecutor({
-    handlers,
-    writeAuditLog,
-  })
+function buildToolExecutor(
+  writeAuditLog: (event: MutationAuditEvent) => Promise<void>,
+  useRealHandlers: boolean,
+) {
+  // In NODE_ENV=test, always use stub handlers so tests don't need
+  // a full DB mock for every model the real handler might touch.
+  const handlers =
+    useRealHandlers && process.env.NODE_ENV !== 'test' ? realToolHandlers : stubToolHandlers
+  return createToolExecutor({ handlers, writeAuditLog })
 }
 
 async function resolveConversationId(
@@ -349,7 +321,7 @@ async function resolveConversationId(
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const userId = getUserIdFromRequest(request)
+  const userId = await getAuthUserId(request)
   if (!userId) {
     return errorResponse(401, 'UNAUTHORIZED', 'Authentication required')
   }
@@ -382,8 +354,8 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const assistantId = crypto.randomUUID()
-  const role = parseRoleFromRequest(request)
-  const ownerModeEnabled = parseOwnerModeFromRequest(request)
+  const role = await getAuthRole(request)
+  const ownerModeEnabled = await getAuthOwnerMode(request)
   const persistence = createDbPersistenceDeps(isDbPersistenceEnabled())
   let conversationId = parsedBody.conversationId ?? crypto.randomUUID()
   try {
@@ -413,7 +385,11 @@ export async function POST(request: Request): Promise<Response> {
 
   const teamDirAbsolute = path.resolve(process.cwd(), 'TEAM')
   const team = loadTeam({ teamDirAbsolute, allowEmpty: true })
-  const llm = buildDeterministicLlm(requestedToolCalls)
+  // Use deterministic mock only for explicit /tool directives; otherwise use real Gemini.
+  const llm =
+    requestedToolCalls.length > 0
+      ? buildDeterministicLlm(requestedToolCalls)
+      : createGeminiClient()
   const consensus = await orchestrate(
     {
       llm,
@@ -424,9 +400,10 @@ export async function POST(request: Request): Promise<Response> {
   )
 
   const pendingAuditEvents: MutationAuditEvent[] = []
-  const executor = buildToolExecutor(async (event) => {
-    pendingAuditEvents.push(event)
-  })
+  const executor = buildToolExecutor(
+    async (event) => { pendingAuditEvents.push(event) },
+    isDbPersistenceEnabled(),
+  )
 
   const toolCallsToExecute =
     consensus.toolCallsToExecute.length > 0 ? consensus.toolCallsToExecute : requestedToolCalls
@@ -536,3 +513,4 @@ export async function POST(request: Request): Promise<Response> {
     },
   })
 }
+
