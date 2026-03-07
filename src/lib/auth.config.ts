@@ -1,35 +1,46 @@
-import type { NextAuthConfig } from 'next-auth'
+import type { NextAuthConfig, DefaultSession } from 'next-auth'
 
-/**
- * Auth config without providers that use Node.js APIs.
- * Used by the Edge middleware (cannot import prisma/bcrypt).
- */
-export const authConfig = {
-  session: { strategy: 'jwt' },
+// Extend NextAuth session/user types to include id and role
+declare module 'next-auth' {
+  interface Session {
+    user: {
+      id: string
+      role: string
+    } & DefaultSession['user']
+  }
+  interface User {
+    role?: string
+  }
+}
+
+export const authConfig: NextAuthConfig = {
   pages: {
     signIn: '/login',
   },
+  session: {
+    strategy: 'jwt',
+  },
   callbacks: {
-    authorized({ auth, request: { nextUrl } }) {
-      const isLoggedIn = !!auth?.user
-      const isProtected = nextUrl.pathname.startsWith('/profile')
-      if (isProtected && !isLoggedIn) {
-        return false // redirects to signIn page
-      }
+    authorized({ auth: session, request: { nextUrl } }) {
+      const isLoggedIn = !!session?.user
+      const isProtectedPage = nextUrl.pathname.startsWith('/profile')
+      if (isProtectedPage) return isLoggedIn
       return true
     },
     jwt({ token, user }) {
       if (user) {
         token.id = user.id
+        token.role = user.role ?? 'USER'
       }
       return token
     },
     session({ session, token }) {
-      if (session.user && token.id) {
-        session.user.id = token.id as string
+      if (session.user) {
+        session.user.id = (token.id ?? token.sub) as string
+        session.user.role = (token.role as string) ?? 'USER'
       }
       return session
     },
   },
-  providers: [], // added in auth.ts with full Node.js providers
-} satisfies NextAuthConfig
+  providers: [],
+}

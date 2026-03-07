@@ -1,5 +1,89 @@
 # Worklog (append-only)
 
+## 2026-03-07 — principal-engineer (Phase B — B7-B12 completed)
+
+- B7 (commit daee9c49): consensusEngine.ts — semantic deduplication (Jaccard 0.4), filterKnownDataQuestions, enforceDomainIsolation. orchestrator.ts — gating feedback loop (detects previous questions, proposes user.updateProfile).
+- B8 (commit ffc93c30): TeamLoader updated for 2-level nested TEAM structure; 24 agents pushed; 'coordination' domain added to schema/types.
+- B9: Frontend pages/components confirmed present on GitHub (STEP 2-15 history preserved).
+- B10 (commit 36e79f75): Test suite pushed — tests/api/ (chat-send-security, chat-send-confirm-flow, live-token-security), tests/security/ (confirm-token-service, env-validation, tool-executor). vitest.config.ts updated. Domain type fix in chat/send/route.ts.
+- B11/B12 (commit b6f4e98b): live-messages/route.ts migrated to getAuthUserId. docs/security/ added.
+
+## 2026-03-06 — principal-engineer (Architectural Alignment: Unified Orchestration Layer — rev. 2)
+
+- Fatto: audit architetturale + correzione errore in rev. 1.
+- Verdict finale: "Partially implied but not explicitly incorporated" → corretto.
+- Gap reale (3 punti): (1) deduplicazione domande solo per stringa uguale, non semantica; (2) risposte utente non salvate sistematicamente in DB prima del turno successivo; (3) nessuna garanzia esplicita di isolamento di dominio.
+- Modello corretto: UOL è coordinatore + feedback loop manager. I domain agents vengono SEMPRE invocati in parallelo (sono loro a sapere i propri dati necessari). Il team parallelo è intenzionale per solidità multi-fronte.
+- Documenti aggiornati: `docs/ARCHITECTURE.md`, `docs/AGENT_SYSTEM_SPEC.md`, `docs/AGENT_PROMPT_ARCHITECTURE.md`, `bkp/ops/DECISIONS.md` (ADR-072 rev. 2).
+- Impatto B7: mantieni `Promise.all` per gli agenti; aggiungi deduplicazione semantica questions, `user.updateProfile` automatico su risposte gating, isolamento dominio nel ConsensusEngine.
+
+## 2026-03-06 — backend-developer (STEP 6: Geo module)
+
+- Fatto: implementato intero modulo geo privacy-first (7 file).
+- `next.config.ts`: fix `Permissions-Policy` — `geolocation=()` → `geolocation=(self)`.
+- `src/lib/ai/types.ts`: aggiunto `geo?` a `ContextPack` (country/region/city/timezone/accuracy).
+- `src/lib/ai/context/contextPackBuilder.ts`: `geoPreference` opzionale in `DbClient`; geo incluso nel pack solo quando `enabled===true`.
+- `src/lib/tools/toolRegistry.ts`: 3 nuovi tool — `geo.setPreference`, `geo.updateCoarseLocation`, `geo.clearLocation` (Zod schemas + definitions).
+- `src/lib/tools/handlers.ts`: handler reali (via `@/lib/db`) + stub test-safe per tutti e 3 i tool geo.
+- `src/app/api/geo/update/route.ts` (nuovo): `POST /api/geo/update` — auth, rate-limit 20/min, toggle + upsert/clear coarse location.
+- `src/app/api/chat/send/route.ts`: `geoPreference.findUnique` aggiunto al DbClient del ContextPackBuilder.
+- Commit: `91ecafc7` su `feat/step6-publish`.
+- ADR: ADR-071.
+- Prossimo passo: aprire PR `feat/step6-publish` → `main`.
+
+## 2026-03-06 — backend-developer (STEP 5: Tool handler reali)
+
+- Fatto: sostituiti tutti i tool handler stub con implementazioni DB reali.
+- `src/lib/tools/handlers.ts` (nuovo): `realToolHandlers` con Prisma + `stubToolHandlers` test-safe. Mapping `category=professional → type=specialist` per Notification. `nutrition.createFoodItem` salvato come RecommendationArtifact (no modello separato). `share.createLink` e `export.pdf` restano stub.
+- `src/app/api/chat/send/route.ts`: `buildToolExecutor(writeAuditLog, useRealHandlers)` — reali in produzione, stub in NODE_ENV=test.
+- Commit: `2f28c7f` su `feat/step6-publish`.
+- Prossimo passo: STEP 6 (Geo module).
+
+## 2026-03-06 — backend-developer (STEP 4: Gemini wiring)
+
+- Fatto: cablato client Gemini reale nella pipeline chat (`createGeminiClient`).
+- File creati/modificati:
+  - `src/lib/ai/gemini.ts`: `createGeminiClient()` via `@google/genai` SDK; mock fallback quando `GEMINI_API_KEY` assente; `JSON_OUTPUT_INSTRUCTION` appesa al system prompt di ogni agente; strip code fences dall'output LLM.
+  - `src/lib/validators/env.ts`: aggiunto `AI_MODEL` (default `gemini-2.5-flash`).
+  - `src/app/api/chat/send/route.ts`: `createGeminiClient()` per messaggi normali; `buildDeterministicLlm()` solo per direttive `/tool` esplicite (test-safe).
+- Output chiave: chat chiama Gemini reale in produzione; mock fallback in dev/test senza API key — nessuna modifica ai test.
+- Commit: `75f0e1c` su `feat/step6-publish`.
+- Prossimo passo: STEP 5 (tool handler reali — DB mutations).
+
+## 2026-03-06 — principal-engineer (Phase A audit + Phase B STEP 1-2-3)
+
+### Phase A — Due Diligence Audit (score 34/100)
+- Inventariato l'intero repository post-merge Step 6.
+- Identificati blocchi critici: auth trust-header insicura, Gemini non cablato (mock deterministico), tool handler tutti stub, modelli Prisma mancanti (tracker/artifact/geo), frontend completamente rimosso.
+- Prodotto compliance matrix completa (PASS/PARTIAL/FAIL) su tutti i requisiti canonici.
+- Diagrammi: System Context, Sequence flow, Data Model aggiornato.
+- Backlog strutturato STEP 1-13 (B1→B13) con dipendenze e priorità.
+
+### STEP 1 — Auth (NextAuth v5 reale, rimozione trust-header)
+- `src/lib/auth.config.ts`: NextAuth config edge-compatible (JWT+session callbacks, type augmentation Session.user.id/role).
+- `src/lib/auth.ts`: Credentials provider + bcrypt + `getAuthUserId/getAuthRole/getAuthOwnerMode` con bypass test-safe (NODE_ENV=test → x-user-id/x-user-role/x-owner-mode-enabled headers).
+- `src/middleware.ts`: protegge solo route `/profile/*`; API routes gestiscono auth internamente.
+- `src/app/api/auth/[...nextauth]/route.ts`: export handlers.
+- `src/app/api/auth/register/route.ts`: registrazione utente (zod, rate-limit 5/min, bcrypt rounds=12, 409 conflict).
+- `src/lib/security/errorSchema.ts`: aggiunto codice 'CONFLICT' all'enum ApiErrorCode.
+- `src/app/api/chat/send/route.ts`: rimosso getUserIdFromRequest/parseRoleFromRequest; sostituiti con getAuthUserId/getAuthRole/getAuthOwnerMode.
+- `src/app/api/live-token/route.ts`: stessa sostituzione auth.
+
+### STEP 2 — DB Schema (modelli tracker/artifact/geo + User.role)
+- `prisma/schema.prisma`: aggiunto campo `role` su User; nuovi modelli BodyMetricEntry, Meal, WorkoutPlan, WorkoutSession, MindfulnessEntry, FileAsset, RecommendationArtifact, GeoPreference.
+- `prisma/migrations/20260306180000_add_trackers_geo_role/migration.sql`: migrazione additive-only con guard IF NOT EXISTS.
+
+### STEP 3 — DB Adapter Layer
+- `src/lib/db/index.ts`: layer tipizzato su Prisma per tutti i domini + geo privacy helpers:
+  - `getUserById`, `updateUserProfile`, `getConversation`, `createMessage`, `getRecentConversationMessages`
+  - `getUserHealthMetrics`, `getNutritionLogs`, `getWorkoutSessions`, `getMindfulnessEntries`
+  - `writeAuditLog`
+  - `getGeoPreference`, `setGeoPreference`, `upsertCoarseLocation` (lat/lon arrotondati a 2dp), `getCoarseLocation` (mai coordinate raw), `clearCoarseLocation`
+- `src/app/api/chat/send/route.ts`: sostituiti findManyIfAvailable con query Prisma dirette per tutti i modelli tracker/artifact.
+- Push commit `3dca9dd` su branch `feat/step6-publish` via GitHub REST API.
+- Output chiave: autenticazione sicura, schema completo, adapter DB pronto per ContextPack reale.
+- Prossimo passo: STEP 4 (Gemini wiring) + PR verso main.
+
 ## 2026-03-04 16:17 — backend-developer
 
 - Fatto: aggiunta priorità di routing su richiesta esplicita professionista (`medico`=>`mmg`, ecc.) in `routeMessage`.
@@ -350,3 +434,42 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 - Fatto: acquisita evidenza utente completa post-verifica finale publish Step 6.
 - Output chiave: esito definitivo confermato negativo (SHA invariato su main, CI non aggiornata per Step 6, deploy associati a commit precedenti, migrate status KO per DATABASE_URL mancante).
 - Prossimo passo: rilanciare publish reale Step 6 con nuovo SHA e ripetere verifica.
+
+## 2026-03-06 12:40 — git-workflow-manager
+
+- Fatto: verifica remota definitiva su publish Step 6 con `git ls-remote origin main` + `gh run list --branch main`.
+- Output chiave: publish su `main` confermato (SHA `8ee4344bbd116b82d45b0972b609c534ba50fc83`) ma CI `main` associata al merge Step 6 e fallita (run `22762076827`, titolo `feat: step6 publish chat persistence hardening (#4)`).
+- Prossimo passo: riaprire fix branch per risolvere failure CI/Vercel e rieseguire merge verde.
+
+## 2026-03-06 12:58 — backend-developer
+
+- Fatto: analisi root-cause run main `22762076827` + fix incrementali minimi su PR #5.
+- Output chiave: risolti tre blocchi CI consecutivi (`security`, `ai runtime`, `tools`) con commit `c0b154c`, `c2f11ea`, `d476c34`; applicato fix funzionale `d294963` per esecuzione `/tool` fallback quando consensus non emette tool-calls.
+- Output chiave: test mirato `tests/api/chat-send-persistence.test.ts` verde in locale dopo ultimo fix.
+- Blocco residuo: impossibile confermare stato finale CI/Vercel/merge nella sessione corrente per assenza DNS verso `api.github.com` e `vercel.com`.
+- Prossimo passo: rieseguire verifica remota PR #5 e chiudere merge+deploy appena connettività ripristinata.
+
+## 2026-03-06 13:05 — git-workflow-manager
+
+- Fatto: ripresa operativa PR #5 con verifica check su commit richiesto e tentativi di sblocco publish.
+- Output chiave: rerun CI lanciato (`22762367707`) ma su SHA `d476c34` (head precedente) con esito failure; creati commit tecnici di retrigger (`0ffca7d`, `1fc0c70`) e push su branch PR.
+- Output chiave: stato PR corrente non mergeabile: `Vercel` failure persistente, nessuna CI associata visibile ai nuovi head SHA in `gh run list`.
+- Output chiave: merge su main NON eseguito; `origin/main` resta `8ee4344...`.
+- Prossimo passo: ripristinare pipeline check completa su head PR corrente (CI + Vercel verdi), poi merge e verifica deploy production.
+
+## 2026-03-06 13:34 — backend-developer
+
+- Fatto: debug completo failure Vercel PR #5 + mancato aggancio CI, con riscrittura branch pulita e patch minima compatibilità.
+- Output chiave: branch `feat/step6-publish` force-updated a `4141ab7` con fix `fix(ci/vercel): isolate runtime ai types and restore env compatibility`.
+- Output chiave: check PR #5 ora verdi su head corrente:
+  - CI `Lint + Test + Build` run `22763623144` = SUCCESS
+  - Vercel preview `Eza6zZPhfxqj4x7WZWvAYZTajiUz` = SUCCESS
+- Prossimo passo: merge PR #5 su `main` e verifica SHA/deploy production post-merge.
+
+## 2026-03-06 16:12 — git-workflow-manager
+
+- Fatto: merge PR #5 su `main` completato via GitHub API (squash) dopo verifica check verdi.
+- Output chiave: SHA finale `origin/main` = `ed82eac36f437c6c621d25a78efc8b9ba4262da7`.
+- Output chiave: CI `main` associata al merge (`run 22763891744`) = SUCCESS.
+- Output chiave: deploy production associato (`deployment 3997961520`) = SUCCESS, URL `https://livewell-ell76r9o8-iamotts-projects.vercel.app`.
+- Prossimo passo: Step 6 fix chiuso definitivamente; passaggio al backlog successivo.

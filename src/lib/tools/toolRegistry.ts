@@ -13,6 +13,9 @@ export const ALLOWED_TOOL_NAMES = [
   'notifications.createInApp',
   'share.createLink',
   'export.pdf',
+  'geo.setPreference',
+  'geo.updateCoarseLocation',
+  'geo.clearLocation',
 ] as const
 
 export type ToolName = (typeof ALLOWED_TOOL_NAMES)[number]
@@ -109,6 +112,22 @@ const exportPdfSchema = z.object({
   resourceId: baseString.max(128),
 })
 
+const geoSetPreferenceSchema = z.object({
+  enabled: z.boolean(),
+})
+
+const geoUpdateCoarseLocationSchema = z.object({
+  country: z.string().max(100).optional(),
+  region: z.string().max(100).optional(),
+  city: z.string().max(100).optional(),
+  timezone: z.string().max(100).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lon: z.number().min(-180).max(180).optional(),
+  accuracy: z.string().max(50).optional(),
+})
+
+const geoClearLocationSchema = z.object({})
+
 export type ToolDefinition = {
   name: ToolName
   schema: z.ZodTypeAny
@@ -199,6 +218,27 @@ const definitions: Record<ToolName, ToolDefinition> = {
     name: 'export.pdf',
     schema: exportPdfSchema,
     mutation: false,
+    destructive: false,
+    requiresOwnerMode: false,
+  },
+  'geo.setPreference': {
+    name: 'geo.setPreference',
+    schema: geoSetPreferenceSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+  },
+  'geo.updateCoarseLocation': {
+    name: 'geo.updateCoarseLocation',
+    schema: geoUpdateCoarseLocationSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+  },
+  'geo.clearLocation': {
+    name: 'geo.clearLocation',
+    schema: geoClearLocationSchema,
+    mutation: true,
     destructive: false,
     requiresOwnerMode: false,
   },

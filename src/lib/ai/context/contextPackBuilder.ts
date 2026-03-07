@@ -1,4 +1,4 @@
-import { ContextPack, Domain, Role } from '../runtime-types'
+import { ContextPack, Domain, Role } from '../types'
 
 type QueryArgs = Record<string, unknown>
 type UnknownRecord = Record<string, unknown>
@@ -48,6 +48,17 @@ export type DbClient = {
         url?: string | null
       }>
     >
+  }
+  // Optional — geo preference (privacy-first: only coarse fields, never raw coords)
+  geoPreference?: {
+    findUnique: (args: QueryArgs) => Promise<{
+      enabled: boolean
+      country?: string | null
+      region?: string | null
+      city?: string | null
+      timezone?: string | null
+      accuracy?: string | null
+    } | null>
   }
 }
 
@@ -175,6 +186,21 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
     },
   })
 
+  // Geo: include ONLY if geoPreference.enabled (privacy contract — no raw coords exposed)
+  const geoRecord = opts.db.geoPreference
+    ? await opts.db.geoPreference.findUnique({ where: { userId: opts.userId } })
+    : null
+  const geo =
+    geoRecord?.enabled
+      ? {
+          country: geoRecord.country ?? null,
+          region: geoRecord.region ?? null,
+          city: geoRecord.city ?? null,
+          timezone: geoRecord.timezone ?? null,
+          accuracy: geoRecord.accuracy ?? null,
+        }
+      : undefined
+
   return {
     user: {
       id: user?.id ?? opts.userId,
@@ -224,5 +250,6 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
       moodScore,
       sectionScores,
     },
+    geo,
   }
 }

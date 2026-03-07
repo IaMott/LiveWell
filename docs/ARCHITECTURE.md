@@ -1,173 +1,160 @@
-# ARCHITECTURE — LiveWell (Next.js + Agents + Tooling)
+# LiveWell — Architecture
 
-## 1) Stack (vincolante)
-
+## Stack
 - Next.js (App Router) + TypeScript
-- UI: Tailwind + shadcn/ui + Radix + lucide-react
-- State: TanStack Query (server state), Zustand opzionale (UI state)
-- DB: Postgres (Supabase o Neon) + Prisma
-- Auth: scegli 1 e implementa end-to-end:
-  - NextAuth (Auth.js) oppure Supabase Auth
-- Storage file: Supabase Storage oppure S3 compatibile (1 scelta)
-- Realtime: Supabase Realtime / Ably / Pusher (1 scelta)
-- Deploy: Vercel
+- UI: TailwindCSS + shadcn/ui (Radix) + custom SVG icons
+- State: TanStack Query (data fetching), Zustand opzionale
+- DB: Postgres + Prisma
+- Auth: NextAuth (Auth.js)
+- Storage: Supabase Storage (file)
+- Realtime signaling: Supabase Realtime (channels)
+- AI: Gemini via server proxy, provider astratto (gemini|mock)
+- Streaming: SSE / fetch streaming (server -> client)
+- Cron: Vercel Cron -> route handler
+- PDF export: server-side generator
 
-## 2) Architettura “Chat-First”
-
-### 2.1 Principio operativo
-
-- L’unico punto di input dell’utente è la chat.
-- Il resto delle UI:
-  - mostra dati e grafici
-  - espone share/export
-  - offre settings
-- La compilazione/aggiornamento dei parametri (nome, misure, preferenze, ecc.) è eseguita tramite tool server-side invocati dagli agenti.
-
-## 3) Struttura cartelle (consigliata)
-
+## Struttura cartelle (macro)
 - /src/app
   - /(app)/page.tsx (chat)
-  - /(app)/profile/\*\* (sottopagine)
-  - /(app)/share/[token]/page.tsx (read-only)
-  - /api/\*\* (route handlers)
+  - /(app)/profile/* (dashboard domini e rendicontazione)
+  - /api/* (route handlers)
 - /src/components
-  - /app (chat, profile, shell)
+  - /app (shell/chat/profile/settings)
   - /ui (design system)
 - /src/lib
-  - /db (prisma client)
+  - /db (prisma client + adapter)
   - /auth
-  - /ai
-    - /providers (Gemini, Mock)
-    - /orchestrator
-    - /team (loader, schema, registry)
-    - /tools (registry, rbac, audit, confirm)
-    - /memory (context loader)
+  - /ai (providers/orchestrator/agents/tools/context/consensus/domain)
   - /realtime
   - /storage
   - /notifications
   - /export (pdf)
-  - /ui
-    - /tokens
-    - /mood (global + section progress state)
-    - /icons (topic highlight logic)
-  - /validators (zod schemas)
+  - /validators (zod)
+  - /security (rate limit, csrf policy se necessario)
+  - /geo (privacy-first geolocation helpers)
+  - /ui (icon registry, domain colors, mood utilities)
+- /TEAM (server-only agent profiles/prompts; loaded at runtime)
+- /design (icons + reference images)
 
-## 4) Data Model (MVP)
+## Unified Orchestration Layer (decisione architetturale vincolante)
 
-### 4.1 Core
+**Non esistono Orchestrator e Interviewer come ruoli separati.**
+Esiste un unico **Unified Orchestration Layer** (UOL) che coordina il team, gestisce il routing e garantisce il feedback loop DB.
 
-- User (role: OWNER|ADMIN|USER, subscriptionTier: FREE|PRO)
-- UserProfile (nome, ecc.)
-- Conversation, Message
-- FileAsset (storage refs)
-- Notification (in-app)
-- AuditLog (tool calls)
+Responsabilità esclusive:
+1. Costruire il ContextPack (DB + messaggi + tracker + geo opt-in).
+2. Rilevare il dominio rilevante (5 aree: Nutrition, Training, Health, Mindfulness, Inspiration).
+3. Selezionare e invocare **sempre** il team di agenti pertinente — anche a contesto parziale.
+4. Raccogliere le domande di gating dai proposal degli agenti e deduplicate semanticamente.
+5. Presentare all'utente solo le domande realmente necessarie (mai ridondanti con dati già noti).
+6. Quando l'utente risponde: salvare i nuovi dati nel profilo DB (`user.updateProfile`) **prima** del turno successivo.
+7. Garantire isolamento di dominio: ogni agente risponde solo per il proprio campo.
+8. Coordinare consensus, tool execution e streaming della risposta finale.
 
-### 4.2 Domains
+**Principio fondamentale:** I domain agents vengono **sempre** invocati perché sono loro a sapere quali dati servono per la loro analisi. Il UOL non blocca il team — lo coordina e mantiene il contesto aggiornato nel tempo.
 
-- Health: MedicalInfo, BodyMetricEntry
-- Nutrition: FoodItem, Meal, MealItem, NutritionPlan, GroceryList, GroceryListItem, Recipe (+ ingredients/steps)
-- Training: WorkoutPlan, WorkoutSession, Exercise, WorkoutExercise (+ timers metadata)
-- Mindfulness: MindfulnessEntry, MindfulnessRecommendation
-- Inspiration: InspirationEntry
-- Artifacts: RecommendationArtifact (link a conversation, type, content markdown)
-- Share: ShareLink (resourceType, resourceId, token, expiresAt, revokedAt)
-- Push: PushSubscription (endpoint, keys, userId)
+I **5 domain team** (Nutrition, Training, Health, Mindfulness, Inspiration) sono **specialist execution layers** che lavorano in parallelo, collaborano sull'output e non sconfinano l'uno nel dominio dell'altro.
 
-## 5) Request flow (Chat)
+## Request flow: Chat send + streaming
 
-1. UI invia message -> `POST /api/chat/send`
-2. Server:
-   - salva Message utente
-   - carica contesto (profilo + ultimi N messaggi + dati rilevanti)
-   - invoca orchestratore
-3. Orchestratore:
-   - routing ambito (icons highlight + domain tags)
-   - selezione sub-agent dal TeamRegistry
-   - consensus loop
-   - propone tool calls (solo allowlist)
-4. Tool Executor (server):
-   - valida input (zod)
-   - RBAC
-   - audit log
-   - conferma 2-step se distruttivo
-   - esegue mutazioni DB
-5. Server:
-   - stream risposta finale (SSE/fetch streaming)
-   - salva Message agente
-   - crea eventuali Artifact / Notification
+```
+User Request
+  ↓
+[Unified Orchestration Layer — coordinamento continuo]
+  1. Build ContextPack (DB + history + trackers + geo)
+  2. Domain Detection
+  3. Select relevant domain team (agenti del dominio rilevato)
+  4. Run agents in parallel → AgentProposal[]
+     (ogni agente conosce i propri dati necessari e li richiede via questions[])
+  5. Consensus Engine:
+     - Merge proposals (isolamento dominio garantito)
+     - Deduplica questions semanticamente (non solo per stringa uguale)
+     - Conflict detection cross-domain
+  6. SE il team ha domande:
+     → Presenta targeted questions consolidate all'utente
+     → Quando l'utente risponde: user.updateProfile → salva in DB
+     → Turno successivo: ContextPack aggiornato → agenti vanno più in profondità
+  7. SE il team ha raccomandazioni:
+     → Tool execution (RBAC + AuditLog + confirmToken)
+     → Stream SSE: message.delta / tool.result / ui.state / message.complete
+  8. Salva messaggio assistant in DB (domain, mood, artifacts)
+```
 
-## 6) Context & “historical data”
+**Feedback loop continuo (invariante):**
+- Ogni risposta dell'utente aggiorna il profilo DB prima del turno successivo.
+- Il ContextPack si arricchisce progressivamente: gli agenti approfondiscono ad ogni turno.
+- Le domande ridondanti vengono eliminate dal UOL: conosce cosa è già stato raccolto.
+- Il team lavora in parallelo su più fronti: la convergenza garantisce qualità e copertura.
 
-### 6.1 Context Loader (server-only)
+## HTTP flow (dettaglio)
+1) Client -> POST `/api/chat/send`
+2) Server:
+   - salva messaggio utente (DB)
+   - costruisce ContextPack (DB + messaggi + tracker + optional geo)
+   - domain detection
+   - seleziona + invoca domain agents in parallelo
+   - consensus: merge proposals, deduplicazione semantica domande, conflict detection
+   - se domande: presenta all'utente + propone `user.updateProfile` per le risposte
+   - se raccomandazioni: esegue tool (RBAC/audit/confirm) + stream SSE
+3) Server salva messaggio assistant (DB) con metadata (domain, mood, artifacts)
 
-Il contesto che gli agenti “vedono” deriva da:
-
-- UserProfile + sezioni (health/nutrition/training/mindfulness/inspiration)
-- ultimi messaggi conversazione
-- ultimi artefatti generati
-- stato avanzamento (global + section)
-  Tutto viene assemblato server-side in un “Context Pack” con dimensioni controllate:
-- summary per storico lungo
-- include raw solo per finestre recenti
-
-### 6.2 Regola: niente segreti nel client
-
-- API keys Gemini e provider (push/realtime/storage) solo su server (env).
-- Il client riceve solo output e dati strettamente necessari.
-
-## 7) Tooling & Mutations
-
-- Le mutazioni avvengono solo via Tool API server-side (mai SQL generato dall’LLM).
-- Ogni tool call produce:
+## Tool execution model (server)
+- LLM non vede DB, filesystem, env vars.
+- LLM può solo proporre tool calls (nome + args).
+- Server:
+  - zod validate
+  - RBAC
   - AuditLog
-  - ToolEvent visibile in chat
-- Distruttivi:
-  - confirmToken (2-step)
-  - owner mode se ad alto impatto
+  - confirmToken + Owner mode per distruttivi
+  - tool event visibile in chat
 
-## 8) Live (audio/video)
+## Storage file
+- Upload via route `/api/files/upload`
+- Supabase Storage + FileAsset in DB
+- Extracted text/metadata server-side
+- Orchestrator riceve riferimenti + testo estratto (no binari enormi)
 
-- WebRTC lato client
-- Signaling via provider realtime scelto (no assunzioni WebSocket Vercel)
-- In assenza di Live API vendor:
-  - dettatura: Web Speech API (fallback)
-  - video: snapshot periodici -> analisi asincrona
+## Realtime + Live
+- Supabase Realtime:
+  - channel `conversation:{id}` scambio SDP/ICE per WebRTC
+- Live pipeline:
+  - audio: WebRTC + trascrizione lato client -> invio chunk testuali
+  - video: snapshot a intervalli -> analisi asincrona
 
-## 9) Notifiche
+## Geolocation (privacy-first)
+- Client:
+  - toggle in settings
+  - navigator.geolocation permission request
+  - invio a server endpoint (e.g. POST /api/geo/update)
+- Server:
+  - normalizza a coarse location (country/region/city o coords arrotondate)
+  - persistenza in UserSettings/GeoLocation
+  - audit log per set/update/clear
+- ContextPack include geo **solo** se enabled.
 
-- In-app: DB + UI inbox + badge
-- Web Push (opt-in):
-  - service worker
-  - VAPID
-  - invio da cron
-- SMS (opzionale):
-  - provider (Twilio o equivalente)
-  - nessuna SIM “fisica” necessaria: invio via API provider
-  - contenuto non sensibile
+Invarianti:
+- No precise location by default
+- No geo in push/SMS payloads
+- No geo in share links
 
-## 10) Responsive & UI
+## Responsive
+- Layout usa `100dvh` + safe-area inset
+- Chat:
+  - top bar fixed
+  - list scroll
+  - composer sticky
+- Profile dashboards:
+  - stessa grammatica UI (cards + donut metrics)
+  - mobile: 1 col, tablet/desktop: 2 col grid
+  - nessun clipping grafici
 
-- 100dvh e safe-area insets su mobile
-- touch targets >= 44px
-- lazy-load moduli pesanti (barcode, charts, webrtc)
-- token semantici per colori/material/ombre
-- “UI viva” guidata da mood/progress state (global + per sezione)
+## Security
+- Rate limiting su: `/api/chat/send`, upload, tool endpoints, share, export, geo endpoints
+- Input validation (zod)
+- Anti prompt-injection: file/web text non attiva tool distruttivi
+- Share links: token non indovinabile, revoca + scadenza
 
-## 11) Share + PDF
-
-- Share link pubblico read-only:
-  - token sicuro
-  - revoca/scadenza
-  - pagina /share/[token]
-- Export PDF server-side:
-  - NutritionPlan, GroceryList, Recipe, WorkoutPlan
-  - stampabile
-
-## 12) Observability & Security
-
-- zod su tutte le API
-- rate limiting su chat/upload/tool/share/export
-- sanitizzazione input (markdown safe)
-- logging strutturato
-- optional Sentry
+## Observability
+- Logging JSON server-side
+- Error boundary UI
+- Sentry opzionale

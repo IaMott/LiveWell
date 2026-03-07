@@ -339,3 +339,89 @@
 - Contesto: utente ha fornito output comandi finali richiesti.
 - Decisione: chiudere definitivamente la verifica con esito negativo, senza eccezioni.
 - Impatto: necessario nuovo ciclo publish per Step 6.
+
+## ADR-061: Publish Step 6 merge effettuato ma release non chiudibile (CI main failure)
+- Data: 2026-03-06 12:40
+- Stato: Accepted
+- Contesto: evidenze finali utente e verifica remota diretta.
+- Decisione: classificare stato come "merged but unhealthy": main avanzato a `8ee4344...`, ma run CI `22762076827` su main è `failure`; non consentita chiusura positiva definitiva.
+- Impatto: necessario step correttivo post-merge (fix failure + nuova CI verde) prima di dichiarare step chiuso.
+
+## ADR-062: Fix post-merge Step 6 tramite reintroduzione moduli mancanti + fallback slash-tool
+- Data: 2026-03-06 12:58
+- Stato: Accepted
+- Contesto: la merge Step 6 su main ha introdotto failure CI per import mancanti in `/api/chat/send` e regressione test audit tool in assenza di tool-calls da consensus.
+- Decisione: applicare patch minime additive in PR #5 senza refactor: aggiunta moduli mancanti `security`, `ai`, `tools` e fallback di esecuzione a `requestedToolCalls` quando `consensus.toolCallsToExecute` è vuoto.
+- Impatto: ripristino atteso della pipeline CI per endpoint chat e preservazione del comportamento `/tool` nei test di persistenza/audit.
+
+## ADR-063: PR #5 non mergeabile finché Vercel/CI non sono verdi sul head corrente
+- Data: 2026-03-06 13:05
+- Stato: Accepted
+- Contesto: richiesta merge PR #5 condizionata da check verdi su fix post-merge Step 6.
+- Decisione: non procedere al merge perché `Vercel` è in failure sul head corrente PR e il rerun CI disponibile è legato a SHA precedente (`d476c34`), non ai commit più recenti (`0ffca7d`, `1fc0c70`).
+- Impatto: `main` resta stabile su `8ee4344...`; necessaria risoluzione check PR prima della pubblicazione definitiva.
+
+## ADR-064: Stabilizzazione PR #5 via branch pulita + separazione tipi runtime AI
+- Data: 2026-03-06 13:34
+- Stato: Accepted
+- Contesto: PR #5 aveva check instabili (CI non allineata ai nuovi commit, Vercel failure in build/typecheck) con conflitti tra tipi legacy (`src/lib/ai/types.ts`) e nuovi moduli Step 6.
+- Decisione: mantenere `types.ts` legacy per compatibilità esistente e introdurre `src/lib/ai/runtime-types.ts` per i nuovi moduli (`chat/send`, orchestrator runtime, tool executor/rbac), aggiungendo compat adapter `getServerEnv` in `validators/env.ts`.
+- Impatto: check PR #5 ripristinati verdi senza refactor ampio del dominio legacy.
+
+## ADR-065: Chiusura definitiva Step 6 fix post-merge
+- Data: 2026-03-06 16:12
+- Stato: Accepted
+- Contesto: PR #5 era pronta al merge con check verdi (CI + Vercel preview).
+- Decisione: eseguito merge squash su `main` e validazione finale end-to-end con tre prove obbligatorie: SHA `origin/main`, run CI `main`, deployment production.
+- Impatto: Step 6 fix ufficialmente chiuso; baseline `main` ripristinata in stato healthy.
+
+## ADR-066: Phase B — STEP 1 Auth: NextAuth v5 reale, rimozione trust-header
+- Data: 2026-03-06
+- Stato: Accepted
+- Contesto: la baseline `feat/step6-publish` usava `x-user-id`/`x-user-role` header in chiaro come unica fonte di autenticazione (FC-01, FC-08 del Phase A audit).
+- Decisione: split auth `auth.config.ts` (edge) + `auth.ts` (Node.js + Credentials + bcrypt); `getAuthUserId/getAuthRole/getAuthOwnerMode` con bypass test-safe su `NODE_ENV=test`; middleware protegge solo `/profile/*`; API routes gestiscono auth autonomamente. Trust-header rimosso da tutti i route handler.
+- Impatto: eliminato rischio impersonation; test suite invariata (bypass header solo in NODE_ENV=test).
+
+## ADR-067: Phase B — STEP 2 DB Schema: tracker/artifact/geo models + User.role
+- Data: 2026-03-06
+- Stato: Accepted
+- Contesto: ContextPackBuilder referenziava modelli Prisma inesistenti (BodyMetricEntry, Meal, WorkoutSession, MindfulnessEntry, FileAsset, RecommendationArtifact, GeoPreference), causando ritorno silenzioso di array vuoti.
+- Decisione: aggiunta al schema Prisma di tutti i modelli mancanti con indici appropriati; campo `role` su User; migrazione additive-only con IF NOT EXISTS guard.
+- Impatto: ContextPack ora può accedere a dati reali; nessuna breaking change su schema esistente.
+
+## ADR-068: Phase B — STEP 3 DB Adapter Layer con geo privacy-first
+- Data: 2026-03-06
+- Stato: Accepted
+- Contesto: mancava un layer tipizzato centralizzato per le query DB usate da route handler, ContextPackBuilder e tool handler.
+- Decisione: creato `src/lib/db/index.ts` con funzioni tipizzate per tutti i domini; invarianti geo privacy: `upsertCoarseLocation` arrotonda lat/lon a 2 decimali (≈1km); `getCoarseLocation` non espone mai le coordinate raw; `clearCoarseLocation` svuota tutti i campi geo su opt-out.
+- Impatto: DB adapter pronto per ContextPack reale e tool handler; contratto privacy geo documentato e applicato a livello codice.
+
+## ADR-069: Phase B — STEP 4 Gemini: client reale con mock fallback e JSON output contract
+- Data: 2026-03-06
+- Stato: Accepted
+- Contesto: `buildDeterministicLlm` in `chat/send/route.ts` restituiva sempre testo statico, rendendo il sistema di agenti completamente non funzionale in produzione.
+- Decisione: creato `src/lib/ai/gemini.ts` con `createGeminiClient()` che usa `@google/genai` SDK; `JSON_OUTPUT_INSTRUCTION` appesa al system prompt di ogni agente per forzare output JSON compatibile con `AgentProposal`; mock fallback automatico quando `GEMINI_API_KEY` assente (dev/test sicuro); `AI_MODEL` in `env.ts` (default `gemini-2.5-flash`). In `chat/send/route.ts`: Gemini per messaggi normali, deterministico solo per direttive `/tool` esplicite.
+- Impatto: sistema agenti operativo in produzione; test esistenti invariati (nessun API key richiesta); retrocompatibilità `/tool` directive mantenuta.
+
+## ADR-070: Phase B — STEP 5 Tool handlers: DB mutations reali con flag test-safe
+- Data: 2026-03-06
+- Stato: Accepted
+- Contesto: tutti i tool handler in `chat/send/route.ts` restituivano `{ saved: true }` stub; nessuna mutazione DB veniva eseguita dalla pipeline agenti.
+- Decisione: creato `src/lib/tools/handlers.ts` con `realToolHandlers` (Prisma) e `stubToolHandlers` (test-safe); `buildToolExecutor` accetta `useRealHandlers: boolean` = `isDbPersistenceEnabled()`. `nutrition.createFoodItem` salvato come `RecommendationArtifact` (nessun modello FoodItem separato nel schema). Mapping `category=professional → type=specialist` per Notification. `share.createLink` e `export.pdf` restano stub in attesa di feature dedicate.
+
+## ADR-071: Phase B — STEP 6 Geo module: geolocalizzazione privacy-first
+- Data: 2026-03-06
+- Stato: Accepted
+- Contesto: `ContextPack` non includeva alcun dato geografico; `Permissions-Policy` bloccava la browser geolocation API (`geolocation=()`); nessun tool o API route per gestire le preferenze geo utente.
+- Decisione: (1) `next.config.ts`: `geolocation=()` → `geolocation=(self)` per abilitare browser API. (2) `types.ts`: aggiunto `geo?` a `ContextPack` (solo campi coarse: country/region/city/timezone/accuracy — mai coordinate raw). (3) `contextPackBuilder.ts`: `geoPreference` opzionale in `DbClient`; `geo` incluso nel pack solo se `enabled===true`. (4) `toolRegistry.ts`: 3 nuovi tool allowlistati — `geo.setPreference`, `geo.updateCoarseLocation`, `geo.clearLocation`. (5) `handlers.ts`: handler reali via `setGeoPreference`, `upsertCoarseLocation`, `clearCoarseLocation` da `@/lib/db`. (6) Nuovo `POST /api/geo/update`: auth + rate-limit (20/min) + toggle + upsert/clear coarse location. (7) `chat/send/route.ts`: `geoPreference.findUnique` aggiunto al DbClient del ContextPackBuilder.
+- Privacy invarianti: lat/lon ricevuti dal browser ma salvati arrotondati a 2dp (≈1km); mai ritornati ai caller; `geo` nel ContextPack mai incluso in share pubblici o notifiche push.
+- Impatto: tool calls del sistema agenti persistono realmente nel DB in produzione; test suite invariata (stub in NODE_ENV=test).
+
+## ADR-072: Unified Orchestration Layer — fusione Orchestrator + Interviewer (rev. 2 — modello corretto)
+- Data: 2026-03-06
+- Stato: Accepted (corretto da rev. 1 errata)
+- Contesto: il modello precedente trattava Orchestrator e Interviewer come ruoli separati. Rev. 1 di questo ADR aveva erroneamente proposto di bloccare i domain agents finché la baseline non fosse completa. Questo era sbagliato: sono i professionisti stessi a sapere quali dati servono per la loro analisi; l'invocazione parallela del team è intenzionale e garantisce copertura multi-fronte.
+- Gap reale identificato (3 punti): (1) le domande di gating dai proposal del team non venivano deduplicate semanticamente — solo per stringa uguale; (2) le risposte dell'utente alle domande non venivano sistematicamente salvate nel profilo DB prima del turno successivo, impedendo l'arricchimento progressivo del ContextPack; (3) nessuna garanzia esplicita di isolamento di dominio tra agenti.
+- Decisione corretta: Orchestrator e Interviewer vengono fusi in un unico **Unified Orchestration Layer** (UOL) con ruolo di **coordinatore + gestore feedback loop**, NON di gate/blocco. Invarianti: (1) i domain agents vengono SEMPRE invocati in parallelo — sono loro a conoscere i propri dati necessari; (2) il UOL raccoglie le questions dai proposal e le deduplica semanticamente prima di presentarle all'utente; (3) quando l'utente risponde il UOL salva i dati in DB (`user.updateProfile`) prima del turno successivo; (4) il UOL garantisce isolamento di dominio rilevando e correggendo sconfinamenti cross-domain; (5) il team lavora su più fronti in parallelo per solidità e copertura dell'analisi.
+- Impatto documenti: `docs/ARCHITECTURE.md`, `docs/AGENT_SYSTEM_SPEC.md`, `docs/AGENT_PROMPT_ARCHITECTURE.md` aggiornati con modello corretto.
+- Impatto codice (backlog B7): `src/lib/ai/orchestrator/orchestrator.ts` — il flow `Promise.all` per gli agenti è corretto e va mantenuto. Va aggiunto: (a) deduplicazione semantica delle questions nel `collectGatingQuestions` del ConsensusEngine; (b) quando il turno contiene domande di gating, proporre automaticamente `user.updateProfile` con i dati eventualmente già forniti nella risposta corrente; (c) logica di isolamento dominio nel ConsensusEngine per filtrare contenuti cross-domain.

@@ -1,0 +1,22 @@
+{
+  "id": "endocrinologo",
+  "displayName": "Endocrinologo",
+  "domainTags": ["health", "nutrition"],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "health.addMetric",
+    "health.updateMedicalInfo",
+    "artifacts.saveRecommendation",
+    "nutrition.createFoodItem",
+    "nutrition.updateFoodItem",
+    "nutrition.logMeal"
+  ],
+  "escalationRules": [
+    "Coma diabetico, ipoglicemia severa, chetoacidosi, stato iperglicemico iperosmolare -> emergenza immediata (118).",
+    "Crisi tireotossica o mixedema coma -> invio urgente PS.",
+    "Insufficienza surrenalica acuta (crisi addisoniana) -> emergenza immediata.",
+    "Condizioni croniche o terapia farmacologica endocrinologica -> raccomandare coinvolgimento medico curante."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

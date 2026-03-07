@@ -1,27 +1,32 @@
 # LiveWell — Project Status
 
-## Current Step: STEP 10 ▶ Verification final CLOSED (negative)
+## Current Step: Phase B — STEP 6 (Geo module) in coda
 
-## Esito definitivo
+## Stato verificato — 2026-03-06
 
-- Publish Step 6 NON risulta completato.
+- Phase A audit completato: score 34/100, blocchi critici identificati.
+- STEP 1 (Auth): DONE — commit `3dca9dd` su `feat/step6-publish`.
+- STEP 2 (DB Schema): DONE — commit `3dca9dd`.
+- STEP 3 (DB Adapter): DONE — commit `3dca9dd`.
+- STEP 4 (Gemini): DONE — commit `75f0e1c` su `feat/step6-publish`.
+- STEP 5 (Tool handlers): DONE — commit `2f28c7f` su `feat/step6-publish`.
+- Branch: `feat/step6-publish` @ `2f28c7fe9a29a6c793f3bbb2fa1622d49e950b32`
+- Main baseline: `ed82eac36f437c6c621d25a78efc8b9ba4262da7`
 
-## Evidenze definitive
+## Stato precedente — Step 6 fix chiuso
 
-- `git rev-parse HEAD` = `d2144f01dd15d196cc8df879f5f659b60ca8e64c` (nessun nuovo SHA Step 6 su main).
-- `gh run list --limit 20` mostra run fino a Sprint 10.2 (nessun run Step 6).
-- `gh api .../commits/<NUOVO_SHA>/status` fallisce (placeholder non sostituito).
-- `gh api .../deployments?per_page=5` mostra deployment legati a commit storici (fino a `d2144f01...`).
-- `npx prisma migrate status` fallisce: `DATABASE_URL` mancante.
+- PR #5 mergiata su `main` con squash.
+  - PR: `https://github.com/IaMott/LiveWell/pull/5`
+  - Merge commit su `origin/main`: `ed82eac36f437c6c621d25a78efc8b9ba4262da7`
+- CI su `main` associata al merge PR #5: SUCCESS. Run: `22763891744`
+- Deploy production: SUCCESS. ID: `3997961520`
+  - URL: `https://livewell-ell76r9o8-iamotts-projects.vercel.app`
 
 ## Next immediato
 
-- pubblicare davvero Step 6 (commit/push/PR/merge su main),
-- ottenere nuovo SHA main,
-- verificare CI verde associata,
-- eseguire migrate deploy in ambiente target,
-- completare smoke checklist.
+- STEP 6: Geo module (`src/lib/geo/`, API route `POST /api/geo/update`, geo tools in toolRegistry, ContextPack geo field, fix `geolocation=()` in Permissions-Policy).
+- PR da `feat/step6-publish` → `main` dopo STEP 6.
 
 ## Ultimo aggiornamento
 
-2026-03-06 12:36
+2026-03-06 (Phase B STEP 5 Tool handlers)

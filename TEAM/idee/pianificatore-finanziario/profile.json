@@ -1,0 +1,28 @@
+{
+  "id": "financial-planner",
+  "displayName": "Financial Planner",
+  "domainTags": [
+    "finance"
+  ],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "finance.addBudgetEntry",
+    "finance.updateBudgetEntry",
+    "finance.deleteBudgetEntry",
+    "finance.logExpense",
+    "finance.deleteExpense",
+    "finance.createGoal",
+    "finance.updateGoal",
+    "finance.deleteGoal",
+    "finance.createSavingsPlan",
+    "finance.updateSavingsPlan",
+    "artifacts.saveRecommendation"
+  ],
+  "escalationRules": [
+    "Segnali di dipendenza dal gioco, acquisti compulsivi, indebitamento grave o crisi finanziaria acuta -> raccomandare consulenza professionale abilitata (commercialista, consulente del debito, supporto psicologico).",
+    "Richieste su investimenti in strumenti finanziari regolamentati (azioni, ETF, obbligazioni, derivati) -> chiarire i limiti del ruolo e raccomandare consulente finanziario abilitato (SIM/SGR/banca).",
+    "Segnali di frode, truffa finanziaria o situazioni legali -> attivare escalation e raccomandare professionista legale."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

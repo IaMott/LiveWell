@@ -1,76 +1,43 @@
 import { z } from 'zod'
 
-const envSchema = z.object({
-  // Node
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-
-  // Database
-  DATABASE_URL: z.string().url().optional(),
-
-  // Auth
-  NEXTAUTH_SECRET: z.string().min(1).optional(),
-  AUTH_TRUST_HOST: z.string().optional(),
-
-  // AI
+const serverEnvSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   GEMINI_API_KEY: z.string().min(1).optional(),
-  AI_PROVIDER: z.enum(['gemini', 'mock']).default('mock'),
-
-  // App
-  NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
-  NEXT_PUBLIC_APP_NAME: z.string().default('LiveWell'),
-
-  // Storage (optional)
-  SUPABASE_URL: z.string().url().optional(),
-  SUPABASE_ANON_KEY: z.string().optional(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
-
-  // Web Push (optional)
-  VAPID_PUBLIC_KEY: z.string().optional(),
-  VAPID_PRIVATE_KEY: z.string().optional(),
-  VAPID_EMAIL: z.string().email().optional(),
-
-  // Feature flags
-  ENABLE_LIVE_AUDIO: z.string().default('false'),
-  ENABLE_SMS: z.string().default('false'),
+  NEXTAUTH_SECRET: z.string().min(1).optional(),
+  AI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
+  LIVE_MODEL: z.string().min(1).default('gemini-2.0-flash-live'),
 })
 
-export type Env = z.infer<typeof envSchema>
+export type ServerEnv = z.infer<typeof serverEnvSchema>
 
-function parseEnv(): Env {
-  const result = envSchema.safeParse(process.env)
-  if (!result.success) {
-    const formatted = result.error.format()
-    console.error('❌ Invalid environment variables:', JSON.stringify(formatted, null, 2))
-    // In production, throw; in dev, warn and continue with defaults
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('Invalid environment variables')
+let cachedEnv: ServerEnv | null = null
+
+export function parseServerEnv(raw: NodeJS.ProcessEnv = process.env): ServerEnv {
+  const parsed = serverEnvSchema.safeParse(raw)
+  if (!parsed.success) {
+    throw new Error(`Invalid server env: ${parsed.error.issues.map((issue) => issue.path.join('.') + ':' + issue.message).join(', ')}`)
+  }
+
+  const env = parsed.data
+  if (env.NODE_ENV === 'production') {
+    if (!env.GEMINI_API_KEY) {
+      throw new Error('Missing GEMINI_API_KEY in production')
+    }
+    if (!env.NEXTAUTH_SECRET) {
+      throw new Error('Missing NEXTAUTH_SECRET in production')
     }
   }
-  return result.data ?? (process.env as unknown as Env)
+
+  return env
 }
 
-export const env = parseEnv()
-
-let cachedServerEnv: {
-  NODE_ENV: string
-  GEMINI_API_KEY?: string
-  NEXTAUTH_SECRET?: string
-  LIVE_MODEL: string
-} | null = null
-
-export function getServerEnv(): {
-  NODE_ENV: string
-  GEMINI_API_KEY?: string
-  NEXTAUTH_SECRET?: string
-  LIVE_MODEL: string
-} {
-  if (!cachedServerEnv) {
-    cachedServerEnv = {
-      NODE_ENV: env.NODE_ENV,
-      GEMINI_API_KEY: env.GEMINI_API_KEY,
-      NEXTAUTH_SECRET: env.NEXTAUTH_SECRET,
-      LIVE_MODEL: process.env.LIVE_MODEL ?? 'gemini-2.0-flash-live',
-    }
+export function getServerEnv(): ServerEnv {
+  if (!cachedEnv) {
+    cachedEnv = parseServerEnv(process.env)
   }
-  return cachedServerEnv
+  return cachedEnv
+}
+
+export function resetServerEnvForTests(): void {
+  cachedEnv = null
 }

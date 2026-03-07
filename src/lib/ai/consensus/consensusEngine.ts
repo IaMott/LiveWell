@@ -5,7 +5,7 @@ import {
   ContextPack,
   Domain,
   ToolCall,
-} from '../runtime-types'
+} from '../types'
 
 export type ConsensusEngineOptions = {
   orchestratorId: string
@@ -35,9 +35,81 @@ function mergeToolCalls(proposals: AgentProposal[], allowedTools: Set<string>): 
   })
 }
 
-function collectGatingQuestions(proposals: AgentProposal[]): string[] {
-  const qs = proposals.flatMap((p) => p.questions ?? [])
-  return uniq(qs).slice(0, 8)
+// Gap 2: profile-field keyword hints for filtering already-known data
+const PROFILE_FIELD_HINTS: Array<{ keywords: string[]; fieldPath: string }> = [
+  { keywords: ['età', 'anni', 'age', 'quanti anni', 'how old'], fieldPath: 'age' },
+  { keywords: ['peso', 'kg', 'chili', 'weight', 'quanti kg', 'quanti chili'], fieldPath: 'weight' },
+  { keywords: ['altezza', 'cm', 'height', 'quanto sei alto', 'how tall'], fieldPath: 'height' },
+  { keywords: ['obiettivo', 'goal', 'scopo', 'cosa vuoi'], fieldPath: 'goals' },
+  { keywords: ['sesso', 'genere', 'gender', 'uomo', 'donna', 'male', 'female'], fieldPath: 'gender' },
+]
+
+// Gap 2: remove questions that ask for profile data already present in ContextPack
+function filterKnownDataQuestions(questions: string[], contextPack: ContextPack): string[] {
+  const profile = (contextPack.user.profile ?? {}) as Record<string, unknown>
+  return questions.filter((q) => {
+    const ql = q.toLowerCase()
+    for (const { keywords, fieldPath } of PROFILE_FIELD_HINTS) {
+      if (keywords.some((kw) => ql.includes(kw)) && profile[fieldPath] != null) return false
+    }
+    return true
+  })
+}
+
+// Gap 2: semantic deduplication via token-based Jaccard similarity (threshold 0.4)
+function semanticDeduplicateQuestions(questions: string[]): string[] {
+  const result: string[] = []
+  const seenTokenSets: Array<Set<string>> = []
+  for (const q of questions) {
+    const tokens = new Set(
+      q
+        .toLowerCase()
+        .replace(/[?.,!]/g, '')
+        .split(/\s+/)
+        .filter((t) => t.length > 3),
+    )
+    const isDuplicate = seenTokenSets.some((seen) => {
+      const inter = [...tokens].filter((t) => seen.has(t)).length
+      const union = new Set([...tokens, ...seen]).size
+      return union > 0 && inter / union > 0.4
+    })
+    if (!isDuplicate) {
+      result.push(q)
+      seenTokenSets.push(tokens)
+    }
+  }
+  return result
+}
+
+// Gap 3: enforce domain isolation — normalize agent proposals to their primary domain
+function enforceDomainIsolation(
+  proposals: AgentProposal[],
+  team: AgentProfile[],
+): { normalized: AgentProposal[]; violations: string[] } {
+  const agentPrimaryDomain = new Map(
+    team.map((a) => [
+      a.id,
+      a.domainTags.find((d) => d !== 'general') ?? a.domainTags[0] ?? 'general',
+    ]),
+  )
+  const violations: string[] = []
+  const normalized = proposals.map((p) => {
+    const expected = agentPrimaryDomain.get(p.agentId)
+    if (expected && expected !== 'general' && p.domain !== expected && p.domain !== 'general') {
+      violations.push(`Agent ${p.agentId} (${expected}) proposed domain ${p.domain} — normalized`)
+      return { ...p, domain: expected as Domain }
+    }
+    return p
+  })
+  return { normalized, violations }
+}
+
+// Collect gating questions with semantic dedup + known-data filtering
+function collectGatingQuestions(proposals: AgentProposal[], contextPack: ContextPack): string[] {
+  const raw = proposals.flatMap((p) => p.questions ?? [])
+  const deduped = semanticDeduplicateQuestions(raw)
+  const filtered = filterKnownDataQuestions(deduped, contextPack)
+  return filtered.slice(0, 8)
 }
 
 function detectConflicts(proposals: AgentProposal[]): string[] {
@@ -79,7 +151,7 @@ function composeFinalMarkdown(
   const top = proposals.sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5))[0]
   if (top?.summary) parts.push(top.summary)
 
-  const gating = collectGatingQuestions(proposals)
+  const gating = collectGatingQuestions(proposals, context)
   if (gating.length) {
     parts.push(`\n### Domande mirate (per completare i dati)`)
     parts.push(gating.map((q) => `- ${q}`).join('\n'))
@@ -138,18 +210,25 @@ export function runConsensus(params: {
   contextPack: ContextPack
   orchestratorToolsAllowed: string[]
 }): ConsensusResult {
-  const domain = pickPrimaryDomain(params.domainHint, params.proposals)
-  const conflicts = detectConflicts(params.proposals)
+  // Gap 3: enforce domain isolation before consensus
+  const { normalized: isolatedProposals, violations: domainViolations } = enforceDomainIsolation(
+    params.proposals,
+    params.team,
+  )
 
-  const toolCalls = mergeToolCalls(params.proposals, new Set(params.orchestratorToolsAllowed))
-  const gatingQuestions = collectGatingQuestions(params.proposals)
+  const domain = pickPrimaryDomain(params.domainHint, isolatedProposals)
+  const conflicts = detectConflicts(isolatedProposals)
 
-  const urgent = params.proposals.some((p) => p.flags?.urgentEscalation)
-  const risk = urgent || params.proposals.some((p) => p.flags?.potentialRisk)
+  const toolCalls = mergeToolCalls(isolatedProposals, new Set(params.orchestratorToolsAllowed))
+  // Gap 2: semantic dedup + known-data filtering
+  const gatingQuestions = collectGatingQuestions(isolatedProposals, params.contextPack)
 
-  const finalMessageMarkdown = composeFinalMarkdown(domain, params.proposals, params.contextPack)
+  const urgent = isolatedProposals.some((p) => p.flags?.urgentEscalation)
+  const risk = urgent || isolatedProposals.some((p) => p.flags?.potentialRisk)
 
-  const artifactsToSave = params.proposals
+  const finalMessageMarkdown = composeFinalMarkdown(domain, isolatedProposals, params.contextPack)
+
+  const artifactsToSave = isolatedProposals
     .flatMap((p) => (p.recommendations ?? []).flatMap((r) => r.artifactsToSave ?? []))
     .slice(0, 5)
     .map((a) => ({ type: a.type, title: a.title, contentMarkdown: a.contentMarkdown }))
@@ -174,8 +253,8 @@ export function runConsensus(params: {
     },
     artifactsToSave: artifactsToSave.length ? artifactsToSave : undefined,
     debug: {
-      selectedAgents: uniq(params.proposals.map((p) => p.agentId)),
-      conflicts,
+      selectedAgents: uniq(isolatedProposals.map((p) => p.agentId)),
+      conflicts: [...conflicts, ...domainViolations],
     },
   }
 }

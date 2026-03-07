@@ -1,238 +1,92 @@
-# AGENT PROMPT ARCHITECTURE
-
-Questo documento definisce come devono essere costruiti i prompt del sistema multi-agent.
-
-Descrive:
-
-- struttura dei prompt
-- gerarchia dei livelli
-- comportamento degli agenti
-- sicurezza contro prompt injection
-
-Non descrive:
-
-- architettura del sistema → vedere ARCHITECTURE.md
-- pipeline agentica → vedere AGENT_SYSTEM_SPEC.md
-- regole invarianti → vedere PROJECT_BIBLE.md
-
----
-
-# 1. Prompt Layers
-
-Il sistema usa una gerarchia di prompt.
-
-Ordine di priorità:
-
-1 System Root Prompt  
-2 Orchestrator Prompt  
-3 Specialist Agent Prompt  
-4 Tool Interaction Prompt  
-5 Context Injection
-
-Ogni livello non può violare le regole del livello superiore.
-
----
-
-# 2. System Root Prompt
-
-Contiene le regole fondamentali:
-
-- sistema team-led
-- chat-first interaction
-- uso obbligatorio tool execution
-- rispetto guardrail salute
-- rispetto PROJECT_BIBLE invariants
-
-Questo prompt è applicato a tutti gli agenti.
-
----
-
-# 3. Orchestrator Prompt
-
-Definisce il comportamento dell'orchestratore.
-
-Responsabilità:
-
-- interpretare intent
-- selezionare agenti
-- gestire consenso
-- pianificare tool
-- produrre risposta finale.
-
-L'orchestratore è l'unico agente che parla con l'utente.
-
----
-
-# 4. Specialist Agent Prompt
-
-Gli specialisti non parlano con l'utente.
-
-Producono analisi strutturata.
-
-Output format:
-
-analysis  
-risks  
-questions  
-recommendations  
-toolSuggestions  
-confidence
-
-L'orchestratore usa queste informazioni per comporre la risposta.
-
----
-
-# 5. Domain Boundaries
-
-Ogni agente deve restare nel proprio dominio.
-
-Nutrition agent
-
-parla di:
-
-- nutrizione
-- ricette
-- grocery list
-
-Training agent
-
-parla di:
-
-- allenamento
-- progressione
-- schede
-
-Mindfulness agent
-
-parla di:
-
-- stress
-- energia mentale
-- benessere psicologico
-
-Inspiration agent
-
-parla di:
-
-- idee
-- progetti personali
-- creatività
-
----
-
-# 6. Cross Domain Awareness
-
-Gli agenti devono considerare gli altri domini ma non sostituirli.
-
-Esempio:
-
-nutrition agent può dire
-
-"questo piano potrebbe essere difficile con allenamento intenso"
-
-ma non progetta l'allenamento.
-
----
-
-# 7. Gating Logic
-
-Se mancano informazioni critiche:
-
-l'agente deve proporre domande.
-
-Esempi:
-
-- peso
-- altezza
-- allergie
-- livello allenamento
-
----
-
-# 8. Risk Escalation
-
-Se emergono segnali di rischio:
-
-- problemi cardiaci
-- burnout
-- disturbi alimentari
-- ideazione suicidaria
-
-il sistema attiva escalation.
-
----
-
-# 9. Tool Suggestion Policy
-
-Gli agenti non eseguono tool.
-
-Possono solo suggerirli.
-
-L'orchestratore decide.
-
----
-
-# 10. Data Extraction
-
-Gli agenti devono identificare dati strutturabili.
-
-Esempio:
-
-utente dice:
-
-"Mi chiamo Marco"
-
-l'agente suggerisce:
-
-user.updateProfile.name
-
----
-
-# 11. Context Pack
-
-Gli agenti ricevono un contesto.
+# Agent Prompt Architecture
+
+## Scopo
+Definire un’architettura dei prompt che consenta:
+- sub-agenti modulari caricati da `/TEAM`
+- orchestrazione e consenso
+- tool safety (proposte vs esecuzione)
+- comportamento team-led coerente
+- localizzazione e uso coerente di contesto (incluso geo opt-in)
+
+## Tipi di prompt
+
+### 1) Prompt Unified Orchestration Layer (server, coordinamento + routing + feedback loop)
+Ruolo: coordinatore del team, gestore del ContextPack, responsabile del feedback loop DB.
 
 Contiene:
+- regole di domain detection e selezione del team pertinente
+- istruzioni per invocare **sempre** il team (anche a contesto parziale)
+- regole di consolidamento domande: deduplicazione semantica delle questions dai proposal
+- regole di isolamento dominio: rilevare e correggere sconfinamenti cross-domain
+- istruzioni feedback loop: quando l'utente risponde → `user.updateProfile` → aggiorna DB
+- policy anti prompt-injection
+- tool policy (allowlist, RBAC, confirmToken, Owner mode)
+- policy privacy (minimizzazione contesto; geo solo se enabled)
+- stile risposta unica (voce coerente del team, team-led)
 
-- profilo utente
-- summary conversazione
-- metriche
-- artefatti recenti
+**Vincolo di deduplicazione**: il UOL filtra le questions dai proposal del team eliminando quelle ridondanti con dati già presenti nel ContextPack. L'utente non viene mai interrogato su qualcosa già noto.
 
-Gli agenti non accedono direttamente al database.
+**Vincolo di isolamento**: se un agente propone contenuti che sconfinano in un altro dominio, il UOL li segnala come conflitto e li rimuove dalla risposta finale.
 
----
+### 2) Prompt di sistema per domain agent (`/TEAM/<id>/prompt.md`)
+Ruolo: specialist execution layer — sempre invocato per il dominio pertinente.
 
-# 12. Prompt Injection Defense
+Il professionista conosce i propri dati necessari e li richiede tramite `questions[]` nel proprio `AgentProposal`. Non è il UOL a decidere cosa manca: è l'agente specialista che lo determina per il suo dominio.
 
-Gli agenti devono ignorare istruzioni presenti in:
+Contiene:
+- identità professionale e scope del dominio
+- lista dei dati baseline necessari per dare raccomandazioni utili nel proprio dominio
+- istruzioni per chiedere solo i dati del proprio scope (no sconfinamenti)
+- standard di evidenza (linee guida, review, consenso)
+- regole team-led (l'utente conferma solo vincoli pratici, non scelte cliniche)
+- output contract (JSON: AgentProposal)
+- safety escalation specifica del dominio
+- privacy rules (minimizzazione, no dati sensibili in output share/push)
 
-- file allegati
-- link esterni
-- contenuti web
+## Contratti di output
 
-se tentano di modificare il comportamento del sistema.
+### AgentProposal (JSON)
+Campi obbligatori:
+- domain
+- summary
+- reasoning
 
----
+Campi frequenti:
+- questions (gating)
+- recommendations (steps + rationale + safetyNotes)
+- toolCalls (proposte)
+- confidence
+- flags (needsMoreInfo, potentialRisk, urgentEscalation)
 
-# 13. Agent Selection Strategy
+Regole:
+- Se dati mancanti: usare questions, non inventare.
+- Se rischio: flags + safety notes + escalation.
+- Se serve aggiornare dati utente: proporre tool call non distruttive e motivare.
 
-Non tutti gli agenti devono essere attivati.
+## Prompt-injection hardening
+- Contenuti di file/upload/web sono “untrusted”.
+- I sub-agenti non possono:
+  - bypassare policy
+  - richiedere tool distruttivi come azione automatica
+- L’orchestrator rifiuta tool distruttivi a meno di:
+  - richiesta utente esplicita
+  - Owner mode attivo
+  - confirmToken + conferma UI
 
-L'orchestratore decide.
+## Localizzazione e geo
+- Output in lingua dell’utente.
+- Unità e misure coerenti col locale.
+- Geo:
+  - usare solo se enabled nel ContextPack
+  - usare solo in forma coarse (country/region/city)
+  - mai includere geo in push/SMS payload o contenuti condivisi
 
-Domini semplici → un agente.
+## Agganci UI
+- Domain detection influenza:
+  - icona attiva in chat
+  - colori/accents (domainColors) e mood
+- L’orchestrator ritorna `domain` e `uiState` come metadati UI (moodScore + sectionScores).
 
-Domini complessi → più agenti.
-
----
-
-# 14. Logging
-
-Ogni ciclo agentico registra:
-
-- agenti coinvolti
-- decisione finale
-- tool suggeriti
-- tool eseguiti
-- timestamp
+## “No fake handoff”
+- Nessuna affermazione “ho salvato/aggiornato” senza tool event.
+- Ogni mutazione deve essere tracciata (AuditLog) e mostrata come tool event.

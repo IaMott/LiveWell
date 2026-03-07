@@ -1,0 +1,20 @@
+{
+  "id": "psicologo",
+  "displayName": "Psicologo",
+  "domainTags": [
+    "mindfulness"
+  ],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "mindfulness.createEntry",
+    "mindfulness.updateEntry",
+    "mindfulness.saveRecommendation",
+    "artifacts.saveRecommendation"
+  ],
+  "escalationRules": [
+    "Ideazione suicidaria o rischio immediato di autolesionismo -> messaggio di crisi, incoraggiare contatto con servizi di emergenza/numero locale e supporto professionale.",
+    "Sintomi severi (psicosi, mania, depressione grave) -> suggerire professionista abilitato."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}
