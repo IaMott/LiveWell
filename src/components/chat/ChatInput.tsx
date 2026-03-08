@@ -22,10 +22,11 @@ const DOMAIN_COLORS: Partial<Record<Domain, string>> = {
 
 type Props = {
   onSend: (message: string) => void
+  onHistory?: () => void
   disabled?: boolean
 }
 
-export function ChatInput({ onSend, disabled = false }: Props) {
+export function ChatInput({ onSend, onHistory, disabled = false }: Props) {
   const [text, setText] = useState('')
   const [activeDomain, setActiveDomain] = useState<Domain | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -105,6 +106,7 @@ export function ChatInput({ onSend, disabled = false }: Props) {
           <button
             type="button"
             aria-label="Storico"
+            onClick={onHistory}
             style={{
               padding: '0.375rem',
               borderRadius: '50%',
