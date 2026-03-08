@@ -91,3 +91,72 @@ export async function GET(request: Request): Promise<Response> {
     })),
   })
 }
+
+const VALID_SECTIONS = ['personal', 'nutrition', 'training', 'health', 'mindfulness', 'goals', 'settings'] as const
+type Section = (typeof VALID_SECTIONS)[number]
+
+export async function PUT(request: Request): Promise<Response> {
+  const userId = await getAuthUserId(request)
+  if (!userId) return errorResponse(401, 'UNAUTHORIZED', 'Authentication required')
+
+  const rate = checkRateLimit({ key: `profile-write:${userId}:${getClientIp(request)}`, max: 30 })
+  if (!rate.ok) return errorResponse(429, 'RATE_LIMITED', 'Too many requests')
+
+  let body: { section?: string; data?: Record<string, unknown> }
+  try {
+    body = (await request.json()) as typeof body
+  } catch {
+    return errorResponse(400, 'BAD_REQUEST', 'Invalid JSON')
+  }
+
+  const { section, data } = body
+  if (!section || !data || typeof data !== 'object') {
+    return errorResponse(400, 'BAD_REQUEST', 'Missing section or data')
+  }
+  if (!VALID_SECTIONS.includes(section as Section)) {
+    return errorResponse(400, 'BAD_REQUEST', 'Invalid section')
+  }
+
+  if (section === 'personal') {
+    const { name, birthDate, gender, height, weight } = data as {
+      name?: string
+      birthDate?: string
+      gender?: string
+      height?: number
+      weight?: number
+    }
+
+    await prisma.$transaction([
+      ...(name !== undefined
+        ? [prisma.user.update({ where: { id: userId }, data: { name: String(name).slice(0, 100) } })]
+        : []),
+      prisma.userProfile.upsert({
+        where: { userId },
+        create: {
+          userId,
+          birthDate: birthDate ? new Date(birthDate) : undefined,
+          gender: gender ? String(gender).slice(0, 20) : undefined,
+          height: height != null ? Number(height) : undefined,
+          weight: weight != null ? Number(weight) : undefined,
+        },
+        update: {
+          ...(birthDate !== undefined && { birthDate: new Date(birthDate) }),
+          ...(gender !== undefined && { gender: String(gender).slice(0, 20) }),
+          ...(height !== undefined && { height: Number(height) }),
+          ...(weight !== undefined && { weight: Number(weight) }),
+        },
+      }),
+    ])
+    return Response.json({ ok: true })
+  }
+
+  // JSON section upsert
+  const sectionKey = section as Exclude<Section, 'personal'>
+  await prisma.userProfile.upsert({
+    where: { userId },
+    create: { userId, [sectionKey]: data },
+    update: { [sectionKey]: data },
+  })
+
+  return Response.json({ ok: true })
+}
