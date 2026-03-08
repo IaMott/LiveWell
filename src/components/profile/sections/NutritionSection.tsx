@@ -7,6 +7,7 @@ type Props = { data: ProfileData }
 export function NutritionSection({ data }: Props) {
   const { stats, recentMeals, profile } = data
   const nutritionProfile = profile?.nutrition as Record<string, unknown> | null
+  const dailyKcal = nutritionProfile?.dailyKcal != null ? Number(nutritionProfile.dailyKcal) : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -18,10 +19,10 @@ export function NutritionSection({ data }: Props) {
         }}
       >
         <StatCard label="Pasti (7gg)" value={stats.mealsLogged7d} color="#AF52DE" />
-        {nutritionProfile?.dailyKcal && (
+        {dailyKcal !== null && (
           <StatCard
             label="Obiettivo kcal"
-            value={String(nutritionProfile.dailyKcal)}
+            value={dailyKcal}
             unit="kcal"
             color="#AF52DE"
           />
@@ -53,7 +54,13 @@ export function NutritionSection({ data }: Props) {
                   boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
                   <p
                     style={{
                       margin: 0,
