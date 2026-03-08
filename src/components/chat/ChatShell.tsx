@@ -5,7 +5,9 @@ import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { useChat } from '@/hooks/useChat'
 
-export function ChatShell() {
+type Props = { userInitials?: string }
+
+export function ChatShell({ userInitials = 'ME' }: Props) {
   const { messages, send, isStreaming } = useChat()
 
   return (
@@ -19,7 +21,7 @@ export function ChatShell() {
         margin: '0 auto',
       }}
     >
-      <TopBar />
+      <TopBar userInitials={userInitials} />
       <MessageList messages={messages} />
       <ChatInput onSend={send} disabled={isStreaming} />
     </div>

@@ -1,6 +1,9 @@
+import Link from 'next/link'
 import { Settings } from 'lucide-react'
 
-export function TopBar() {
+type Props = { userInitials?: string }
+
+export function TopBar({ userInitials = 'ME' }: Props) {
   return (
     <header
       style={{
@@ -10,7 +13,8 @@ export function TopBar() {
         padding: '3.5rem 1rem 0.75rem',
       }}
     >
-      <button
+      <Link
+        href="/profile/impostazioni"
         aria-label="Impostazioni"
         style={{
           width: '2.25rem',
@@ -19,17 +23,16 @@ export function TopBar() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
           color: 'var(--color-text-primary)',
+          textDecoration: 'none',
         }}
       >
         <Settings size={22} strokeWidth={1.5} />
-      </button>
+      </Link>
 
-      <div
-        aria-label="Profilo utente"
+      <Link
+        href="/profile"
+        aria-label="Vai al profilo"
         style={{
           width: '2.5rem',
           height: '2.5rem',
@@ -42,10 +45,11 @@ export function TopBar() {
           fontSize: '0.875rem',
           fontWeight: 600,
           letterSpacing: '0.02em',
+          textDecoration: 'none',
         }}
       >
-        MM
-      </div>
+        {userInitials}
+      </Link>
     </header>
   )
 }
