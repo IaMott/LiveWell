@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pencil } from 'lucide-react'
+import { Pencil, Plus } from 'lucide-react'
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
 import { StatCard } from './StatCard'
 import { EmptyState } from './EmptyState'
@@ -13,7 +13,9 @@ export function MindfulnessSection({ data }: Props) {
   const { stats, recentMindfulness, profile } = data
   const router = useRouter()
   const [editing, setEditing] = useState(false)
+  const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [addSaving, setAddSaving] = useState(false)
   const mindfulnessProfile = profile?.mindfulness as Record<string, unknown> | null
   const [form, setForm] = useState({
     sleepHours: mindfulnessProfile?.sleepHours != null ? String(mindfulnessProfile.sleepHours) : '',
@@ -21,8 +23,9 @@ export function MindfulnessSection({ data }: Props) {
     meditationGoal: mindfulnessProfile?.meditationGoal != null ? String(mindfulnessProfile.meditationGoal) : '',
     mainStressors: mindfulnessProfile?.mainStressors != null ? String(mindfulnessProfile.mainStressors) : '',
   })
+  const [addForm, setAddForm] = useState({ mood: '7', stress: '4', content: '' })
 
-  async function save() {
+  async function saveProfile() {
     setSaving(true)
     try {
       await fetch('/api/profile', {
@@ -45,9 +48,29 @@ export function MindfulnessSection({ data }: Props) {
     }
   }
 
+  async function addEntry() {
+    setAddSaving(true)
+    try {
+      await fetch('/api/trackers/mood', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mood: addForm.mood ? Number(addForm.mood) : undefined,
+          stress: addForm.stress ? Number(addForm.stress) : undefined,
+          content: addForm.content || undefined,
+        }),
+      })
+      setAdding(false)
+      setAddForm({ mood: '7', stress: '4', content: '' })
+      router.refresh()
+    } finally {
+      setAddSaving(false)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      {/* Edit card */}
+      {/* Profile edit card */}
       <div style={panelStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
           <h2 style={labelStyle}>Mindfulness</h2>
@@ -56,7 +79,6 @@ export function MindfulnessSection({ data }: Props) {
             {editing ? 'Annulla' : 'Modifica'}
           </button>
         </div>
-
         {!editing ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <Row label="Ore di sonno target" value={mindfulnessProfile?.sleepHours != null ? `${mindfulnessProfile.sleepHours}h` : '—'} />
@@ -68,27 +90,10 @@ export function MindfulnessSection({ data }: Props) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
               <Field label="Ore di sonno target">
-                <input
-                  type="number"
-                  value={form.sleepHours}
-                  onChange={(e) => setForm((f) => ({ ...f, sleepHours: e.target.value }))}
-                  placeholder="8"
-                  min={4}
-                  max={12}
-                  step={0.5}
-                  style={inputStyle}
-                />
+                <input type="number" value={form.sleepHours} onChange={(e) => setForm((f) => ({ ...f, sleepHours: e.target.value }))} placeholder="8" min={4} max={12} step={0.5} style={inputStyle} />
               </Field>
-              <Field label="Livello stress target (1-10)">
-                <input
-                  type="number"
-                  value={form.stressTarget}
-                  onChange={(e) => setForm((f) => ({ ...f, stressTarget: e.target.value }))}
-                  placeholder="3"
-                  min={1}
-                  max={10}
-                  style={inputStyle}
-                />
+              <Field label="Stress target (1-10)">
+                <input type="number" value={form.stressTarget} onChange={(e) => setForm((f) => ({ ...f, stressTarget: e.target.value }))} placeholder="3" min={1} max={10} style={inputStyle} />
               </Field>
             </div>
             <Field label="Obiettivo meditazione">
@@ -102,14 +107,9 @@ export function MindfulnessSection({ data }: Props) {
               </select>
             </Field>
             <Field label="Principali fonti di stress">
-              <input
-                value={form.mainStressors}
-                onChange={(e) => setForm((f) => ({ ...f, mainStressors: e.target.value }))}
-                placeholder="es: lavoro, relazioni, salute"
-                style={inputStyle}
-              />
+              <input value={form.mainStressors} onChange={(e) => setForm((f) => ({ ...f, mainStressors: e.target.value }))} placeholder="es: lavoro, relazioni, salute" style={inputStyle} />
             </Field>
-            <button onClick={save} disabled={saving} style={saveButtonStyle}>
+            <button onClick={saveProfile} disabled={saving} style={{ ...saveButtonStyle, backgroundColor: '#5AC8FA' }}>
               {saving ? 'Salvataggio…' : 'Salva modifiche'}
             </button>
           </div>
@@ -118,52 +118,62 @@ export function MindfulnessSection({ data }: Props) {
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
-        {stats.avgMood7d != null && (
-          <StatCard label="Umore medio (7gg)" value={Math.round(stats.avgMood7d * 10) / 10} unit="/10" color="#5AC8FA" />
-        )}
-        {stats.avgStress7d != null && (
-          <StatCard label="Stress medio (7gg)" value={Math.round(stats.avgStress7d * 10) / 10} unit="/10" color="#FF9F0A" />
-        )}
+        {stats.avgMood7d != null && <StatCard label="Umore medio (7gg)" value={Math.round(stats.avgMood7d * 10) / 10} unit="/10" color="#5AC8FA" />}
+        {stats.avgStress7d != null && <StatCard label="Stress medio (7gg)" value={Math.round(stats.avgStress7d * 10) / 10} unit="/10" color="#FF9F0A" />}
       </div>
 
-      {recentMindfulness.length > 0 ? (
-        <section>
-          <h2 style={sectionTitleStyle}>Journal recente</h2>
+      {/* Quick-add mood */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <h2 style={sectionTitleStyle}>Journal</h2>
+          <button onClick={() => setAdding((v) => !v)} style={addButtonStyle}>
+            <Plus size={13} />
+            {adding ? 'Annulla' : 'Come stai?'}
+          </button>
+        </div>
+
+        {adding && (
+          <div style={{ ...panelStyle, marginBottom: '0.5rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                <Field label="Umore (1-10)">
+                  <input type="number" value={addForm.mood} onChange={(e) => setAddForm((f) => ({ ...f, mood: e.target.value }))} min={1} max={10} style={inputStyle} />
+                </Field>
+                <Field label="Stress (1-10)">
+                  <input type="number" value={addForm.stress} onChange={(e) => setAddForm((f) => ({ ...f, stress: e.target.value }))} min={1} max={10} style={inputStyle} />
+                </Field>
+              </div>
+              <Field label="Note (opzionale)">
+                <textarea value={addForm.content} onChange={(e) => setAddForm((f) => ({ ...f, content: e.target.value }))} placeholder="Come ti senti oggi?" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+              </Field>
+              <button onClick={addEntry} disabled={addSaving} style={{ ...saveButtonStyle, backgroundColor: '#5AC8FA' }}>
+                {addSaving ? 'Salvataggio…' : 'Registra stato'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {recentMindfulness.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {recentMindfulness.map((entry) => (
               <div key={entry.id} style={cardStyle}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    {entry.mood != null && (
-                      <span style={{ fontSize: '0.8125rem', color: '#5AC8FA', fontWeight: 600 }}>
-                        😊 {entry.mood}/10
-                      </span>
-                    )}
-                    {entry.stress != null && (
-                      <span style={{ fontSize: '0.8125rem', color: '#FF9F0A', fontWeight: 600 }}>
-                        😤 {entry.stress}/10
-                      </span>
-                    )}
+                    {entry.mood != null && <span style={{ fontSize: '0.8125rem', color: '#5AC8FA', fontWeight: 600 }}>😊 {entry.mood}/10</span>}
+                    {entry.stress != null && <span style={{ fontSize: '0.8125rem', color: '#FF9F0A', fontWeight: 600 }}>😤 {entry.stress}/10</span>}
                   </div>
                   <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
                     {new Date(entry.createdAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
                   </span>
                 </div>
-                {entry.content && (
-                  <p style={{ margin: '0.375rem 0 0', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                    {entry.content}
-                  </p>
-                )}
+                {entry.content && <p style={{ margin: '0.375rem 0 0', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{entry.content}</p>}
               </div>
             ))}
           </div>
-        </section>
-      ) : (
-        <EmptyState
-          message="Nessun dato di benessere registrato. Il tuo mental coach ti aiuterà a monitorare umore e stress."
-          cta="Parla con il mental coach"
-        />
-      )}
+        ) : !adding ? (
+          <EmptyState message="Nessun dato di benessere registrato. Il tuo mental coach ti aiuterà a monitorare umore e stress." cta="Parla con il mental coach" />
+        ) : null}
+      </div>
     </div>
   )
 }
@@ -176,85 +186,20 @@ function Row({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
-        {label}
-      </label>
+      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>{label}</label>
       {children}
     </div>
   )
 }
 
-const panelStyle: React.CSSProperties = {
-  backgroundColor: 'var(--color-surface)',
-  borderRadius: '1rem',
-  padding: '1rem',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-}
-
-const labelStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: '0.8125rem',
-  fontWeight: 600,
-  color: 'var(--color-text-secondary)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-}
-
-const editButtonStyle: React.CSSProperties = {
-  padding: '0.25rem 0.625rem',
-  borderRadius: '999px',
-  border: '1px solid var(--color-separator)',
-  background: 'transparent',
-  color: 'var(--color-accent)',
-  fontSize: '0.8125rem',
-  fontWeight: 600,
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.25rem',
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.5rem 0.75rem',
-  borderRadius: '0.625rem',
-  border: '1px solid var(--color-separator)',
-  backgroundColor: 'var(--color-bg)',
-  fontSize: '0.9375rem',
-  color: 'var(--color-text-primary)',
-  outline: 'none',
-  boxSizing: 'border-box',
-}
-
-const saveButtonStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.75rem',
-  borderRadius: '0.75rem',
-  border: 'none',
-  backgroundColor: '#5AC8FA',
-  color: '#fff',
-  fontSize: '0.9375rem',
-  fontWeight: 600,
-  cursor: 'pointer',
-  marginTop: '0.25rem',
-}
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: '0.8125rem',
-  fontWeight: 600,
-  color: 'var(--color-text-secondary)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  margin: '0 0 0.5rem',
-}
-
-const cardStyle: React.CSSProperties = {
-  backgroundColor: 'var(--color-surface)',
-  borderRadius: '1rem',
-  padding: '0.875rem 1rem',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-}
+const panelStyle: React.CSSProperties = { backgroundColor: 'var(--color-surface)', borderRadius: '1rem', padding: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }
+const labelStyle: React.CSSProperties = { margin: 0, fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }
+const sectionTitleStyle: React.CSSProperties = { margin: 0, fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }
+const editButtonStyle: React.CSSProperties = { padding: '0.25rem 0.625rem', borderRadius: '999px', border: '1px solid var(--color-separator)', background: 'transparent', color: 'var(--color-accent)', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }
+const addButtonStyle: React.CSSProperties = { ...editButtonStyle, color: '#5AC8FA', borderColor: '#5AC8FA30' }
+const inputStyle: React.CSSProperties = { width: '100%', padding: '0.5rem 0.75rem', borderRadius: '0.625rem', border: '1px solid var(--color-separator)', backgroundColor: 'var(--color-bg)', fontSize: '0.9375rem', color: 'var(--color-text-primary)', outline: 'none', boxSizing: 'border-box' }
+const saveButtonStyle: React.CSSProperties = { width: '100%', padding: '0.75rem', borderRadius: '0.75rem', border: 'none', color: '#fff', fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer', marginTop: '0.25rem' }
+const cardStyle: React.CSSProperties = { backgroundColor: 'var(--color-surface)', borderRadius: '1rem', padding: '0.875rem 1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }
