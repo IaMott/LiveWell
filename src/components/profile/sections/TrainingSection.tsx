@@ -50,7 +50,7 @@ export function TrainingSection({ data }: Props) {
       {/* Edit card */}
       <div style={panelStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <h2 style={labelStyle}>Allenamento</h2>
+          <h2 style={sectionTitleStyle}>Allenamento</h2>
           <button onClick={() => setEditing((v) => !v)} style={editButtonStyle}>
             <Pencil size={12} />
             {editing ? 'Annulla' : 'Modifica'}
