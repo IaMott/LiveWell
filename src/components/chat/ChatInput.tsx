@@ -108,17 +108,27 @@ interface Props {
   onHistory?: () => void
   disabled?: boolean
   activeDomain?: Domain | null
-  onVoiceSend?: () => void
+  onVoiceStart?: () => void
+  onVoiceEnd?: () => void
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ChatInput({ onSend, onHistory, disabled, activeDomain, onVoiceSend }: Props) {
+export function ChatInput({ onSend, onHistory, disabled, activeDomain, onVoiceStart, onVoiceEnd }: Props) {
   const [text, setText] = useState('')
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(activeDomain ?? null)
   const [showLive, setShowLive] = useState(false)
   const [animDomain, setAnimDomain] = useState<Domain | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Notify parent when live session opens/closes (for TTS voice mode)
+  useEffect(() => {
+    if (showLive) {
+      onVoiceStart?.()
+    } else {
+      onVoiceEnd?.()
+    }
+  }, [showLive]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync activeDomain from orchestrator ui.state SSE
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -165,10 +175,8 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain, onVoiceSe
   function handleTranscription(transcript: string) {
     const trimmed = transcript.trim()
     if (!trimmed) return
-    // Auto-send voice message immediately — no manual confirm needed
+    // Auto-send voice message — TTS managed by ChatShell while showLive=true
     onSend(trimmed, selectedDomain ?? undefined)
-    // Signal parent to enable voice response (TTS)
-    onVoiceSend?.()
   }
 
   return (

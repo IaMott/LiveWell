@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { TopBar } from '@/components/layout/TopBar'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
@@ -33,13 +33,13 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
     exitSpecialist,
   } = useChat()
   const [historyOpen, setHistoryOpen] = useState(false)
-  // voiceMode: true after a live voice message — next assistant reply gets spoken aloud
-  const [voiceMode, setVoiceMode] = useState(false)
+  // voiceActive: true while the Live modal is open — speak assistant replies
+  const [voiceActive, setVoiceActive] = useState(false)
   const lastSpokenIdRef = useRef<string | undefined>(undefined)
 
-  // Speak new assistant messages when voiceMode is active
+  // Speak new assistant messages while voice session is active
   useEffect(() => {
-    if (!voiceMode) return
+    if (!voiceActive) return
     const lastMsg = messages.at(-1)
     if (!lastMsg || lastMsg.role !== 'assistant' || lastMsg.streaming) return
     if (lastMsg.id === lastSpokenIdRef.current) return
@@ -51,15 +51,33 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
       utterance.lang = 'it-IT'
       utterance.rate = 1.05
       utterance.pitch = 1.0
-      // Try to use an Italian voice if available
-      const voices = window.speechSynthesis.getVoices()
-      const itVoice = voices.find((v) => v.lang.startsWith('it'))
-      if (itVoice) utterance.voice = itVoice
-      window.speechSynthesis.speak(utterance)
+      // Prefer Italian system voice if available
+      const loadVoice = () => {
+        const voices = window.speechSynthesis.getVoices()
+        const itVoice = voices.find((v) => v.lang.startsWith('it'))
+        if (itVoice) utterance.voice = itVoice
+        window.speechSynthesis.speak(utterance)
+      }
+      if (window.speechSynthesis.getVoices().length > 0) {
+        loadVoice()
+      } else {
+        window.speechSynthesis.onvoiceschanged = loadVoice
+      }
     }
-    // Reset voice mode after speaking — user can trigger again by pressing LIVE
-    setVoiceMode(false)
-  }, [messages, voiceMode])
+    // NOTE: do NOT reset voiceActive — it stays true until the modal closes
+  }, [messages, voiceActive])
+
+  const handleVoiceStart = useCallback(() => {
+    lastSpokenIdRef.current = undefined
+    setVoiceActive(true)
+  }, [])
+
+  const handleVoiceEnd = useCallback(() => {
+    setVoiceActive(false)
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
+  }, [])
 
   const specialistColor = activeDomain ? (DOMAIN_COLORS[activeDomain] ?? '#007AFF') : '#007AFF'
 
@@ -142,7 +160,8 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
         onHistory={() => setHistoryOpen(true)}
         disabled={isStreaming}
         activeDomain={activeDomain}
-        onVoiceSend={() => setVoiceMode(true)}
+        onVoiceStart={handleVoiceStart}
+        onVoiceEnd={handleVoiceEnd}
       />
       <ConversationHistory
         open={historyOpen}
