@@ -21,19 +21,25 @@ export async function GET(request: Request): Promise<Response> {
       updatedAt: true,
       messages: {
         orderBy: { createdAt: 'desc' },
-        take: 1,
-        select: { role: true, content: true },
+        take: 2,
+        select: { role: true, content: true, domain: true, specialistName: true },
       },
     },
   })
 
   return Response.json({
-    conversations: conversations.map((c) => ({
-      id: c.id,
-      title: c.title ?? 'Conversazione',
-      updatedAt: c.updatedAt.toISOString(),
-      preview: c.messages[0]?.content?.slice(0, 80) ?? '',
-    })),
+    conversations: conversations.map((c) => {
+      const lastMsg = c.messages[0]
+      // If last message is from user, try the assistant message before it
+      const assistantMsg = c.messages.find((m) => m.role === 'assistant')
+      return {
+        id: c.id,
+        title: c.title ?? 'Conversazione',
+        updatedAt: c.updatedAt.toISOString(),
+        preview: lastMsg?.content?.slice(0, 80) ?? '',
+        specialist: assistantMsg?.specialistName ?? null,
+      }
+    }),
   })
 }
 

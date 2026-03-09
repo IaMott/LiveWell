@@ -8,6 +8,7 @@ export type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
   domain?: Domain
+  specialistName?: string
   streaming?: boolean
 }
 
@@ -43,13 +44,15 @@ export function useChat() {
         return
       }
       const data = (await res.json()) as {
-        messages: Array<{ id: string; role: string; content: string }>
+        messages: Array<{ id: string; role: string; content: string; domain?: string; specialistName?: string }>
       }
       setMessages(
         data.messages.map((m) => ({
           id: m.id,
           role: m.role as 'user' | 'assistant',
           content: m.content,
+          domain: m.domain as Domain | undefined,
+          specialistName: m.specialistName,
         })),
       )
       setConversationId(id)
@@ -99,7 +102,6 @@ export function useChat() {
         localStorage.setItem(STORAGE_KEY, newId)
       }
 
-      // Reset active domain on new user message
       setActiveDomain(null)
 
       const userMsg: ChatMessage = {
@@ -172,12 +174,12 @@ export function useChat() {
                 )
               } else if (event.type === 'ui.state') {
                 const domain = event.domain as Domain | undefined
-                if (domain) {
-                  // Light up the domain icon in ChatInput
-                  setActiveDomain(domain)
-                }
+                const specialistName = event.specialistName as string | undefined
+                if (domain) setActiveDomain(domain)
                 setMessages((prev) =>
-                  prev.map((m) => (m.id === assistantId ? { ...m, domain } : m)),
+                  prev.map((m) =>
+                    m.id === assistantId ? { ...m, domain, specialistName } : m,
+                  ),
                 )
               }
             } catch {
@@ -202,10 +204,10 @@ export function useChat() {
 
   return {
     messages,
-    send,
     isStreaming,
     conversationId,
     activeDomain,
+    send,
     loadConversation,
     newConversation,
     exportConversation,

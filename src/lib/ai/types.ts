@@ -9,6 +9,8 @@ export type Domain =
 
 export type Role = "OWNER" | "ADMIN" | "USER";
 
+export type AgentId = string;
+
 export type ToolCall = {
   id: string;
   name: string;
@@ -24,8 +26,6 @@ export type ToolResult = {
   requiresUserConfirmation?: boolean;
   uiEvent?: { title: string; description?: string; domain?: Domain };
 };
-
-export type AgentId = string;
 
 export type AgentProfile = {
   id: AgentId;
@@ -45,6 +45,8 @@ export type AgentInput = {
   message: string;
   domainHint?: Domain;
   contextPack: ContextPack;
+  // When set, the named specialist responds in first person (direct mode)
+  activeSpecialistId?: string;
   constraints?: {
     locale?: string;
     timezone?: string;
@@ -56,9 +58,9 @@ export type AgentInput = {
 export type AgentProposal = {
   agentId: AgentId;
   domain: Domain;
-  summary: string; // short
-  reasoning: string; // user-visible, no secrets
-  questions?: string[]; // gating questions
+  summary: string;
+  reasoning: string;
+  questions?: string[];
   recommendations?: Array<{
     title: string;
     steps: string[];
@@ -71,9 +73,9 @@ export type AgentProposal = {
       relatedResourceIds?: Record<string, string>;
     }>;
   }>;
-  toolCalls?: ToolCall[]; // proposed, not executed by agents
-  confidence?: number; // 0..1
-  citations?: Array<{ title: string; url?: string; note?: string }>; // optional
+  toolCalls?: ToolCall[];
+  confidence?: number;
+  citations?: Array<{ title: string; url?: string; note?: string }>;
   flags?: {
     needsMoreInfo?: boolean;
     potentialRisk?: boolean;
@@ -123,6 +125,12 @@ export type ContextPack = {
   };
 };
 
+export type ActiveSpecialist = {
+  id: string;
+  displayName: string;
+  domain: Domain;
+};
+
 export type ConsensusResult = {
   domain: Domain;
   finalMessageMarkdown: string;
@@ -142,6 +150,8 @@ export type ConsensusResult = {
     title: string;
     contentMarkdown: string;
   }>;
+  // Set when the orchestrator detected a direct specialist request
+  activeSpecialist?: ActiveSpecialist;
   debug?: {
     selectedAgents: AgentId[];
     conflicts: string[];
@@ -149,10 +159,7 @@ export type ConsensusResult = {
 };
 
 
-// ─── Backward-compatibility types for legacy src/lib/ai/orchestrator.ts ────────
-// These were part of the original types.ts (Steps 5-9) and are still imported
-// by the old orchestrator, context, and prompts modules that coexist on GitHub.
-
+// ─── Backward-compatibility types for legacy modules ─────────────────────────
 export type AIMessage = { role: 'user' | 'assistant' | 'system'; content: string }
 export type ProfileData = Record<string, unknown>
 export type SpecialistId = string

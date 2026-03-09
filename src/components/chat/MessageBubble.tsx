@@ -11,6 +11,14 @@ const DOMAIN_COLORS: Record<Domain, string> = {
   coordination: '#8E8E93',
 }
 
+const DOMAIN_LABELS: Partial<Record<Domain, string>> = {
+  nutrition: 'Nutrizionista',
+  training: 'Personal Trainer',
+  health: 'Medico',
+  mindfulness: 'Mental Coach',
+  inspiration: 'Coach',
+}
+
 type Props = {
   message: ChatMessage
 }
@@ -18,53 +26,79 @@ type Props = {
 export function MessageBubble({ message }: Props) {
   const isUser = message.role === 'user'
   const domainColor = message.domain ? DOMAIN_COLORS[message.domain] : undefined
+  const specialistLabel =
+    !isUser && message.specialistName
+      ? message.specialistName
+      : !isUser && message.domain && DOMAIN_LABELS[message.domain]
+        ? DOMAIN_LABELS[message.domain]
+        : null
 
   return (
     <div
       style={{
         display: 'flex',
-        justifyContent: isUser ? 'flex-end' : 'flex-start',
+        flexDirection: 'column',
+        alignItems: isUser ? 'flex-end' : 'flex-start',
         padding: '0.25rem 1rem',
       }}
     >
-      {!isUser && domainColor && (
-        <div
+      {/* Specialist label above assistant bubble */}
+      {specialistLabel && (
+        <span
           style={{
-            width: '3px',
-            borderRadius: '2px',
-            backgroundColor: domainColor,
-            marginRight: '0.5rem',
-            flexShrink: 0,
-            alignSelf: 'stretch',
-            minHeight: '1.5rem',
+            fontSize: '0.6875rem',
+            fontWeight: 600,
+            color: domainColor ?? 'var(--color-text-secondary)',
+            marginBottom: '0.25rem',
+            marginLeft: '0.375rem',
+            letterSpacing: '0.03em',
+            textTransform: 'uppercase',
           }}
-        />
+        >
+          {specialistLabel}
+        </span>
       )}
-      <div
-        style={{
-          maxWidth: '72%',
-          backgroundColor: 'var(--color-surface)',
-          borderRadius: isUser
-            ? '1.25rem 1.25rem 0.375rem 1.25rem'
-            : '1.25rem 1.25rem 1.25rem 0.375rem',
-          padding: '0.625rem 0.875rem',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
-        }}
-      >
-        {message.streaming && !message.content ? (
-          <ThinkingDots />
-        ) : (
-          <MarkdownContent
-            content={message.content}
-            streaming={message.streaming}
+
+      <div style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', width: '100%' }}>
+        {!isUser && domainColor && (
+          <div
+            style={{
+              width: '3px',
+              borderRadius: '2px',
+              backgroundColor: domainColor,
+              marginRight: '0.5rem',
+              flexShrink: 0,
+              alignSelf: 'stretch',
+              minHeight: '1.5rem',
+            }}
           />
         )}
+        <div
+          style={{
+            maxWidth: '72%',
+            backgroundColor: 'var(--color-surface)',
+            borderRadius: isUser
+              ? '1.25rem 1.25rem 0.375rem 1.25rem'
+              : '1.25rem 1.25rem 1.25rem 0.375rem',
+            padding: '0.625rem 0.875rem',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+          }}
+        >
+          {message.streaming && !message.content ? (
+            <ThinkingDots />
+          ) : (
+            <MarkdownContent
+              content={message.content}
+              streaming={message.streaming}
+            />
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-/** Lightweight inline markdown renderer — supports bold, italic, numbered lists, bullet lists */
+/** Lightweight inline markdown renderer */
 function MarkdownContent({
   content,
   streaming,
@@ -106,7 +140,6 @@ function MarkdownContent({
             </ol>
           )
         }
-        // paragraph
         return (
           <p key={i} style={{ margin: i === 0 ? '0' : '0.5rem 0 0' }}>
             {renderInline(block.text ?? '')}
@@ -135,7 +168,6 @@ function parseBlocks(text: string): Block[] {
     const line = lines[i]
 
     if (/^[-*•]\s/.test(line)) {
-      // Collect bullet list
       const items: string[] = []
       while (i < lines.length && /^[-*•]\s/.test(lines[i])) {
         items.push(lines[i].replace(/^[-*•]\s+/, ''))
@@ -146,7 +178,6 @@ function parseBlocks(text: string): Block[] {
     }
 
     if (/^\d+\.\s/.test(line)) {
-      // Collect numbered list
       const items: string[] = []
       while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
         items.push(lines[i].replace(/^\d+\.\s+/, ''))
@@ -161,7 +192,6 @@ function parseBlocks(text: string): Block[] {
       continue
     }
 
-    // Paragraph: collect consecutive non-list, non-empty lines
     const paragraphLines: string[] = []
     while (
       i < lines.length &&
@@ -181,7 +211,6 @@ function parseBlocks(text: string): Block[] {
 }
 
 function renderInline(text: string): React.ReactNode {
-  // Process **bold**, *italic*, inline code `code`
   const parts: React.ReactNode[] = []
   const regex = /(\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/g
   let last = 0

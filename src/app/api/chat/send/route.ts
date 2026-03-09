@@ -27,6 +27,7 @@ type ChatStreamEvent =
       domain: Domain
       moodScore: number
       sectionScores: Record<string, number>
+      specialistName?: string
     }
   | {
       type: 'tool.result'
@@ -47,10 +48,6 @@ function toSse(event: ChatStreamEvent): string {
 function isDbPersistenceEnabled(): boolean {
   return process.env.NODE_ENV !== 'test' || process.env.ENABLE_DB_IN_TEST === '1'
 }
-
-// Role and owner mode are resolved via getAuthRole / getAuthOwnerMode from auth.ts.
-// In test environment: header-based (x-user-role, x-owner-mode-enabled).
-// In production: session-based (NextAuth JWT).
 
 function parseToolDirective(message: string): ToolCall[] {
   const direct = message.match(/^\/tool\s+([a-zA-Z0-9._-]+)\s+([\s\S]+)$/)
@@ -76,8 +73,6 @@ function buildDefaultContextPack(userId: string, role: Role): ContextPack {
   }
 }
 
-// buildDeterministicLlm: used only when the user sends an explicit /tool directive.
-// Bypasses LLM entirely and injects the tool calls directly into the AgentProposal.
 function buildDeterministicLlm(toolCalls: ToolCall[]) {
   return {
     async complete() {
@@ -103,6 +98,8 @@ type RoutePersistenceDeps = {
     conversationId: string
     userMessage: string
     assistantMessage: string
+    domain?: string
+    specialistName?: string
     auditEvents: MutationAuditEvent[]
   }) => Promise<void>
   buildContextPack: (input: {
@@ -130,7 +127,6 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
     return delegate?.findUnique ?? null
   }
 
-  // Fallback for models not yet in schema (e.g. medicalInfo)
   async function findUniqueIfAvailable<T>(
     modelName: string,
     args: Record<string, unknown>,
@@ -155,14 +151,20 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
         data: { userId, title },
         select: { id: true },
       }),
-    persistChatTurn: async ({ conversationId, userMessage, assistantMessage, auditEvents }) => {
+    persistChatTurn: async ({ conversationId, userMessage, assistantMessage, domain, specialistName, auditEvents }) => {
       await prisma.$transaction(async (tx) => {
         await tx.message.create({
           data: { conversationId, role: 'user', content: userMessage },
         })
 
         await tx.message.create({
-          data: { conversationId, role: 'assistant', content: assistantMessage },
+          data: {
+            conversationId,
+            role: 'assistant',
+            content: assistantMessage,
+            domain: domain ?? null,
+            specialistName: specialistName ?? null,
+          },
         })
 
         for (const event of auditEvents) {
@@ -382,7 +384,6 @@ export async function POST(request: Request): Promise<Response> {
 
   const teamDirAbsolute = path.resolve(process.cwd(), 'TEAM')
   const team = loadTeam({ teamDirAbsolute, allowEmpty: true })
-  // Use deterministic mock only for explicit /tool directives; otherwise use real Gemini.
   const llm =
     requestedToolCalls.length > 0
       ? buildDeterministicLlm(requestedToolCalls)
@@ -422,19 +423,22 @@ export async function POST(request: Request): Promise<Response> {
     toolResults.push(result)
   }
 
-  // Response text is only the natural language message — tool results are
-  // emitted as separate SSE events (tool.result) and never appended to the visible message.
+  // Tool results go to SSE only — never appended to visible message text
   const responseText = consensus.finalMessageMarkdown
+
+  const activeDomain = consensus.activeSpecialist?.domain ?? consensus.ui.domainIcon
+  const specialistName = consensus.activeSpecialist?.displayName
 
   try {
     await persistence.persistChatTurn({
       conversationId,
       userMessage: parsedBody.message,
       assistantMessage: responseText,
+      domain: activeDomain,
+      specialistName,
       auditEvents: pendingAuditEvents,
     })
   } catch (error) {
-    // Non-blocking fallback: response streaming must continue even when DB persistence fails.
     console.error('[chat/send] persistChatTurn failed, continuing in fallback mode', error)
   }
 
@@ -453,9 +457,10 @@ export async function POST(request: Request): Promise<Response> {
           encoder.encode(
             toSse({
               type: 'ui.state',
-              domain: consensus.ui.domainIcon,
+              domain: activeDomain,
               moodScore: consensus.ui.moodScore,
               sectionScores: consensus.ui.sectionScores ?? { general: consensus.ui.moodScore },
+              specialistName,
             }),
           ),
         )

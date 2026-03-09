@@ -95,6 +95,8 @@ model Message {
   id             String       @id @default(cuid())
   role           String       // 'user' | 'assistant'
   content        String
+  domain         String?      // domain of the responding specialist (assistant messages only)
+  specialistName String?      @map("specialist_name") // e.g. "Nutrizionista"
   conversationId String       @map("conversation_id")
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   attachments    Attachment[]

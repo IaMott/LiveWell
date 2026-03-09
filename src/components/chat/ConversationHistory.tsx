@@ -8,6 +8,7 @@ type ConvPreview = {
   title: string
   preview: string
   updatedAt: string
+  specialist?: string | null
 }
 
 type Props = {
@@ -211,6 +212,23 @@ export function ConversationHistory({ open, currentId, onClose, onSelect, onNew,
                   style={{ flexShrink: 0 }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
+                  {c.specialist && (
+                    <p
+                      style={{
+                        margin: '0 0 0.125rem',
+                        fontSize: '0.6875rem',
+                        fontWeight: 600,
+                        color: 'var(--color-accent)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {c.specialist}
+                    </p>
+                  )}
                   <p
                     style={{
                       margin: 0,
