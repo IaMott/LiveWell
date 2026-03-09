@@ -1,30 +1,28 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import { signIn } from 'next-auth/react'
 import Link from 'next/link'
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
+      await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       })
-      if (result?.error) {
-        setError('Email o password non validi.')
-      } else {
-        window.location.href = '/'
-      }
+      // Always show success to avoid email enumeration
+      setDone(true)
+    } catch {
+      setError('Si è verificato un errore. Riprova.')
     } finally {
       setLoading(false)
     }
@@ -33,45 +31,43 @@ export default function LoginPage() {
   return (
     <div style={cardStyle}>
       <h1 style={titleStyle}>LiveWell</h1>
-      <p style={subtitleStyle}>Accedi al tuo profilo</p>
+      <p style={subtitleStyle}>Recupero password</p>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          style={inputStyle}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          style={inputStyle}
-        />
-
-        <div style={{ textAlign: 'right', marginTop: '-0.25rem' }}>
-          <Link href="/forgot-password" style={linkStyle}>
-            Password dimenticata?
+      {done ? (
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontSize: '0.9375rem', color: 'var(--color-text-primary, #1C1C1E)', marginBottom: '1rem' }}>
+            Se l&apos;email è registrata riceverai le istruzioni entro pochi minuti.
+            Controlla anche la cartella spam.
+          </p>
+          <Link href="/login" style={{ ...linkStyle, fontSize: '0.9375rem' }}>
+            ← Torna al login
           </Link>
         </div>
-
-        {error && <p style={errorStyle}>{error}</p>}
-
-        <button type="submit" disabled={loading} style={buttonStyle(loading)}>
-          {loading ? 'Accesso…' : 'Accedi'}
-        </button>
-      </form>
-
-      <p style={footerStyle}>
-        Non hai un account?{' '}
-        <Link href="/register" style={linkStyle}>
-          Registrati
-        </Link>
-      </p>
+      ) : (
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary, #8E8E93)', marginBottom: '0.25rem' }}>
+            Inserisci l&apos;email del tuo account e ti invieremo un link per reimpostare la password.
+          </p>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoFocus
+            style={inputStyle}
+          />
+          {error && <p style={errorStyle}>{error}</p>}
+          <button type="submit" disabled={loading} style={buttonStyle(loading)}>
+            {loading ? 'Invio in corso…' : 'Invia link di recupero'}
+          </button>
+          <div style={{ textAlign: 'center' }}>
+            <Link href="/login" style={linkStyle}>
+              ← Torna al login
+            </Link>
+          </div>
+        </form>
+      )}
     </div>
   )
 }
@@ -124,14 +120,7 @@ const buttonStyle = (loading: boolean): React.CSSProperties => ({
   border: 'none',
   cursor: loading ? 'not-allowed' : 'pointer',
   opacity: loading ? 0.6 : 1,
-  marginTop: '0.25rem',
 })
-const footerStyle: React.CSSProperties = {
-  textAlign: 'center',
-  marginTop: '1.25rem',
-  fontSize: '0.875rem',
-  color: 'var(--color-text-secondary, #8E8E93)',
-}
 const linkStyle: React.CSSProperties = {
   color: 'var(--color-accent, #007AFF)',
   fontWeight: 500,
