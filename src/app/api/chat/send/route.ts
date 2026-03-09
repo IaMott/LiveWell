@@ -298,10 +298,7 @@ function buildToolExecutor(
   writeAuditLog: (event: MutationAuditEvent) => Promise<void>,
   useRealHandlers: boolean,
 ) {
-  // In NODE_ENV=test, always use stub handlers so tests don't need
-  // a full DB mock for every model the real handler might touch.
-  const handlers =
-    useRealHandlers && process.env.NODE_ENV !== 'test' ? realToolHandlers : stubToolHandlers
+  const handlers = useRealHandlers ? realToolHandlers : stubToolHandlers
   return createToolExecutor({ handlers, writeAuditLog })
 }
 
@@ -425,13 +422,9 @@ export async function POST(request: Request): Promise<Response> {
     toolResults.push(result)
   }
 
-  const toolLines = toolResults.map((r) =>
-    r.ok ? `Tool ${r.toolCallId}: ok` : `Tool ${r.toolCallId}: ${r.error?.code ?? 'ERROR'}`,
-  )
-  const responseText =
-    toolLines.length > 0
-      ? `${consensus.finalMessageMarkdown}\n\n${toolLines.join('\n')}`
-      : consensus.finalMessageMarkdown
+  // Response text is only the natural language message — tool results are
+  // emitted as separate SSE events (tool.result) and never appended to the visible message.
+  const responseText = consensus.finalMessageMarkdown
 
   try {
     await persistence.persistChatTurn({
@@ -513,4 +506,3 @@ export async function POST(request: Request): Promise<Response> {
     },
   })
 }
-

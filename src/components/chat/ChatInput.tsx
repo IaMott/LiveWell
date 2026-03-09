@@ -76,15 +76,18 @@ function IconCronology({ color }: { color: string }) {
   )
 }
 
-function IconLive() {
-  // Based on design/icons/live.svg — circle bg + 4 waveform bars
+// LIVE icon — matches design/icons/live.svg exactly
+// active=true → red circle; active=false → gray circle
+function IconLive({ active }: { active: boolean }) {
+  const bg = active ? '#FF3B30' : '#dbdbda'
   return (
-    <svg viewBox="0 0 800 800" width="16" height="16" aria-hidden="true">
-      {/* bars in white (circle bg is the red pill button itself) */}
-      <rect x="417.56" y="293.48" width="50" height="209.67" rx="25" fill="#fff" />
-      <rect x="332.44" y="239.98" width="50" height="316.67" rx="25" fill="#fff" />
-      <rect x="247.11" y="320.98" width="50" height="154.67" rx="25" fill="#fff" />
-      <rect x="502.89" y="320.98" width="50" height="154.67" rx="25" fill="#fff" />
+    <svg viewBox="0 0 800 800" width="30" height="30" aria-hidden="true">
+      <circle cx="400" cy="400" r="354.33" fill={bg} />
+      {/* 4 waveform bars from design/icons/live.svg */}
+      <path fillRule="evenodd" fill="#f7f7f8" d="M442.56,293.48c13.81,0,25,11.19,25,25v159.67c0,13.81-11.19,25-25,25s-25-11.19-25-25v-159.67c0-13.81,11.19-25,25-25h0Z"/>
+      <path fillRule="evenodd" fill="#f7f7f8" d="M357.44,239.98c13.81,0,25,11.19,25,25v266.67c0,13.81-11.19,25-25,25s-25-11.19-25-25v-266.67c0-13.81,11.19-25,25-25h0Z"/>
+      <path fillRule="evenodd" fill="#f7f7f8" d="M272.11,320.98c13.81,0,25,11.19,25,25v104.67c0,13.81-11.19,25-25,25s-25-11.19-25-25v-104.67c0-13.81,11.19-25,25-25h0Z"/>
+      <path fillRule="evenodd" fill="#f7f7f8" d="M527.89,320.98c13.81,0,25,11.19,25,25v104.67c0,13.81-11.19,25-25,25s-25-11.19-25-25v-104.67c0-13.81,11.19-25,25-25h0Z"/>
     </svg>
   )
 }
@@ -257,23 +260,24 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain }: Props) 
             {/* Spacer */}
             <div style={{ flex: 1 }} />
 
-            {/* LIVE button */}
+            {/* LIVE button — icon matching design/icons/live.svg */}
             <button
               type="button"
               aria-label="Sessione live"
               onClick={() => setShowLive(true)}
               style={{
-                display: 'flex', alignItems: 'center', gap: '0.25rem',
-                padding: '0.3rem 0.625rem',
-                borderRadius: '999px', border: 'none',
-                backgroundColor: '#FF3B30', color: '#fff',
-                fontSize: '0.6875rem', fontWeight: 700,
-                cursor: 'pointer', flexShrink: 0,
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                flexShrink: 0,
                 marginRight: '0.375rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              <IconLive />
-              <span>LIVE</span>
+              <IconLive active={showLive} />
             </button>
 
             {/* Send button */}

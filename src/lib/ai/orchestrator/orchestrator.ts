@@ -62,6 +62,7 @@ function buildAgentUserPrompt(input: AgentInput): string {
     `- Ask gating questions only for data that YOUR specific domain requires.`,
     `- Provide evidence-based recommendations. If uncertain, say so.`,
     `- Propose tool calls only if clearly helpful; do not claim execution.`,
+    `- Return ONLY valid JSON matching the AgentProposal schema. No markdown, no prose outside the JSON object.`,
   )
 
   return parts.join('\n')
@@ -72,17 +73,32 @@ async function runOneAgent(
   agent: AgentProfile,
   input: AgentInput,
 ): Promise<AgentProposal> {
-  // Minimal JSON-ish protocol: agent writes a JSON object.
   const userPrompt = buildAgentUserPrompt(input)
 
+  // Inject exact allowed tool names to prevent LLM hallucination of tool names
+  let systemPrompt = agent.systemPrompt
+  if (agent.toolsAllowed.length > 0) {
+    systemPrompt += [
+      '',
+      '## STRUMENTI DISPONIBILI',
+      'Usa ESATTAMENTE questi nomi in toolCalls[].name (nessuna variazione):',
+      agent.toolsAllowed.map((t) => `- ${t}`).join('\n'),
+      'Non inventare nomi alternativi. Se un tool non è in questa lista, non includerlo in toolCalls.',
+    ].join('\n')
+  } else {
+    systemPrompt += '\n\n## Strumenti: nessuno disponibile. Non includere toolCalls nel JSON.'
+  }
+
   const res = await llm.complete({
-    system: agent.systemPrompt,
+    system: systemPrompt,
     user: userPrompt,
   })
 
   // Try to parse JSON. Fallback to a safe proposal.
   try {
-    const obj = JSON.parse(res.text)
+    // Strip markdown code fences if the model wrapped the JSON
+    const raw = res.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
+    const obj = JSON.parse(raw)
     return {
       agentId: agent.id,
       domain: (obj.domain as Domain) ?? input.domainHint ?? 'general',
@@ -156,6 +172,7 @@ async function synthesizeResponse(
     `- Non chiedere informazioni già presenti nel profilo utente`,
     `- Usa il punto fermo, non liste di bullet, per risposte conversazionali brevi`,
     `- Per piani o programmi strutturati, usa elenchi numerati senza intestazioni`,
+    `- NON menzionare errori tecnici, tool calls o problemi di sistema nel testo della risposta`,
   ].join('\n')
 
   const userPrompt = [
