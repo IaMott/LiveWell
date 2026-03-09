@@ -24,6 +24,10 @@ const prismaMock = {
   userProfile: {
     findUnique: vi.fn(),
   },
+  // Required by realToolHandlers: health.addMetric calls prisma.bodyMetricEntry.create
+  bodyMetricEntry: {
+    create: vi.fn(),
+  },
   $transaction: vi.fn(
     async (
       callback: (tx: {
@@ -55,6 +59,7 @@ describe('/api/chat/send persistence integration', () => {
     prismaMock.notification.findFirst.mockResolvedValue(null)
     prismaMock.userProfile.findUnique.mockResolvedValue(null)
     prismaMock.toolAuditLog.create.mockResolvedValue({ id: 'audit-1' })
+    prismaMock.bodyMetricEntry.create.mockResolvedValue({ id: 'metric-1' })
     txMessageCreate.mockResolvedValue({ id: 'msg-tx' })
     txToolAuditCreate.mockResolvedValue({ id: 'audit-tx' })
   })
