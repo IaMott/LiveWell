@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, type KeyboardEvent, type ChangeEvent } from 'react'
+import type React from 'react'
 import type { Domain } from '@/lib/ai/types'
 
 const DOMAIN_COLORS: Partial<Record<Domain, string>> = {
@@ -81,7 +82,9 @@ function IconLive({ active }: { active: boolean }) {
   )
 }
 
-const DOMAINS: Array<{ domain: Domain; Icon: (props: { color: string }) => JSX.Element; label: string }> = [
+type IconFC = (props: { color: string }) => React.ReactNode
+
+const DOMAINS: Array<{ domain: Domain; Icon: IconFC; label: string }> = [
   { domain: 'nutrition', Icon: IconFood, label: 'Nutrizione' },
   { domain: 'training', Icon: IconGym, label: 'Allenamento' },
   { domain: 'health', Icon: IconHealth, label: 'Salute' },
