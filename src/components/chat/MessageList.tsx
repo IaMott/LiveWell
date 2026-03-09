@@ -6,9 +6,10 @@ import type { ChatMessage } from '@/hooks/useChat'
 
 type Props = {
   messages: ChatMessage[]
+  streamingSpecialistName?: string
 }
 
-export function MessageList({ messages }: Props) {
+export function MessageList({ messages, streamingSpecialistName }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -64,7 +65,11 @@ export function MessageList({ messages }: Props) {
       }}
     >
       {messages.map((msg) => (
-        <MessageBubble key={msg.id} message={msg} />
+        <MessageBubble
+          key={msg.id}
+          message={msg}
+          streamingSpecialistName={streamingSpecialistName}
+        />
       ))}
       <div ref={bottomRef} />
     </div>

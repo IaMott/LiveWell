@@ -21,9 +21,10 @@ const DOMAIN_LABELS: Partial<Record<Domain, string>> = {
 
 type Props = {
   message: ChatMessage
+  streamingSpecialistName?: string
 }
 
-export function MessageBubble({ message }: Props) {
+export function MessageBubble({ message, streamingSpecialistName }: Props) {
   const isUser = message.role === 'user'
   const domainColor = message.domain ? DOMAIN_COLORS[message.domain] : undefined
   const specialistLabel =
@@ -32,6 +33,9 @@ export function MessageBubble({ message }: Props) {
       : !isUser && message.domain && DOMAIN_LABELS[message.domain]
         ? DOMAIN_LABELS[message.domain]
         : null
+
+  // Name to show in ThinkingDots: prefer message-level name (from ui.state), fallback to streaming context
+  const thinkingName = message.specialistName ?? (message.streaming ? streamingSpecialistName : undefined)
 
   return (
     <div
@@ -85,7 +89,7 @@ export function MessageBubble({ message }: Props) {
           }}
         >
           {message.streaming && !message.content ? (
-            <ThinkingDots />
+            <ThinkingDots specialistName={thinkingName} />
           ) : (
             <MarkdownContent
               content={message.content}
@@ -250,7 +254,7 @@ function renderInline(text: string): React.ReactNode {
   return parts.length === 1 ? parts[0] : parts
 }
 
-function ThinkingDots() {
+function ThinkingDots({ specialistName }: { specialistName?: string }) {
   return (
     <div style={{ display: 'flex', gap: '4px', padding: '2px 0', alignItems: 'center' }}>
       {[0, 1, 2].map((i) => (
@@ -266,10 +270,31 @@ function ThinkingDots() {
           }}
         />
       ))}
+      {specialistName && (
+        // key={specialistName} causes remount on agent switch → CSS animation replays (crossfade effect)
+        <span
+          key={specialistName}
+          style={{
+            marginLeft: '7px',
+            fontSize: '0.6875rem',
+            fontWeight: 500,
+            color: 'var(--color-text-secondary)',
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            animation: 'lw-name-in 0.4s ease forwards',
+          }}
+        >
+          {specialistName}
+        </span>
+      )}
       <style>{`
         @keyframes lw-bounce {
           0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
           30% { transform: translateY(-5px); opacity: 1; }
+        }
+        @keyframes lw-name-in {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 0.55; transform: translateY(0); }
         }
       `}</style>
     </div>

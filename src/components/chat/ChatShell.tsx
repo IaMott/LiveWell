@@ -154,7 +154,10 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
         </div>
       )}
 
-      <MessageList messages={messages} />
+      <MessageList
+        messages={messages}
+        streamingSpecialistName={isStreaming ? (activeSpecialistName ?? undefined) : undefined}
+      />
       <ChatInput
         onSend={send}
         onHistory={() => setHistoryOpen(true)}
