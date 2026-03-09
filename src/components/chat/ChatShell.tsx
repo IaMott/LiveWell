@@ -33,11 +33,11 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
     exitSpecialist,
   } = useChat()
   const [historyOpen, setHistoryOpen] = useState(false)
-  // voiceActive: true while the Live modal is open — speak assistant replies
+  // voiceActive: true while the Live modal is open — speak assistant replies via TTS
   const [voiceActive, setVoiceActive] = useState(false)
   const lastSpokenIdRef = useRef<string | undefined>(undefined)
 
-  // Speak new assistant messages while voice session is active
+  // Speak new assistant messages while voice session is active (text fallback only)
   useEffect(() => {
     if (!voiceActive) return
     const lastMsg = messages.at(-1)
@@ -51,7 +51,6 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
       utterance.lang = 'it-IT'
       utterance.rate = 1.05
       utterance.pitch = 1.0
-      // Prefer Italian system voice if available
       const loadVoice = () => {
         const voices = window.speechSynthesis.getVoices()
         const itVoice = voices.find((v) => v.lang.startsWith('it'))
@@ -64,13 +63,15 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
         window.speechSynthesis.onvoiceschanged = loadVoice
       }
     }
-    // NOTE: do NOT reset voiceActive — it stays true until the modal closes
   }, [messages, voiceActive])
 
   const handleVoiceStart = useCallback(() => {
-    lastSpokenIdRef.current = undefined
+    // Pin lastSpokenId to the current last message so the TTS effect does NOT
+    // re-speak it when voiceActive flips to true. Only new messages received
+    // while the modal is open will be spoken (as text fallback).
+    lastSpokenIdRef.current = messages.at(-1)?.id
     setVoiceActive(true)
-  }, [])
+  }, [messages])
 
   const handleVoiceEnd = useCallback(() => {
     setVoiceActive(false)

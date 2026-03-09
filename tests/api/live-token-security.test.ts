@@ -1,6 +1,17 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '@/app/api/live-token/route'
 import { resetServerEnvForTests } from '@/lib/validators/env'
+
+// Mock @google/genai so the test doesn't make real API calls.
+// authTokens.create returns a fake ephemeral token name.
+vi.mock('@google/genai', () => ({
+  GoogleGenAI: vi.fn().mockImplementation(() => ({
+    authTokens: {
+      create: vi.fn().mockResolvedValue({ name: 'auth_tokens/test-ephemeral-token-12345' }),
+    },
+    tokens: undefined,
+  })),
+}))
 
 describe('/api/live-token security baseline', () => {
   const oldEnv = process.env
@@ -9,7 +20,7 @@ describe('/api/live-token security baseline', () => {
     process.env = { ...oldEnv }
     process.env.NODE_ENV = 'test'
     process.env.GEMINI_API_KEY = 'test-secret-key'
-    process.env.LIVE_MODEL = 'gemini-2.0-flash-live'
+    process.env.LIVE_MODEL = 'gemini-2.0-flash-live-001'
     resetServerEnvForTests()
   })
 
@@ -19,7 +30,7 @@ describe('/api/live-token security baseline', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns apiKey to authenticated users (intentional — endpoint is auth-protected)', async () => {
+  it('returns ephemeral token to authenticated users (not the raw API key)', async () => {
     const req = new Request('http://localhost/api/live-token', {
       method: 'POST',
       headers: {
@@ -33,13 +44,16 @@ describe('/api/live-token security baseline', () => {
     expect(res.status).toBe(200)
 
     const body = await res.json()
-    expect(body.sessionToken).toBeTypeOf('string')
-    expect(body.model).toBe('gemini-2.0-flash-live')
-    // apiKey is intentionally returned to authenticated users so the browser
-    // can open a direct WebSocket to the Gemini Live API.
-    // The endpoint requires a valid session cookie — unauthenticated requests
-    // receive 401 (verified above).
-    expect(body.apiKey).toBeTypeOf('string')
-    expect(body.apiKey).toBe('test-secret-key')
+
+    // Must return a short-lived ephemeral token, not the full API key
+    expect(body.token).toBeTypeOf('string')
+    expect(body.token).toContain('auth_tokens/')
+    expect(body.model).toBe('gemini-2.0-flash-live-001')
+
+    // GEMINI_API_KEY must NOT appear in the response
+    const serialized = JSON.stringify(body)
+    expect(serialized).not.toContain('test-secret-key')
+    // apiKey field must not be present
+    expect(body.apiKey).toBeUndefined()
   })
 })
