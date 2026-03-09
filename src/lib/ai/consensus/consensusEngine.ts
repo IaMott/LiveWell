@@ -140,48 +140,26 @@ function pickPrimaryDomain(domainHint: Domain | undefined, proposals: AgentPropo
   return sorted.length ? sorted[0][0] : 'general'
 }
 
+// Internal summary used as context for the synthesis LLM call — never shown directly to the user.
 function composeFinalMarkdown(
   domain: Domain,
   proposals: AgentProposal[],
   context: ContextPack,
 ): string {
-  // Team-led voice: professionals lead; user confirms only constraints.
-  const parts: string[] = []
-  parts.push(`### Sintesi (${domain})`)
   const top = proposals.sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5))[0]
+  const parts: string[] = [`[internal:domain=${domain}]`]
+
   if (top?.summary) parts.push(top.summary)
 
   const gating = collectGatingQuestions(proposals, context)
-  if (gating.length) {
-    parts.push(`\n### Domande mirate (per completare i dati)`)
-    parts.push(gating.map((q) => `- ${q}`).join('\n'))
-  }
+  if (gating.length) parts.push(`[gating: ${gating.join(' | ')}]`)
 
-  // Merge recommendations
   const recs = proposals.flatMap((p) => p.recommendations ?? [])
   if (recs.length) {
-    parts.push(`\n### Piano proposto dal team`)
-    recs.slice(0, 3).forEach((r, idx) => {
-      parts.push(`\n**${idx + 1}. ${r.title}**`)
-      parts.push(r.steps.map((s) => `- ${s}`).join('\n'))
-      parts.push(`\n_Razionale_: ${r.rationale}`)
-      if (r.safetyNotes?.length) {
-        parts.push(`\n_Note di sicurezza_:`)
-        parts.push(r.safetyNotes.map((s) => `- ${s}`).join('\n'))
-      }
+    recs.slice(0, 3).forEach((r) => {
+      parts.push(`${r.title}: ${r.steps.slice(0, 2).join('; ')}`)
     })
-  } else if (!gating.length) {
-    parts.push(`\n### Prossimo passo`)
-    parts.push(
-      `- Il team può proporre un percorso appena confermati i vincoli pratici (orari, attrezzatura, alimenti disponibili, preferenze non cliniche).`,
-    )
   }
-
-  // Mood hint (UI-only)
-  parts.push(`\n---\n`)
-  parts.push(
-    `_Stato attuale_: ${context.ui.moodScore}/100 (indicatore UI basato su tracking reale).`,
-  )
 
   return parts.join('\n')
 }

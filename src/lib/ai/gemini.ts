@@ -34,7 +34,10 @@ Optional fields:
 
 function buildMockClient(): LlmClient {
   return {
-    async complete() {
+    async complete({ format = 'json' } = {} as { system: string; user: string; format?: 'json' | 'text' }) {
+      if (format === 'text') {
+        return { text: 'Sono qui per aiutarti. Dimmi pure come posso supportarti oggi.' }
+      }
       return {
         text: JSON.stringify({
           domain: 'general',
@@ -67,15 +70,15 @@ export function createGeminiClient(): LlmClient {
   const ai = new GoogleGenAI({ apiKey })
 
   return {
-    async complete({ system, user }) {
-      const systemInstruction = system + JSON_OUTPUT_INSTRUCTION
+    async complete({ system, user, format = 'json' }) {
+      const systemInstruction = format === 'json' ? system + JSON_OUTPUT_INSTRUCTION : system
 
       const response = await ai.models.generateContent({
         model,
         contents: user,
         config: {
           systemInstruction,
-          temperature: 0.7,
+          temperature: format === 'json' ? 0.7 : 0.85,
           maxOutputTokens: 2048,
         },
       })
@@ -85,55 +88,5 @@ export function createGeminiClient(): LlmClient {
       const text = raw.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
       return { text }
     },
-  }
-}
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Compatibility shims for legacy src/lib/ai/orchestrator.ts (Step 8 era).
-// The new orchestrator uses createGeminiClient(). These shims let both coexist.
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Returns true if GEMINI_API_KEY is configured.
- * Used by legacy orchestrator and transcribe route.
- */
-export function isGeminiConfigured(): boolean {
-  try {
-    const env = getServerEnv()
-    return Boolean(env.GEMINI_API_KEY)
-  } catch {
-    return false
-  }
-}
-
-type LegacyAIMessage = { role: 'user' | 'assistant' | 'system'; content: string }
-
-/**
- * Legacy response generator: wraps createGeminiClient for old orchestrator API.
- */
-export async function generateResponse(
-  systemPrompt: string,
-  messages: LegacyAIMessage[],
-): Promise<string> {
-  const client = createGeminiClient()
-  const userText = messages
-    .filter((m) => m.role !== 'system')
-    .map((m) => `[${m.role}]: ${m.content}`)
-    .join('\n\n')
-  const result = await client.complete({ system: systemPrompt, user: userText })
-  return result.text
-}
-
-/**
- * Legacy streaming generator: yields tokens word-by-word.
- */
-export async function* generateStream(
-  systemPrompt: string,
-  messages: LegacyAIMessage[],
-): AsyncGenerator<string> {
-  const text = await generateResponse(systemPrompt, messages)
-  for (const word of text.split(' ')) {
-    yield word + ' '
   }
 }

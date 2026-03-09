@@ -44,36 +44,186 @@ export function MessageBubble({ message }: Props) {
         style={{
           maxWidth: '72%',
           backgroundColor: 'var(--color-surface)',
-          borderRadius: isUser ? '1.25rem 1.25rem 0.375rem 1.25rem' : '1.25rem 1.25rem 1.25rem 0.375rem',
+          borderRadius: isUser
+            ? '1.25rem 1.25rem 0.375rem 1.25rem'
+            : '1.25rem 1.25rem 1.25rem 0.375rem',
           padding: '0.625rem 0.875rem',
           boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
         }}
       >
         {message.streaming && !message.content ? (
-          <TypingDots />
+          <ThinkingDots />
         ) : (
-          <p
-            style={{
-              margin: 0,
-              fontSize: '0.9375rem',
-              lineHeight: 1.5,
-              color: 'var(--color-text-primary)',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-            }}
-          >
-            {message.content}
-            {message.streaming && <span style={{ opacity: 0.5 }}>▋</span>}
-          </p>
+          <MarkdownContent
+            content={message.content}
+            streaming={message.streaming}
+          />
         )}
       </div>
     </div>
   )
 }
 
-function TypingDots() {
+/** Lightweight inline markdown renderer — supports bold, italic, numbered lists, bullet lists */
+function MarkdownContent({
+  content,
+  streaming,
+}: {
+  content: string
+  streaming?: boolean
+}) {
+  const blocks = parseBlocks(content)
+
   return (
-    <div style={{ display: 'flex', gap: '4px', padding: '2px 0' }}>
+    <div
+      style={{
+        fontSize: '0.9375rem',
+        lineHeight: 1.6,
+        color: 'var(--color-text-primary)',
+        wordBreak: 'break-word',
+      }}
+    >
+      {blocks.map((block, i) => {
+        if (block.type === 'bullet-list') {
+          return (
+            <ul key={i} style={{ margin: '0.25rem 0', paddingLeft: '1.25rem' }}>
+              {block.items!.map((item, j) => (
+                <li key={j} style={{ marginBottom: '0.125rem' }}>
+                  {renderInline(item)}
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        if (block.type === 'numbered-list') {
+          return (
+            <ol key={i} style={{ margin: '0.25rem 0', paddingLeft: '1.25rem' }}>
+              {block.items!.map((item, j) => (
+                <li key={j} style={{ marginBottom: '0.125rem' }}>
+                  {renderInline(item)}
+                </li>
+              ))}
+            </ol>
+          )
+        }
+        // paragraph
+        return (
+          <p key={i} style={{ margin: i === 0 ? '0' : '0.5rem 0 0' }}>
+            {renderInline(block.text ?? '')}
+            {streaming && i === blocks.length - 1 && (
+              <span style={{ opacity: 0.5 }}>▋</span>
+            )}
+          </p>
+        )
+      })}
+      {!blocks.length && streaming && <span style={{ opacity: 0.5 }}>▋</span>}
+    </div>
+  )
+}
+
+type Block =
+  | { type: 'paragraph'; text: string }
+  | { type: 'bullet-list'; items: string[] }
+  | { type: 'numbered-list'; items: string[] }
+
+function parseBlocks(text: string): Block[] {
+  const lines = text.split('\n')
+  const blocks: Block[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    if (/^[-*•]\s/.test(line)) {
+      // Collect bullet list
+      const items: string[] = []
+      while (i < lines.length && /^[-*•]\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^[-*•]\s+/, ''))
+        i++
+      }
+      blocks.push({ type: 'bullet-list', items })
+      continue
+    }
+
+    if (/^\d+\.\s/.test(line)) {
+      // Collect numbered list
+      const items: string[] = []
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+\.\s+/, ''))
+        i++
+      }
+      blocks.push({ type: 'numbered-list', items })
+      continue
+    }
+
+    if (line.trim() === '') {
+      i++
+      continue
+    }
+
+    // Paragraph: collect consecutive non-list, non-empty lines
+    const paragraphLines: string[] = []
+    while (
+      i < lines.length &&
+      lines[i].trim() !== '' &&
+      !/^[-*•]\s/.test(lines[i]) &&
+      !/^\d+\.\s/.test(lines[i])
+    ) {
+      paragraphLines.push(lines[i])
+      i++
+    }
+    if (paragraphLines.length > 0) {
+      blocks.push({ type: 'paragraph', text: paragraphLines.join(' ') })
+    }
+  }
+
+  return blocks
+}
+
+function renderInline(text: string): React.ReactNode {
+  // Process **bold**, *italic*, inline code `code`
+  const parts: React.ReactNode[] = []
+  const regex = /(\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/g
+  let last = 0
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > last) {
+      parts.push(text.slice(last, match.index))
+    }
+    if (match[2]) {
+      parts.push(<strong key={match.index}>{match[2]}</strong>)
+    } else if (match[3]) {
+      parts.push(<em key={match.index}>{match[3]}</em>)
+    } else if (match[4]) {
+      parts.push(
+        <code
+          key={match.index}
+          style={{
+            fontFamily: 'monospace',
+            fontSize: '0.875em',
+            backgroundColor: 'var(--color-separator)',
+            borderRadius: '3px',
+            padding: '0 3px',
+          }}
+        >
+          {match[4]}
+        </code>,
+      )
+    }
+    last = match.index + match[0].length
+  }
+
+  if (last < text.length) {
+    parts.push(text.slice(last))
+  }
+
+  return parts.length === 1 ? parts[0] : parts
+}
+
+function ThinkingDots() {
+  return (
+    <div style={{ display: 'flex', gap: '4px', padding: '2px 0', alignItems: 'center' }}>
       {[0, 1, 2].map((i) => (
         <span
           key={i}
@@ -82,15 +232,15 @@ function TypingDots() {
             height: '6px',
             borderRadius: '50%',
             backgroundColor: 'var(--color-text-secondary)',
-            animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+            animation: `lw-bounce 1.4s ease-in-out ${i * 0.2}s infinite`,
             display: 'inline-block',
           }}
         />
       ))}
       <style>{`
-        @keyframes bounce {
-          0%, 60%, 100% { transform: translateY(0); }
-          30% { transform: translateY(-4px); }
+        @keyframes lw-bounce {
+          0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+          30% { transform: translateY(-5px); opacity: 1; }
         }
       `}</style>
     </div>

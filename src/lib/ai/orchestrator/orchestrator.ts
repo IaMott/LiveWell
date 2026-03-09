@@ -1,13 +1,15 @@
-import { AgentProfile, AgentInput, AgentProposal, ConsensusResult, Domain } from '../types'
+import { AgentProfile, AgentInput, AgentProposal, ConsensusResult, ContextPack, Domain } from '../types'
 import { detectDomainFromText } from '../domain/domainDetection'
 import { selectAgentsForRequest, runConsensus } from '../consensus/consensusEngine'
 
 export type LlmClient = {
+  // Your Gemini provider (or mock) implements this.
   complete: (args: {
     system: string
     user: string
     jsonSchema?: unknown
     stream?: boolean
+    format?: 'json' | 'text'
   }) => Promise<{ text: string }>
 }
 
@@ -17,151 +19,22 @@ export type OrchestratorDeps = {
   orchestratorToolsAllowed: string[]
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Profile serialization — builds a compact but rich context block for agents
-// ─────────────────────────────────────────────────────────────────────────────
-
-function formatAge(birthDate: unknown): string | null {
-  if (!birthDate || typeof birthDate !== 'string') return null
-  try {
-    const years = Math.floor(
-      (Date.now() - new Date(birthDate).getTime()) / (1000 * 60 * 60 * 24 * 365.25),
-    )
-    return isNaN(years) || years < 0 || years > 120 ? null : `${years}`
-  } catch {
-    return null
-  }
-}
-
-function serializeProfileContext(pack: AgentInput['contextPack']): string {
-  const profile = pack.user.profile as Record<string, unknown> | undefined
-  if (!profile) return ''
-
-  const lines: string[] = []
-
-  // ── Personal ──────────────────────────────────────────────────────────────
-  const personal: string[] = []
-  const age = formatAge(profile.birthDate)
-  if (age) personal.push(`age: ${age}`)
-  if (profile.gender) personal.push(`gender: ${profile.gender}`)
-  if (profile.height) personal.push(`height: ${profile.height} cm`)
-  if (profile.weight) personal.push(`weight: ${profile.weight} kg`)
-  if (personal.length > 0) lines.push(`PERSONAL: ${personal.join(', ')}`)
-
-  // ── Health ────────────────────────────────────────────────────────────────
-  const health = profile.health as Record<string, unknown> | null | undefined
-  if (health && typeof health === 'object') {
-    const hParts: string[] = []
-    if (health.conditions) hParts.push(`conditions: ${health.conditions}`)
-    if (health.medications) hParts.push(`medications: ${health.medications}`)
-    if (health.allergies) hParts.push(`allergies: ${health.allergies}`)
-    if (health.surgeries) hParts.push(`past surgeries: ${health.surgeries}`)
-    if (health.smokingStatus) hParts.push(`smoking: ${health.smokingStatus}`)
-    if (hParts.length > 0) lines.push(`HEALTH: ${hParts.join(' | ')}`)
-  }
-
-  // ── Nutrition ─────────────────────────────────────────────────────────────
-  const nutrition = profile.nutrition as Record<string, unknown> | null | undefined
-  if (nutrition && typeof nutrition === 'object') {
-    const nParts: string[] = []
-    if (nutrition.dietType) nParts.push(`diet: ${nutrition.dietType}`)
-    if (nutrition.dailyKcal) nParts.push(`kcal target: ${nutrition.dailyKcal}`)
-    if (nutrition.meals) nParts.push(`meals/day: ${nutrition.meals}`)
-    if (nutrition.allergies) nParts.push(`intolerances: ${nutrition.allergies}`)
-    if (nParts.length > 0) lines.push(`NUTRITION: ${nParts.join(' | ')}`)
-  }
-
-  // ── Training ──────────────────────────────────────────────────────────────
-  const training = profile.training as Record<string, unknown> | null | undefined
-  if (training && typeof training === 'object') {
-    const tParts: string[] = []
-    if (training.fitnessLevel) tParts.push(`level: ${training.fitnessLevel}`)
-    if (training.weeklyDays) tParts.push(`days/week: ${training.weeklyDays}`)
-    if (training.preferredActivities) tParts.push(`activities: ${training.preferredActivities}`)
-    if (training.trainingGoal) tParts.push(`goal: ${training.trainingGoal}`)
-    if (tParts.length > 0) lines.push(`TRAINING: ${tParts.join(' | ')}`)
-  }
-
-  // ── Mindfulness ───────────────────────────────────────────────────────────
-  const mindfulness = profile.mindfulness as Record<string, unknown> | null | undefined
-  if (mindfulness && typeof mindfulness === 'object') {
-    const mParts: string[] = []
-    if (mindfulness.sleepHours) mParts.push(`sleep target: ${mindfulness.sleepHours}h`)
-    if (mindfulness.stressTarget) mParts.push(`stress target: ${mindfulness.stressTarget}/10`)
-    if (mindfulness.meditationGoal) mParts.push(`goal: ${mindfulness.meditationGoal}`)
-    if (mParts.length > 0) lines.push(`MINDFULNESS: ${mParts.join(' | ')}`)
-  }
-
-  // ── Goals ─────────────────────────────────────────────────────────────────
-  const goals = profile.goals as Record<string, unknown> | null | undefined
-  if (goals && typeof goals === 'object') {
-    const gParts: string[] = []
-    if (goals.primaryGoal) gParts.push(`primary: ${goals.primaryGoal}`)
-    if (goals.weightGoal) gParts.push(`weight goal: ${goals.weightGoal} kg`)
-    if (gParts.length > 0) lines.push(`GOALS: ${gParts.join(' | ')}`)
-  }
-
-  return lines.length > 0 ? `\nUSER PROFILE:\n${lines.join('\n')}` : ''
-}
-
-function serializeTrackerContext(pack: AgentInput['contextPack']): string {
-  const { trackers } = pack
-  if (!trackers || Object.keys(trackers).length === 0) return ''
-
-  const parts: string[] = []
-  if (trackers.training?.workoutsCount7d != null)
-    parts.push(`workouts last 7d: ${trackers.training.workoutsCount7d}`)
-  if (trackers.nutrition?.mealsCount7d != null)
-    parts.push(`meals logged last 7d: ${trackers.nutrition.mealsCount7d}`)
-  if (trackers.mindfulness?.entriesCount7d != null)
-    parts.push(`mindfulness entries last 7d: ${trackers.mindfulness.entriesCount7d}`)
-  if (trackers.health?.metricsCount7d != null)
-    parts.push(`health metrics last 7d: ${trackers.health.metricsCount7d}`)
-
-  return parts.length > 0 ? `\nRECENT ACTIVITY: ${parts.join(' | ')}` : ''
-}
-
-function serializeGeoContext(pack: AgentInput['contextPack']): string {
-  const geo = pack.geo
-  if (!geo) return ''
-  const parts: string[] = []
-  if (geo.city) parts.push(geo.city)
-  if (geo.region) parts.push(geo.region)
-  if (geo.country) parts.push(geo.country)
-  if (geo.timezone) parts.push(`tz: ${geo.timezone}`)
-  return parts.length > 0 ? `\nLOCATION: ${parts.join(', ')}` : ''
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
 function buildAgentUserPrompt(input: AgentInput): string {
-  const profileCtx = serializeProfileContext(input.contextPack)
-  const trackerCtx = serializeTrackerContext(input.contextPack)
-  const geoCtx = serializeGeoContext(input.contextPack)
-
   const parts: string[] = [
     `USER MESSAGE:`,
     input.message,
     ``,
-    `CONTEXT SUMMARY:`,
+    `CONTEXT (summary):`,
     `- role: ${input.contextPack.user.role}`,
-    `- wellbeing score: ${input.contextPack.ui.moodScore}/100`,
+    `- moodScore: ${input.contextPack.ui.moodScore}`,
+    `- recentMessages: ${input.contextPack.history.recentMessages
+      .slice(-6)
+      .map((m) => `${m.role}: ${m.content}`)
+      .join(' | ')}`,
   ]
 
-  if (profileCtx) parts.push(profileCtx)
-  if (trackerCtx) parts.push(trackerCtx)
-  if (geoCtx) parts.push(geoCtx)
-
-  // Recent conversation history (last 6 turns)
-  const recentHistory = input.contextPack.history.recentMessages.slice(-6)
-  if (recentHistory.length > 0) {
-    parts.push(`\nCONVERSATION HISTORY (last ${recentHistory.length} turns):`)
-    for (const m of recentHistory) {
-      parts.push(`${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.slice(0, 200)}`)
-    }
-  }
-
-  // Detect if last assistant turn had gating questions → extract profile info
+  // Gap 1: detect previous gating questions from last assistant turn → instruct agent to
+  // propose user.updateProfile if the user's message answers any of them
   const lastAssistant = input.contextPack.history.recentMessages
     .filter((m) => m.role === 'assistant')
     .slice(-1)[0]
@@ -172,32 +45,23 @@ function buildAgentUserPrompt(input: AgentInput): string {
       .filter((l) => l.endsWith('?'))
       .slice(0, 6)
     if (prevQuestions.length > 0) {
-      parts.push(`\nPREVIOUS TEAM QUESTIONS (from last turn):`)
+      parts.push(``, `PREVIOUS TEAM QUESTIONS (from last turn):`)
       prevQuestions.forEach((q) => parts.push(`- ${q}`))
       parts.push(
-        `If the user message answers any of these, include a "user.updateProfile" tool call`,
-        `with { fields: { <key>: <value> } } for each extracted value.`,
-        `Only include fields you can extract with confidence.`,
+        `If the user message answers any of these questions, include a "user.updateProfile" tool call`,
+        `in your toolCalls[] with { fields: { <key>: <value> } } for each extracted value.`,
+        `Only include fields you can extract with confidence from the user message.`,
       )
     }
-  }
-
-  // Personalization instruction
-  if (profileCtx) {
-    parts.push(
-      `\nPERSONALIZATION NOTE:`,
-      `Use the USER PROFILE above to tailor your response. Reference specific data (age, conditions, goals, fitness level) when relevant. Do NOT ask for information already present in the profile.`,
-    )
   }
 
   parts.push(
     ``,
     `INSTRUCTIONS:`,
-    `- You are a specialist agent. Respond ONLY within your domain scope.`,
-    `- Ask gating questions only for data genuinely missing from the profile.`,
-    `- Provide evidence-based, personalized recommendations.`,
+    `- You are a specialist agent. Respond ONLY within your domain scope. Do NOT ask about or propose recommendations for other domains.`,
+    `- Ask gating questions only for data that YOUR specific domain requires.`,
+    `- Provide evidence-based recommendations. If uncertain, say so.`,
     `- Propose tool calls only if clearly helpful; do not claim execution.`,
-    `- Respond in the same language as the user message (default: Italian).`,
   )
 
   return parts.join('\n')
@@ -208,6 +72,7 @@ async function runOneAgent(
   agent: AgentProfile,
   input: AgentInput,
 ): Promise<AgentProposal> {
+  // Minimal JSON-ish protocol: agent writes a JSON object.
   const userPrompt = buildAgentUserPrompt(input)
 
   const res = await llm.complete({
@@ -215,6 +80,7 @@ async function runOneAgent(
     user: userPrompt,
   })
 
+  // Try to parse JSON. Fallback to a safe proposal.
   try {
     const obj = JSON.parse(res.text)
     return {
@@ -243,6 +109,87 @@ async function runOneAgent(
   }
 }
 
+/**
+ * Final synthesis step: converts structured specialist proposals into a natural,
+ * warm Italian conversational response. This is the text shown to the user.
+ */
+async function synthesizeResponse(
+  llm: LlmClient,
+  params: {
+    userMessage: string
+    proposals: AgentProposal[]
+    gatingQuestions: string[]
+    contextPack: ContextPack
+  },
+): Promise<string> {
+  const { userMessage, proposals, gatingQuestions, contextPack } = params
+
+  // Build concise internal context for the synthesis prompt
+  const summaries = proposals
+    .filter((p) => p.summary)
+    .sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5))
+    .map((p) => p.summary)
+    .join('\n')
+
+  const topRecs = proposals
+    .flatMap((p) => p.recommendations ?? [])
+    .slice(0, 3)
+    .map((r) => `• ${r.title}: ${r.steps.slice(0, 2).join('; ')}`)
+    .join('\n')
+
+  const recentHistory = contextPack.history.recentMessages
+    .slice(-4)
+    .map((m) => `${m.role === 'user' ? 'Utente' : 'LiveWell'}: ${m.content.slice(0, 120)}`)
+    .join('\n')
+
+  const systemPrompt = [
+    `Sei LiveWell, un assistente per il benessere personale che coordina un team di specialisti italiani.`,
+    `Parli in italiano, con tono caldo, diretto e professionale — mai generico.`,
+    ``,
+    `REGOLE OBBLIGATORIE:`,
+    `- NON usare intestazioni markdown (###, ##, #)`,
+    `- NON iniziare con "Certo!", "Assolutamente!", "Ottima domanda!" o simili`,
+    `- NON ripetere formalmente il dominio (non scrivere "Nell'ambito della nutrizione...")`,
+    `- Rispondi direttamente al messaggio dell'utente`,
+    `- Max 3-4 frasi salvo piani dettagliati richiesti dall'utente`,
+    `- Se devi fare domande, includine al massimo 1, formulata in modo conversazionale`,
+    `- Non chiedere informazioni già presenti nel profilo utente`,
+    `- Usa il punto fermo, non liste di bullet, per risposte conversazionali brevi`,
+    `- Per piani o programmi strutturati, usa elenchi numerati senza intestazioni`,
+  ].join('\n')
+
+  const userPrompt = [
+    recentHistory ? `CONVERSAZIONE RECENTE:\n${recentHistory}\n` : '',
+    `MESSAGGIO UTENTE: "${userMessage}"`,
+    ``,
+    `ANALISI DEL TEAM SPECIALISTICO:`,
+    summaries,
+    topRecs ? `\nRACCOMANDAZIONI:\n${topRecs}` : '',
+    gatingQuestions.length
+      ? `\nINFORMAZIONI ANCORA MANCANTI (chiedi solo la più importante): ${gatingQuestions.slice(0, 3).join('; ')}`
+      : '',
+    ``,
+    `Scrivi una risposta conversazionale naturale in italiano, rivolta direttamente all'utente.`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  try {
+    const res = await llm.complete({ system: systemPrompt, user: userPrompt, format: 'text' })
+    const text = res.text.trim()
+    // Fallback if model accidentally returned JSON
+    if (text.startsWith('{') || text.startsWith('[')) {
+      return proposals.find((p) => p.summary)?.summary ?? 'Il team sta elaborando la tua richiesta.'
+    }
+    return text
+  } catch {
+    return (
+      proposals.find((p) => p.summary)?.summary ??
+      'Il team sta elaborando la tua richiesta.'
+    )
+  }
+}
+
 export async function orchestrate(
   deps: OrchestratorDeps,
   input: AgentInput,
@@ -254,7 +201,7 @@ export async function orchestrate(
     selectedAgents.map((a) => runOneAgent(deps.llm, a, { ...input, domainHint })),
   )
 
-  return runConsensus({
+  const consensus = runConsensus({
     opts: { orchestratorId: 'orchestrator', maxAgents: 4, requireGatingOnMissingInfo: true },
     team: deps.team,
     proposals,
@@ -262,4 +209,14 @@ export async function orchestrate(
     contextPack: input.contextPack,
     orchestratorToolsAllowed: deps.orchestratorToolsAllowed,
   })
+
+  // Replace template-generated markdown with a natural Italian conversational response
+  const naturalResponse = await synthesizeResponse(deps.llm, {
+    userMessage: input.message,
+    proposals,
+    gatingQuestions: consensus.gatingQuestions ?? [],
+    contextPack: input.contextPack,
+  })
+
+  return { ...consensus, finalMessageMarkdown: naturalResponse }
 }
