@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, MessageSquare, Trash2, Plus } from 'lucide-react'
+import { X, MessageSquare, Trash2, Plus, Download } from 'lucide-react'
 
 type ConvPreview = {
   id: string
@@ -16,12 +16,14 @@ type Props = {
   onClose: () => void
   onSelect: (id: string) => void
   onNew: () => void
+  onExport: (id: string) => void
 }
 
-export function ConversationHistory({ open, currentId, onClose, onSelect, onNew }: Props) {
+export function ConversationHistory({ open, currentId, onClose, onSelect, onNew, onExport }: Props) {
   const [convs, setConvs] = useState<ConvPreview[]>([])
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [exporting, setExporting] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -42,6 +44,17 @@ export function ConversationHistory({ open, currentId, onClose, onSelect, onNew 
       setConvs((prev) => prev.filter((c) => c.id !== id))
     } finally {
       setDeleting(null)
+    }
+  }
+
+  const handleExport = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (exporting) return
+    setExporting(id)
+    try {
+      await onExport(id)
+    } finally {
+      setExporting(null)
     }
   }
 
@@ -238,6 +251,22 @@ export function ConversationHistory({ open, currentId, onClose, onSelect, onNew 
                     month: 'short',
                   })}
                 </span>
+                <button
+                  onClick={(e) => handleExport(c.id, e)}
+                  aria-label="Esporta conversazione"
+                  style={{
+                    padding: '0.25rem',
+                    background: 'transparent',
+                    border: 'none',
+                    color: exporting === c.id ? 'var(--color-text-secondary)' : 'var(--color-accent)',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Download size={15} />
+                </button>
                 <button
                   onClick={(e) => handleDelete(c.id, e)}
                   aria-label="Elimina conversazione"

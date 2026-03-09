@@ -10,21 +10,11 @@ function IconSettings() {
   )
 }
 
-function IconExport() {
-  return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 3v13M7 11l5 5 5-5" />
-      <path d="M5 21h14" />
-    </svg>
-  )
-}
-
 type Props = {
   userInitials?: string
-  onExport?: () => void
 }
 
-export function TopBar({ userInitials = 'ME', onExport }: Props) {
+export function TopBar({ userInitials = 'ME' }: Props) {
   return (
     <header
       style={{
@@ -47,39 +37,20 @@ export function TopBar({ userInitials = 'ME', onExport }: Props) {
         <IconSettings />
       </Link>
 
-      {/* Right side: export + avatar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        {onExport && (
-          <button
-            type="button"
-            onClick={onExport}
-            aria-label="Esporta chat"
-            title="Esporta conversazione"
-            style={{
-              width: '2.25rem', height: '2.25rem', borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--color-text-secondary)',
-            }}
-          >
-            <IconExport />
-          </button>
-        )}
-
-        <Link
-          href="/profile"
-          aria-label="Vai al profilo"
-          style={{
-            width: '2.5rem', height: '2.5rem', borderRadius: '50%',
-            backgroundColor: 'var(--color-text-primary)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: '0.875rem', fontWeight: 600,
-            letterSpacing: '0.02em', textDecoration: 'none',
-          }}
-        >
-          {userInitials}
-        </Link>
-      </div>
+      {/* Right side: avatar */}
+      <Link
+        href="/profile"
+        aria-label="Vai al profilo"
+        style={{
+          width: '2.5rem', height: '2.5rem', borderRadius: '50%',
+          backgroundColor: 'var(--color-text-primary)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#fff', fontSize: '0.875rem', fontWeight: 600,
+          letterSpacing: '0.02em', textDecoration: 'none',
+        }}
+      >
+        {userInitials}
+      </Link>
     </header>
   )
 }

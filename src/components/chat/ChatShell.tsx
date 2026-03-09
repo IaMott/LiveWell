@@ -33,10 +33,7 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
         margin: '0 auto',
       }}
     >
-      <TopBar
-        userInitials={userInitials}
-        onExport={conversationId ? exportConversation : undefined}
-      />
+      <TopBar userInitials={userInitials} />
       <MessageList messages={messages} />
       <ChatInput
         onSend={send}
@@ -50,6 +47,7 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
         onClose={() => setHistoryOpen(false)}
         onSelect={loadConversation}
         onNew={newConversation}
+        onExport={exportConversation}
       />
     </div>
   )

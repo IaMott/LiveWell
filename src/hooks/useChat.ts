@@ -71,11 +71,11 @@ export function useChat() {
     localStorage.setItem(STORAGE_KEY, newId)
   }, [])
 
-  const exportConversation = useCallback(async () => {
-    const id = conversationIdRef.current
-    if (!id) return
+  const exportConversation = useCallback(async (id?: string) => {
+    const targetId = id ?? conversationIdRef.current
+    if (!targetId) return
     try {
-      const res = await fetch(`/api/conversations/${id}/export`)
+      const res = await fetch(`/api/conversations/${targetId}/export`)
       if (!res.ok) return
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
