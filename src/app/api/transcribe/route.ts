@@ -101,6 +101,6 @@ export async function POST(request: Request): Promise<Response> {
     })
   } catch (err) {
     console.error('[api/transcribe] Gemini error:', err)
-    return errorResponse(500, 'TRANSCRIPTION_FAILED', 'Audio transcription failed')
+    return errorResponse(500, 'INTERNAL_ERROR', 'Audio transcription failed')
   }
 }
