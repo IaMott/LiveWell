@@ -2,66 +2,42 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pencil, Plus } from 'lucide-react'
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
-import { StatCard } from './StatCard'
-import { EmptyState } from './EmptyState'
+import type React from 'react'
 
 type Props = { data: ProfileData }
+
+const WORKOUT_TYPES = [
+  { key: 'cardio', label: 'Cardio', emoji: '🏃', color: '#FF3B30', desc: 'Corsa, bici, nuoto' },
+  { key: 'forza', label: 'Forza', emoji: '🏋️', color: '#007AFF', desc: 'Pesi, macchine' },
+  { key: 'flessibilita', label: 'Flessibilità', emoji: '🧘', color: '#34C759', desc: 'Yoga, stretching' },
+  { key: 'sport', label: 'Sport', emoji: '⚽', color: '#FF9F0A', desc: 'Sport di squadra' },
+]
 
 export function TrainingSection({ data }: Props) {
   const { stats, recentWorkouts, profile } = data
   const router = useRouter()
-  const [editing, setEditing] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [addSaving, setAddSaving] = useState(false)
-  const trainingProfile = profile?.training as Record<string, unknown> | null
-  const [form, setForm] = useState({
-    weeklyDays: trainingProfile?.weeklyDays != null ? String(trainingProfile.weeklyDays) : '',
-    fitnessLevel: trainingProfile?.fitnessLevel != null ? String(trainingProfile.fitnessLevel) : '',
-    preferredActivities: trainingProfile?.preferredActivities != null ? String(trainingProfile.preferredActivities) : '',
-    trainingGoal: trainingProfile?.trainingGoal != null ? String(trainingProfile.trainingGoal) : '',
-  })
-  const [addForm, setAddForm] = useState({ durationMin: '30', perceivedEffort: '6', notes: '' })
+  const [addForm, setAddForm] = useState({ type: 'cardio', durationMin: '30', effort: '6', notes: '' })
 
-  async function saveProfile() {
-    setSaving(true)
-    try {
-      await fetch('/api/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          section: 'training',
-          data: {
-            weeklyDays: form.weeklyDays ? Number(form.weeklyDays) : undefined,
-            fitnessLevel: form.fitnessLevel || undefined,
-            preferredActivities: form.preferredActivities || undefined,
-            trainingGoal: form.trainingGoal || undefined,
-          },
-        }),
-      })
-      setEditing(false)
-      router.refresh()
-    } finally {
-      setSaving(false)
-    }
-  }
+  const trainingProfile = profile?.training as Record<string, unknown> | null
+  const weeklyTarget = trainingProfile?.weeklyDays != null ? Number(trainingProfile.weeklyDays) : 3
+  const progressPct = Math.min(100, weeklyTarget > 0 ? Math.round((stats.workoutSessions7d / weeklyTarget) * 100) : 0)
 
   async function addWorkout() {
     setAddSaving(true)
     try {
-      await fetch('/api/trackers/workout', {
+      await fetch('/api/profile/workout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          durationMin: Number(addForm.durationMin) || 30,
-          perceivedEffort: Number(addForm.perceivedEffort) || undefined,
-          notes: addForm.notes || undefined,
+          durationMin: Number(addForm.durationMin),
+          perceivedEffort: Number(addForm.effort),
+          notes: `${addForm.type}: ${addForm.notes}`.trim(),
         }),
       })
       setAdding(false)
-      setAddForm({ durationMin: '30', perceivedEffort: '6', notes: '' })
       router.refresh()
     } finally {
       setAddSaving(false)
@@ -70,140 +46,145 @@ export function TrainingSection({ data }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      {/* Profile edit card */}
-      <div style={panelStyle}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <h2 style={sectionTitleStyle}>Allenamento</h2>
-          <button onClick={() => setEditing((v) => !v)} style={editButtonStyle}>
-            <Pencil size={12} />
-            {editing ? 'Annulla' : 'Modifica'}
-          </button>
+      {/* Weekly progress bar */}
+      <div style={{
+        backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem',
+        padding: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.625rem' }}>
+          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary, #1C1C1E)' }}>
+            Obiettivo settimanale
+          </span>
+          <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#007AFF' }}>
+            {stats.workoutSessions7d}/{weeklyTarget} gg
+          </span>
         </div>
-        {!editing ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <Row label="Livello" value={trainingProfile?.fitnessLevel ? String(trainingProfile.fitnessLevel) : '—'} />
-            <Row label="Giorni/settimana" value={trainingProfile?.weeklyDays != null ? String(trainingProfile.weeklyDays) : '—'} />
-            <Row label="Attività" value={trainingProfile?.preferredActivities ? String(trainingProfile.preferredActivities) : '—'} />
-            <Row label="Obiettivo" value={trainingProfile?.trainingGoal ? String(trainingProfile.trainingGoal) : '—'} />
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <Field label="Livello di fitness">
-              <select value={form.fitnessLevel} onChange={(e) => setForm((f) => ({ ...f, fitnessLevel: e.target.value }))} style={inputStyle}>
-                <option value="">Seleziona</option>
-                <option value="principiante">Principiante</option>
-                <option value="intermedio">Intermedio</option>
-                <option value="avanzato">Avanzato</option>
-                <option value="atleta">Atleta</option>
-              </select>
-            </Field>
-            <Field label="Giorni a settimana">
-              <input type="number" value={form.weeklyDays} onChange={(e) => setForm((f) => ({ ...f, weeklyDays: e.target.value }))} placeholder="3" min={0} max={7} style={inputStyle} />
-            </Field>
-            <Field label="Attività preferite">
-              <input value={form.preferredActivities} onChange={(e) => setForm((f) => ({ ...f, preferredActivities: e.target.value }))} placeholder="es: corsa, yoga, nuoto" style={inputStyle} />
-            </Field>
-            <Field label="Obiettivo">
-              <select value={form.trainingGoal} onChange={(e) => setForm((f) => ({ ...f, trainingGoal: e.target.value }))} style={inputStyle}>
-                <option value="">Seleziona</option>
-                <option value="dimagrimento">Dimagrimento</option>
-                <option value="massa-muscolare">Massa muscolare</option>
-                <option value="resistenza">Resistenza / endurance</option>
-                <option value="mobilita">Mobilità e flessibilità</option>
-                <option value="salute-generale">Salute generale</option>
-                <option value="performance">Performance sportiva</option>
-              </select>
-            </Field>
-            <button onClick={saveProfile} disabled={saving} style={{ ...saveButtonStyle, backgroundColor: '#007AFF' }}>
-              {saving ? 'Salvataggio…' : 'Salva modifiche'}
-            </button>
-          </div>
-        )}
+        <div style={{ height: '8px', borderRadius: '4px', backgroundColor: 'var(--color-bg, #F2F2F7)', overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${progressPct}%`, borderRadius: '4px', backgroundColor: '#007AFF', transition: 'width 0.3s' }} />
+        </div>
+        <p style={{ margin: '0.375rem 0 0', fontSize: '0.75rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
+          {stats.totalWorkoutMin7d > 0 ? `${stats.totalWorkoutMin7d} min totali questa settimana` : 'Nessun allenamento questa settimana'}
+        </p>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
-        <StatCard label="Sessioni (7gg)" value={stats.workoutSessions7d} color="#007AFF" />
-        <StatCard label="Minuti totali" value={stats.totalWorkoutMin7d} unit="min" color="#007AFF" />
-      </div>
-
-      {/* Quick-add workout */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-          <h2 style={sectionTitleStyle}>Ultime sessioni</h2>
-          <button onClick={() => setAdding((v) => !v)} style={addButtonStyle}>
-            <Plus size={13} />
-            {adding ? 'Annulla' : 'Aggiungi'}
-          </button>
-        </div>
-
-        {adding && (
-          <div style={{ ...panelStyle, marginBottom: '0.5rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                <Field label="Durata (minuti)">
-                  <input type="number" value={addForm.durationMin} onChange={(e) => setAddForm((f) => ({ ...f, durationMin: e.target.value }))} min={1} max={600} style={inputStyle} />
-                </Field>
-                <Field label="Sforzo percepito (1-10)">
-                  <input type="number" value={addForm.perceivedEffort} onChange={(e) => setAddForm((f) => ({ ...f, perceivedEffort: e.target.value }))} min={1} max={10} style={inputStyle} />
-                </Field>
+      {/* Workout type cards */}
+      <h3 style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary, #8E8E93)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Tipi di allenamento
+      </h3>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
+        {WORKOUT_TYPES.map(({ key, label, emoji, color, desc }) => {
+          const count = recentWorkouts.filter((w) => w.notes?.toLowerCase().includes(key)).length
+          return (
+            <div
+              key={key}
+              style={{
+                backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem',
+                padding: '0.875rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                borderTop: `3px solid ${color}`,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary, #1C1C1E)' }}>{label}</span>
+                <span style={{ fontSize: '1.125rem' }}>{emoji}</span>
               </div>
-              <Field label="Note (opzionale)">
-                <input value={addForm.notes} onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))} placeholder="es: corsa in salita, palestra upper body" style={inputStyle} />
-              </Field>
-              <button onClick={addWorkout} disabled={addSaving} style={{ ...saveButtonStyle, backgroundColor: '#007AFF' }}>
-                {addSaving ? 'Salvataggio…' : 'Registra sessione'}
-              </button>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--color-text-secondary, #8E8E93)' }}>{desc}</p>
+              {count > 0 && (
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.6875rem', fontWeight: 600, color }}>
+                  {count}× questa settimana
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Recent workouts */}
+      {recentWorkouts.length > 0 && (
+        <>
+          <h3 style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary, #8E8E93)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Sessioni recenti
+          </h3>
+          {recentWorkouts.slice(0, 3).map((w) => (
+            <div
+              key={w.id}
+              style={{
+                backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem',
+                padding: '0.875rem 1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}
+            >
+              <div>
+                <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary, #1C1C1E)' }}>
+                  {w.notes ?? 'Sessione'}
+                </p>
+                <p style={{ margin: '0.125rem 0 0', fontSize: '0.75rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
+                  {new Date(w.date).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}
+                </p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#007AFF' }}>
+                  {w.durationMin ?? '—'} min
+                </p>
+                {w.perceivedEffort != null && (
+                  <p style={{ margin: '0.125rem 0 0', fontSize: '0.75rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
+                    RPE {w.perceivedEffort}/10
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Add workout */}
+      {!adding ? (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          style={{ padding: '0.875rem', borderRadius: '1rem', border: '1.5px dashed var(--color-separator, #E5E5EA)', backgroundColor: 'transparent', color: '#007AFF', fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer' }}
+        >
+          + Aggiungi allenamento
+        </button>
+      ) : (
+        <div style={{ backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem', padding: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+          <select value={addForm.type} onChange={(e) => setAddForm((f) => ({ ...f, type: e.target.value }))} style={inputStyle}>
+            {WORKOUT_TYPES.map(({ key, label }) => <option key={key} value={key}>{label}</option>)}
+          </select>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <div>
+              <label style={labelStyle}>Durata (min)</label>
+              <input type="number" value={addForm.durationMin} min={5} max={300} onChange={(e) => setAddForm((f) => ({ ...f, durationMin: e.target.value }))} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Sforzo (1-10)</label>
+              <input type="number" value={addForm.effort} min={1} max={10} onChange={(e) => setAddForm((f) => ({ ...f, effort: e.target.value }))} style={inputStyle} />
             </div>
           </div>
-        )}
-
-        {recentWorkouts.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {recentWorkouts.map((w) => (
-              <div key={w.id} style={cardStyle}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <p style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                    {w.durationMin} min
-                    {w.perceivedEffort != null && <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)', marginLeft: '0.5rem' }}>RPE {w.perceivedEffort}/10</span>}
-                  </p>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                    {new Date(w.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
-                  </span>
-                </div>
-                {w.notes && <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{w.notes}</p>}
-              </div>
-            ))}
+          <input value={addForm.notes} onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Note opzionali…" style={{ ...inputStyle, marginTop: '0.5rem' }} />
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <button type="button" onClick={() => setAdding(false)} style={{ ...btnStyle, backgroundColor: 'var(--color-bg, #F2F2F7)', color: 'var(--color-text-primary, #1C1C1E)', flex: 1 }}>Annulla</button>
+            <button type="button" onClick={addWorkout} disabled={addSaving} style={{ ...btnStyle, backgroundColor: '#007AFF', color: '#fff', flex: 2 }}>{addSaving ? 'Salvataggio…' : 'Salva sessione'}</button>
           </div>
-        ) : !adding ? (
-          <EmptyState message="Nessuna sessione registrata questa settimana. Il tuo personal trainer ti aiuterà a strutturare il piano." cta="Parla con il trainer" />
-        ) : null}
+        </div>
+      )}
+
+      {/* Stats bottom bar */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+        {[
+          { label: 'Sessioni 7gg', value: String(stats.workoutSessions7d), color: '#007AFF' },
+          { label: 'Minuti attivi', value: String(stats.totalWorkoutMin7d), color: '#34C759' },
+          { label: 'Obiettivo', value: `${weeklyTarget} gg/sett`, color: '#FF9F0A' },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem', padding: '0.75rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', textAlign: 'center' }}>
+            <p style={{ margin: '0 0 0.2rem', fontSize: '0.625rem', fontWeight: 600, color: 'var(--color-text-secondary, #8E8E93)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</p>
+            <p style={{ margin: 0, fontSize: '1.125rem', fontWeight: 700, color }}>{value}</p>
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-      <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{label}</span>
-      <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>{value}</span>
-    </div>
-  )
-}
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>{label}</label>
-      {children}
-    </div>
-  )
-}
-
-const panelStyle: React.CSSProperties = { backgroundColor: 'var(--color-surface)', borderRadius: '1rem', padding: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }
-const sectionTitleStyle: React.CSSProperties = { margin: 0, fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }
-const editButtonStyle: React.CSSProperties = { padding: '0.25rem 0.625rem', borderRadius: '999px', border: '1px solid var(--color-separator)', background: 'transparent', color: 'var(--color-accent)', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }
-const addButtonStyle: React.CSSProperties = { ...editButtonStyle, color: '#007AFF', borderColor: '#007AFF30' }
-const inputStyle: React.CSSProperties = { width: '100%', padding: '0.5rem 0.75rem', borderRadius: '0.625rem', border: '1px solid var(--color-separator)', backgroundColor: 'var(--color-bg)', fontSize: '0.9375rem', color: 'var(--color-text-primary)', outline: 'none', boxSizing: 'border-box' }
-const saveButtonStyle: React.CSSProperties = { width: '100%', padding: '0.75rem', borderRadius: '0.75rem', border: 'none', color: '#fff', fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer', marginTop: '0.25rem' }
-const cardStyle: React.CSSProperties = { backgroundColor: 'var(--color-surface)', borderRadius: '1rem', padding: '0.875rem 1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }
+const inputStyle: React.CSSProperties = { width: '100%', padding: '0.5rem 0.75rem', borderRadius: '0.625rem', border: '1px solid var(--color-separator, #E5E5EA)', backgroundColor: 'var(--color-bg, #F2F2F7)', fontSize: '0.9375rem', color: 'var(--color-text-primary, #1C1C1E)', outline: 'none', boxSizing: 'border-box' }
+const btnStyle: React.CSSProperties = { padding: '0.75rem', borderRadius: '0.75rem', border: 'none', fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer' }
+const labelStyle: React.CSSProperties = { display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary, #8E8E93)', marginBottom: '0.25rem' }

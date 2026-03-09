@@ -2,63 +2,50 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pencil, Plus } from 'lucide-react'
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
-import { StatCard } from './StatCard'
-import { EmptyState } from './EmptyState'
+import type React from 'react'
 
 type Props = { data: ProfileData }
 
+const EXERCISES = [
+  { key: 'respiro', label: 'Pausa Respiro', emoji: '🌬️', duration: '5 min', kcal: '5 cal-equiv.', color: '#5AC8FA', desc: 'Focalizzati sul respiro. Respira lentamente — ripeti 5 cicli.' },
+  { key: 'camminata', label: 'Camminata Consapevole', emoji: '🚶', duration: '10 min', kcal: '30 cal-equiv.', color: '#34C759', desc: 'Senti ogni passo mentre cammini. Disabilita le notifiche.' },
+  { key: 'gratitudine', label: 'Esercizio di Gratitudine', emoji: '🙏', duration: '3 min', kcal: '5 cal-equiv.', color: '#FF9F0A', desc: 'Scrivi 3 cose per cui sei grato oggi. Anche piccole cose contano.' },
+  { key: 'visualizzazione', label: 'Visualizzazione', emoji: '✨', duration: '7 min', kcal: '8 cal-equiv.', color: '#AF52DE', desc: 'Immagina un luogo sereno. Usa tutti i sensi. Rilassa le spalle.' },
+]
+
+function MoodBar({ label, value, max = 10, color }: { label: string; value: number | null; max?: number; color: string }) {
+  const pct = value != null ? Math.round((value / max) * 100) : 0
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary, #8E8E93)' }}>{label}</span>
+        <span style={{ fontSize: '0.75rem', fontWeight: 700, color }}>{value != null ? `${Math.round(value * 10) / 10}/10` : '—'}</span>
+      </div>
+      <div style={{ height: '6px', borderRadius: '3px', backgroundColor: 'var(--color-bg, #F2F2F7)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, borderRadius: '3px', backgroundColor: color, transition: 'width 0.3s' }} />
+      </div>
+    </div>
+  )
+}
+
 export function MindfulnessSection({ data }: Props) {
-  const { stats, recentMindfulness, profile } = data
+  const { stats, recentMindfulness } = data
   const router = useRouter()
-  const [editing, setEditing] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [addSaving, setAddSaving] = useState(false)
-  const mindfulnessProfile = profile?.mindfulness as Record<string, unknown> | null
-  const [form, setForm] = useState({
-    sleepHours: mindfulnessProfile?.sleepHours != null ? String(mindfulnessProfile.sleepHours) : '',
-    stressTarget: mindfulnessProfile?.stressTarget != null ? String(mindfulnessProfile.stressTarget) : '',
-    meditationGoal: mindfulnessProfile?.meditationGoal != null ? String(mindfulnessProfile.meditationGoal) : '',
-    mainStressors: mindfulnessProfile?.mainStressors != null ? String(mindfulnessProfile.mainStressors) : '',
-  })
   const [addForm, setAddForm] = useState({ mood: '7', stress: '4', content: '' })
 
-  async function saveProfile() {
-    setSaving(true)
-    try {
-      await fetch('/api/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          section: 'mindfulness',
-          data: {
-            sleepHours: form.sleepHours ? Number(form.sleepHours) : undefined,
-            stressTarget: form.stressTarget ? Number(form.stressTarget) : undefined,
-            meditationGoal: form.meditationGoal || undefined,
-            mainStressors: form.mainStressors || undefined,
-          },
-        }),
-      })
-      setEditing(false)
-      router.refresh()
-    } finally {
-      setSaving(false)
-    }
-  }
+  const avgMood = stats.avgMood7d
+  const avgStress = stats.avgStress7d
 
   async function addEntry() {
     setAddSaving(true)
     try {
-      await fetch('/api/trackers/mood', {
+      await fetch('/api/profile/mindfulness', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mood: addForm.mood ? Number(addForm.mood) : undefined,
-          stress: addForm.stress ? Number(addForm.stress) : undefined,
-          content: addForm.content || undefined,
-        }),
+        body: JSON.stringify({ mood: Number(addForm.mood), stress: Number(addForm.stress), content: addForm.content }),
       })
       setAdding(false)
       setAddForm({ mood: '7', stress: '4', content: '' })
@@ -70,136 +57,121 @@ export function MindfulnessSection({ data }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      {/* Profile edit card */}
-      <div style={panelStyle}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <h2 style={labelStyle}>Mindfulness</h2>
-          <button onClick={() => setEditing((v) => !v)} style={editButtonStyle}>
-            <Pencil size={12} />
-            {editing ? 'Annulla' : 'Modifica'}
-          </button>
-        </div>
-        {!editing ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <Row label="Ore di sonno target" value={mindfulnessProfile?.sleepHours != null ? `${mindfulnessProfile.sleepHours}h` : '—'} />
-            <Row label="Obiettivo stress" value={mindfulnessProfile?.stressTarget != null ? `${mindfulnessProfile.stressTarget}/10` : '—'} />
-            <Row label="Obiettivo meditazione" value={mindfulnessProfile?.meditationGoal ? String(mindfulnessProfile.meditationGoal) : '—'} />
-            <Row label="Principali stressori" value={mindfulnessProfile?.mainStressors ? String(mindfulnessProfile.mainStressors) : '—'} />
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--color-text-primary, #1C1C1E)' }}>
+          Consigli per il Giorno
+        </h2>
+        <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#5AC8FA', backgroundColor: 'rgba(90,200,250,0.1)', borderRadius: '999px', padding: '0.2rem 0.625rem' }}>
+          {recentMindfulness.length > 0 ? `${recentMindfulness.length} sessioni` : 'Inizia oggi'}
+        </span>
+      </div>
+
+      {/* Exercise cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
+        {EXERCISES.map(({ key, label, emoji, duration, kcal, color, desc }) => (
+          <div
+            key={key}
+            style={{
+              backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem',
+              padding: '0.875rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+              borderTop: `3px solid ${color}`,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.375rem' }}>
+              <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-primary, #1C1C1E)', lineHeight: 1.3 }}>{label}</span>
+              <span style={{ fontSize: '1rem', flexShrink: 0 }}>{emoji}</span>
+            </div>
+            <p style={{ margin: '0 0 0.5rem', fontSize: '0.6875rem', color: 'var(--color-text-secondary, #8E8E93)', lineHeight: 1.4 }}>{desc}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.6875rem', color, fontWeight: 600 }}>{duration}</span>
+              <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary, #8E8E93)' }}>{kcal}</span>
+            </div>
           </div>
-        ) : (
+        ))}
+      </div>
+
+      {/* Mood stats */}
+      {(avgMood != null || recentMindfulness.length > 0) && (
+        <div style={{ backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem', padding: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+          <p style={{ margin: '0 0 0.75rem', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary, #8E8E93)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Media 7 giorni
+          </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-              <Field label="Ore di sonno target">
-                <input type="number" value={form.sleepHours} onChange={(e) => setForm((f) => ({ ...f, sleepHours: e.target.value }))} placeholder="8" min={4} max={12} step={0.5} style={inputStyle} />
-              </Field>
-              <Field label="Stress target (1-10)">
-                <input type="number" value={form.stressTarget} onChange={(e) => setForm((f) => ({ ...f, stressTarget: e.target.value }))} placeholder="3" min={1} max={10} style={inputStyle} />
-              </Field>
-            </div>
-            <Field label="Obiettivo meditazione">
-              <select value={form.meditationGoal} onChange={(e) => setForm((f) => ({ ...f, meditationGoal: e.target.value }))} style={inputStyle}>
-                <option value="">Seleziona</option>
-                <option value="ridurre-stress">Ridurre lo stress</option>
-                <option value="migliorare-sonno">Migliorare il sonno</option>
-                <option value="focus">Aumentare la concentrazione</option>
-                <option value="benessere-generale">Benessere generale</option>
-                <option value="ansia">Gestire l&apos;ansia</option>
-              </select>
-            </Field>
-            <Field label="Principali fonti di stress">
-              <input value={form.mainStressors} onChange={(e) => setForm((f) => ({ ...f, mainStressors: e.target.value }))} placeholder="es: lavoro, relazioni, salute" style={inputStyle} />
-            </Field>
-            <button onClick={saveProfile} disabled={saving} style={{ ...saveButtonStyle, backgroundColor: '#5AC8FA' }}>
-              {saving ? 'Salvataggio…' : 'Salva modifiche'}
-            </button>
+            <MoodBar label="Umore" value={avgMood} color="#5AC8FA" />
+            <MoodBar label="Stress (inv.)" value={avgStress != null ? 10 - avgStress : null} color="#AF52DE" />
           </div>
-        )}
-      </div>
-
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
-        {stats.avgMood7d != null && <StatCard label="Umore medio (7gg)" value={Math.round(stats.avgMood7d * 10) / 10} unit="/10" color="#5AC8FA" />}
-        {stats.avgStress7d != null && <StatCard label="Stress medio (7gg)" value={Math.round(stats.avgStress7d * 10) / 10} unit="/10" color="#FF9F0A" />}
-      </div>
-
-      {/* Quick-add mood */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-          <h2 style={sectionTitleStyle}>Journal</h2>
-          <button onClick={() => setAdding((v) => !v)} style={addButtonStyle}>
-            <Plus size={13} />
-            {adding ? 'Annulla' : 'Come stai?'}
-          </button>
         </div>
+      )}
 
-        {adding && (
-          <div style={{ ...panelStyle, marginBottom: '0.5rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                <Field label="Umore (1-10)">
-                  <input type="number" value={addForm.mood} onChange={(e) => setAddForm((f) => ({ ...f, mood: e.target.value }))} min={1} max={10} style={inputStyle} />
-                </Field>
-                <Field label="Stress (1-10)">
-                  <input type="number" value={addForm.stress} onChange={(e) => setAddForm((f) => ({ ...f, stress: e.target.value }))} min={1} max={10} style={inputStyle} />
-                </Field>
+      {/* Recent entries */}
+      {recentMindfulness.length > 0 && (
+        <>
+          <h3 style={sectionHeaderStyle}>Sessioni recenti</h3>
+          {recentMindfulness.slice(0, 3).map((e) => (
+            <div key={e.id} style={{ backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem', padding: '0.875rem 1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
+                  {new Date(e.createdAt).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}
+                </p>
+                {e.content && (
+                  <p style={{ margin: '0.125rem 0 0', fontSize: '0.875rem', color: 'var(--color-text-primary, #1C1C1E)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' as const }}>
+                    {e.content}
+                  </p>
+                )}
               </div>
-              <Field label="Note (opzionale)">
-                <textarea value={addForm.content} onChange={(e) => setAddForm((f) => ({ ...f, content: e.target.value }))} placeholder="Come ti senti oggi?" rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
-              </Field>
-              <button onClick={addEntry} disabled={addSaving} style={{ ...saveButtonStyle, backgroundColor: '#5AC8FA' }}>
-                {addSaving ? 'Salvataggio…' : 'Registra stato'}
-              </button>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ margin: 0, fontSize: '0.8125rem', fontWeight: 700, color: '#5AC8FA' }}>😊 {e.mood}/10</p>
+                <p style={{ margin: '0.125rem 0 0', fontSize: '0.75rem', color: '#AF52DE' }}>stress {e.stress}/10</p>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Add entry */}
+      {!adding ? (
+        <button type="button" onClick={() => setAdding(true)} style={{ padding: '0.875rem', borderRadius: '1rem', border: '1.5px dashed var(--color-separator, #E5E5EA)', backgroundColor: 'transparent', color: '#5AC8FA', fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer' }}>
+          + Registra stato d&apos;animo
+        </button>
+      ) : (
+        <div style={{ backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem', padding: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <div>
+              <label style={labelStyle}>Umore (1-10)</label>
+              <input type="number" value={addForm.mood} min={1} max={10} onChange={(e) => setAddForm((f) => ({ ...f, mood: e.target.value }))} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Stress (1-10)</label>
+              <input type="number" value={addForm.stress} min={1} max={10} onChange={(e) => setAddForm((f) => ({ ...f, stress: e.target.value }))} style={inputStyle} />
             </div>
           </div>
-        )}
-
-        {recentMindfulness.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {recentMindfulness.map((entry) => (
-              <div key={entry.id} style={cardStyle}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    {entry.mood != null && <span style={{ fontSize: '0.8125rem', color: '#5AC8FA', fontWeight: 600 }}>😊 {entry.mood}/10</span>}
-                    {entry.stress != null && <span style={{ fontSize: '0.8125rem', color: '#FF9F0A', fontWeight: 600 }}>😤 {entry.stress}/10</span>}
-                  </div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                    {new Date(entry.createdAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
-                  </span>
-                </div>
-                {entry.content && <p style={{ margin: '0.375rem 0 0', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{entry.content}</p>}
-              </div>
-            ))}
+          <textarea value={addForm.content} onChange={(e) => setAddForm((f) => ({ ...f, content: e.target.value }))} placeholder="Come ti senti oggi? (opzionale)" rows={2} style={{ ...inputStyle, resize: 'none', marginTop: '0.5rem' }} />
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <button type="button" onClick={() => setAdding(false)} style={{ ...btnStyle, backgroundColor: 'var(--color-bg, #F2F2F7)', color: 'var(--color-text-primary, #1C1C1E)', flex: 1 }}>Annulla</button>
+            <button type="button" onClick={addEntry} disabled={addSaving} style={{ ...btnStyle, backgroundColor: '#5AC8FA', color: '#fff', flex: 2 }}>{addSaving ? 'Salvataggio…' : 'Salva'}</button>
           </div>
-        ) : !adding ? (
-          <EmptyState message="Nessun dato di benessere registrato. Il tuo mental coach ti aiuterà a monitorare umore e stress." cta="Parla con il mental coach" />
-        ) : null}
+        </div>
+      )}
+
+      {/* Bottom stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+        {[
+          { label: 'Sessioni 7gg', value: String(recentMindfulness.length), color: '#5AC8FA' },
+          { label: 'Umore medio', value: avgMood != null ? `${(Math.round(avgMood * 10) / 10)}/10` : '—', color: '#34C759' },
+          { label: 'Stress medio', value: avgStress != null ? `${(Math.round(avgStress * 10) / 10)}/10` : '—', color: '#AF52DE' },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem', padding: '0.75rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', textAlign: 'center' }}>
+            <p style={{ margin: '0 0 0.2rem', fontSize: '0.625rem', fontWeight: 600, color: 'var(--color-text-secondary, #8E8E93)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</p>
+            <p style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color }}>{value}</p>
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-      <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{label}</span>
-      <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>{value}</span>
-    </div>
-  )
-}
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>{label}</label>
-      {children}
-    </div>
-  )
-}
-
-const panelStyle: React.CSSProperties = { backgroundColor: 'var(--color-surface)', borderRadius: '1rem', padding: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }
-const labelStyle: React.CSSProperties = { margin: 0, fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }
-const sectionTitleStyle: React.CSSProperties = { margin: 0, fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }
-const editButtonStyle: React.CSSProperties = { padding: '0.25rem 0.625rem', borderRadius: '999px', border: '1px solid var(--color-separator)', background: 'transparent', color: 'var(--color-accent)', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }
-const addButtonStyle: React.CSSProperties = { ...editButtonStyle, color: '#5AC8FA', borderColor: '#5AC8FA30' }
-const inputStyle: React.CSSProperties = { width: '100%', padding: '0.5rem 0.75rem', borderRadius: '0.625rem', border: '1px solid var(--color-separator)', backgroundColor: 'var(--color-bg)', fontSize: '0.9375rem', color: 'var(--color-text-primary)', outline: 'none', boxSizing: 'border-box' }
-const saveButtonStyle: React.CSSProperties = { width: '100%', padding: '0.75rem', borderRadius: '0.75rem', border: 'none', color: '#fff', fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer', marginTop: '0.25rem' }
-const cardStyle: React.CSSProperties = { backgroundColor: 'var(--color-surface)', borderRadius: '1rem', padding: '0.875rem 1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }
+const sectionHeaderStyle: React.CSSProperties = { margin: '0.25rem 0 0', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary, #8E8E93)', textTransform: 'uppercase', letterSpacing: '0.05em' }
+const inputStyle: React.CSSProperties = { width: '100%', padding: '0.5rem 0.75rem', borderRadius: '0.625rem', border: '1px solid var(--color-separator, #E5E5EA)', backgroundColor: 'var(--color-bg, #F2F2F7)', fontSize: '0.9375rem', color: 'var(--color-text-primary, #1C1C1E)', outline: 'none', boxSizing: 'border-box' }
+const btnStyle: React.CSSProperties = { padding: '0.75rem', borderRadius: '0.75rem', border: 'none', fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer' }
+const labelStyle: React.CSSProperties = { display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary, #8E8E93)', marginBottom: '0.25rem' }
