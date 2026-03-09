@@ -5,7 +5,7 @@ const serverEnvSchema = z.object({
   GEMINI_API_KEY: z.string().min(1).optional(),
   NEXTAUTH_SECRET: z.string().min(1).optional(),
   AI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
-  LIVE_MODEL: z.string().min(1).default('gemini-2.0-flash-live'),
+  LIVE_MODEL: z.string().min(1).default('gemini-2.0-flash-live-001'),
 })
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>
