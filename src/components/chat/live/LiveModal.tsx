@@ -193,8 +193,10 @@ export function LiveModal({ onClose }: Props) {
 
   const startMediaStreaming = useCallback(
     async (session: LiveSession, micStream: MediaStream) => {
-      const w = window as Window & { webkitAudioContext?: typeof AudioContext }
-      const AudioCtxCtor = w.AudioContext ?? w.webkitAudioContext
+      // window.AudioContext is available globally; webkit prefix cast uses unknown (not any)
+      const AudioCtxCtor =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
       if (!AudioCtxCtor) return
 
       const inCtx = new AudioCtxCtor()
