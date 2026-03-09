@@ -1,12 +1,49 @@
 'use client'
 
+import type React from 'react'
 import { useEffect, useRef, useState, useCallback } from 'react'
 
-// Augment Window for browser Speech API (not in all TS lib versions)
+// Minimal Web Speech API type definitions (not always in TS lib)
+interface SpeechRecognitionAlternative {
+  transcript: string
+  confidence: number
+}
+interface SpeechRecognitionResult {
+  isFinal: boolean
+  length: number
+  [index: number]: SpeechRecognitionAlternative
+}
+interface SpeechRecognitionResultList {
+  length: number
+  [index: number]: SpeechRecognitionResult
+}
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number
+  results: SpeechRecognitionResultList
+}
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string
+}
+interface SpeechRecognitionInstance extends EventTarget {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  start(): void
+  stop(): void
+  abort(): void
+  onstart: ((ev: Event) => void) | null
+  onend: ((ev: Event) => void) | null
+  onresult: ((ev: SpeechRecognitionEvent) => void) | null
+  onerror: ((ev: SpeechRecognitionErrorEvent) => void) | null
+  onspeechend: ((ev: Event) => void) | null
+}
+interface SpeechRecognitionConstructor {
+  new(): SpeechRecognitionInstance
+}
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition
-    webkitSpeechRecognition: typeof SpeechRecognition
+    SpeechRecognition?: SpeechRecognitionConstructor
+    webkitSpeechRecognition?: SpeechRecognitionConstructor
   }
 }
 
@@ -64,7 +101,7 @@ export function LiveModal({ onClose, onTranscription }: Props) {
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
   const [currentCameraIdx, setCurrentCameraIdx] = useState(0)
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const audioStreamRef = useRef<MediaStream | null>(null)
   const videoStreamRef = useRef<MediaStream | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -124,7 +161,7 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
   // ── Speech Recognition setup ─────────────────────────────────────────────
 
-  function startListening(recognition: SpeechRecognition) {
+  function startListening(recognition: SpeechRecognitionInstance) {
     if (isClosingRef.current) return
     finalTranscriptRef.current = ''
     setInterimText('')
@@ -146,7 +183,7 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
     void startMicAnalyser()
 
-    const recognition = new SpeechRecognitionClass()
+    const recognition = new SpeechRecognitionClass() as SpeechRecognitionInstance
     recognition.lang = 'it-IT'
     recognition.continuous = false
     recognition.interimResults = true
@@ -179,7 +216,7 @@ export function LiveModal({ onClose, onTranscription }: Props) {
         // No speech — restart listening after a short pause
         if (!isClosingRef.current) {
           setTimeout(() => {
-            if (!isClosingRef.current && phaseRef.current === 'listening') {
+            if (!isClosingRef.current && (phaseRef.current === 'listening' || phaseRef.current === 'requesting')) {
               startListening(recognition)
             }
           }, 400)
