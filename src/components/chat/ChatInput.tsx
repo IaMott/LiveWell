@@ -108,11 +108,12 @@ interface Props {
   onHistory?: () => void
   disabled?: boolean
   activeDomain?: Domain | null
+  onVoiceSend?: () => void
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ChatInput({ onSend, onHistory, disabled, activeDomain }: Props) {
+export function ChatInput({ onSend, onHistory, disabled, activeDomain, onVoiceSend }: Props) {
   const [text, setText] = useState('')
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(activeDomain ?? null)
   const [showLive, setShowLive] = useState(false)
@@ -162,8 +163,12 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain }: Props) 
   }
 
   function handleTranscription(transcript: string) {
-    setText(transcript)
-    setTimeout(() => autoResize(), 0)
+    const trimmed = transcript.trim()
+    if (!trimmed) return
+    // Auto-send voice message immediately — no manual confirm needed
+    onSend(trimmed, selectedDomain ?? undefined)
+    // Signal parent to enable voice response (TTS)
+    onVoiceSend?.()
   }
 
   return (
@@ -313,3 +318,4 @@ function iconBtnStyle(active: boolean): React.CSSProperties {
     flexShrink: 0, transition: 'background-color 0.15s',
   }
 }
+

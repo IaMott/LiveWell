@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { TopBar } from '@/components/layout/TopBar'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
@@ -33,6 +33,33 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
     exitSpecialist,
   } = useChat()
   const [historyOpen, setHistoryOpen] = useState(false)
+  // voiceMode: true after a live voice message — next assistant reply gets spoken aloud
+  const [voiceMode, setVoiceMode] = useState(false)
+  const lastSpokenIdRef = useRef<string | undefined>(undefined)
+
+  // Speak new assistant messages when voiceMode is active
+  useEffect(() => {
+    if (!voiceMode) return
+    const lastMsg = messages.at(-1)
+    if (!lastMsg || lastMsg.role !== 'assistant' || lastMsg.streaming) return
+    if (lastMsg.id === lastSpokenIdRef.current) return
+    lastSpokenIdRef.current = lastMsg.id
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+      const utterance = new SpeechSynthesisUtterance(lastMsg.content)
+      utterance.lang = 'it-IT'
+      utterance.rate = 1.05
+      utterance.pitch = 1.0
+      // Try to use an Italian voice if available
+      const voices = window.speechSynthesis.getVoices()
+      const itVoice = voices.find((v) => v.lang.startsWith('it'))
+      if (itVoice) utterance.voice = itVoice
+      window.speechSynthesis.speak(utterance)
+    }
+    // Reset voice mode after speaking — user can trigger again by pressing LIVE
+    setVoiceMode(false)
+  }, [messages, voiceMode])
 
   const specialistColor = activeDomain ? (DOMAIN_COLORS[activeDomain] ?? '#007AFF') : '#007AFF'
 
@@ -115,6 +142,7 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
         onHistory={() => setHistoryOpen(true)}
         disabled={isStreaming}
         activeDomain={activeDomain}
+        onVoiceSend={() => setVoiceMode(true)}
       />
       <ConversationHistory
         open={historyOpen}

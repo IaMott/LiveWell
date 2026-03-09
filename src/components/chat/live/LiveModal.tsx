@@ -121,7 +121,6 @@ export function LiveModal({ onClose, onTranscription }: Props) {
   }, [videoEnabled])
 
   async function startVideo(deviceId?: string) {
-    // Stop any existing video stream
     videoStreamRef.current?.getTracks().forEach((t) => t.stop())
     videoStreamRef.current = null
 
@@ -132,7 +131,6 @@ export function LiveModal({ onClose, onTranscription }: Props) {
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
       videoStreamRef.current = stream
       setVideoEnabled(true)
-      // If ref is already mounted (switching camera), attach immediately
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         videoRef.current.play().catch(() => {})
@@ -152,7 +150,6 @@ export function LiveModal({ onClose, onTranscription }: Props) {
       stopVideo()
     } else {
       await startVideo()
-      // Enumerate after first start to populate device list
       const devices = await navigator.mediaDevices.enumerateDevices().catch(() => [])
       const vdevs = devices.filter((d) => d.kind === 'videoinput')
       setVideoDevices(vdevs)
@@ -181,7 +178,7 @@ export function LiveModal({ onClose, onTranscription }: Props) {
     recorder.onstop = async () => {
       if (chunksRef.current.length === 0) { onClose(); return }
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType })
-      if (blob.size < 1000) { onClose(); return }
+      if (blob.size < 500) { onClose(); return }
 
       try {
         const fd = new FormData()
@@ -189,9 +186,22 @@ export function LiveModal({ onClose, onTranscription }: Props) {
         const res = await fetch('/api/transcribe', { method: 'POST', body: fd })
         if (res.ok) {
           const data = (await res.json()) as { text?: string }
-          if (data.text && onTranscription) onTranscription(data.text)
+          if (data.text?.trim() && onTranscription) {
+            onTranscription(data.text.trim())
+          }
+        } else {
+          // Transcription endpoint error — show briefly then close
+          setPhase('error')
+          setErrorMsg('Trascrizione non riuscita. Riprova.')
+          setTimeout(() => onClose(), 2000)
+          return
         }
-      } catch {}
+      } catch {
+        setPhase('error')
+        setErrorMsg('Errore di rete. Riprova.')
+        setTimeout(() => onClose(), 2000)
+        return
+      }
       onClose()
     }
 
@@ -239,8 +249,8 @@ export function LiveModal({ onClose, onTranscription }: Props) {
           </div>
           <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.875rem', margin: 0 }}>
             {phase === 'requesting' && 'Richiesta accesso microfono…'}
-            {phase === 'active' && 'In ascolto — parla ora'}
-            {phase === 'processing' && 'Elaborazione in corso…'}
+            {phase === 'active' && 'In ascolto — parla, poi tocca stop'}
+            {phase === 'processing' && 'Trascrizione in corso…'}
             {phase === 'error' && errorMsg}
           </p>
         </div>
@@ -282,13 +292,12 @@ export function LiveModal({ onClose, onTranscription }: Props) {
         {phase === 'active' && (
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
 
-            {/* Camera switch button — only when multiple cameras & video active */}
+            {/* Camera switch — only when multiple cameras & video active */}
             {videoEnabled && videoDevices.length > 1 && (
               <button
                 type="button"
                 onClick={() => { void switchCamera() }}
                 aria-label="Cambia fotocamera"
-                title="Cambia fotocamera"
                 style={{
                   width: '3rem', height: '3rem', borderRadius: '50%', border: 'none',
                   backgroundColor: 'rgba(255,255,255,0.2)',
@@ -305,7 +314,6 @@ export function LiveModal({ onClose, onTranscription }: Props) {
               type="button"
               onClick={() => { void toggleVideo() }}
               aria-label={videoEnabled ? 'Disabilita video' : 'Abilita video'}
-              title={videoEnabled ? 'Disabilita video' : 'Abilita video'}
               style={{
                 width: '3.5rem', height: '3.5rem', borderRadius: '50%', border: 'none',
                 backgroundColor: videoEnabled ? '#FF3B30' : 'rgba(255,255,255,0.15)',
@@ -320,7 +328,7 @@ export function LiveModal({ onClose, onTranscription }: Props) {
             <button
               type="button"
               onClick={() => { void stopAndSend() }}
-              aria-label="Invia messaggio"
+              aria-label="Invia messaggio vocale"
               title="Invia messaggio vocale"
               style={{
                 width: '4rem', height: '4rem', borderRadius: '50%', border: 'none',
@@ -332,6 +340,22 @@ export function LiveModal({ onClose, onTranscription }: Props) {
               <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
                 <rect x="6" y="6" width="12" height="12" rx="2" />
               </svg>
+            </button>
+
+            {/* Cancel */}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Annulla"
+              style={{
+                width: '3rem', height: '3rem', borderRadius: '50%', border: 'none',
+                backgroundColor: 'rgba(255,255,255,0.12)',
+                color: 'rgba(255,255,255,0.7)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.02em',
+              }}
+            >
+              ✕
             </button>
           </div>
         )}
