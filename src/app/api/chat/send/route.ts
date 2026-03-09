@@ -16,6 +16,7 @@ import { prisma } from '@/lib/prisma'
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(4000),
   conversationId: z.string().min(1).optional(),
+  activeSpecialistId: z.string().trim().min(1).optional(),
   confirmedByUser: z.boolean().optional(),
   confirmToken: z.string().trim().min(1).optional(),
 })
@@ -28,6 +29,7 @@ type ChatStreamEvent =
       moodScore: number
       sectionScores: Record<string, number>
       specialistName?: string
+      activeSpecialistId?: string
     }
   | {
       type: 'tool.result'
@@ -162,8 +164,8 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
             conversationId,
             role: 'assistant',
             content: assistantMessage,
-            domain: domain ?? null,
-            specialistName: specialistName ?? null,
+            ...(domain ? { domain } : {}),
+            ...(specialistName ? { specialistName } : {}),
           },
         })
 
@@ -380,6 +382,7 @@ export async function POST(request: Request): Promise<Response> {
     conversationId,
     message: parsedBody.message,
     contextPack,
+    activeSpecialistId: parsedBody.activeSpecialistId,
   }
 
   const teamDirAbsolute = path.resolve(process.cwd(), 'TEAM')
@@ -423,11 +426,12 @@ export async function POST(request: Request): Promise<Response> {
     toolResults.push(result)
   }
 
-  // Tool results go to SSE only — never appended to visible message text
+  // Natural response text only — tool execution details go as separate SSE events
   const responseText = consensus.finalMessageMarkdown
 
   const activeDomain = consensus.activeSpecialist?.domain ?? consensus.ui.domainIcon
   const specialistName = consensus.activeSpecialist?.displayName
+  const activeSpecialistId = consensus.activeSpecialist?.id
 
   try {
     await persistence.persistChatTurn({
@@ -461,6 +465,7 @@ export async function POST(request: Request): Promise<Response> {
               moodScore: consensus.ui.moodScore,
               sectionScores: consensus.ui.sectionScores ?? { general: consensus.ui.moodScore },
               specialistName,
+              activeSpecialistId,
             }),
           ),
         )

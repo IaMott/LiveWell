@@ -1,21 +1,10 @@
 {
   "id": "life-organizer",
   "displayName": "Life Organizer",
-  "domainTags": [
-    "productivity",
-    "coordination"
-  ],
+  "domainTags": ["productivity", "coordination"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
-    "productivity.createTask",
-    "productivity.updateTask",
-    "productivity.deleteTask",
-    "productivity.createProject",
-    "productivity.updateProject",
-    "productivity.deleteProject",
-    "productivity.createReminder",
-    "productivity.updateReminder",
-    "productivity.deleteReminder",
+    "user.updateProfile",
     "artifacts.saveRecommendation",
     "notifications.createInApp"
   ],

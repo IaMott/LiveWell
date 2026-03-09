@@ -1,22 +1,12 @@
 {
   "id": "financial-planner",
   "displayName": "Financial Planner",
-  "domainTags": [
-    "finance"
-  ],
+  "domainTags": ["finance"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
-    "finance.addBudgetEntry",
-    "finance.updateBudgetEntry",
-    "finance.deleteBudgetEntry",
-    "finance.logExpense",
-    "finance.deleteExpense",
-    "finance.createGoal",
-    "finance.updateGoal",
-    "finance.deleteGoal",
-    "finance.createSavingsPlan",
-    "finance.updateSavingsPlan",
-    "artifacts.saveRecommendation"
+    "user.updateProfile",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp"
   ],
   "escalationRules": [
     "Segnali di dipendenza dal gioco, acquisti compulsivi, indebitamento grave o crisi finanziaria acuta -> raccomandare consulenza professionale abilitata (commercialista, consulente del debito, supporto psicologico).",

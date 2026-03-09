@@ -1,17 +1,12 @@
 {
   "id": "sleep-coach",
   "displayName": "Sleep Coach",
-  "domainTags": [
-    "health",
-    "mindfulness"
-  ],
+  "domainTags": ["health", "mindfulness"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
+    "user.updateProfile",
     "health.addMetric",
-    "health.updateMedicalInfo",
     "mindfulness.createEntry",
-    "mindfulness.updateEntry",
-    "mindfulness.saveRecommendation",
     "artifacts.saveRecommendation"
   ],
   "escalationRules": [

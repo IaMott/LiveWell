@@ -1,18 +1,12 @@
 {
   "id": "career-coach",
   "displayName": "Career Coach",
-  "domainTags": [
-    "career"
-  ],
+  "domainTags": ["career"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
-    "career.createGoal",
-    "career.updateGoal",
-    "career.deleteGoal",
-    "career.logAction",
-    "career.updateAction",
-    "career.deleteAction",
-    "artifacts.saveRecommendation"
+    "user.updateProfile",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp"
   ],
   "escalationRules": [
     "Segnali di burnout grave, depressione o ansia invalidante legata al lavoro -> co-gestione con psicologo del team e suggerimento di supporto professionale.",

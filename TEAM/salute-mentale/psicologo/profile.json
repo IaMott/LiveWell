@@ -1,14 +1,11 @@
 {
   "id": "psicologo",
   "displayName": "Psicologo",
-  "domainTags": [
-    "mindfulness"
-  ],
+  "domainTags": ["mindfulness"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
+    "user.updateProfile",
     "mindfulness.createEntry",
-    "mindfulness.updateEntry",
-    "mindfulness.saveRecommendation",
     "artifacts.saveRecommendation"
   ],
   "escalationRules": [

@@ -1,14 +1,13 @@
 {
   "id": "mmg",
   "displayName": "Mmg",
-  "domainTags": [
-    "health"
-  ],
+  "domainTags": ["health"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
+    "user.updateProfile",
     "health.addMetric",
-    "health.updateMedicalInfo",
-    "artifacts.saveRecommendation"
+    "artifacts.saveRecommendation",
+    "notifications.createInApp"
   ],
   "escalationRules": [
     "Segnali di emergenza (dolore toracico, dispnea grave, sincope, deficit neurologici, sangue nelle feci/vomito, febbre alta persistente, reazione allergica) -> messaggio di sicurezza e invito a contattare emergenza/medico.",

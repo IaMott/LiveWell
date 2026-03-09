@@ -1,20 +1,15 @@
 {
   "id": "medico-dello-sport",
   "displayName": "Medico Dello Sport",
-  "domainTags": [
-    "health",
-    "training"
-  ],
+  "domainTags": ["health", "training"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
+    "user.updateProfile",
     "health.addMetric",
-    "health.updateMedicalInfo",
-    "artifacts.saveRecommendation",
     "training.createWorkoutPlan",
-    "training.updateWorkoutPlan",
     "training.logWorkoutSession",
-    "training.updateWorkoutSession",
-    "training.deleteWorkoutSession"
+    "artifacts.saveRecommendation",
+    "notifications.createInApp"
   ],
   "escalationRules": [
     "Segnali di emergenza (dolore toracico, dispnea grave, sincope, deficit neurologici, sangue nelle feci/vomito, febbre alta persistente, reazione allergica) -> messaggio di sicurezza e invito a contattare emergenza/medico.",

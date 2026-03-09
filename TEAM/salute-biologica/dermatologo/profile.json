@@ -4,8 +4,8 @@
   "domainTags": ["health"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
+    "user.updateProfile",
     "health.addMetric",
-    "health.updateMedicalInfo",
     "artifacts.saveRecommendation"
   ],
   "escalationRules": [

@@ -1,21 +1,13 @@
 {
   "id": "chef",
   "displayName": "Chef",
-  "domainTags": [
-    "nutrition"
-  ],
+  "domainTags": ["nutrition"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
-    "nutrition.createFoodItem",
-    "nutrition.updateFoodItem",
-    "nutrition.deleteFoodItem",
+    "user.updateProfile",
     "nutrition.logMeal",
-    "nutrition.deleteMeal",
-    "nutrition.grocery.addItem",
-    "nutrition.grocery.toggleItem",
+    "nutrition.createFoodItem",
     "nutrition.recipes.createRecipe",
-    "nutrition.recipes.updateRecipe",
-    "nutrition.recipes.deleteRecipe",
     "artifacts.saveRecommendation"
   ],
   "escalationRules": [

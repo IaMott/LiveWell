@@ -1,16 +1,12 @@
 {
   "id": "chinesologo",
   "displayName": "Chinesologo",
-  "domainTags": [
-    "training"
-  ],
+  "domainTags": ["training"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
+    "user.updateProfile",
     "training.createWorkoutPlan",
-    "training.updateWorkoutPlan",
     "training.logWorkoutSession",
-    "training.updateWorkoutSession",
-    "training.deleteWorkoutSession",
     "artifacts.saveRecommendation"
   ],
   "escalationRules": [

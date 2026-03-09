@@ -1,16 +1,10 @@
 {
   "id": "commercialista",
   "displayName": "Commercialista",
-  "domainTags": [
-    "finance",
-    "legal"
-  ],
+  "domainTags": ["finance", "legal"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
-    "finance.addBudgetEntry",
-    "finance.updateBudgetEntry",
-    "finance.createGoal",
-    "finance.updateGoal",
+    "user.updateProfile",
     "artifacts.saveRecommendation"
   ],
   "escalationRules": [

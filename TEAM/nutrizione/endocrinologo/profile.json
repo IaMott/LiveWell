@@ -4,12 +4,11 @@
   "domainTags": ["health", "nutrition"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
+    "user.updateProfile",
     "health.addMetric",
-    "health.updateMedicalInfo",
-    "artifacts.saveRecommendation",
+    "nutrition.logMeal",
     "nutrition.createFoodItem",
-    "nutrition.updateFoodItem",
-    "nutrition.logMeal"
+    "artifacts.saveRecommendation"
   ],
   "escalationRules": [
     "Coma diabetico, ipoglicemia severa, chetoacidosi, stato iperglicemico iperosmolare -> emergenza immediata (118).",

@@ -18,53 +18,66 @@ export type OrchestratorDeps = {
   orchestratorToolsAllowed: string[]
 }
 
-// ── Specialist request detection ──────────────────────────────────────────────
-
-const SPECIALIST_KEYWORDS: Record<string, string[]> = {
-  'dietista':          ['dietista', 'nutrizionista', 'alimentazione', 'dieta', 'nutri'],
-  'persona-trainer':   ['personal trainer', 'trainer', 'allenatore', 'allenamento', 'palestra', 'fitness'],
-  'medico':            ['medico', 'dottore', 'fisiatra', 'salute', 'clinico'],
-  'psicologo':         ['psicologo', 'mental coach', 'coach mentale', 'mente', 'mindfulness', 'psico'],
-  'chef':              ['chef', 'cuoco', 'ricetta', 'cucina'],
-}
-
+/** Phrases that signal the user wants to speak with a specific specialist */
 const REQUEST_VERBS = [
-  'voglio parlare con',
-  'posso parlare con',
-  'mi colleghi con',
-  'chiamami',
-  'passa a',
-  'fammi parlare con',
-  'vorrei parlare con',
-  'parla con',
-  'speak with',
-  'talk to',
+  'parlami con', 'parla con', 'voglio parlare con', 'voglio parlare al',
+  'voglio il', 'voglio la', 'passami il', 'passami la',
+  'dammi il', 'fammi parlare con', 'connettimi con',
+  'vorrei parlare con', 'vorrei il', 'speak to', 'talk to', 'chiedi al',
 ]
 
-function detectSpecialistRequest(message: string, team: AgentProfile[]): AgentProfile | null {
-  const lower = message.toLowerCase()
-  const hasRequestVerb = REQUEST_VERBS.some((v) => lower.includes(v))
-  if (!hasRequestVerb) return null
-
-  for (const [agentId, keywords] of Object.entries(SPECIALIST_KEYWORDS)) {
-    if (keywords.some((kw) => lower.includes(kw))) {
-      const agent = team.find((a) => a.id === agentId)
-      if (agent) return agent
-      // Fallback: find agent in same domain
-      const domain = agentId === 'dietista' || agentId === 'chef'
-        ? 'nutrition'
-        : agentId === 'persona-trainer'
-          ? 'training'
-          : agentId === 'medico'
-            ? 'health'
-            : 'mindfulness'
-      return team.find((a) => a.domainTags.includes(domain)) ?? null
-    }
-  }
-  return null
+/** Maps keyword → agent id for specialist detection */
+const SPECIALIST_KEYWORDS: Record<string, string> = {
+  'dietista': 'dietista', 'dietitian': 'dietista', 'nutrizionista': 'dietista',
+  'chef': 'chef', 'cuoco': 'chef',
+  'endocrinologo': 'endocrinologo', 'endocrinologa': 'endocrinologo',
+  'personal trainer': 'persona-trainer', 'personal-trainer': 'persona-trainer',
+  'trainer': 'persona-trainer', 'allenatore': 'persona-trainer',
+  'chinesologo': 'chinesologo', 'chinesiologia': 'chinesologo',
+  'medico dello sport': 'medico-dello-sport', 'medico sport': 'medico-dello-sport',
+  'fisioterapista': 'fisioterapista',
+  'fisiatra': 'fisiatra',
+  'sleep coach': 'sleep-coach', 'coach del sonno': 'sleep-coach',
+  'mmg': 'mmg', 'medico di base': 'mmg', 'medico curante': 'mmg', 'medico generico': 'mmg',
+  'gastroenterologo': 'gastroenterologo', 'gastro': 'gastroenterologo',
+  'cardiologo': 'cardiologo', 'cardiologa': 'cardiologo',
+  'dermatologo': 'dermatologo', 'dermatologa': 'dermatologo',
+  'psicologo': 'psicologo', 'psicologa': 'psicologo',
+  'mental coach': 'mental-coach', 'mental-coach': 'mental-coach',
+  'coach relazionale': 'relationship-coach', 'relationship coach': 'relationship-coach',
+  'analista contesto': 'analista-contesto',
+  'financial planner': 'financial-planner', 'pianificatore finanziario': 'financial-planner',
+  'commercialista': 'commercialista',
+  'career coach': 'career-coach', 'coach carriera': 'career-coach',
+  'executive coach': 'executive-coach',
+  'organizzatore di vita': 'life-organizer', 'life organizer': 'life-organizer',
+  'consulente legale': 'consulente-legale', 'avvocato': 'consulente-legale',
 }
 
-// ── Agent prompt builder ───────────────────────────────────────────────────────
+/**
+ * Detects if the user is explicitly requesting a specific specialist.
+ * Returns the agent id if found, null otherwise.
+ */
+function detectSpecialistRequest(message: string, team: AgentProfile[]): string | null {
+  const lower = message.toLowerCase()
+
+  // Check specialist keywords in message
+  for (const [kw, agentId] of Object.entries(SPECIALIST_KEYWORDS)) {
+    if (lower.includes(kw)) {
+      if (team.some((a) => a.id === agentId)) return agentId
+    }
+  }
+
+  // If a request verb is present, also match by agent displayName
+  const hasRequestVerb = REQUEST_VERBS.some((v) => lower.includes(v))
+  if (hasRequestVerb) {
+    for (const agent of team) {
+      if (lower.includes(agent.displayName.toLowerCase())) return agent.id
+    }
+  }
+
+  return null
+}
 
 function buildAgentUserPrompt(input: AgentInput): string {
   const parts: string[] = [
@@ -80,6 +93,16 @@ function buildAgentUserPrompt(input: AgentInput): string {
       .join(' | ')}`,
   ]
 
+  // Profile data in context
+  if (input.contextPack.user.profile && Object.keys(input.contextPack.user.profile).length > 0) {
+    const profileSummary = Object.entries(input.contextPack.user.profile)
+      .slice(0, 10)
+      .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+      .join(', ')
+    parts.push(`- userProfile: ${profileSummary}`)
+  }
+
+  // Detect previous gating questions → instruct agent to call user.updateProfile if answered
   const lastAssistant = input.contextPack.history.recentMessages
     .filter((m) => m.role === 'assistant')
     .slice(-1)[0]
@@ -102,12 +125,17 @@ function buildAgentUserPrompt(input: AgentInput): string {
 
   parts.push(
     ``,
+    `PROFILE EXTRACTION (MANDATORY):`,
+    `If the user mentions ANY personal data (weight, height, age, medical conditions, symptoms,`,
+    `goals, diet restrictions, training frequency, medications, allergies, sleep hours, stress level etc.),`,
+    `ALWAYS include a "user.updateProfile" tool call in your toolCalls[] with the extracted key-value pairs.`,
+    ``,
     `INSTRUCTIONS:`,
     `- You are a specialist agent. Respond ONLY within your domain scope.`,
-    `- Ask gating questions only for data that YOUR specific domain requires.`,
+    `- Ask gating questions only for data YOUR specific domain requires.`,
     `- Provide evidence-based recommendations. If uncertain, say so.`,
     `- Propose tool calls only if clearly helpful; do not claim execution.`,
-    `- Return ONLY valid JSON matching the AgentProposal schema. No markdown outside the JSON object.`,
+    `- Output must be valid JSON.`,
   )
 
   return parts.join('\n')
@@ -120,25 +148,13 @@ async function runOneAgent(
 ): Promise<AgentProposal> {
   const userPrompt = buildAgentUserPrompt(input)
 
-  // Inject exact allowed tool names to prevent LLM hallucination
-  let systemPrompt = agent.systemPrompt
-  if (agent.toolsAllowed.length > 0) {
-    systemPrompt += [
-      '',
-      '## STRUMENTI DISPONIBILI',
-      'Usa ESATTAMENTE questi nomi in toolCalls[].name (nessuna variazione):',
-      agent.toolsAllowed.map((t) => `- ${t}`).join('\n'),
-      'Non inventare nomi alternativi. Se un tool non è in questa lista, non includerlo in toolCalls.',
-    ].join('\n')
-  } else {
-    systemPrompt += '\n\n## Strumenti: nessuno disponibile. Non includere toolCalls nel JSON.'
-  }
-
-  const res = await llm.complete({ system: systemPrompt, user: userPrompt })
+  const res = await llm.complete({
+    system: agent.systemPrompt,
+    user: userPrompt,
+  })
 
   try {
-    const raw = res.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
-    const obj = JSON.parse(raw)
+    const obj = JSON.parse(res.text)
     return {
       agentId: agent.id,
       domain: (obj.domain as Domain) ?? input.domainHint ?? 'general',
@@ -164,8 +180,6 @@ async function runOneAgent(
     }
   }
 }
-
-// ── Synthesis ─────────────────────────────────────────────────────────────────
 
 async function synthesizeResponse(
   llm: LlmClient,
@@ -193,64 +207,56 @@ async function synthesizeResponse(
 
   const recentHistory = contextPack.history.recentMessages
     .slice(-4)
-    .map((m) => `${m.role === 'user' ? 'Utente' : 'LiveWell'}: ${m.content.slice(0, 120)}`)
+    .map((m) => `${m.role === 'user' ? 'Utente' : 'Assistente'}: ${m.content.slice(0, 120)}`)
     .join('\n')
 
-  // Peer proposals from other specialists (to inform the active specialist)
-  const peerInsights = activeSpecialist
-    ? proposals
-        .filter((p) => p.agentId !== activeSpecialist.id)
-        .map((p) => `[${p.agentId}]: ${p.summary}`)
-        .join('\n')
-    : ''
-
-  const systemPrompt = activeSpecialist
-    ? [
-        `Sei ${activeSpecialist.displayName}, uno specialista del team LiveWell.`,
-        `L'utente ha richiesto di parlare direttamente con te. Rispondi in prima persona con la tua voce professionale.`,
-        `Prima di rispondere hai consultato i tuoi colleghi specialisti — integra le loro prospettive quando utile.`,
-        ``,
-        `REGOLE OBBLIGATORIE:`,
-        `- Parla in prima persona (es. "Come tuo ${activeSpecialist.displayName}, ti consiglio...")`,
-        `- NON usare intestazioni markdown (###, ##, #)`,
-        `- NON iniziare con "Certo!", "Assolutamente!" o simili`,
-        `- Rispondi direttamente al messaggio dell'utente`,
-        `- Max 3-4 frasi salvo piani dettagliati richiesti`,
-        `- Se devi fare domande, includine al massimo 1`,
-        `- Non chiedere informazioni già presenti nel profilo utente`,
-        `- NON menzionare errori tecnici o problemi di sistema`,
-        `- Puoi citare i colleghi quando la loro prospettiva arricchisce la risposta`,
-      ].join('\n')
-    : [
-        `Sei LiveWell, un assistente per il benessere personale che coordina un team di specialisti italiani.`,
-        `Parli in italiano, con tono caldo, diretto e professionale — mai generico.`,
-        ``,
-        `REGOLE OBBLIGATORIE:`,
-        `- NON usare intestazioni markdown (###, ##, #)`,
-        `- NON iniziare con "Certo!", "Assolutamente!", "Ottima domanda!" o simili`,
-        `- NON ripetere formalmente il dominio`,
-        `- Rispondi direttamente al messaggio dell'utente`,
-        `- Max 3-4 frasi salvo piani dettagliati richiesti dall'utente`,
-        `- Se devi fare domande, includine al massimo 1, formulata in modo conversazionale`,
-        `- Non chiedere informazioni già presenti nel profilo utente`,
-        `- Usa il punto fermo, non liste di bullet, per risposte conversazionali brevi`,
-        `- Per piani o programmi strutturati, usa elenchi numerati senza intestazioni`,
-        `- NON menzionare errori tecnici o problemi di sistema`,
-      ].join('\n')
+  let systemPrompt: string
+  if (activeSpecialist) {
+    systemPrompt = [
+      `Sei ${activeSpecialist.displayName}, specialista del team LiveWell.`,
+      `Rispondi in prima persona come ${activeSpecialist.displayName}, con tono professionale e umano, in italiano.`,
+      `Stai avendo una conversazione diretta con il tuo paziente/cliente nel tuo ruolo specifico.`,
+      ``,
+      `REGOLE OBBLIGATORIE:`,
+      `- NON usare intestazioni markdown (###, ##, #)`,
+      `- NON iniziare con "Certo!", "Assolutamente!", "Ottima domanda!" o simili`,
+      `- Rispondi come professionista direttamente al paziente/cliente, in prima persona`,
+      `- Max 3-4 frasi salvo piani dettagliati esplicitamente richiesti`,
+      `- Se devi fare domande, includine al massimo 1`,
+      `- Rimani nel tuo ambito di competenza; per altri ambiti rimanda ai colleghi`,
+      `- Per piani o programmi strutturati, usa elenchi numerati senza intestazioni`,
+    ].join('\n')
+  } else {
+    systemPrompt = [
+      `Sei LiveWell, assistente per il benessere personale che coordina un team di specialisti italiani.`,
+      `Parli in italiano, con tono caldo, diretto e professionale — mai generico.`,
+      ``,
+      `REGOLE OBBLIGATORIE:`,
+      `- NON usare intestazioni markdown (###, ##, #)`,
+      `- NON iniziare con "Certo!", "Assolutamente!", "Ottima domanda!" o simili`,
+      `- NON scrivere "Il team sta elaborando..." o promesse di risposte future`,
+      `- NON dire che la risposta arriverà in 24-48 ore o simili`,
+      `- Rispondi SUBITO con informazioni concrete basate sull'analisi del team`,
+      `- Max 3-4 frasi salvo piani dettagliati richiesti dall'utente`,
+      `- Se devi fare domande, includine al massimo 1, in modo conversazionale`,
+      `- Non chiedere informazioni già presenti nel profilo utente`,
+      `- Usa il punto fermo, non bullet, per risposte conversazionali brevi`,
+      `- Per piani strutturati, usa elenchi numerati senza intestazioni`,
+    ].join('\n')
+  }
 
   const userPrompt = [
     recentHistory ? `CONVERSAZIONE RECENTE:\n${recentHistory}\n` : '',
     `MESSAGGIO UTENTE: "${userMessage}"`,
     ``,
     `ANALISI DEL TEAM SPECIALISTICO:`,
-    summaries,
+    summaries || '(nessuna analisi disponibile)',
     topRecs ? `\nRACCOMANDAZIONI:\n${topRecs}` : '',
-    activeSpecialist && peerInsights ? `\nPROSPETTIVE COLLEGHI (uso interno):\n${peerInsights}` : '',
     gatingQuestions.length
       ? `\nINFORMAZIONI ANCORA MANCANTI (chiedi solo la più importante): ${gatingQuestions.slice(0, 3).join('; ')}`
       : '',
     ``,
-    `Scrivi una risposta conversazionale naturale in italiano, rivolta direttamente all'utente.`,
+    `Scrivi una risposta conversazionale in italiano, rivolta direttamente all'utente.`,
   ]
     .filter(Boolean)
     .join('\n')
@@ -258,19 +264,15 @@ async function synthesizeResponse(
   try {
     const res = await llm.complete({ system: systemPrompt, user: userPrompt, format: 'text' })
     const text = res.text.trim()
+    // Fallback if model accidentally returned JSON
     if (text.startsWith('{') || text.startsWith('[')) {
-      return proposals.find((p) => p.summary)?.summary ?? 'Il team sta elaborando la tua richiesta.'
+      return proposals.find((p) => p.summary)?.summary ?? 'Come posso aiutarti?'
     }
     return text
   } catch {
-    return (
-      proposals.find((p) => p.summary)?.summary ??
-      'Il team sta elaborando la tua richiesta.'
-    )
+    return proposals.find((p) => p.summary)?.summary ?? 'Come posso aiutarti?'
   }
 }
-
-// ── Main orchestrate ───────────────────────────────────────────────────────────
 
 export async function orchestrate(
   deps: OrchestratorDeps,
@@ -278,25 +280,27 @@ export async function orchestrate(
 ): Promise<ConsensusResult> {
   const domainHint = input.domainHint ?? detectDomainFromText(input.message)
 
-  // Detect if user is requesting a specific specialist
-  const requestedSpecialist = detectSpecialistRequest(input.message, deps.team)
-  const activeSpecialistAgent = requestedSpecialist ?? (
-    input.activeSpecialistId
-      ? deps.team.find((a) => a.id === input.activeSpecialistId) ?? null
-      : null
-  )
+  // Determine active specialist: locked from previous turn OR newly requested this turn
+  let activeSpecialist: ActiveSpecialist | undefined
+  let lockedAgentId = input.activeSpecialistId ?? null
 
-  const activeSpecialist: ActiveSpecialist | undefined = activeSpecialistAgent
-    ? {
-        id: activeSpecialistAgent.id,
-        displayName: activeSpecialistAgent.displayName,
-        domain: (activeSpecialistAgent.domainTags[0] as Domain) ?? domainHint,
+  if (!lockedAgentId) {
+    const detectedId = detectSpecialistRequest(input.message, deps.team)
+    if (detectedId) lockedAgentId = detectedId
+  }
+
+  if (lockedAgentId) {
+    const agent = deps.team.find((a) => a.id === lockedAgentId)
+    if (agent) {
+      activeSpecialist = {
+        id: agent.id,
+        displayName: agent.displayName,
+        domain: (agent.domainTags[0] ?? domainHint) as Domain,
       }
-    : undefined
+    }
+  }
 
   const selectedAgents = selectAgentsForRequest(deps.team, domainHint, 4)
-
-  // Always run all agents (peer consultation rule)
   const proposals = await Promise.all(
     selectedAgents.map((a) => runOneAgent(deps.llm, a, { ...input, domainHint })),
   )
@@ -318,5 +322,14 @@ export async function orchestrate(
     activeSpecialist,
   })
 
-  return { ...consensus, finalMessageMarkdown: naturalResponse, activeSpecialist }
+  return {
+    ...consensus,
+    finalMessageMarkdown: naturalResponse,
+    activeSpecialist,
+    debug: {
+      selectedAgents: consensus.debug?.selectedAgents ?? selectedAgents.map((a) => a.id),
+      conflicts: consensus.debug?.conflicts ?? [],
+      proposals,
+    },
+  }
 }

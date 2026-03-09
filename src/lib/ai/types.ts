@@ -9,8 +9,6 @@ export type Domain =
 
 export type Role = "OWNER" | "ADMIN" | "USER";
 
-export type AgentId = string;
-
 export type ToolCall = {
   id: string;
   name: string;
@@ -27,6 +25,8 @@ export type ToolResult = {
   uiEvent?: { title: string; description?: string; domain?: Domain };
 };
 
+export type AgentId = string;
+
 export type AgentProfile = {
   id: AgentId;
   displayName: string;
@@ -38,15 +38,22 @@ export type AgentProfile = {
   decisionStyle: "team-led";
 };
 
+/** Identifies the specialist currently active in a conversation turn */
+export type ActiveSpecialist = {
+  id: AgentId;
+  displayName: string;
+  domain: Domain;
+};
+
 export type AgentInput = {
   requestId: string;
   userId: string;
   conversationId: string;
   message: string;
   domainHint?: Domain;
-  contextPack: ContextPack;
-  // When set, the named specialist responds in first person (direct mode)
+  /** ID of the specialist locked for this conversation (persisted from previous turn) */
   activeSpecialistId?: string;
+  contextPack: ContextPack;
   constraints?: {
     locale?: string;
     timezone?: string;
@@ -58,9 +65,9 @@ export type AgentInput = {
 export type AgentProposal = {
   agentId: AgentId;
   domain: Domain;
-  summary: string;
-  reasoning: string;
-  questions?: string[];
+  summary: string; // short
+  reasoning: string; // user-visible, no secrets
+  questions?: string[]; // gating questions
   recommendations?: Array<{
     title: string;
     steps: string[];
@@ -73,9 +80,9 @@ export type AgentProposal = {
       relatedResourceIds?: Record<string, string>;
     }>;
   }>;
-  toolCalls?: ToolCall[];
-  confidence?: number;
-  citations?: Array<{ title: string; url?: string; note?: string }>;
+  toolCalls?: ToolCall[]; // proposed, not executed by agents
+  confidence?: number; // 0..1
+  citations?: Array<{ title: string; url?: string; note?: string }>; // optional
   flags?: {
     needsMoreInfo?: boolean;
     potentialRisk?: boolean;
@@ -125,16 +132,12 @@ export type ContextPack = {
   };
 };
 
-export type ActiveSpecialist = {
-  id: string;
-  displayName: string;
-  domain: Domain;
-};
-
 export type ConsensusResult = {
   domain: Domain;
   finalMessageMarkdown: string;
   toolCallsToExecute: ToolCall[];
+  /** Active specialist for this turn (set by orchestrator) */
+  activeSpecialist?: ActiveSpecialist;
   ui: {
     domainIcon: Domain;
     moodScore: number;
@@ -150,45 +153,9 @@ export type ConsensusResult = {
     title: string;
     contentMarkdown: string;
   }>;
-  // Set when the orchestrator detected a direct specialist request
-  activeSpecialist?: ActiveSpecialist;
   debug?: {
     selectedAgents: AgentId[];
     conflicts: string[];
+    proposals?: AgentProposal[];
   };
 };
-
-
-// ─── Backward-compatibility types for legacy modules ─────────────────────────
-export type AIMessage = { role: 'user' | 'assistant' | 'system'; content: string }
-export type ProfileData = Record<string, unknown>
-export type SpecialistId = string
-export type RiskLevel = 'R0' | 'R1' | 'R2' | 'R3'
-
-export type RoutingDecision = {
-  primarySpecialist: SpecialistId
-  supportSpecialists: SpecialistId[]
-  domain: Domain
-  riskLevel: RiskLevel
-  requiresIntervention: boolean
-}
-
-export type AIResponse = {
-  content: string
-  specialist: SpecialistId
-  domain: Domain
-  routing: RoutingDecision
-  suggestions?: string[]
-  flags?: {
-    potentialRisk?: boolean
-    requiresFollowUp?: boolean
-  }
-}
-
-export type ConversationContext = {
-  userId: string
-  messages: AIMessage[]
-  profile: ProfileData
-  domain?: Domain
-  language?: string
-}

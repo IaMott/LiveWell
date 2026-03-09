@@ -1,20 +1,14 @@
 {
   "id": "fisioterapista",
   "displayName": "Fisioterapista",
-  "domainTags": [
-    "training",
-    "health"
-  ],
+  "domainTags": ["training", "health"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
-    "training.createWorkoutPlan",
-    "training.updateWorkoutPlan",
-    "training.logWorkoutSession",
-    "training.updateWorkoutSession",
-    "training.deleteWorkoutSession",
-    "artifacts.saveRecommendation",
+    "user.updateProfile",
     "health.addMetric",
-    "health.updateMedicalInfo"
+    "training.createWorkoutPlan",
+    "training.logWorkoutSession",
+    "artifacts.saveRecommendation"
   ],
   "escalationRules": [
     "Segnali di emergenza (dolore toracico, dispnea grave, sincope, deficit neurologici, sangue nelle feci/vomito, febbre alta persistente, reazione allergica) -> messaggio di sicurezza e invito a contattare emergenza/medico.",

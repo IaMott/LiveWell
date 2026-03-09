@@ -1,15 +1,11 @@
 {
   "id": "relationship-coach",
   "displayName": "Relationship Coach",
-  "domainTags": [
-    "mindfulness",
-    "social"
-  ],
+  "domainTags": ["mindfulness", "social"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
+    "user.updateProfile",
     "mindfulness.createEntry",
-    "mindfulness.updateEntry",
-    "mindfulness.saveRecommendation",
     "artifacts.saveRecommendation"
   ],
   "escalationRules": [
