@@ -259,14 +259,17 @@ export function ConversationHistory({ open, currentId, onClose, onSelect, onNew,
                 </div>
                 <span
                   style={{
-                    fontSize: '0.75rem',
+                    fontSize: '0.6875rem',
                     color: 'var(--color-text-secondary)',
                     flexShrink: 0,
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  {new Date(c.updatedAt).toLocaleDateString('it-IT', {
+                  {new Date(c.updatedAt).toLocaleString('it-IT', {
                     day: 'numeric',
                     month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
                   })}
                 </span>
                 <button

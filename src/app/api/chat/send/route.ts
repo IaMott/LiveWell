@@ -95,7 +95,7 @@ function buildDeterministicLlm(toolCalls: ToolCall[]) {
 
 type RoutePersistenceDeps = {
   findConversationById: (id: string) => Promise<{ id: string; userId: string } | null>
-  createConversation: (input: { userId: string; title: string }) => Promise<{ id: string }>
+  createConversation: (input: { id?: string; userId: string; title: string }) => Promise<{ id: string }>
   persistChatTurn: (input: {
     conversationId: string
     userMessage: string
@@ -115,7 +115,7 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
   if (!enabled) {
     return {
       findConversationById: async () => null,
-      createConversation: async () => ({ id: crypto.randomUUID() }),
+      createConversation: async ({ id }) => ({ id: id ?? crypto.randomUUID() }),
       persistChatTurn: async () => undefined,
       buildContextPack: async ({ userId, role }) => buildDefaultContextPack(userId, role),
     }
@@ -148,9 +148,9 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
         where: { id },
         select: { id: true, userId: true },
       }),
-    createConversation: async ({ userId, title }) =>
+    createConversation: async ({ id, userId, title }) =>
       prisma.conversation.create({
-        data: { userId, title },
+        data: { ...(id ? { id } : {}), userId, title },
         select: { id: true },
       }),
     persistChatTurn: async ({ conversationId, userMessage, assistantMessage, domain, specialistName, auditEvents }) => {
@@ -313,6 +313,13 @@ async function resolveConversationId(
   if (input.conversationId) {
     const existing = await deps.findConversationById(input.conversationId)
     if (existing && existing.userId === input.userId) return existing.id
+    // Client-provided ID not found — create conversation with that same ID to prevent duplication
+    const created = await deps.createConversation({
+      id: input.conversationId,
+      userId: input.userId,
+      title: input.message.slice(0, 80),
+    })
+    return created.id
   }
   const created = await deps.createConversation({
     userId: input.userId,

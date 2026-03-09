@@ -79,6 +79,13 @@ function detectSpecialistRequest(message: string, team: AgentProfile[]): string 
   return null
 }
 
+/** Key profile fields to track for completeness */
+const KEY_PROFILE_FIELDS = [
+  'peso', 'altezza', 'eta', 'genere',
+  'obiettivi', 'condizioni_mediche', 'attivita_fisica',
+  'dieta_restrizioni', 'farmaci', 'allergie',
+]
+
 function buildAgentUserPrompt(input: AgentInput): string {
   const parts: string[] = [
     `USER MESSAGE:`,
@@ -100,6 +107,17 @@ function buildAgentUserPrompt(input: AgentInput): string {
       .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
       .join(', ')
     parts.push(`- userProfile: ${profileSummary}`)
+  }
+
+  // Missing key profile fields — ask one at a time if relevant to domain
+  const profile = (input.contextPack.user.profile ?? {}) as Record<string, unknown>
+  const missingFields = KEY_PROFILE_FIELDS.filter((f) => profile[f] === undefined || profile[f] === null || profile[f] === '')
+  if (missingFields.length > 0) {
+    parts.push(
+      ``,
+      `CAMPI PROFILO MANCANTI (chiedi quelli pertinenti al tuo ambito, UNO alla volta):`,
+      missingFields.map((f) => `- ${f}`).join('\n'),
+    )
   }
 
   // Detect previous gating questions → instruct agent to call user.updateProfile if answered
@@ -130,12 +148,27 @@ function buildAgentUserPrompt(input: AgentInput): string {
     `goals, diet restrictions, training frequency, medications, allergies, sleep hours, stress level etc.),`,
     `ALWAYS include a "user.updateProfile" tool call in your toolCalls[] with the extracted key-value pairs.`,
     ``,
+    `NATURAL DIALOGUE RULE:`,
+    `Termina SEMPRE con una domanda aperta o un invito a continuare la conversazione.`,
+    `L'ultima parola è sempre dell'utente — mai tua. Chiedi UNA sola cosa alla volta.`,
+    ``,
     `INSTRUCTIONS:`,
     `- You are a specialist agent. Respond ONLY within your domain scope.`,
     `- Ask gating questions only for data YOUR specific domain requires.`,
     `- Provide evidence-based recommendations. If uncertain, say so.`,
     `- Propose tool calls only if clearly helpful; do not claim execution.`,
-    `- Output must be valid JSON.`,
+    `- Output must be valid JSON matching the schema below.`,
+    ``,
+    `OUTPUT JSON SCHEMA (rispetta esattamente questa struttura):`,
+    `{`,
+    `  "domain": "nutrizione|allenamento|salute|mindfulness|idee|general",`,
+    `  "summary": "risposta diretta in italiano, termina con una domanda",`,
+    `  "reasoning": "analisi interna non visibile all'utente",`,
+    `  "questions": ["domanda gating se necessario"],`,
+    `  "recommendations": [],`,
+    `  "toolCalls": [{"id": "uuid", "name": "user.updateProfile", "args": {"fields": {"chiave": "valore"}}}],`,
+    `  "confidence": 0.8`,
+    `}`,
   )
 
   return parts.join('\n')
@@ -222,9 +255,10 @@ async function synthesizeResponse(
       `- NON iniziare con "Certo!", "Assolutamente!", "Ottima domanda!" o simili`,
       `- Rispondi come professionista direttamente al paziente/cliente, in prima persona`,
       `- Max 3-4 frasi salvo piani dettagliati esplicitamente richiesti`,
-      `- Se devi fare domande, includine al massimo 1`,
       `- Rimani nel tuo ambito di competenza; per altri ambiti rimanda ai colleghi`,
       `- Per piani o programmi strutturati, usa elenchi numerati senza intestazioni`,
+      `- Se mancano dati fondamentali per il tuo ambito, chiedi UNA sola informazione alla volta`,
+      `- REGOLA FONDAMENTALE: Termina SEMPRE con una domanda aperta o un invito a rispondere — l'ultima parola è sempre dell'utente, mai tua`,
     ].join('\n')
   } else {
     systemPrompt = [
@@ -242,6 +276,7 @@ async function synthesizeResponse(
       `- Non chiedere informazioni già presenti nel profilo utente`,
       `- Usa il punto fermo, non bullet, per risposte conversazionali brevi`,
       `- Per piani strutturati, usa elenchi numerati senza intestazioni`,
+      `- REGOLA FONDAMENTALE: Termina SEMPRE con una domanda aperta o un invito a rispondere — l'ultima parola è sempre dell'utente, mai tua`,
     ].join('\n')
   }
 
@@ -257,6 +292,7 @@ async function synthesizeResponse(
       : '',
     ``,
     `Scrivi una risposta conversazionale in italiano, rivolta direttamente all'utente.`,
+    `Termina SEMPRE con una domanda o un invito — non chiudere mai la conversazione unilateralmente.`,
   ]
     .filter(Boolean)
     .join('\n')
