@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect, type KeyboardEvent, type ChangeEvent } from 'react'
+import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react'
 import type React from 'react'
 import type { Domain } from '@/lib/ai/types'
 import { LiveModal } from './live/LiveModal'
@@ -83,7 +83,6 @@ function IconLive({ active }: { active: boolean }) {
   return (
     <svg viewBox="0 0 800 800" width="30" height="30" aria-hidden="true">
       <circle cx="400" cy="400" r="354.33" fill={bg} />
-      {/* 4 waveform bars from design/icons/live.svg */}
       <path fillRule="evenodd" fill="#f7f7f8" d="M442.56,293.48c13.81,0,25,11.19,25,25v159.67c0,13.81-11.19,25-25,25s-25-11.19-25-25v-159.67c0-13.81,11.19-25,25-25h0Z"/>
       <path fillRule="evenodd" fill="#f7f7f8" d="M357.44,239.98c13.81,0,25,11.19,25,25v266.67c0,13.81-11.19,25-25,25s-25-11.19-25-25v-266.67c0-13.81,11.19-25,25-25h0Z"/>
       <path fillRule="evenodd" fill="#f7f7f8" d="M272.11,320.98c13.81,0,25,11.19,25,25v104.67c0,13.81-11.19,25-25,25s-25-11.19-25-25v-104.67c0-13.81,11.19-25,25-25h0Z"/>
@@ -120,11 +119,12 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain }: Props) 
   const [animDomain, setAnimDomain] = useState<Domain | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // When activeDomain changes (from orchestrator ui.state SSE), auto-select and animate
+  // Sync activeDomain from orchestrator ui.state SSE
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (activeDomain && activeDomain !== selectedDomain) {
-      setSelectedDomain(activeDomain)
-      setAnimDomain(activeDomain)
+      setSelectedDomain(activeDomain) // eslint-disable-line react-hooks/set-state-in-effect
+      setAnimDomain(activeDomain) // eslint-disable-line react-hooks/set-state-in-effect
       const t = setTimeout(() => setAnimDomain(null), 400)
       return () => clearTimeout(t)
     }
@@ -151,7 +151,7 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain }: Props) 
     }
   }
 
-  const submit = useCallback(() => {
+  function submit() {
     const trimmed = text.trim()
     if (!trimmed || disabled) return
     onSend(trimmed, selectedDomain ?? undefined)
@@ -159,7 +159,7 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain }: Props) 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [text, disabled, onSend, selectedDomain])
+  }
 
   function handleTranscription(transcript: string) {
     setText(transcript)

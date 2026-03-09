@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { signOut } from 'next-auth/react'
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
 import type React from 'react'
@@ -13,26 +13,42 @@ function dispatchSettingsChanged() {
   window.dispatchEvent(new Event('lw-settings-changed'))
 }
 
+function getSavedSettings(): Record<string, unknown> {
+  if (typeof window === 'undefined') return {}
+  try {
+    return JSON.parse(localStorage.getItem('lw_settings') ?? '{}') as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
 export function SettingsSection({ data }: Props) {
   const { user } = data
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
-  const [accentColor, setAccentColor] = useState('#007AFF')
-  const [notifInApp, setNotifInApp] = useState(true)
-  const [notifPush, setNotifPush] = useState(false)
-  const [geoEnabled, setGeoEnabled] = useState(false)
-  const [reduceAnim, setReduceAnim] = useState(false)
-
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('lw_settings') ?? '{}') as Record<string, unknown>
-      if (saved.theme) setTheme(saved.theme as typeof theme)
-      if (saved.accentColor) setAccentColor(saved.accentColor as string)
-      if (saved.notifInApp !== undefined) setNotifInApp(saved.notifInApp as boolean)
-      if (saved.notifPush !== undefined) setNotifPush(saved.notifPush as boolean)
-      if (saved.geoEnabled !== undefined) setGeoEnabled(saved.geoEnabled as boolean)
-      if (saved.reduceAnim !== undefined) setReduceAnim(saved.reduceAnim as boolean)
-    } catch {}
-  }, [])
+  // Lazy initialization from localStorage — avoids setState in useEffect
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => {
+    const s = getSavedSettings()
+    return (s.theme as 'light' | 'dark' | 'system') ?? 'system'
+  })
+  const [accentColor, setAccentColor] = useState<string>(() => {
+    const s = getSavedSettings()
+    return (s.accentColor as string) ?? '#007AFF'
+  })
+  const [notifInApp, setNotifInApp] = useState<boolean>(() => {
+    const s = getSavedSettings()
+    return s.notifInApp !== undefined ? (s.notifInApp as boolean) : true
+  })
+  const [notifPush, setNotifPush] = useState<boolean>(() => {
+    const s = getSavedSettings()
+    return s.notifPush !== undefined ? (s.notifPush as boolean) : false
+  })
+  const [geoEnabled, setGeoEnabled] = useState<boolean>(() => {
+    const s = getSavedSettings()
+    return s.geoEnabled !== undefined ? (s.geoEnabled as boolean) : false
+  })
+  const [reduceAnim, setReduceAnim] = useState<boolean>(() => {
+    const s = getSavedSettings()
+    return s.reduceAnim !== undefined ? (s.reduceAnim as boolean) : false
+  })
 
   function save(updates: Record<string, unknown>) {
     try {
