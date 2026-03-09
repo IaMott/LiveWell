@@ -101,13 +101,14 @@ const DOMAINS: Array<{ domain: Domain; Icon: IconFC; label: string }> = [
 
 interface Props {
   onSend: (text: string, domain?: Domain) => void
+  onHistory?: () => void
   disabled?: boolean
   activeDomain?: Domain | null
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ChatInput({ onSend, disabled, activeDomain }: Props) {
+export function ChatInput({ onSend, onHistory, disabled, activeDomain }: Props) {
   const [text, setText] = useState('')
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(activeDomain ?? null)
   const [showLive, setShowLive] = useState(false)
@@ -212,7 +213,7 @@ export function ChatInput({ onSend, disabled, activeDomain }: Props) {
             <button
               type="button"
               aria-label="Cronologia"
-              onClick={() => setSelectedDomain(null)}
+              onClick={() => { setSelectedDomain(null); onHistory?.() }}
               style={iconBtnStyle(false)}
             >
               <IconCronology color={selectedDomain === null ? currentColor : 'var(--color-text-secondary, #8E8E93)'} />
