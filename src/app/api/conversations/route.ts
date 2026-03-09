@@ -10,37 +10,67 @@ export async function GET(request: Request): Promise<Response> {
   const rate = checkRateLimit({ key: `conversations-list:${userId}:${getClientIp(request)}`, max: 60 })
   if (!rate.ok) return errorResponse(429, 'RATE_LIMITED', 'Too many requests')
 
-  const conversations = await prisma.conversation.findMany({
-    where: { userId },
-    orderBy: { updatedAt: 'desc' },
-    take: 30,
-    select: {
-      id: true,
-      title: true,
-      createdAt: true,
-      updatedAt: true,
-      messages: {
-        orderBy: { createdAt: 'desc' },
-        take: 2,
-        select: { role: true, content: true, domain: true, specialistName: true },
+  try {
+    const conversations = await prisma.conversation.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+      take: 30,
+      select: {
+        id: true,
+        title: true,
+        updatedAt: true,
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 2,
+          select: { role: true, content: true, domain: true, specialistName: true },
+        },
       },
-    },
-  })
+    })
 
-  return Response.json({
-    conversations: conversations.map((c) => {
-      const lastMsg = c.messages[0]
-      // If last message is from user, try the assistant message before it
-      const assistantMsg = c.messages.find((m) => m.role === 'assistant')
-      return {
-        id: c.id,
-        title: c.title ?? 'Conversazione',
-        updatedAt: c.updatedAt.toISOString(),
-        preview: lastMsg?.content?.slice(0, 80) ?? '',
-        specialist: assistantMsg?.specialistName ?? null,
-      }
-    }),
-  })
+    return Response.json({
+      conversations: conversations.map((c) => {
+        const lastMsg = c.messages[0]
+        const assistantMsg = c.messages.find((m) => m.role === 'assistant')
+        return {
+          id: c.id,
+          title: c.title ?? 'Conversazione',
+          updatedAt: c.updatedAt.toISOString(),
+          preview: lastMsg?.content?.slice(0, 80) ?? '',
+          specialist: assistantMsg?.specialistName ?? null,
+        }
+      }),
+    })
+  } catch {
+    // Fallback: return basic list without specialist info (e.g. during schema migration)
+    try {
+      const conversations = await prisma.conversation.findMany({
+        where: { userId },
+        orderBy: { updatedAt: 'desc' },
+        take: 30,
+        select: {
+          id: true,
+          title: true,
+          updatedAt: true,
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { role: true, content: true },
+          },
+        },
+      })
+      return Response.json({
+        conversations: conversations.map((c) => ({
+          id: c.id,
+          title: c.title ?? 'Conversazione',
+          updatedAt: c.updatedAt.toISOString(),
+          preview: c.messages[0]?.content?.slice(0, 80) ?? '',
+          specialist: null,
+        })),
+      })
+    } catch {
+      return Response.json({ conversations: [] })
+    }
+  }
 }
 
 export async function DELETE(request: Request): Promise<Response> {
