@@ -49,7 +49,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const bytes = await file.arrayBuffer()
   if (bytes.byteLength > MAX_BYTES) {
-    return errorResponse(413, 'FILE_TOO_LARGE', 'Audio file exceeds 10 MB limit')
+    return errorResponse(400, 'BAD_REQUEST', 'Audio file exceeds 10 MB limit')
   }
   if (bytes.byteLength < 500) {
     // Too small to contain real audio
