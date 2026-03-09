@@ -193,9 +193,8 @@ export function LiveModal({ onClose }: Props) {
 
   const startMediaStreaming = useCallback(
     async (session: LiveSession, micStream: MediaStream) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const AudioCtxCtor: typeof AudioContext =
-        window.AudioContext ?? (window as any).webkitAudioContext
+      const w = window as Window & { webkitAudioContext?: typeof AudioContext }
+      const AudioCtxCtor = w.AudioContext ?? w.webkitAudioContext
       if (!AudioCtxCtor) return
 
       const inCtx = new AudioCtxCtor()
@@ -212,7 +211,6 @@ export function LiveModal({ onClose }: Props) {
       analyserRef.current = analyser
 
       // ScriptProcessor: reliable cross-browser, no worker-blob CSP issues
-      // eslint-disable-next-line deprecation/deprecation
       const proc = inCtx.createScriptProcessor(2048, 1, 1)
       const mute = inCtx.createGain()
       mute.gain.value = 0
@@ -333,7 +331,6 @@ export function LiveModal({ onClose }: Props) {
               prebuiltVoiceConfig: { voiceName: 'Kore' },
             },
           },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           realtimeInputConfig: {
             automaticActivityDetection: {
               disabled: false,
