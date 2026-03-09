@@ -14,6 +14,8 @@ export type ChatMessage = {
 
 const STORAGE_KEY = 'livewell_conversation_id'
 const SPECIALIST_KEY = 'livewell_active_specialist'
+// Max time to wait for conversation history before giving up (Neon cold-start)
+const LOAD_TIMEOUT_MS = 8000
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -49,8 +51,13 @@ export function useChat() {
     setActiveSpecialistId(undefined)
     setActiveSpecialistName(undefined)
     activeSpecialistIdRef.current = undefined
+
+    // Abort the request if it takes too long (protects against Neon DB cold-start hangs)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS)
+
     try {
-      const res = await fetch(`/api/conversations/${id}`)
+      const res = await fetch(`/api/conversations/${id}`, { signal: controller.signal })
       if (!res.ok) {
         localStorage.removeItem(STORAGE_KEY)
         return
@@ -73,6 +80,7 @@ export function useChat() {
     } catch {
       localStorage.removeItem(STORAGE_KEY)
     } finally {
+      clearTimeout(timeout)
       setIsStreaming(false)
     }
   }, [])
