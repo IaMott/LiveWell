@@ -13,17 +13,26 @@ export type ChatMessage = {
 }
 
 const STORAGE_KEY = 'livewell_conversation_id'
+const SPECIALIST_KEY = 'livewell_active_specialist'
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
   const [activeDomain, setActiveDomain] = useState<Domain | null>(null)
+  const [activeSpecialistId, setActiveSpecialistId] = useState<string | undefined>(undefined)
+  const [activeSpecialistName, setActiveSpecialistName] = useState<string | undefined>(undefined)
+
   const conversationIdRef = useRef<string | undefined>(undefined)
+  const activeSpecialistIdRef = useRef<string | undefined>(undefined)
 
   useEffect(() => {
     conversationIdRef.current = conversationId
   }, [conversationId])
+
+  useEffect(() => {
+    activeSpecialistIdRef.current = activeSpecialistId
+  }, [activeSpecialistId])
 
   useEffect(() => {
     const savedId = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
@@ -37,6 +46,9 @@ export function useChat() {
     setIsStreaming(true)
     setMessages([])
     setActiveDomain(null)
+    setActiveSpecialistId(undefined)
+    setActiveSpecialistName(undefined)
+    activeSpecialistIdRef.current = undefined
     try {
       const res = await fetch(`/api/conversations/${id}`)
       if (!res.ok) {
@@ -69,9 +81,20 @@ export function useChat() {
     const newId = crypto.randomUUID()
     setMessages([])
     setActiveDomain(null)
+    setActiveSpecialistId(undefined)
+    setActiveSpecialistName(undefined)
+    activeSpecialistIdRef.current = undefined
     setConversationId(newId)
     conversationIdRef.current = newId
     localStorage.setItem(STORAGE_KEY, newId)
+    localStorage.removeItem(SPECIALIST_KEY)
+  }, [])
+
+  const exitSpecialist = useCallback(() => {
+    setActiveSpecialistId(undefined)
+    setActiveSpecialistName(undefined)
+    activeSpecialistIdRef.current = undefined
+    localStorage.removeItem(SPECIALIST_KEY)
   }, [])
 
   const exportConversation = useCallback(async (id?: string) => {
@@ -127,6 +150,7 @@ export function useChat() {
           body: JSON.stringify({
             message: trimmed,
             conversationId: conversationIdRef.current,
+            activeSpecialistId: activeSpecialistIdRef.current,
           }),
         })
 
@@ -175,7 +199,18 @@ export function useChat() {
               } else if (event.type === 'ui.state') {
                 const domain = event.domain as Domain | undefined
                 const specialistName = event.specialistName as string | undefined
+                const newSpecialistId = event.activeSpecialistId as string | undefined
+
                 if (domain) setActiveDomain(domain)
+
+                // Update specialist state from server response
+                if (newSpecialistId && newSpecialistId !== activeSpecialistIdRef.current) {
+                  setActiveSpecialistId(newSpecialistId)
+                  setActiveSpecialistName(specialistName)
+                  activeSpecialistIdRef.current = newSpecialistId
+                  if (newSpecialistId) localStorage.setItem(SPECIALIST_KEY, newSpecialistId)
+                }
+
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantId ? { ...m, domain, specialistName } : m,
@@ -207,9 +242,12 @@ export function useChat() {
     isStreaming,
     conversationId,
     activeDomain,
+    activeSpecialistId,
+    activeSpecialistName,
     send,
     loadConversation,
     newConversation,
+    exitSpecialist,
     exportConversation,
   }
 }
