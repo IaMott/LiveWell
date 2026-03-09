@@ -7,25 +7,22 @@ interface Props {
   onTranscription?: (text: string) => void
 }
 
-function IconVideo({ crossed }: { crossed?: boolean }) {
+function IconVideo() {
   return (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polygon points="23 7 16 12 23 17 23 7" />
       <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-      {crossed && (
-        <>
-          <line x1="1" y1="1" x2="23" y2="23" strokeWidth="2.5" />
-        </>
-      )}
     </svg>
   )
 }
 
-function IconX() {
+function IconSwitchCamera() {
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 7h-3a2 2 0 0 1-2-2V2" />
+      <path d="M9 2H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5Z" />
+      <path d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+      <path d="M9.5 9.5 L14.5 14.5" />
     </svg>
   )
 }
@@ -35,7 +32,11 @@ export function LiveModal({ onClose, onTranscription }: Props) {
   const [errorMsg, setErrorMsg] = useState('')
   const [bars, setBars] = useState<number[]>(Array(12).fill(4))
   const [videoEnabled, setVideoEnabled] = useState(false)
-  const mediaRef = useRef<MediaStream | null>(null)
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
+  const [currentCameraIdx, setCurrentCameraIdx] = useState(0)
+
+  const audioStreamRef = useRef<MediaStream | null>(null)
+  const videoStreamRef = useRef<MediaStream | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -60,11 +61,12 @@ export function LiveModal({ onClose, onTranscription }: Props) {
     animRef.current = requestAnimationFrame(tick)
   }, [])
 
+  // Start audio on mount
   useEffect(() => {
     async function start() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        mediaRef.current = stream
+        audioStreamRef.current = stream
 
         try {
           const ctx = new AudioContext()
@@ -97,34 +99,78 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current)
-      if (mediaRef.current) mediaRef.current.getTracks().forEach((t) => t.stop())
+      audioStreamRef.current?.getTracks().forEach((t) => t.stop())
+      videoStreamRef.current?.getTracks().forEach((t) => t.stop())
     }
   }, [startAnim])
 
+  // Enumerate video devices when video is enabled
+  useEffect(() => {
+    if (!videoEnabled) return
+    navigator.mediaDevices.enumerateDevices().then((devices) => {
+      setVideoDevices(devices.filter((d) => d.kind === 'videoinput'))
+    }).catch(() => {})
+  }, [videoEnabled])
+
+  // Attach video stream to <video> element after it mounts
+  useEffect(() => {
+    if (videoEnabled && videoRef.current && videoStreamRef.current) {
+      videoRef.current.srcObject = videoStreamRef.current
+      videoRef.current.play().catch(() => {})
+    }
+  }, [videoEnabled])
+
+  async function startVideo(deviceId?: string) {
+    // Stop any existing video stream
+    videoStreamRef.current?.getTracks().forEach((t) => t.stop())
+    videoStreamRef.current = null
+
+    try {
+      const constraints: MediaStreamConstraints = {
+        video: deviceId ? { deviceId: { exact: deviceId } } : true,
+      }
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      videoStreamRef.current = stream
+      setVideoEnabled(true)
+      // If ref is already mounted (switching camera), attach immediately
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play().catch(() => {})
+      }
+    } catch {}
+  }
+
+  function stopVideo() {
+    videoStreamRef.current?.getTracks().forEach((t) => t.stop())
+    videoStreamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+    setVideoEnabled(false)
+  }
+
   async function toggleVideo() {
     if (videoEnabled) {
-      // Stop video tracks
-      if (mediaRef.current) {
-        mediaRef.current.getVideoTracks().forEach((t) => t.stop())
-      }
-      if (videoRef.current) videoRef.current.srcObject = null
-      setVideoEnabled(false)
+      stopVideo()
     } else {
-      try {
-        const videoStream = await navigator.mediaDevices.getUserMedia({ video: true })
-        videoStream.getVideoTracks().forEach((t) => mediaRef.current?.addTrack(t))
-        if (videoRef.current) {
-          videoRef.current.srcObject = videoStream
-          await videoRef.current.play()
-        }
-        setVideoEnabled(true)
-      } catch {}
+      await startVideo()
+      // Enumerate after first start to populate device list
+      const devices = await navigator.mediaDevices.enumerateDevices().catch(() => [])
+      const vdevs = devices.filter((d) => d.kind === 'videoinput')
+      setVideoDevices(vdevs)
+      setCurrentCameraIdx(0)
     }
+  }
+
+  async function switchCamera() {
+    if (videoDevices.length < 2) return
+    const nextIdx = (currentCameraIdx + 1) % videoDevices.length
+    setCurrentCameraIdx(nextIdx)
+    await startVideo(videoDevices[nextIdx]?.deviceId)
   }
 
   async function stopAndSend() {
     if (animRef.current) cancelAnimationFrame(animRef.current)
     setPhase('processing')
+    stopVideo()
 
     const recorder = recorderRef.current
     if (!recorder || recorder.state === 'inactive') {
@@ -149,7 +195,7 @@ export function LiveModal({ onClose, onTranscription }: Props) {
       onClose()
     }
 
-    if (mediaRef.current) mediaRef.current.getTracks().forEach((t) => t.stop())
+    audioStreamRef.current?.getTracks().forEach((t) => t.stop())
     recorder.stop()
   }
 
@@ -172,27 +218,10 @@ export function LiveModal({ onClose, onTranscription }: Props) {
           playsInline
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', opacity: 0.35,
+            objectFit: 'cover', opacity: 0.45,
           }}
         />
       )}
-
-      {/* X button top-right */}
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Chiudi"
-        style={{
-          position: 'absolute', top: '1.25rem', right: '1.25rem',
-          width: '2.5rem', height: '2.5rem', borderRadius: '50%',
-          backgroundColor: 'rgba(255,255,255,0.15)', border: 'none',
-          color: '#fff', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 2,
-        }}
-      >
-        <IconX />
-      </button>
 
       {/* Content */}
       <div
@@ -249,13 +278,32 @@ export function LiveModal({ onClose, onTranscription }: Props) {
           </div>
         )}
 
-        {/* Controls: video camera button (send) */}
+        {/* Controls */}
         {phase === 'active' && (
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+
+            {/* Camera switch button — only when multiple cameras & video active */}
+            {videoEnabled && videoDevices.length > 1 && (
+              <button
+                type="button"
+                onClick={() => { void switchCamera() }}
+                aria-label="Cambia fotocamera"
+                title="Cambia fotocamera"
+                style={{
+                  width: '3rem', height: '3rem', borderRadius: '50%', border: 'none',
+                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  color: '#fff', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <IconSwitchCamera />
+              </button>
+            )}
+
             {/* Video toggle */}
             <button
               type="button"
-              onClick={toggleVideo}
+              onClick={() => { void toggleVideo() }}
               aria-label={videoEnabled ? 'Disabilita video' : 'Abilita video'}
               title={videoEnabled ? 'Disabilita video' : 'Abilita video'}
               style={{
@@ -265,13 +313,13 @@ export function LiveModal({ onClose, onTranscription }: Props) {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
             >
-              <IconVideo crossed={!videoEnabled} />
+              <IconVideo />
             </button>
 
-            {/* Send (stop + transcribe) */}
+            {/* Stop + send */}
             <button
               type="button"
-              onClick={stopAndSend}
+              onClick={() => { void stopAndSend() }}
               aria-label="Invia messaggio"
               title="Invia messaggio vocale"
               style={{
@@ -281,7 +329,6 @@ export function LiveModal({ onClose, onTranscription }: Props) {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
             >
-              {/* Mic / stop icon */}
               <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
                 <rect x="6" y="6" width="12" height="12" rx="2" />
               </svg>
