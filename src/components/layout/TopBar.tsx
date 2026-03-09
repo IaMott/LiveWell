@@ -24,9 +24,9 @@ export function TopBar({ userInitials = 'ME' }: Props) {
         padding: '3.5rem 1rem 0.75rem',
       }}
     >
-      {/* Settings gear → /profile/impostazioni */}
+      {/* Settings gear → /settings (separate from profile) */}
       <Link
-        href="/profile/impostazioni"
+        href="/settings"
         aria-label="Impostazioni"
         style={{
           width: '2.25rem', height: '2.25rem', borderRadius: '50%',
@@ -37,7 +37,7 @@ export function TopBar({ userInitials = 'ME' }: Props) {
         <IconSettings />
       </Link>
 
-      {/* Right side: avatar */}
+      {/* Right side: avatar → /profile */}
       <Link
         href="/profile"
         aria-label="Vai al profilo"

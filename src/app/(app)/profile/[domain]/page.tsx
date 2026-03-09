@@ -7,7 +7,14 @@ import { TrainingSection } from '@/components/profile/sections/TrainingSection'
 import { HealthSection } from '@/components/profile/sections/HealthSection'
 import { MindfulnessSection } from '@/components/profile/sections/MindfulnessSection'
 import { IdeasSection } from '@/components/profile/sections/IdeasSection'
-import { SettingsSection } from '@/components/profile/sections/SettingsSection'
+
+// Profile domains map to TEAM agent groups:
+//   nutrizione  → TEAM/nutrizione  (dietista, chef, endocrinologo)
+//   salute      → TEAM/salute-biologica (mmg, gastroenterologo, cardiologo, dermatologo)
+//   allenamento → TEAM/allenamento (persona-trainer, chinesologo, medico-dello-sport, fisioterapista, fisiatra, sleep-coach)
+//   mindfulness → TEAM/salute-mentale (psicologo, mental-coach, coach-relazionale)
+//   idee        → TEAM/idee (analista-contesto, financial-planner, commercialista, career-coach, executive-coach, life-organizer, consulente-legale)
+// Settings are at /settings (separate route — not part of the profile)
 
 const VALID_DOMAINS = [
   'overview',
@@ -16,7 +23,6 @@ const VALID_DOMAINS = [
   'salute',
   'mindfulness',
   'idee',
-  'impostazioni',
 ] as const
 
 type Domain = (typeof VALID_DOMAINS)[number]
@@ -139,7 +145,5 @@ export default async function DomainPage({
       return <MindfulnessSection data={data} />
     case 'idee':
       return <IdeasSection data={data} />
-    case 'impostazioni':
-      return <SettingsSection data={data} />
   }
 }

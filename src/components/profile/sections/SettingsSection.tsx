@@ -2,10 +2,9 @@
 
 import { useState } from 'react'
 import { signOut } from 'next-auth/react'
-import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
 import type React from 'react'
 
-type Props = { data: ProfileData }
+type Props = { user: { email: string; name?: string | null } }
 
 const ACCENT_COLORS = ['#007AFF', '#34C759', '#FF3B30', '#FF9F0A', '#AF52DE', '#5AC8FA', '#FF2D55', '#FFCC00']
 
@@ -22,9 +21,7 @@ function getSavedSettings(): Record<string, unknown> {
   }
 }
 
-export function SettingsSection({ data }: Props) {
-  const { user } = data
-  // Lazy initialization from localStorage — avoids setState in useEffect
+export function SettingsSection({ user }: Props) {
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => {
     const s = getSavedSettings()
     return (s.theme as 'light' | 'dark' | 'system') ?? 'system'
