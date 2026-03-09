@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, type KeyboardEvent, type ChangeEvent } from 'react'
+import { useState, useRef, useCallback, useEffect, type KeyboardEvent, type ChangeEvent } from 'react'
 import type React from 'react'
 import type { Domain } from '@/lib/ai/types'
 import { LiveModal } from './live/LiveModal'
@@ -77,12 +77,14 @@ function IconCronology({ color }: { color: string }) {
 }
 
 function IconLive() {
+  // Based on design/icons/live.svg — circle bg + 4 waveform bars
   return (
-    <svg viewBox="0 0 800 800" width="16" height="16" fill="#fff" aria-hidden="true">
-      <rect x="417.56" y="293.48" width="50" height="209.67" rx="25" />
-      <rect x="332.44" y="239.98" width="50" height="316.67" rx="25" />
-      <rect x="247.11" y="320.98" width="50" height="154.67" rx="25" />
-      <rect x="502.89" y="320.98" width="50" height="154.67" rx="25" />
+    <svg viewBox="0 0 800 800" width="16" height="16" aria-hidden="true">
+      {/* bars in white (circle bg is the red pill button itself) */}
+      <rect x="417.56" y="293.48" width="50" height="209.67" rx="25" fill="#fff" />
+      <rect x="332.44" y="239.98" width="50" height="316.67" rx="25" fill="#fff" />
+      <rect x="247.11" y="320.98" width="50" height="154.67" rx="25" fill="#fff" />
+      <rect x="502.89" y="320.98" width="50" height="154.67" rx="25" fill="#fff" />
     </svg>
   )
 }
@@ -112,7 +114,18 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain }: Props) 
   const [text, setText] = useState('')
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(activeDomain ?? null)
   const [showLive, setShowLive] = useState(false)
+  const [animDomain, setAnimDomain] = useState<Domain | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // When activeDomain changes (from orchestrator ui.state SSE), auto-select and animate
+  useEffect(() => {
+    if (activeDomain && activeDomain !== selectedDomain) {
+      setSelectedDomain(activeDomain)
+      setAnimDomain(activeDomain)
+      const t = setTimeout(() => setAnimDomain(null), 400)
+      return () => clearTimeout(t)
+    }
+  }, [activeDomain]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentColor = selectedDomain ? (DOMAIN_COLORS[selectedDomain] ?? '#8E8E93') : '#8E8E93'
 
@@ -225,6 +238,7 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain }: Props) 
             {/* Domain icons */}
             {DOMAINS.map(({ domain, Icon, label }) => {
               const isActive = selectedDomain === domain
+              const isAnimating = animDomain === domain
               const color = isActive ? (DOMAIN_COLORS[domain] ?? '#8E8E93') : 'var(--color-text-secondary, #8E8E93)'
               return (
                 <button
@@ -232,6 +246,7 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain }: Props) 
                   type="button"
                   aria-label={label}
                   onClick={() => setSelectedDomain(isActive ? null : domain)}
+                  className={isAnimating ? 'lw-domain-active' : undefined}
                   style={iconBtnStyle(isActive)}
                 >
                   <Icon color={color} />

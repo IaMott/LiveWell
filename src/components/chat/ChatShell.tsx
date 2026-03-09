@@ -10,7 +10,16 @@ import { useChat } from '@/hooks/useChat'
 type Props = { userInitials?: string }
 
 export function ChatShell({ userInitials = 'ME' }: Props) {
-  const { messages, send, isStreaming, conversationId, loadConversation, newConversation } = useChat()
+  const {
+    messages,
+    send,
+    isStreaming,
+    conversationId,
+    activeDomain,
+    loadConversation,
+    newConversation,
+    exportConversation,
+  } = useChat()
   const [historyOpen, setHistoryOpen] = useState(false)
 
   return (
@@ -24,12 +33,16 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
         margin: '0 auto',
       }}
     >
-      <TopBar userInitials={userInitials} />
+      <TopBar
+        userInitials={userInitials}
+        onExport={conversationId ? exportConversation : undefined}
+      />
       <MessageList messages={messages} />
       <ChatInput
         onSend={send}
         onHistory={() => setHistoryOpen(true)}
         disabled={isStreaming}
+        activeDomain={activeDomain}
       />
       <ConversationHistory
         open={historyOpen}

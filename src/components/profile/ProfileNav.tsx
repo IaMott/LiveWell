@@ -87,7 +87,6 @@ const TABS: Array<{ slug: string; label: string; Icon: IconFC; color: string }> 
   { slug: 'salute', label: 'Salute', Icon: IconHealth, color: '#34C759' },
   { slug: 'mindfulness', label: 'Mindfulness', Icon: IconMental, color: '#5AC8FA' },
   { slug: 'idee', label: 'Idee', Icon: IconIdea, color: '#FF9F0A' },
-  { slug: 'impostazioni', label: 'Impostazioni', Icon: IconSettings, color: '#8E8E93' },
 ]
 
 export function ProfileNav() {

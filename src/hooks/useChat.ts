@@ -17,17 +17,15 @@ export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
+  const [activeDomain, setActiveDomain] = useState<Domain | null>(null)
   const conversationIdRef = useRef<string | undefined>(undefined)
 
-  // Sync ref with state
   useEffect(() => {
     conversationIdRef.current = conversationId
   }, [conversationId])
 
-  // On mount: restore last conversation from localStorage
   useEffect(() => {
-    const savedId =
-      typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
+    const savedId = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
     if (savedId) {
       void loadConversation(savedId)
     }
@@ -37,10 +35,10 @@ export function useChat() {
   const loadConversation = useCallback(async (id: string) => {
     setIsStreaming(true)
     setMessages([])
+    setActiveDomain(null)
     try {
       const res = await fetch(`/api/conversations/${id}`)
       if (!res.ok) {
-        // Conversation not found — start fresh
         localStorage.removeItem(STORAGE_KEY)
         return
       }
@@ -67,9 +65,26 @@ export function useChat() {
   const newConversation = useCallback(() => {
     const newId = crypto.randomUUID()
     setMessages([])
+    setActiveDomain(null)
     setConversationId(newId)
     conversationIdRef.current = newId
     localStorage.setItem(STORAGE_KEY, newId)
+  }, [])
+
+  const exportConversation = useCallback(async () => {
+    const id = conversationIdRef.current
+    if (!id) return
+    try {
+      const res = await fetch(`/api/conversations/${id}/export`)
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `livewell-chat-${new Date().toISOString().slice(0, 10)}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {}
   }, [])
 
   const send = useCallback(
@@ -77,13 +92,15 @@ export function useChat() {
       const trimmed = text.trim()
       if (!trimmed || isStreaming) return
 
-      // Initialize conversationId on first send if not yet set
       if (!conversationIdRef.current) {
         const newId = crypto.randomUUID()
         conversationIdRef.current = newId
         setConversationId(newId)
         localStorage.setItem(STORAGE_KEY, newId)
       }
+
+      // Reset active domain on new user message
+      setActiveDomain(null)
 
       const userMsg: ChatMessage = {
         id: crypto.randomUUID(),
@@ -136,6 +153,7 @@ export function useChat() {
             if (!line.startsWith('data: ')) continue
             try {
               const event = JSON.parse(line.slice(6)) as Record<string, unknown>
+
               if (event.type === 'message.delta') {
                 setMessages((prev) =>
                   prev.map((m) =>
@@ -154,6 +172,10 @@ export function useChat() {
                 )
               } else if (event.type === 'ui.state') {
                 const domain = event.domain as Domain | undefined
+                if (domain) {
+                  // Light up the domain icon in ChatInput
+                  setActiveDomain(domain)
+                }
                 setMessages((prev) =>
                   prev.map((m) => (m.id === assistantId ? { ...m, domain } : m)),
                 )
@@ -178,5 +200,14 @@ export function useChat() {
     [isStreaming],
   )
 
-  return { messages, send, isStreaming, conversationId, loadConversation, newConversation }
+  return {
+    messages,
+    send,
+    isStreaming,
+    conversationId,
+    activeDomain,
+    loadConversation,
+    newConversation,
+    exportConversation,
+  }
 }
