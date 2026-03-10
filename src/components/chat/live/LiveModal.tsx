@@ -2,6 +2,7 @@
 
 import type React from 'react'
 import { GoogleGenAI } from '@google/genai'
+import { Modality } from '@google/genai'
 import type { LiveConnectConfig, LiveServerMessage, Session } from '@google/genai'
 import { useEffect, useRef, useState, useCallback } from 'react'
 
@@ -327,7 +328,7 @@ export function LiveModal({ onClose }: Props) {
               },
             ],
           },
-          responseModalities: ['AUDIO'],
+          responseModalities: [Modality.AUDIO],
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: { voiceName: 'Kore' },
