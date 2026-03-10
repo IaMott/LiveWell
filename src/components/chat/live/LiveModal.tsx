@@ -2,7 +2,6 @@
 
 import type React from 'react'
 import { GoogleGenAI } from '@google/genai'
-import { Modality } from '@google/genai'
 import type { LiveConnectConfig, LiveServerMessage, Session } from '@google/genai'
 import { useEffect, useRef, useState, useCallback } from 'react'
 
@@ -20,6 +19,14 @@ interface Props {
   onClose: () => void
   onTranscription?: (text: string) => void
 }
+
+// ── Live model candidates (fallback chain if primary gets 1008) ────────────────
+
+const LIVE_MODEL_FALLBACKS = [
+  'gemini-2.5-flash-native-audio-preview-12-2025',
+  'gemini-live-2.5-flash-preview-native-audio-09-2025',
+  'gemini-2.0-flash-live-001',
+]
 
 // ── Audio / encoding helpers ──────────────────────────────────────────────────
 
@@ -100,6 +107,16 @@ function IconVideoOff() {
   )
 }
 
+function IconSwitchCamera() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 7h-3.5l-1.5-2H9L7.5 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" />
+      <path d="M9 13l2-2 2 2" />
+      <path d="M13 11l2 2-2 2" />
+    </svg>
+  )
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function LiveModal({ onClose }: Props) {
@@ -107,6 +124,8 @@ export function LiveModal({ onClose }: Props) {
   const [statusText, setStatusText] = useState('Connessione a Gemini Live…')
   const [isAiSpeaking, setIsAiSpeaking] = useState(false)
   const [videoEnabled, setVideoEnabled] = useState(false)
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
+  const [currentCameraIdx, setCurrentCameraIdx] = useState(0)
   const [bars, setBars] = useState<number[]>(Array(12).fill(4))
 
   const sessionRef = useRef<LiveSession | null>(null)
@@ -304,6 +323,13 @@ export function LiveModal({ onClose }: Props) {
           return
         }
 
+        // Enumerate camera devices after mic permission is granted
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices()
+          const cameras = devices.filter((d) => d.kind === 'videoinput')
+          if (mounted) setVideoDevices(cameras)
+        } catch { /* ignore — camera list not critical */ }
+
         // 3. Output audio context (24 kHz — Gemini output sample rate)
         const outCtx = new AudioContext({ sampleRate: 24000 })
         outputAudioCtxRef.current = outCtx
@@ -318,7 +344,13 @@ export function LiveModal({ onClose }: Props) {
           httpOptions: { apiVersion: 'v1alpha' },
         } as ConstructorParameters<typeof GoogleGenAI>[0])
 
-        const liveModel = tokenData.model ?? 'gemini-2.0-flash-live-001'
+        // Use model from server (already the right fallback chain on server side)
+        // but prefer the known working model locally if server returns a legacy one
+        const serverModel = tokenData.model ?? ''
+        const liveModel =
+          serverModel && !serverModel.includes('2.0-flash-live')
+            ? serverModel
+            : (LIVE_MODEL_FALLBACKS[0] ?? serverModel)
 
         const liveConfig: LiveConnectConfig = {
           systemInstruction: {
@@ -328,7 +360,7 @@ export function LiveModal({ onClose }: Props) {
               },
             ],
           },
-          responseModalities: [Modality.AUDIO],
+          responseModalities: ['AUDIO'],
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: { voiceName: 'Kore' },
@@ -366,8 +398,10 @@ export function LiveModal({ onClose }: Props) {
             onclose: (ev: CloseEvent) => {
               if (!mounted || closingRef.current) return
               if (ev.code !== 1000) {
+                const reason = ev.reason ? ` — ${ev.reason}` : ''
                 setPhase('error')
-                setStatusText(`Sessione chiusa (${ev.code})`)
+                setStatusText(`Sessione chiusa (${ev.code}${reason})`)
+                console.error('[LiveModal] session closed', ev.code, ev.reason)
               }
             },
           },
@@ -401,6 +435,57 @@ export function LiveModal({ onClose }: Props) {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Start video stream with a specific device ─────────────────────────────
+
+  const startVideoStream = useCallback(async (deviceId?: string) => {
+    const constraints: MediaStreamConstraints = deviceId
+      ? { video: { deviceId: { exact: deviceId } } }
+      : { video: { facingMode: 'environment' } }
+
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints)
+    } catch {
+      // Fallback: any camera
+      stream = await navigator.mediaDevices.getUserMedia({ video: true })
+    }
+
+    // Refresh camera device list after permission
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const cameras = devices.filter((d) => d.kind === 'videoinput')
+      setVideoDevices(cameras)
+    } catch { /* ignore */ }
+
+    videoStreamRef.current = stream
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream
+      videoRef.current.play().catch(() => {})
+    }
+    setVideoEnabled(true)
+
+    // Send a video frame to Gemini every 1.1 seconds
+    videoTimerRef.current = window.setInterval(() => {
+      const session = sessionRef.current
+      if (!sessionReadyRef.current || !session || !videoRef.current || !videoStreamRef.current) return
+      if (videoRef.current.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return
+
+      const canvas = document.createElement('canvas')
+      canvas.width = 320
+      canvas.height = 180
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.drawImage(videoRef.current, 0, 0, 320, 180)
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.55)
+      session.sendRealtimeInput({
+        video: {
+          mimeType: 'image/jpeg',
+          data: dataUrl.split(',')[1],
+        },
+      })
+    }, 1100)
+  }, [])
+
   // ── Video toggle ──────────────────────────────────────────────────────────
 
   async function toggleVideo() {
@@ -415,44 +500,35 @@ export function LiveModal({ onClose }: Props) {
       setVideoEnabled(false)
     } else {
       try {
-        // Try rear camera first; fall back to any available camera (desktop browsers)
-        let stream: MediaStream
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        } catch {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true })
-        }
-        videoStreamRef.current = stream
-        // Assign srcObject before setting state — videoRef is always mounted
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          videoRef.current.play().catch(() => {})
-        }
-        setVideoEnabled(true)
-
-        // Send a video frame to Gemini every 1.1 seconds
-        videoTimerRef.current = window.setInterval(() => {
-          const session = sessionRef.current
-          if (!sessionReadyRef.current || !session || !videoRef.current || !videoStreamRef.current) return
-          if (videoRef.current.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return
-
-          const canvas = document.createElement('canvas')
-          canvas.width = 320
-          canvas.height = 180
-          const ctx = canvas.getContext('2d')
-          if (!ctx) return
-          ctx.drawImage(videoRef.current, 0, 0, 320, 180)
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.55)
-          session.sendRealtimeInput({
-            video: {
-              mimeType: 'image/jpeg',
-              data: dataUrl.split(',')[1],
-            },
-          })
-        }, 1100)
+        await startVideoStream(videoDevices[currentCameraIdx]?.deviceId)
       } catch (e) {
         console.error('[LiveModal] camera error', e)
       }
+    }
+  }
+
+  // ── Camera switch ─────────────────────────────────────────────────────────
+
+  async function switchCamera() {
+    if (!videoEnabled || videoDevices.length < 2) return
+    const nextIdx = (currentCameraIdx + 1) % videoDevices.length
+    setCurrentCameraIdx(nextIdx)
+
+    // Stop current video stream
+    if (videoTimerRef.current) {
+      clearInterval(videoTimerRef.current)
+      videoTimerRef.current = null
+    }
+    videoStreamRef.current?.getTracks().forEach((t) => t.stop())
+    videoStreamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+    setVideoEnabled(false)
+
+    // Start with new camera
+    try {
+      await startVideoStream(videoDevices[nextIdx]?.deviceId)
+    } catch (e) {
+      console.error('[LiveModal] camera switch error', e)
     }
   }
 
@@ -595,6 +671,18 @@ export function LiveModal({ onClose }: Props) {
           >
             {videoEnabled ? <IconVideo /> : <IconVideoOff />}
           </button>
+
+          {/* Camera switch — shown only when video is on and multiple cameras available */}
+          {videoEnabled && videoDevices.length > 1 && (
+            <button
+              type="button"
+              onClick={() => void switchCamera()}
+              aria-label="Cambia fotocamera"
+              style={circleBtn('rgba(255,255,255,0.12)', '3rem')}
+            >
+              <IconSwitchCamera />
+            </button>
+          )}
 
           {/* End session */}
           <button
