@@ -9,6 +9,7 @@
  * - Geo coordinates are stored rounded (2 decimal places ≈ 1km precision).
  */
 
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 // ─────────────────────────────────────────
@@ -56,6 +57,12 @@ export type UserAttributeRow = {
   recordedAt: Date
   validUntil: Date | null
   notes: string | null
+}
+
+export type AgentWorkspaceRow = {
+  agentId: string
+  memory: unknown
+  updatedAt: Date
 }
 
 // ─────────────────────────────────────────
@@ -117,6 +124,29 @@ export async function getUserAttributes(
       validUntil: true,
       notes: true,
     },
+  })
+}
+
+export async function getAgentWorkspaces(
+  userId: string,
+  agentIds: string[],
+): Promise<AgentWorkspaceRow[]> {
+  if (agentIds.length === 0) return []
+  return prisma.agentWorkspace.findMany({
+    where: { userId, agentId: { in: agentIds } },
+    select: { agentId: true, memory: true, updatedAt: true },
+  })
+}
+
+export async function upsertAgentWorkspace(
+  userId: string,
+  agentId: string,
+  memory: unknown,
+): Promise<void> {
+  await prisma.agentWorkspace.upsert({
+    where: { userId_agentId: { userId, agentId } },
+    create: { userId, agentId, memory: memory as Prisma.InputJsonValue },
+    update: { memory: memory as Prisma.InputJsonValue },
   })
 }
 

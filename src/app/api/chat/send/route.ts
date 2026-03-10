@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import { checkRateLimit, getClientIp } from '@/lib/security/httpGuards'
 import { getAuthUserId, getAuthRole, getAuthOwnerMode } from '@/lib/auth'
 import { errorResponse } from '@/lib/security/errorSchema'
@@ -405,6 +406,33 @@ export async function POST(request: Request): Promise<Response> {
       llm,
       team,
       orchestratorToolsAllowed: [...ALLOWED_TOOL_NAMES],
+      agentMemoryStore: isDbPersistenceEnabled()
+        ? {
+            loadMany: async (uid, agentIds) => {
+              if (agentIds.length === 0) return []
+              return prisma.agentWorkspace.findMany({
+                where: { userId: uid, agentId: { in: agentIds } },
+                select: { agentId: true, memory: true },
+              })
+            },
+            saveMany: async (uid, snapshots) => {
+              if (snapshots.length === 0) return
+              await prisma.$transaction(
+                snapshots.map((s) =>
+                  prisma.agentWorkspace.upsert({
+                    where: { userId_agentId: { userId: uid, agentId: s.agentId } },
+                    create: {
+                      userId: uid,
+                      agentId: s.agentId,
+                      memory: s.memory as Prisma.InputJsonValue,
+                    },
+                    update: { memory: s.memory as Prisma.InputJsonValue },
+                  }),
+                ),
+              )
+            },
+          }
+        : undefined,
     },
     agentInput,
   )

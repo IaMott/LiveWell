@@ -30,8 +30,23 @@ model User {
   recommendationArtifacts RecommendationArtifact[]
   geoPreference           GeoPreference?
   userAttributes          UserAttribute[]
+  agentWorkspaces         AgentWorkspace[]
 
   @@map("users")
+}
+
+model AgentWorkspace {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentId   String   @map("agent_id")
+  memory    Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, agentId])
+  @@index([userId, updatedAt])
+  @@map("agent_workspaces")
 }
 
 model Notification {

@@ -20,16 +20,21 @@ export type LlmClient = {
   }) => Promise<{ text: string }>
 }
 
+type AgentMemorySnapshot = {
+  agentId: string
+  memory: unknown
+}
+
 export type OrchestratorDeps = {
   llm: LlmClient
   team: AgentProfile[]
   orchestratorToolsAllowed: string[]
+  agentMemoryStore?: {
+    loadMany: (userId: string, agentIds: string[]) => Promise<AgentMemorySnapshot[]>
+    saveMany: (userId: string, snapshots: AgentMemorySnapshot[]) => Promise<void>
+  }
 }
 
-/**
- * Format the user's current attributes into a compact string for agent context.
- * Shows the most recent value for each known attribute, organized by domain.
- */
 function formatAttributes(attrs: UserAttributes | undefined): string {
   if (!attrs || Object.keys(attrs).length === 0) return ''
 
@@ -68,7 +73,38 @@ function formatAttributes(attrs: UserAttributes | undefined): string {
   return lines.join('\n')
 }
 
-function buildAgentUserPrompt(input: AgentInput, agent: AgentProfile): string {
+function stringifyMemory(memory: unknown): string {
+  if (!memory) return ''
+  if (typeof memory === 'string') return memory
+  try {
+    return JSON.stringify(memory)
+  } catch {
+    return ''
+  }
+}
+
+function buildTeamBoard(proposals: AgentProposal[]): string {
+  if (proposals.length === 0) return ''
+  const lines: string[] = ['BOARD TEAM (turno corrente):']
+  for (const p of proposals) {
+    const q = (p.questions ?? []).slice(0, 2).join(' | ')
+    lines.push(
+      `- ${p.agentId} [domain=${p.domain}, conf=${(p.confidence ?? 0.5).toFixed(2)}] ${p.summary}`,
+    )
+    if (q) lines.push(`  domande: ${q}`)
+  }
+  return lines.join('\n')
+}
+
+function buildAgentUserPrompt(params: {
+  input: AgentInput
+  agent: AgentProfile
+  memoryText?: string
+  teamBoardText?: string
+  revisionMode: boolean
+}): string {
+  const { input, agent, memoryText, teamBoardText, revisionMode } = params
+
   const parts: string[] = [
     `USER MESSAGE:`,
     input.message,
@@ -78,7 +114,6 @@ function buildAgentUserPrompt(input: AgentInput, agent: AgentProfile): string {
     `- moodScore: ${input.contextPack.ui.moodScore}`,
   ]
 
-  // Current conversation history
   const recentMsgs = input.contextPack.history.recentMessages
   if (recentMsgs.length > 0) {
     parts.push(
@@ -89,7 +124,6 @@ function buildAgentUserPrompt(input: AgentInput, agent: AgentProfile): string {
     )
   }
 
-  // Cross-conversation memory (previous sessions)
   const crossMsgs = input.contextPack.history.crossConversationMessages
   if (crossMsgs && crossMsgs.length > 0) {
     parts.push(``, `MEMORIA DA SESSIONI PRECEDENTI:`)
@@ -100,33 +134,23 @@ function buildAgentUserPrompt(input: AgentInput, agent: AgentProfile): string {
     })
   }
 
-  // Dynamic user attributes (time-series data from previous conversations)
   const attrsText = formatAttributes(input.contextPack.user.attributes)
-  if (attrsText) {
-    parts.push(``, attrsText)
+  if (attrsText) parts.push('', attrsText)
+
+  if (memoryText) {
+    parts.push('', `MEMORIA PERSISTENTE DEL TUO AGENTE:`, memoryText)
   }
 
-  // Detect if previous assistant turn had questions → instruct agent to extract answers
-  const lastAssistant = input.contextPack.history.recentMessages
-    .filter((m) => m.role === 'assistant')
-    .slice(-1)[0]
-  if (lastAssistant) {
-    const prevQuestions = lastAssistant.content
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.endsWith('?'))
-      .slice(0, 6)
-    if (prevQuestions.length > 0) {
-      parts.push(``, `DOMANDE PRECEDENTI DEL TEAM:`)
-      prevQuestions.forEach((q) => parts.push(`- ${q}`))
-      parts.push(
-        `Se il messaggio dell'utente risponde a queste domande, proponi i tool calls appropriati`,
-        `per salvare le informazioni raccolte (user.setAttribute o user.updateProfile).`,
-      )
-    }
+  if (teamBoardText && revisionMode) {
+    parts.push('', teamBoardText)
+    parts.push(
+      'RIVEDI la tua proposta considerando gli altri specialisti:',
+      '- allinea ciò che è compatibile',
+      '- segnala SOLO conflitti clinici/tecnici reali',
+      '- evita duplicazioni di domande già coperte da altri agenti.',
+    )
   }
 
-  // List tools available to this agent
   const validTools = agent.toolsAllowed.filter((t) =>
     [
       'user.updateProfile',
@@ -148,45 +172,46 @@ function buildAgentUserPrompt(input: AgentInput, agent: AgentProfile): string {
     ].includes(t),
   )
 
-  // user.setAttribute is always available to every agent
   const toolList = Array.from(new Set(['user.setAttribute', 'user.updateProfile', ...validTools]))
 
   parts.push(
-    ``,
+    '',
     `TOOL CALLS DISPONIBILI (puoi proporre questi):`,
     `- user.setAttribute: { domain, key, value, unit?, recordedAt?, validUntil?, notes? }`,
-    `  Usa per salvare QUALSIASI dato dinamico: peso, altezza, diagnosi, farmaci, allergie,`,
-    `  infortuni, preferenze alimentari, obiettivi, metriche vitali, ecc.`,
-    `  Esempi: { domain:"health", key:"weight", value:80, unit:"kg" }`,
-    `          { domain:"health", key:"diagnosis", value:"Ernia L4-L5", notes:"da 2020" }`,
-    `          { domain:"health", key:"medication", value:{"name":"Ibuprofene","dose":"400mg"} }`,
-    `          { domain:"nutrition", key:"allergy", value:"Penicillina" }`,
-    `          { domain:"health", key:"injury", value:"distorsione caviglia dx", validUntil:"2026-04-01" }`,
+    `  Usa per salvare dati dinamici: peso, diagnosi, farmaci, allergie, infortuni, obiettivi, ecc.`,
     ...toolList
       .filter((t) => t !== 'user.setAttribute' && t !== 'user.updateProfile')
       .map((t) => `- ${t}`),
   )
 
   parts.push(
-    ``,
+    '',
     `ISTRUZIONI:`,
     `- Sei uno specialista. Rispondi SOLO nel tuo dominio di competenza.`,
-    `- Se l'utente fornisce nuovi dati (peso, sintomi, diagnosi, farmaci, allergie, obiettivi, ecc.)`,
-    `  proponi SEMPRE un tool call user.setAttribute per salvarli nel database.`,
+    `- Se l'utente fornisce nuovi dati, proponi user.setAttribute per salvarli nel database.`,
     `- Fai domande gating solo per dati che il TUO dominio richiede e che non sono già noti.`,
     `- Fornisci raccomandazioni basate su evidenza. Se incerto, dillo.`,
-    `- Non proporre tool calls di altri domini (enforcement è centralizzato).`,
   )
 
   return parts.join('\n')
 }
 
-async function runOneAgent(
-  llm: LlmClient,
-  agent: AgentProfile,
-  input: AgentInput,
-): Promise<AgentProposal> {
-  const userPrompt = buildAgentUserPrompt(input, agent)
+async function runOneAgent(params: {
+  llm: LlmClient
+  agent: AgentProfile
+  input: AgentInput
+  memoryText?: string
+  teamBoardText?: string
+  revisionMode: boolean
+}): Promise<AgentProposal> {
+  const { llm, agent, input, memoryText, teamBoardText, revisionMode } = params
+  const userPrompt = buildAgentUserPrompt({
+    input,
+    agent,
+    memoryText,
+    teamBoardText,
+    revisionMode,
+  })
 
   const res = await llm.complete({
     system: agent.systemPrompt,
@@ -221,10 +246,6 @@ async function runOneAgent(
   }
 }
 
-/**
- * Final synthesis step: converts structured specialist proposals into a natural,
- * warm Italian conversational response shown to the user.
- */
 async function synthesizeResponse(
   llm: LlmClient,
   params: {
@@ -256,30 +277,22 @@ async function synthesizeResponse(
   const systemPrompt = [
     `Sei LiveWell, un assistente per il benessere personale che coordina un team di specialisti italiani.`,
     `Parli in italiano, con tono caldo, diretto e professionale — mai generico.`,
-    ``,
-    `REGOLE OBBLIGATORIE:`,
-    `- NON usare intestazioni markdown (###, ##, #)`,
-    `- NON iniziare con "Certo!", "Assolutamente!", "Ottima domanda!" o simili`,
-    `- NON ripetere formalmente il dominio (non scrivere "Nell'ambito della nutrizione...")`,
-    `- Rispondi direttamente al messaggio dell'utente`,
-    `- Max 3-4 frasi salvo piani dettagliati richiesti dall'utente`,
-    `- Se devi fare domande, includine al massimo 1, formulata in modo conversazionale`,
-    `- Non chiedere informazioni già presenti nel profilo utente`,
-    `- Usa il punto fermo, non liste di bullet, per risposte conversazionali brevi`,
-    `- Per piani o programmi strutturati, usa elenchi numerati senza intestazioni`,
+    `REGOLE: niente markdown header, niente frasi di apertura generiche, risposta diretta e concreta.`,
   ].join('\n')
 
   const userPrompt = [
     recentHistory ? `CONVERSAZIONE RECENTE:\n${recentHistory}\n` : '',
     `MESSAGGIO UTENTE: "${userMessage}"`,
-    ``,
+    '',
     `ANALISI DEL TEAM SPECIALISTICO:`,
     summaries,
     topRecs ? `\nRACCOMANDAZIONI:\n${topRecs}` : '',
     gatingQuestions.length
-      ? `\nINFORMAZIONI ANCORA MANCANTI (chiedi solo la più importante): ${gatingQuestions.slice(0, 3).join('; ')}`
+      ? `\nINFORMAZIONI ANCORA MANCANTI (chiedi solo la più importante): ${gatingQuestions
+          .slice(0, 3)
+          .join('; ')}`
       : '',
-    ``,
+    '',
     `Scrivi una risposta conversazionale naturale in italiano, rivolta direttamente all'utente.`,
   ]
     .filter(Boolean)
@@ -301,31 +314,78 @@ export async function orchestrate(
   deps: OrchestratorDeps,
   input: AgentInput,
 ): Promise<ConsensusResult> {
-  // Detect primary domain + all relevant domains for multi-domain agent selection
   const primaryDomain = input.domainHint ?? detectDomainFromText(input.message)
   const allDetectedDomains = detectDomainsMulti(input.message)
     .filter((d) => d.score > 0)
     .map((d) => d.domain as Domain)
 
-  // Select agents using multi-domain relevance scoring (fixes Problem 1)
   const selectedAgents = selectAgentsForRequest(deps.team, primaryDomain, 4, allDetectedDomains)
+  const selectedAgentIds = selectedAgents.map((a) => a.id)
 
-  const proposals = await Promise.all(
-    selectedAgents.map((a) => runOneAgent(deps.llm, a, { ...input, domainHint: primaryDomain })),
+  const memoryRows = deps.agentMemoryStore
+    ? await deps.agentMemoryStore.loadMany(input.userId, selectedAgentIds)
+    : []
+  const memoryMap = new Map(memoryRows.map((m) => [m.agentId, stringifyMemory(m.memory)]))
+
+  // Round 1: initial specialist proposals
+  const initialProposals = await Promise.all(
+    selectedAgents.map((agent) =>
+      runOneAgent({
+        llm: deps.llm,
+        agent,
+        input: { ...input, domainHint: primaryDomain },
+        memoryText: memoryMap.get(agent.id),
+        revisionMode: false,
+      }),
+    ),
+  )
+
+  // Round 2: each specialist revises after reading the team board
+  const teamBoardText = buildTeamBoard(initialProposals)
+  const revisedProposals = await Promise.all(
+    selectedAgents.map((agent, idx) =>
+      runOneAgent({
+        llm: deps.llm,
+        agent,
+        input: { ...input, domainHint: primaryDomain },
+        memoryText: memoryMap.get(agent.id),
+        teamBoardText,
+        revisionMode: true,
+      }).catch(() => initialProposals[idx]),
+    ),
+  )
+
+  const finalProposals = revisedProposals.map((p, idx) =>
+    p.summary?.trim() ? p : initialProposals[idx],
   )
 
   const consensus = runConsensus({
     opts: { orchestratorId: 'orchestrator', maxAgents: 4, requireGatingOnMissingInfo: true },
     team: deps.team,
-    proposals,
+    proposals: finalProposals,
     domainHint: primaryDomain,
     contextPack: input.contextPack,
     orchestratorToolsAllowed: deps.orchestratorToolsAllowed,
   })
 
+  // Persist per-agent memory snapshot for future turns
+  if (deps.agentMemoryStore) {
+    const snapshots: AgentMemorySnapshot[] = finalProposals.map((p) => ({
+      agentId: p.agentId,
+      memory: {
+        lastDomain: p.domain,
+        lastSummary: p.summary,
+        openQuestions: (p.questions ?? []).slice(0, 5),
+        lastConfidence: p.confidence ?? null,
+        updatedAt: new Date().toISOString(),
+      },
+    }))
+    await deps.agentMemoryStore.saveMany(input.userId, snapshots).catch(() => {})
+  }
+
   const naturalResponse = await synthesizeResponse(deps.llm, {
     userMessage: input.message,
-    proposals,
+    proposals: finalProposals,
     gatingQuestions: consensus.gatingQuestions ?? [],
     contextPack: input.contextPack,
   })
