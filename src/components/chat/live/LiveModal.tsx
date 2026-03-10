@@ -415,8 +415,15 @@ export function LiveModal({ onClose }: Props) {
       setVideoEnabled(false)
     } else {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        // Try rear camera first; fall back to any available camera (desktop browsers)
+        let stream: MediaStream
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true })
+        }
         videoStreamRef.current = stream
+        // Assign srcObject before setting state — videoRef is always mounted
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           videoRef.current.play().catch(() => {})
@@ -482,23 +489,22 @@ export function LiveModal({ onClose }: Props) {
         backdropFilter: 'blur(12px)',
       }}
     >
-      {/* Camera preview background */}
-      {videoEnabled && (
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            opacity: 0.35,
-          }}
-        />
-      )}
+      {/* Camera preview — always in DOM so videoRef is immediately available on enable */}
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          opacity: videoEnabled ? 0.35 : 0,
+          pointerEvents: 'none',
+        }}
+      />
 
       {/* Overlay content */}
       <div
