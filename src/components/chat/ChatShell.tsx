@@ -44,11 +44,12 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
     lastSpokenIdRef.current = messages.at(-1)?.id
   }, [messages])
 
-  const handleVoiceEnd = useCallback(() => {
-    // After Live session ends, reload the conversation to show saved transcript
-    const cid = conversationIdRef.current
+  const handleVoiceEnd = useCallback((liveConversationId?: string) => {
+    // Prefer the conversation used during the Live session (may be newly created)
+    // over the one that was active before it started.
+    const cid = liveConversationId ?? conversationIdRef.current
     if (cid) {
-      // Small delay so DB writes from the last transcript flush
+      // Small delay so the last DB writes from the session flush before reload
       setTimeout(() => { void loadConversation(cid) }, 600)
     }
   }, [loadConversation])

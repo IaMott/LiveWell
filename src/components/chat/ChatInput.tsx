@@ -109,7 +109,9 @@ interface Props {
   disabled?: boolean
   activeDomain?: Domain | null
   onVoiceStart?: () => void
-  onVoiceEnd?: () => void
+  /** Called when the Live session closes; receives the conversation ID that was used
+   * (may differ from the prop if a new conversation was auto-created during the session). */
+  onVoiceEnd?: (liveConversationId?: string) => void
   /** Active conversation ID — used to save Live session transcript to chat history. */
   conversationId?: string | null
 }
@@ -122,13 +124,22 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain, onVoiceSt
   const [showLive, setShowLive] = useState(false)
   const [animDomain, setAnimDomain] = useState<Domain | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // Tracks the conversation used during the current Live session — may be a newly
+  // auto-created one if the user started Live with no prior text conversation.
+  const liveConversationIdRef = useRef<string | null>(conversationId ?? null)
 
-  // Notify parent when live session opens/closes (for TTS voice mode)
+  // Keep liveConversationIdRef seeded with the latest prop (for sessions starting
+  // after a text conversation is already open).
+  useEffect(() => {
+    if (!showLive) liveConversationIdRef.current = conversationId ?? null
+  }, [conversationId, showLive])
+
+  // Notify parent when live session opens/closes
   useEffect(() => {
     if (showLive) {
       onVoiceStart?.()
     } else {
-      onVoiceEnd?.()
+      onVoiceEnd?.(liveConversationIdRef.current ?? undefined)
     }
   }, [showLive]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -176,20 +187,30 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain, onVoiceSt
 
   /**
    * Called by LiveModal with each completed transcript turn.
-   * Saves the message to the current conversation without triggering the AI
-   * (the Live session IS the AI — it responds in real-time audio).
+   * Saves the message to the current conversation without triggering the AI.
+   * If no conversation exists yet, the server auto-creates one and returns its ID,
+   * which is stored in liveConversationIdRef for subsequent saves and the final reload.
    */
   function handleTranscription(role: 'user' | 'assistant', text: string) {
     const trimmed = text.trim()
-    if (!trimmed || !conversationId) return
+    if (!trimmed) return
     void fetch('/api/chat/transcript', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        conversationId,
+        conversationId: liveConversationIdRef.current ?? null,
         messages: [{ role, content: trimmed }],
       }),
-    }).catch(() => { /* best-effort — transcript saving is not critical */ })
+    })
+      .then((res) => res.json())
+      .then((data: unknown) => {
+        // If a new conversation was created, persist its ID for subsequent calls
+        const id = (data as { conversationId?: string }).conversationId
+        if (id && !liveConversationIdRef.current) {
+          liveConversationIdRef.current = id
+        }
+      })
+      .catch(() => { /* best-effort */ })
   }
 
   return (
