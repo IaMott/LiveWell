@@ -21,11 +21,12 @@ interface Props {
 }
 
 // ── Live model candidates (fallback chain if primary gets 1008) ────────────────
+// Primary: stable pointer recommended by @google/genai SDK docs for Google AI Studio.
+// Fallback: dated snapshot known to work (iManager-verified).
 
 const LIVE_MODEL_FALLBACKS = [
+  'gemini-live-2.5-flash-preview',
   'gemini-2.5-flash-native-audio-preview-12-2025',
-  'gemini-live-2.5-flash-preview-native-audio-09-2025',
-  'gemini-2.0-flash-live-001',
 ]
 
 // ── Audio / encoding helpers ──────────────────────────────────────────────────
@@ -344,13 +345,8 @@ export function LiveModal({ onClose }: Props) {
           httpOptions: { apiVersion: 'v1alpha' },
         } as ConstructorParameters<typeof GoogleGenAI>[0])
 
-        // Use model from server (already the right fallback chain on server side)
-        // but prefer the known working model locally if server returns a legacy one
-        const serverModel = tokenData.model ?? ''
-        const liveModel =
-          serverModel && !serverModel.includes('2.0-flash-live')
-            ? serverModel
-            : (LIVE_MODEL_FALLBACKS[0] ?? serverModel)
+        // Use model from server; fall back to first candidate if empty
+        const liveModel = tokenData.model || (LIVE_MODEL_FALLBACKS[0] ?? '')
 
         const liveConfig: LiveConnectConfig = {
           systemInstruction: {
