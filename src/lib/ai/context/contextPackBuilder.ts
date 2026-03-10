@@ -1,8 +1,18 @@
-import { ContextPack, Domain, Role } from '../types'
+import { ContextPack, Domain, Role, UserAttributes, AttributeValue } from '../types'
 
 type QueryArgs = Record<string, unknown>
 type UnknownRecord = Record<string, unknown>
 type DateCarrier = { createdAt: Date | string }
+
+type RawAttribute = {
+  domain: string
+  key: string
+  value: unknown
+  unit: string | null
+  recordedAt: Date | string
+  notes: string | null
+  source?: string | null
+}
 
 export type DbClient = {
   user: {
@@ -33,7 +43,6 @@ export type DbClient = {
   bodyMetricEntry: {
     findMany: (args: QueryArgs) => Promise<unknown[]>
   }
-  // Nutrition / training / mindfulness as needed
   meal: { findMany: (args: QueryArgs) => Promise<unknown[]> }
   workoutSession: { findMany: (args: QueryArgs) => Promise<unknown[]> }
   mindfulnessEntry: { findMany: (args: QueryArgs) => Promise<unknown[]> }
@@ -49,6 +58,21 @@ export type DbClient = {
       }>
     >
   }
+  // Dynamic attribute store — optional for test backwards compat
+  userAttribute?: {
+    findMany: (args: QueryArgs) => Promise<RawAttribute[]>
+  }
+  // Optional geo preference (privacy-first)
+  geoPreference?: {
+    findUnique: (args: QueryArgs) => Promise<{
+      enabled: boolean
+      country?: string | null
+      region?: string | null
+      city?: string | null
+      timezone?: string | null
+      accuracy?: string | null
+    } | null>
+  }
 }
 
 export type ContextPackBuilderOptions = {
@@ -63,7 +87,6 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n))
 }
 
-// Mood is computed from real user signals; keep it simple and safe.
 function computeMoodScore(input: {
   last7Weights?: number[]
   last7Workouts?: number
@@ -73,8 +96,6 @@ function computeMoodScore(input: {
   const w = input.last7Workouts ?? 0
   const m = input.last7MealsLogged ?? 0
   const me = input.last7MindfulnessEntries ?? 0
-
-  // Very rough heuristic: activity + tracking consistency
   const raw = 40 + w * 6 + m * 2 + me * 4
   return clamp(raw, 0, 100)
 }
@@ -95,6 +116,36 @@ function computeSectionScores(input: {
   }
 }
 
+/**
+ * Collapse a flat list of UserAttribute rows into a UserAttributes map.
+ * Only keeps the most recent record per (domain, key) — rows must be
+ * pre-sorted by recordedAt DESC.
+ */
+function buildAttributeMap(rows: RawAttribute[]): UserAttributes {
+  const seen = new Set<string>()
+  const result: UserAttributes = {}
+  const domainResult = result as Record<string, Record<string, AttributeValue>>
+
+  for (const row of rows) {
+    const compositeKey = `${row.domain}:${row.key}`
+    if (seen.has(compositeKey)) continue // already have the most recent
+    seen.add(compositeKey)
+
+    const domainKey = row.domain as keyof UserAttributes
+    if (!domainResult[domainKey]) domainResult[domainKey] = {}
+    const attrValue: AttributeValue = {
+      value: row.value,
+      unit: row.unit ?? undefined,
+      recordedAt: new Date(row.recordedAt).toISOString(),
+      notes: row.notes ?? undefined,
+      source: row.source ?? undefined,
+    }
+    domainResult[domainKey][row.key] = attrValue
+  }
+
+  return result
+}
+
 export async function buildContextPack(opts: ContextPackBuilderOptions): Promise<ContextPack> {
   void opts.nowIso
 
@@ -104,12 +155,29 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
     opts.db.medicalInfo.findUnique({ where: { userId: opts.userId } }),
   ])
 
+  // Current conversation messages (full context for this session)
   const recentMessages = await opts.db.message.findMany({
     where: { conversationId: opts.conversationId },
     orderBy: { createdAt: 'desc' },
     take: 24,
     select: { role: true, content: true, createdAt: true },
   })
+
+  // Cross-conversation memory: last 15 messages from OTHER conversations
+  // Enables agents to recall facts mentioned in previous sessions
+  const crossConvMessages = await opts.db.message
+    .findMany({
+      where: {
+        conversation: { userId: opts.userId },
+        NOT: { conversationId: opts.conversationId },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 15,
+      select: { role: true, content: true, createdAt: true },
+    })
+    .catch(
+      () => [] as Array<{ role: 'user' | 'assistant'; content: string; createdAt: Date | string }>,
+    )
 
   const recentArtifacts = await opts.db.recommendationArtifact.findMany({
     where: { relatedConversationId: opts.conversationId },
@@ -127,7 +195,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
     }),
   ])
 
-  // Trackers (last 7 days - simplified)
+  // Trackers (last 7 days)
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
   const [metrics, meals, workouts, mind] = await Promise.all([
     opts.db.bodyMetricEntry.findMany({
@@ -147,6 +215,32 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
       take: 50,
     }),
   ])
+
+  // Dynamic user attributes — most recent per (domain, key)
+  // Only valid attributes (not yet expired)
+  let userAttributes: UserAttributes = {}
+  if (opts.db.userAttribute) {
+    const attrRows = await opts.db.userAttribute
+      .findMany({
+        where: {
+          userId: opts.userId,
+          OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }],
+        },
+        orderBy: { recordedAt: 'desc' },
+        take: 200,
+        select: {
+          domain: true,
+          key: true,
+          value: true,
+          unit: true,
+          recordedAt: true,
+          notes: true,
+          source: true,
+        },
+      })
+      .catch(() => [] as RawAttribute[])
+    userAttributes = buildAttributeMap(attrRows)
+  }
 
   const moodScore = computeMoodScore({
     last7Workouts: workouts.length,
@@ -175,6 +269,20 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
     },
   })
 
+  // Geo: only if geoPreference.enabled (privacy contract)
+  const geoRecord = opts.db.geoPreference
+    ? await opts.db.geoPreference.findUnique({ where: { userId: opts.userId } })
+    : null
+  const geo = geoRecord?.enabled
+    ? {
+        country: geoRecord.country ?? null,
+        region: geoRecord.region ?? null,
+        city: geoRecord.city ?? null,
+        timezone: geoRecord.timezone ?? null,
+        accuracy: geoRecord.accuracy ?? null,
+      }
+    : undefined
+
   return {
     user: {
       id: user?.id ?? opts.userId,
@@ -183,6 +291,8 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
         ...(userProfile ?? {}),
         medicalInfo: medicalInfo ?? undefined,
       },
+      // Agent-driven dynamic attributes (most recent per key)
+      attributes: Object.keys(userAttributes).length > 0 ? userAttributes : undefined,
     },
     history: {
       recentMessages: recentMessages
@@ -193,6 +303,17 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
           content: m.content,
           createdAt: new Date(m.createdAt).toISOString(),
         })),
+      crossConversationMessages:
+        crossConvMessages.length > 0
+          ? crossConvMessages
+              .slice()
+              .reverse()
+              .map((m) => ({
+                role: m.role,
+                content: m.content,
+                createdAt: new Date(m.createdAt).toISOString(),
+              }))
+          : undefined,
       recentArtifacts: recentArtifacts.map((a) => ({
         type: a.type,
         title: a.title,
@@ -224,5 +345,6 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
       moodScore,
       sectionScores,
     },
+    geo,
   }
 }

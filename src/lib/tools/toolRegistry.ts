@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 export const ALLOWED_TOOL_NAMES = [
   'user.updateProfile',
+  'user.setAttribute',
   'health.addMetric',
   'nutrition.logMeal',
   'nutrition.createFoodItem',
@@ -13,6 +14,9 @@ export const ALLOWED_TOOL_NAMES = [
   'notifications.createInApp',
   'share.createLink',
   'export.pdf',
+  'geo.setPreference',
+  'geo.updateCoarseLocation',
+  'geo.clearLocation',
 ] as const
 
 export type ToolName = (typeof ALLOWED_TOOL_NAMES)[number]
@@ -21,6 +25,27 @@ const baseString = z.string().trim().min(1)
 
 const userUpdateProfileSchema = z.object({
   fields: z.record(z.string(), z.unknown()).refine((v) => Object.keys(v).length > 0),
+})
+
+/**
+ * user.setAttribute — the primary agent tool for storing any dynamic,
+ * time-series user data. Always appends a new record (never overwrites).
+ *
+ * Domain examples:  'health', 'nutrition', 'training', 'mindfulness', 'personal', 'general'
+ * Key examples:     'weight', 'height', 'diagnosis', 'medication', 'allergy',
+ *                   'injury', 'blood_pressure', 'diet_preference', 'goal', 'sleep_hours',
+ *                   'heart_rate_resting', 'bmi', 'stress_level', 'energy_level', ...
+ * Value examples:   80 (number), "Ernia L4-L5" (string),
+ *                   { name: "Ibuprofene", dose: "400mg", frequency: "al bisogno" } (object)
+ */
+const userSetAttributeSchema = z.object({
+  domain: z.enum(['health', 'nutrition', 'training', 'mindfulness', 'personal', 'general']),
+  key: baseString.max(64),
+  value: z.unknown(),
+  unit: z.string().trim().max(32).optional(),
+  recordedAt: z.string().datetime().optional(),
+  validUntil: z.string().datetime().optional(),
+  notes: z.string().max(500).optional(),
 })
 
 const healthAddMetricSchema = z.object({
@@ -109,6 +134,22 @@ const exportPdfSchema = z.object({
   resourceId: baseString.max(128),
 })
 
+const geoSetPreferenceSchema = z.object({
+  enabled: z.boolean(),
+})
+
+const geoUpdateCoarseLocationSchema = z.object({
+  country: z.string().max(100).optional(),
+  region: z.string().max(100).optional(),
+  city: z.string().max(100).optional(),
+  timezone: z.string().max(100).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lon: z.number().min(-180).max(180).optional(),
+  accuracy: z.string().max(50).optional(),
+})
+
+const geoClearLocationSchema = z.object({})
+
 export type ToolDefinition = {
   name: ToolName
   schema: z.ZodTypeAny
@@ -121,6 +162,13 @@ const definitions: Record<ToolName, ToolDefinition> = {
   'user.updateProfile': {
     name: 'user.updateProfile',
     schema: userUpdateProfileSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+  },
+  'user.setAttribute': {
+    name: 'user.setAttribute',
+    schema: userSetAttributeSchema,
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
@@ -199,6 +247,27 @@ const definitions: Record<ToolName, ToolDefinition> = {
     name: 'export.pdf',
     schema: exportPdfSchema,
     mutation: false,
+    destructive: false,
+    requiresOwnerMode: false,
+  },
+  'geo.setPreference': {
+    name: 'geo.setPreference',
+    schema: geoSetPreferenceSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+  },
+  'geo.updateCoarseLocation': {
+    name: 'geo.updateCoarseLocation',
+    schema: geoUpdateCoarseLocationSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+  },
+  'geo.clearLocation': {
+    name: 'geo.clearLocation',
+    schema: geoClearLocationSchema,
+    mutation: true,
     destructive: false,
     requiresOwnerMode: false,
   },

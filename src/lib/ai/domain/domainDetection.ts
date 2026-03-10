@@ -75,6 +75,7 @@ const KEYWORDS: Record<Domain, string[]> = {
     'career',
     'obiettivo professionale',
   ],
+  coordination: [],
   general: [],
 }
 

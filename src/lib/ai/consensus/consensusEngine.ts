@@ -5,6 +5,7 @@ import {
   ContextPack,
   Domain,
   ToolCall,
+  UserAttributes,
 } from '../types'
 
 export type ConsensusEngineOptions = {
@@ -35,16 +36,143 @@ function mergeToolCalls(proposals: AgentProposal[], allowedTools: Set<string>): 
   })
 }
 
-function collectGatingQuestions(proposals: AgentProposal[]): string[] {
-  const qs = proposals.flatMap((p) => p.questions ?? [])
-  return uniq(qs).slice(0, 8)
+// Profile field hints for known-data filtering (legacy profile blob)
+const PROFILE_FIELD_HINTS: Array<{ keywords: string[]; fieldPath: string }> = [
+  { keywords: ['età', 'anni', 'age', 'quanti anni', 'how old'], fieldPath: 'age' },
+  { keywords: ['peso', 'kg', 'chili', 'weight', 'quanti kg', 'quanti chili'], fieldPath: 'weight' },
+  { keywords: ['altezza', 'cm', 'height', 'quanto sei alto', 'how tall'], fieldPath: 'height' },
+  { keywords: ['obiettivo', 'goal', 'scopo', 'cosa vuoi'], fieldPath: 'goals' },
+  {
+    keywords: ['sesso', 'genere', 'gender', 'uomo', 'donna', 'male', 'female'],
+    fieldPath: 'gender',
+  },
+]
+
+// UserAttribute keywords: maps question keywords to attribute (domain, key) pairs
+// so that known-data filtering also checks the dynamic attribute store.
+const ATTRIBUTE_FIELD_HINTS: Array<{
+  keywords: string[]
+  domain: keyof UserAttributes
+  key: string
+}> = [
+  { keywords: ['peso', 'kg', 'chili', 'weight'], domain: 'personal', key: 'weight' },
+  { keywords: ['altezza', 'cm', 'height'], domain: 'personal', key: 'height' },
+  {
+    keywords: ['diagnosi', 'diagnosis', 'patologia', 'malattia'],
+    domain: 'health',
+    key: 'diagnosis',
+  },
+  {
+    keywords: ['farmaco', 'medicinale', 'medication', 'medicine', 'terapia'],
+    domain: 'health',
+    key: 'medication',
+  },
+  { keywords: ['allergia', 'allergy', 'intolleranza'], domain: 'health', key: 'allergy' },
+  { keywords: ['infortunio', 'injury', 'lesione', 'trauma'], domain: 'health', key: 'injury' },
+  {
+    keywords: ['pressione', 'blood_pressure', 'pressione arteriosa'],
+    domain: 'health',
+    key: 'blood_pressure',
+  },
+  {
+    keywords: ['dieta', 'alimentazione', 'diet_preference', 'vegano', 'vegetariano'],
+    domain: 'nutrition',
+    key: 'diet_preference',
+  },
+  {
+    keywords: ['sonno', 'sleep', 'ore di sonno', 'sleep_hours'],
+    domain: 'health',
+    key: 'sleep_hours',
+  },
+]
+
+/**
+ * Remove gating questions about data already present in:
+ * 1. The legacy profile blob (profile[fieldPath])
+ * 2. The dynamic UserAttribute store (attributes[domain][key])
+ */
+function filterKnownDataQuestions(questions: string[], contextPack: ContextPack): string[] {
+  const profile = (contextPack.user.profile ?? {}) as Record<string, unknown>
+  const attrs = contextPack.user.attributes ?? {}
+
+  return questions.filter((q) => {
+    const ql = q.toLowerCase()
+
+    // Check legacy profile blob
+    for (const { keywords, fieldPath } of PROFILE_FIELD_HINTS) {
+      if (keywords.some((kw) => ql.includes(kw)) && profile[fieldPath] != null) return false
+    }
+
+    // Check dynamic UserAttribute store
+    for (const { keywords, domain, key } of ATTRIBUTE_FIELD_HINTS) {
+      if (keywords.some((kw) => ql.includes(kw))) {
+        const domainAttrs = attrs[domain] as Record<string, unknown> | undefined
+        if (domainAttrs?.[key] != null) return false
+      }
+    }
+
+    return true
+  })
+}
+
+// Semantic deduplication via token-based Jaccard similarity (threshold 0.4)
+function semanticDeduplicateQuestions(questions: string[]): string[] {
+  const result: string[] = []
+  const seenTokenSets: Array<Set<string>> = []
+  for (const q of questions) {
+    const tokens = new Set(
+      q
+        .toLowerCase()
+        .replace(/[?.,!]/g, '')
+        .split(/\s+/)
+        .filter((t) => t.length > 3),
+    )
+    const isDuplicate = seenTokenSets.some((seen) => {
+      const inter = [...tokens].filter((t) => seen.has(t)).length
+      const union = new Set([...tokens, ...seen]).size
+      return union > 0 && inter / union > 0.4
+    })
+    if (!isDuplicate) {
+      result.push(q)
+      seenTokenSets.push(tokens)
+    }
+  }
+  return result
+}
+
+// Enforce domain isolation — normalize agent proposals to their primary domain
+function enforceDomainIsolation(
+  proposals: AgentProposal[],
+  team: AgentProfile[],
+): { normalized: AgentProposal[]; violations: string[] } {
+  const agentPrimaryDomain = new Map(
+    team.map((a) => [
+      a.id,
+      a.domainTags.find((d) => d !== 'general') ?? a.domainTags[0] ?? 'general',
+    ]),
+  )
+  const violations: string[] = []
+  const normalized = proposals.map((p) => {
+    const expected = agentPrimaryDomain.get(p.agentId)
+    if (expected && expected !== 'general' && p.domain !== expected && p.domain !== 'general') {
+      violations.push(`Agent ${p.agentId} (${expected}) proposed domain ${p.domain} — normalized`)
+      return { ...p, domain: expected as Domain }
+    }
+    return p
+  })
+  return { normalized, violations }
+}
+
+function collectGatingQuestions(proposals: AgentProposal[], contextPack: ContextPack): string[] {
+  const raw = proposals.flatMap((p) => p.questions ?? [])
+  const deduped = semanticDeduplicateQuestions(raw)
+  const filtered = filterKnownDataQuestions(deduped, contextPack)
+  return filtered.slice(0, 8)
 }
 
 function detectConflicts(proposals: AgentProposal[]): string[] {
-  // Simple conflict detector: different high-level summary intents in same domain
   const summaries = proposals.map((p) => p.summary.trim().toLowerCase()).filter(Boolean)
   if (summaries.length <= 1) return []
-  // if summaries are too different, we flag; heuristic: Jaccard distance on tokens
   const tokens = summaries.map((s) => new Set(s.split(/\s+/).slice(0, 30)))
   const conflicts: string[] = []
   for (let i = 0; i < tokens.length; i++) {
@@ -73,56 +201,72 @@ function composeFinalMarkdown(
   proposals: AgentProposal[],
   context: ContextPack,
 ): string {
-  // Team-led voice: professionals lead; user confirms only constraints.
-  const parts: string[] = []
-  parts.push(`### Sintesi (${domain})`)
   const top = proposals.sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5))[0]
+  const parts: string[] = [`[internal:domain=${domain}]`]
+
   if (top?.summary) parts.push(top.summary)
 
-  const gating = collectGatingQuestions(proposals)
-  if (gating.length) {
-    parts.push(`\n### Domande mirate (per completare i dati)`)
-    parts.push(gating.map((q) => `- ${q}`).join('\n'))
-  }
+  const gating = collectGatingQuestions(proposals, context)
+  if (gating.length) parts.push(`[gating: ${gating.join(' | ')}]`)
 
-  // Merge recommendations
   const recs = proposals.flatMap((p) => p.recommendations ?? [])
   if (recs.length) {
-    parts.push(`\n### Piano proposto dal team`)
-    recs.slice(0, 3).forEach((r, idx) => {
-      parts.push(`\n**${idx + 1}. ${r.title}**`)
-      parts.push(r.steps.map((s) => `- ${s}`).join('\n'))
-      parts.push(`\n_Razionale_: ${r.rationale}`)
-      if (r.safetyNotes?.length) {
-        parts.push(`\n_Note di sicurezza_:`)
-        parts.push(r.safetyNotes.map((s) => `- ${s}`).join('\n'))
-      }
+    recs.slice(0, 3).forEach((r) => {
+      parts.push(`${r.title}: ${r.steps.slice(0, 2).join('; ')}`)
     })
-  } else if (!gating.length) {
-    parts.push(`\n### Prossimo passo`)
-    parts.push(
-      `- Il team può proporre un percorso appena confermati i vincoli pratici (orari, attrezzatura, alimenti disponibili, preferenze non cliniche).`,
-    )
   }
-
-  // Mood hint (UI-only)
-  parts.push(`\n---\n`)
-  parts.push(
-    `_Stato attuale_: ${context.ui.moodScore}/100 (indicatore UI basato su tracking reale).`,
-  )
 
   return parts.join('\n')
 }
 
+/**
+ * Select agents for a request using a multi-domain relevance score.
+ *
+ * Scoring:
+ * - +3: agent's domainTags includes the primary domain
+ * - +1: agent's domainTags includes a secondary detected domain (for each match)
+ * - +0.5: agent is tagged 'general' and no primary match
+ *
+ * This ensures dual-domain agents (e.g. fisioterapista: ['training', 'health'])
+ * rank higher than single-domain agents when both domains are relevant,
+ * and are always included when their domains are detected.
+ *
+ * @param team          Full loaded team
+ * @param primaryDomain Best-match domain from detectDomainFromText
+ * @param maxAgents     Maximum agents to select (default 4)
+ * @param allDomains    All detected domains from detectDomainsMulti (optional)
+ */
 export function selectAgentsForRequest(
   team: AgentProfile[],
-  domain: Domain,
+  primaryDomain: Domain,
   maxAgents: number,
+  allDomains?: Domain[],
 ): AgentProfile[] {
-  const scored = team.map((a) => ({
-    agent: a,
-    score: a.domainTags.includes(domain) ? 2 : a.domainTags.includes('general') ? 1 : 0,
-  }))
+  const secondaryDomains = (allDomains ?? []).filter((d) => d !== primaryDomain && d !== 'general')
+
+  const scored = team.map((a) => {
+    let score = 0
+
+    // Primary domain match: highest weight
+    if (a.domainTags.includes(primaryDomain)) {
+      score += 3
+    }
+
+    // Secondary domain matches: agents covering multiple relevant domains rank higher
+    for (const d of secondaryDomains) {
+      if (a.domainTags.includes(d)) {
+        score += 1
+      }
+    }
+
+    // General fallback: only if no other match
+    if (score === 0 && a.domainTags.includes('general')) {
+      score = 0.5
+    }
+
+    return { agent: a, score }
+  })
+
   return scored
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
@@ -138,18 +282,23 @@ export function runConsensus(params: {
   contextPack: ContextPack
   orchestratorToolsAllowed: string[]
 }): ConsensusResult {
-  const domain = pickPrimaryDomain(params.domainHint, params.proposals)
-  const conflicts = detectConflicts(params.proposals)
+  const { normalized: isolatedProposals, violations: domainViolations } = enforceDomainIsolation(
+    params.proposals,
+    params.team,
+  )
 
-  const toolCalls = mergeToolCalls(params.proposals, new Set(params.orchestratorToolsAllowed))
-  const gatingQuestions = collectGatingQuestions(params.proposals)
+  const domain = pickPrimaryDomain(params.domainHint, isolatedProposals)
+  const conflicts = detectConflicts(isolatedProposals)
 
-  const urgent = params.proposals.some((p) => p.flags?.urgentEscalation)
-  const risk = urgent || params.proposals.some((p) => p.flags?.potentialRisk)
+  const toolCalls = mergeToolCalls(isolatedProposals, new Set(params.orchestratorToolsAllowed))
+  const gatingQuestions = collectGatingQuestions(isolatedProposals, params.contextPack)
 
-  const finalMessageMarkdown = composeFinalMarkdown(domain, params.proposals, params.contextPack)
+  const urgent = isolatedProposals.some((p) => p.flags?.urgentEscalation)
+  const risk = urgent || isolatedProposals.some((p) => p.flags?.potentialRisk)
 
-  const artifactsToSave = params.proposals
+  const finalMessageMarkdown = composeFinalMarkdown(domain, isolatedProposals, params.contextPack)
+
+  const artifactsToSave = isolatedProposals
     .flatMap((p) => (p.recommendations ?? []).flatMap((r) => r.artifactsToSave ?? []))
     .slice(0, 5)
     .map((a) => ({ type: a.type, title: a.title, contentMarkdown: a.contentMarkdown }))
@@ -174,8 +323,8 @@ export function runConsensus(params: {
     },
     artifactsToSave: artifactsToSave.length ? artifactsToSave : undefined,
     debug: {
-      selectedAgents: uniq(params.proposals.map((p) => p.agentId)),
-      conflicts,
+      selectedAgents: uniq(isolatedProposals.map((p) => p.agentId)),
+      conflicts: [...conflicts, ...domainViolations],
     },
   }
 }
