@@ -118,3 +118,37 @@ body {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* ── iOS-style CSS variables (used by inline-style components) ── */
+/* These mirror the Tailwind @theme tokens for use via var() in     */
+/* ChatShell, ChatInput, and other B8 inline-style components.      */
+
+:root {
+  --color-bg: #F2F2F7;
+  --color-text-primary: #1C1C1E;
+  --color-text-secondary: #8E8E93;
+  --color-separator: #E5E5EA;
+  --color-bg-elevated: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #1C1C1E;
+    --color-text-primary: #F2F2F7;
+    --color-text-secondary: #8E8E93;
+    --color-separator: #38383A;
+    --color-bg-elevated: #2C2C2E;
+  }
+}
+
+/* ── Domain icon active animation ──────────────────────── */
+
+@keyframes lw-domain-pulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+.lw-domain-active {
+  animation: lw-domain-pulse 0.4s ease-out forwards;
+}
