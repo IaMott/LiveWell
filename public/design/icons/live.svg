@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 800 800">
+  <!-- Generator: Adobe Illustrator 29.5.1, SVG Export Plug-In . SVG Version: 2.1.0 Build 141)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #dbdbda;
+      }
+
+      .st1 {
+        fill: #f7f7f8;
+        fill-rule: evenodd;
+      }
+    </style>
+  </defs>
+  <g id="Livello_2">
+    <circle class="st0" cx="400" cy="400" r="354.33"/>
+  </g>
+  <g id="Livello_1">
+    <path class="st1" d="M442.56,293.48c13.81,0,25,11.19,25,25v159.67c0,13.81-11.19,25-25,25s-25-11.19-25-25v-159.67c0-13.81,11.19-25,25-25h0Z"/>
+    <path class="st1" d="M357.44,239.98c13.81,0,25,11.19,25,25v266.67c0,13.81-11.19,25-25,25s-25-11.19-25-25v-266.67c0-13.81,11.19-25,25-25h0Z"/>
+    <path class="st1" d="M272.11,320.98c13.81,0,25,11.19,25,25v104.67c0,13.81-11.19,25-25,25s-25-11.19-25-25v-104.67c0-13.81,11.19-25,25-25h0Z"/>
+    <path class="st1" d="M527.89,320.98c13.81,0,25,11.19,25,25v104.67c0,13.81-11.19,25-25,25s-25-11.19-25-25v-104.67c0-13.81,11.19-25,25-25h0Z"/>
+  </g>
+</svg>

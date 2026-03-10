@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { User, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -33,7 +34,17 @@ export function TopBar({ className }: TopBarProps) {
             <span className="text-sm font-medium">Chat</span>
           </Link>
         ) : (
-          <span className="text-lg font-semibold tracking-tight text-brand-600">LiveWell</span>
+          <span className="flex items-center gap-2 text-lg font-semibold tracking-tight text-brand-600">
+            <Image
+              src="/design/icons/live.svg"
+              alt=""
+              width={20}
+              height={20}
+              className="h-5 w-5"
+              aria-hidden="true"
+            />
+            LiveWell
+          </span>
         )}
       </div>
 
