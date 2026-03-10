@@ -402,26 +402,18 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
               // ── Transcript accumulation ───────────────────────────────────
               // User speech (inputAudioTranscription enabled in config)
-              const userTranscription = sc?.inputTranscription
-              if (typeof userTranscription?.text === 'string' && userTranscription.text) {
-                userTranscriptBufRef.current += userTranscription.text
+              const userText = sc?.inputTranscription?.text
+              if (typeof userText === 'string' && userText) {
+                userTranscriptBufRef.current += userText
               }
-              // Emit user transcript as soon as their speech turn ends
-              if (userTranscription?.endOfTranscription) {
-                const userSeg = userTranscriptBufRef.current.trim()
-                userTranscriptBufRef.current = ''
-                if (userSeg) onTranscription?.('user', userSeg)
-              }
-
               // AI speech (outputAudioTranscription enabled in config)
               const aiText = sc?.outputTranscription?.text
               if (typeof aiText === 'string' && aiText) {
                 aiTranscriptBufRef.current += aiText
               }
 
-              // On turn complete, emit buffered AI transcript (user already emitted above)
+              // Emit both segments on turn complete
               if (sc?.turnComplete) {
-                // Flush any remaining user segment in case endOfTranscription was missed
                 const userSeg = userTranscriptBufRef.current.trim()
                 userTranscriptBufRef.current = ''
                 if (userSeg) onTranscription?.('user', userSeg)
