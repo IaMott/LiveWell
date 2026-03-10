@@ -53,6 +53,16 @@ function makeDb(): DbClient {
         },
       ],
     },
+    agentWorkspace: {
+      findMany: async () => [
+        {
+          agentId: 'fisioterapista',
+          round1Proposal: { summary: 'Possibile lombalgia meccanica' },
+          round2Proposal: { summary: 'Valutare irradiazione e trigger di movimento' },
+          updatedAt: new Date('2026-03-10T10:05:00Z'),
+        },
+      ],
+    },
   }
 }
 
@@ -64,5 +74,7 @@ describe('buildContextPack', () => {
     expect(pack.history.crossConversationMessages?.length).toBe(1)
     expect(pack.user.attributes?.health?.diagnosis).toBeTruthy()
     expect(pack.user.attributes?.health?.diagnosis?.value).toBe('lombalgia')
+    expect(pack.history.agentWorkspaces?.[0]?.agentId).toBe('fisioterapista')
+    expect(pack.history.agentWorkspaces?.[0]?.round2Summary).toContain('Valutare irradiazione')
   })
 })

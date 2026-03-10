@@ -21,6 +21,7 @@ import { ALLOWED_TOOL_NAMES } from '@/lib/tools/toolRegistry'
 import { createToolExecutor, type MutationAuditEvent } from '@/lib/tools/toolExecutor'
 import { realToolHandlers, stubToolHandlers } from '@/lib/tools/handlers'
 import { prisma } from '@/lib/prisma'
+import { logApiErrorEvent } from '@/lib/monitoring/apiErrorEvents'
 
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(4000),
@@ -354,6 +355,17 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
                   }>
                 >,
             },
+            agentWorkspace: {
+              findMany: async (args) =>
+                prisma.agentWorkspace.findMany(args as object) as Promise<
+                  Array<{
+                    agentId: string
+                    round1Proposal?: unknown
+                    round2Proposal?: unknown
+                    updatedAt: Date
+                  }>
+                >,
+            },
             geoPreference: {
               findUnique: async () =>
                 prisma.geoPreference.findUnique({
@@ -408,8 +420,17 @@ async function resolveConversationId(
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const requestId = crypto.randomUUID()
   const userId = await getAuthUserId(request)
   if (!userId) {
+    await logApiErrorEvent({
+      endpoint: '/api/chat/send',
+      errorCode: 'UNAUTHORIZED',
+      statusCode: 401,
+      message: 'Authentication required',
+      requestId,
+      userId: null,
+    })
     return errorResponse(401, 'UNAUTHORIZED', 'Authentication required')
   }
 
@@ -418,6 +439,14 @@ export async function POST(request: Request): Promise<Response> {
     max: 30,
   })
   if (!rate.ok) {
+    await logApiErrorEvent({
+      endpoint: '/api/chat/send',
+      errorCode: 'RATE_LIMITED',
+      statusCode: 429,
+      message: 'Too many requests',
+      requestId,
+      userId,
+    })
     return new Response(
       JSON.stringify({ error: { code: 'RATE_LIMITED', message: 'Too many requests' } }),
       {
@@ -434,9 +463,27 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const body = (await request.json()) as unknown
     const parsed = requestSchema.safeParse(body)
-    if (!parsed.success) return errorResponse(400, 'BAD_REQUEST', 'Invalid request body')
+    if (!parsed.success) {
+      await logApiErrorEvent({
+        endpoint: '/api/chat/send',
+        errorCode: 'BAD_REQUEST',
+        statusCode: 400,
+        message: 'Invalid request body',
+        requestId,
+        userId,
+      })
+      return errorResponse(400, 'BAD_REQUEST', 'Invalid request body')
+    }
     parsedBody = parsed.data
   } catch {
+    await logApiErrorEvent({
+      endpoint: '/api/chat/send',
+      errorCode: 'BAD_REQUEST',
+      statusCode: 400,
+      message: 'Invalid JSON body',
+      requestId,
+      userId,
+    })
     return errorResponse(400, 'BAD_REQUEST', 'Invalid JSON body')
   }
 
@@ -463,7 +510,7 @@ export async function POST(request: Request): Promise<Response> {
   })
 
   const agentInput: AgentInput = {
-    requestId: crypto.randomUUID(),
+    requestId,
     userId,
     conversationId,
     message: parsedBody.message,

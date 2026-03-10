@@ -121,21 +121,26 @@ function detectSpecialistRequest(message: string, team: AgentProfile[]): string 
   return null
 }
 
-/** Key profile fields to track for completeness */
-const KEY_PROFILE_FIELDS = [
-  'peso',
-  'altezza',
-  'eta',
-  'genere',
-  'obiettivi',
-  'condizioni_mediche',
-  'attivita_fisica',
-  'dieta_restrizioni',
-  'farmaci',
-  'allergie',
-]
+function formatUserAttributes(input: AgentInput): string[] {
+  const attrs = input.contextPack.user.attributes
+  if (!attrs) return []
+  const lines: string[] = []
+  for (const [domain, kv] of Object.entries(attrs)) {
+    if (!kv || typeof kv !== 'object') continue
+    const entries = Object.entries(kv as Record<string, { value: unknown; unit?: string }>)
+      .slice(0, 8)
+      .map(
+        ([k, v]) =>
+          `${k}: ${typeof v.value === 'object' ? JSON.stringify(v.value) : String(v.value)}${v.unit ? ` ${v.unit}` : ''}`,
+      )
+    if (entries.length > 0) {
+      lines.push(`[${domain}] ${entries.join(' | ')}`)
+    }
+  }
+  return lines
+}
 
-function buildAgentUserPrompt(input: AgentInput, peerInsights?: string): string {
+function buildAgentUserPrompt(input: AgentInput, agentId: string, peerInsights?: string): string {
   const parts: string[] = [
     `USER MESSAGE:`,
     input.message,
@@ -158,20 +163,17 @@ function buildAgentUserPrompt(input: AgentInput, peerInsights?: string): string 
     parts.push(`- userProfile: ${profileSummary}`)
   }
 
-  // Missing key profile fields — ask one at a time if relevant to domain
-  const profile = (input.contextPack.user.profile ?? {}) as Record<string, unknown>
-  const missingFields = KEY_PROFILE_FIELDS.filter(
-    (f) => profile[f] === undefined || profile[f] === null || profile[f] === '',
-  )
-  if (missingFields.length > 0) {
-    parts.push(
-      ``,
-      `CAMPI PROFILO MANCANTI (chiedi quelli pertinenti al tuo ambito, UNO alla volta):`,
-      missingFields.map((f) => `- ${f}`).join('\n'),
-    )
+  const attributeLines = formatUserAttributes(input)
+  if (attributeLines.length > 0) {
+    parts.push(``, `USER ATTRIBUTES (fonte principale dinamica):`, ...attributeLines)
   }
 
-  // Detect previous gating questions → instruct agent to call user.updateProfile if answered
+  const ownWorkspace = input.contextPack.history.agentWorkspaces?.find((w) => w.agentId === agentId)
+  if (ownWorkspace?.round2Summary) {
+    parts.push(``, `WORKSPACE MEMORIA TURNO PRECEDENTE:`, ownWorkspace.round2Summary)
+  }
+
+  // Detect previous gating questions → instruct agent to call user.setAttribute if answered
   const lastAssistant = input.contextPack.history.recentMessages
     .filter((m) => m.role === 'assistant')
     .slice(-1)[0]
@@ -185,9 +187,10 @@ function buildAgentUserPrompt(input: AgentInput, peerInsights?: string): string 
       parts.push(``, `PREVIOUS TEAM QUESTIONS (from last turn):`)
       prevQuestions.forEach((q) => parts.push(`- ${q}`))
       parts.push(
-        `If the user message answers any of these questions, include a "user.updateProfile" tool call`,
-        `in your toolCalls[] with { fields: { <key>: <value> } } for each extracted value.`,
-        `Only include fields you can extract with confidence from the user message.`,
+        `If the user message answers any of these questions, include a "user.setAttribute" tool call`,
+        `in toolCalls[] for each extracted value.`,
+        `Prefer user.setAttribute: { domain, key, value, unit?, notes? }.`,
+        `Only include fields/attributes you can extract with confidence from the user message.`,
       )
     }
   }
@@ -206,7 +209,8 @@ function buildAgentUserPrompt(input: AgentInput, peerInsights?: string): string 
     `PROFILE EXTRACTION (MANDATORY):`,
     `If the user mentions ANY personal data (weight, height, age, medical conditions, symptoms,`,
     `goals, diet restrictions, training frequency, medications, allergies, sleep hours, stress level etc.),`,
-    `ALWAYS include a "user.updateProfile" tool call in your toolCalls[] with the extracted key-value pairs.`,
+    `ALWAYS include a "user.setAttribute" tool call in your toolCalls[] with extracted values.`,
+    `Use user.updateProfile only for legacy compatibility when needed by profile snapshot.`,
     ``,
     `NATURAL DIALOGUE RULE:`,
     `Termina SEMPRE con una domanda aperta o un invito a continuare la conversazione.`,
@@ -226,7 +230,7 @@ function buildAgentUserPrompt(input: AgentInput, peerInsights?: string): string 
     `  "reasoning": "analisi interna non visibile all'utente",`,
     `  "questions": ["domanda gating se necessario"],`,
     `  "recommendations": [],`,
-    `  "toolCalls": [{"id": "uuid", "name": "user.updateProfile", "args": {"fields": {"chiave": "valore"}}}],`,
+    `  "toolCalls": [{"id":"uuid","name":"user.setAttribute","args":{"domain":"health","key":"weight","value":80,"unit":"kg"}}],`,
     `  "confidence": 0.8`,
     `}`,
   )
@@ -240,7 +244,7 @@ async function runOneAgent(
   input: AgentInput,
   peerInsights?: string,
 ): Promise<AgentProposal> {
-  const userPrompt = buildAgentUserPrompt(input, peerInsights)
+  const userPrompt = buildAgentUserPrompt(input, agent.id, peerInsights)
 
   const res = await llm.complete({
     system: agent.systemPrompt,

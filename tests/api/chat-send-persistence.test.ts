@@ -150,4 +150,29 @@ describe('/api/chat/send persistence integration', () => {
     expect(body).toContain('"type":"message.complete"')
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
   })
+
+  it('smoke: /api/chat/send back-pain request persists AgentWorkspace proposals', async () => {
+    vi.resetModules()
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const req = new Request('http://localhost/api/chat/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': 'u-db',
+      },
+      body: JSON.stringify({ message: 'ho mal di schiena lombare da 3 giorni' }),
+    })
+
+    const res = await POST(req)
+    const body = await res.text()
+
+    expect(res.status).toBe(200)
+    expect(body).toContain('"type":"message.complete"')
+    expect(txAgentWorkspaceUpsert).toHaveBeenCalled()
+    const agentIds = txAgentWorkspaceUpsert.mock.calls.map(
+      (c) => (c[0] as { create?: { agentId?: string } }).create?.agentId,
+    )
+    expect(agentIds).toContain('fisioterapista')
+  })
 })

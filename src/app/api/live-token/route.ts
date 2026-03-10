@@ -5,6 +5,7 @@ import { getAuthUserId } from '@/lib/auth'
 import { getServerSecret } from '@/lib/security/secrets'
 import { getServerEnv } from '@/lib/validators/env'
 import { prisma } from '@/lib/prisma'
+import { logApiErrorEvent } from '@/lib/monitoring/apiErrorEvents'
 
 const requestSchema = z.object({
   conversationId: z.string().min(1).optional(),
@@ -222,8 +223,17 @@ async function buildLiveSystemInstruction(userId: string): Promise<string> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const requestId = crypto.randomUUID()
   const userId = await getAuthUserId(request)
   if (!userId) {
+    await logApiErrorEvent({
+      endpoint: '/api/live-token',
+      errorCode: 'UNAUTHORIZED',
+      statusCode: 401,
+      message: 'Authentication required',
+      requestId,
+      userId: null,
+    })
     return errorResponse(401, 'UNAUTHORIZED', 'Authentication required')
   }
 
@@ -232,6 +242,14 @@ export async function POST(request: Request): Promise<Response> {
     const body = (await request.json()) as unknown
     const parsed = requestSchema.safeParse(body)
     if (!parsed.success) {
+      await logApiErrorEvent({
+        endpoint: '/api/live-token',
+        errorCode: 'BAD_REQUEST',
+        statusCode: 400,
+        message: 'Invalid request body',
+        requestId,
+        userId,
+      })
       return errorResponse(400, 'BAD_REQUEST', 'Invalid request body')
     }
     parsedBody = parsed.data
@@ -241,6 +259,14 @@ export async function POST(request: Request): Promise<Response> {
 
   const apiKey = getServerSecret('GEMINI_API_KEY')
   if (!apiKey) {
+    await logApiErrorEvent({
+      endpoint: '/api/live-token',
+      errorCode: 'UNAVAILABLE',
+      statusCode: 503,
+      message: 'Live service not available',
+      requestId,
+      userId,
+    })
     return errorResponse(503, 'UNAVAILABLE', 'Live service not available')
   }
 
@@ -304,6 +330,14 @@ export async function POST(request: Request): Promise<Response> {
     )
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unable to create live session token'
+    await logApiErrorEvent({
+      endpoint: '/api/live-token',
+      errorCode: 'UNAVAILABLE',
+      statusCode: 503,
+      message: msg,
+      requestId,
+      userId,
+    })
     return errorResponse(503, 'UNAVAILABLE', msg)
   }
 }

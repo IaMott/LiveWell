@@ -5,6 +5,7 @@ import {
   ContextPack,
   Domain,
   ToolCall,
+  UserAttributes,
 } from '../types'
 
 export type ConsensusEngineOptions = {
@@ -50,10 +51,31 @@ const PROFILE_FIELD_HINTS: Array<{ keywords: string[]; fieldPath: string }> = [
 // Gap 2: remove questions that ask for profile data already present in ContextPack
 function filterKnownDataQuestions(questions: string[], contextPack: ContextPack): string[] {
   const profile = (contextPack.user.profile ?? {}) as Record<string, unknown>
+  const attrs = contextPack.user.attributes ?? {}
+  const ATTRIBUTE_FIELD_HINTS: Array<{
+    keywords: string[]
+    domain: keyof UserAttributes
+    key: string
+  }> = [
+    { keywords: ['peso', 'weight', 'kg'], domain: 'personal', key: 'weight' },
+    { keywords: ['altezza', 'height', 'cm'], domain: 'personal', key: 'height' },
+    { keywords: ['diagnosi', 'diagnosis', 'patologia'], domain: 'health', key: 'diagnosis' },
+    { keywords: ['farmaco', 'medicazione', 'medication'], domain: 'health', key: 'medication' },
+    { keywords: ['allergia', 'allergy'], domain: 'health', key: 'allergy' },
+    { keywords: ['infortunio', 'injury', 'lesione'], domain: 'health', key: 'injury' },
+    { keywords: ['dieta', 'diet', 'regime alimentare'], domain: 'nutrition', key: 'diet' },
+    { keywords: ['obiettivo', 'goal'], domain: 'general', key: 'goal' },
+  ]
+
   return questions.filter((q) => {
     const ql = q.toLowerCase()
     for (const { keywords, fieldPath } of PROFILE_FIELD_HINTS) {
       if (keywords.some((kw) => ql.includes(kw)) && profile[fieldPath] != null) return false
+    }
+    for (const { keywords, domain, key } of ATTRIBUTE_FIELD_HINTS) {
+      if (!keywords.some((kw) => ql.includes(kw))) continue
+      const domainAttrs = attrs[domain] as Record<string, unknown> | undefined
+      if (domainAttrs?.[key] != null) return false
     }
     return true
   })
@@ -174,8 +196,43 @@ export function selectAgentsForRequest(
   allDomains: Domain[] = [],
   message = '',
 ): AgentProfile[] {
+  const AGENT_COMPETENCE_HINTS: Record<string, string[]> = {
+    fisioterapista: ['schiena', 'lombalgia', 'sciatica', 'postura', 'riabilitazione', 'muscolo'],
+    fisiatra: ['schiena', 'dolore', 'articolazione', 'riabilitazione', 'colonna', 'muscolo'],
+    'medico-dello-sport': ['infortunio', 'recupero', 'muscolo', 'allenamento', 'sport'],
+    cardiologo: ['cuore', 'tachicardia', 'pressione', 'palpitazioni', 'torace'],
+    gastroenterologo: ['stomaco', 'intestino', 'reflusso', 'nausea', 'digestione'],
+    dermatologo: ['pelle', 'rash', 'eczema', 'dermatite'],
+    dietista: ['dieta', 'calorie', 'alimentazione', 'peso'],
+    endocrinologo: ['tiroide', 'glicemia', 'ormoni', 'insulina', 'metabolismo'],
+    psicologo: ['ansia', 'umore', 'stress', 'panico', 'depressione'],
+  }
+
+  const MUSCULOSKELETAL_HINTS = new Set([
+    'schiena',
+    'lombalgia',
+    'sciatica',
+    'postura',
+    'muscolo',
+    'muscolare',
+    'colonna',
+    'dolore',
+    'cervicale',
+  ])
+
+  const textToTokens = (text: string): Set<string> =>
+    new Set(
+      text
+        .toLowerCase()
+        .replace(/[^a-z0-9àèéìòù_\-\s]/gi, ' ')
+        .split(/\s+/)
+        .filter((t) => t.length > 2),
+    )
+
   const secondary = allDomains.filter((d) => d !== domain && d !== 'general')
   const lowerMessage = message.toLowerCase()
+  const msgTokens = textToTokens(message)
+  const hasMusculoskeletalSignal = [...msgTokens].some((t) => MUSCULOSKELETAL_HINTS.has(t))
 
   const scored = team.map((a) => ({
     agent: a,
@@ -186,6 +243,20 @@ export function selectAgentsForRequest(
       for (const d of secondary) if (a.domainTags.includes(d)) s += 2
       if (lowerMessage.includes(a.id.toLowerCase())) s += 2
       if (lowerMessage.includes(a.displayName.toLowerCase())) s += 2
+
+      const competenceHints = AGENT_COMPETENCE_HINTS[a.id] ?? []
+      const competenceMatches = competenceHints.filter((h) => msgTokens.has(h)).length
+      if (competenceMatches > 0) s += competenceMatches * 3
+
+      if (
+        hasMusculoskeletalSignal &&
+        (a.id === 'fisioterapista' || a.id === 'fisiatra' || a.id === 'medico-dello-sport')
+      ) {
+        s += 4
+      }
+      if (hasMusculoskeletalSignal && a.id === 'fisioterapista') {
+        s += 1
+      }
       return s
     })(),
   }))

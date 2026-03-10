@@ -104,6 +104,12 @@ export type ContextPack = {
       content: string
       createdAt: string
     }>
+    agentWorkspaces?: Array<{
+      agentId: string
+      round1Summary?: string
+      round2Summary?: string
+      updatedAt: string
+    }>
     recentArtifacts: Array<{
       type: string
       title: string

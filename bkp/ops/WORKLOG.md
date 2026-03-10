@@ -488,3 +488,27 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 - B6: `live-token` system instruction estesa con attributi dinamici `UserAttribute`.
 - B7: test mirati passati + `typecheck` e `build` OK (ripristinato `tsconfig.json` dopo auto-edit Next).
 - Prossimo passo: commit/push branch dedicato e migrate deploy su ambiente target.
+
+## 2026-03-10 21:09 — git-workflow-manager (backup locale zip)
+
+- Creato backup locale fisico in formato zip con timestamp in `bkp/backups/2026-03-10/2109_full-app-backup.zip`.
+- Esclusioni applicate: `node_modules/`, `.next/`, `coverage/`, `bkp/backups/`.
+- Integrità archivio verificata con `unzip -tqq` (esito OK).
+- Prossimo passo: opzionale push/archiviazione esterna del file zip.
+
+## 2026-03-10 21:17 — backend-developer (post-release hardening)
+
+- Cleanup: rimossi utenti smoke test (`smoke_%@example.com`) e dati relazionati via delete cascade su DB target.
+- Monitoring: aggiunto event logging errori API (`ApiErrorEvent`) su `/api/chat/send` e `/api/live-token` + route admin `GET /api/admin/monitoring/errors` (OWNER-only).
+- Test CI: aggiunti test automatici con mock DB per smoke autenticato `user.setAttribute` e test route monitoring admin.
+- Verifiche: `npx prisma generate` OK, `npm run test` OK (36/36), `npm run build` OK.
+- Prossimo passo: se vuoi, procedo con commit/push/deploy + migrate deploy in target.
+
+## 2026-03-10 22:28 — backend-developer (architettura multi-agent + dynamic attributes)
+
+- Problema 1: migliorata `selectAgentsForRequest` con scoring per competenza (keyword cliniche/specialistiche + boost muscolo-scheletrico), oltre al domain match.
+- Problema 2: aggiunta memoria persistente reale dei sub-agent in ContextPack (`history.agentWorkspaces`) letta da `AgentWorkspace` e riutilizzata nei prompt per turno successivo.
+- Problemi 3/5: orchestrator aggiornato per usare `user.setAttribute` come tool principale per estrazione dati dinamici; `user.updateProfile` mantenuto solo legacy.
+- Problema 4: mantenuta e validata memoria cross-conversation già presente in `contextPackBuilder`.
+- Test incrementali eseguiti dopo ogni blocco + regressione completa finale.
+- Esito finale: `npm run test` 38/38 PASS, `npm run build` PASS.

@@ -1,20 +1,22 @@
 # LiveWell — Project Status
 
-## Current Step: Phase B backend implementation complete (B1-B7)
+## Current Step: Fix architetturali multi-agent/dynamic DB completati (backend-only)
 
-## Stato verificato — 2026-03-10 18:28
+## Stato verificato — 2026-03-10 22:28
 
-- Baseline: ripristino a commit `07abaeb5ee138cc9c1a29433dd0f5e3bd6c8ab2e` completato.
-- Implementazione backend Fase B completata senza modifiche UI/layout.
-- Blocchi implementati: B1, B2, B3, B5, B4, B6, B7.
-- Verifiche: test mirati PASS, typecheck PASS, build PASS.
+- Problema 1 (routing competenze) corretto con scoring specialistico.
+- Problema 2 (team simulato) ridotto con persistenza reale workspace agente tra turni via ContextPack.
+- Problema 3 (profilo sovrascrivibile) mitigato: orchestrator usa `user.setAttribute` come default dinamico.
+- Problema 4 (cross-conversation memory) attivo e validato.
+- Problema 5 (attributi tipizzati mancanti) coperto da `UserAttribute` time-series + filtro domande su attributi noti.
+- Verifiche:
+  - `npm run test` ✅ (38/38)
+  - `npm run build` ✅
 
 ## Next immediato
 
-- Commit + push su branch di lavoro.
-- Deploy e migrazione DB (`prisma migrate deploy`) in ambiente target.
-- Smoke test API chat/send + live-token + profile context.
+- Commit + push + deploy backend + `prisma migrate deploy` su target.
 
 ## Ultimo aggiornamento
 
-2026-03-10 18:28
+2026-03-10 22:28

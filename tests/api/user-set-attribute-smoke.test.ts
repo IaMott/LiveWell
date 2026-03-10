@@ -1,0 +1,79 @@
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { createToolExecutor } from '@/lib/tools/toolExecutor'
+import { realToolHandlers } from '@/lib/tools/handlers'
+
+const { mockUserAttributeCreate, mockUpdateUserProfile } = vi.hoisted(() => ({
+  mockUserAttributeCreate: vi.fn(async () => ({ id: 'attr-1' })),
+  mockUpdateUserProfile: vi.fn(async () => ({ id: 'profile-1' })),
+}))
+
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    userAttribute: {
+      create: mockUserAttributeCreate,
+    },
+  },
+}))
+
+vi.mock('@/lib/db', () => ({
+  updateUserProfile: mockUpdateUserProfile,
+  setGeoPreference: vi.fn(),
+  upsertCoarseLocation: vi.fn(),
+  clearCoarseLocation: vi.fn(),
+}))
+
+describe('smoke auth user.setAttribute (mock DB)', () => {
+  beforeEach(() => {
+    mockUserAttributeCreate.mockClear()
+    mockUpdateUserProfile.mockClear()
+  })
+
+  it('executes as authenticated USER and persists attribute history', async () => {
+    const writeAuditLog = vi.fn(async () => undefined)
+    const executor = createToolExecutor({
+      handlers: realToolHandlers,
+      writeAuditLog,
+    })
+
+    const result = await executor.executeToolCall(
+      {
+        id: 'tc-1',
+        name: 'user.setAttribute',
+        args: {
+          domain: 'personal',
+          key: 'weight',
+          value: 81.2,
+          unit: 'kg',
+          notes: 'misurato al mattino',
+        },
+      },
+      {
+        requestId: 'req-1',
+        conversationId: 'conv-1',
+        actor: { userId: 'user-auth-1', role: 'USER', ownerModeEnabled: false },
+        source: 'assistant',
+        confirmedByUser: false,
+      },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(mockUserAttributeCreate).toHaveBeenCalledTimes(1)
+    expect(mockUserAttributeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: 'user-auth-1',
+          domain: 'personal',
+          key: 'weight',
+          value: 81.2,
+          unit: 'kg',
+          conversationId: 'conv-1',
+          source: 'agent',
+        }),
+      }),
+    )
+
+    // personal.weight also syncs the legacy profile snapshot for compatibility.
+    expect(mockUpdateUserProfile).toHaveBeenCalledWith('user-auth-1', { weight: 81.2 })
+    expect(writeAuditLog).toHaveBeenCalledTimes(1)
+  })
+})

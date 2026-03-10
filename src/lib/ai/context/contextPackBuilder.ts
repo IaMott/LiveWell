@@ -12,6 +12,12 @@ type RawAttribute = {
   notes: string | null
   source?: string | null
 }
+type WorkspaceRow = {
+  agentId: string
+  round1Proposal?: unknown
+  round2Proposal?: unknown
+  updatedAt: Date | string
+}
 
 export type DbClient = {
   user: {
@@ -60,6 +66,9 @@ export type DbClient = {
   }
   userAttribute?: {
     findMany: (args: QueryArgs) => Promise<RawAttribute[]>
+  }
+  agentWorkspace?: {
+    findMany: (args: QueryArgs) => Promise<WorkspaceRow[]>
   }
   // Optional — geo preference (privacy-first: only coarse fields, never raw coords)
   geoPreference?: {
@@ -193,7 +202,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
 
   // Trackers (last 7 days - simplified)
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-  const [metrics, meals, workouts, mind] = await Promise.all([
+  const [metrics, meals, workouts, mind, workspaces] = await Promise.all([
     opts.db.bodyMetricEntry.findMany({
       where: { userId: opts.userId, recordedAt: { gte: since } },
       take: 50,
@@ -210,6 +219,19 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
       where: { userId: opts.userId, createdAt: { gte: since } },
       take: 50,
     }),
+    opts.db.agentWorkspace
+      ? opts.db.agentWorkspace.findMany({
+          where: { userId: opts.userId, conversationId: opts.conversationId },
+          orderBy: { updatedAt: 'desc' },
+          take: 20,
+          select: {
+            agentId: true,
+            round1Proposal: true,
+            round2Proposal: true,
+            updatedAt: true,
+          },
+        })
+      : Promise.resolve([] as WorkspaceRow[]),
   ])
 
   let userAttributes: UserAttributes = {}
@@ -302,6 +324,25 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
         createdAt: new Date(a.createdAt).toISOString(),
         contentMarkdown: a.content ?? undefined,
       })),
+      agentWorkspaces:
+        workspaces.length > 0
+          ? workspaces.map((w) => {
+              const r1 =
+                w.round1Proposal && typeof w.round1Proposal === 'object'
+                  ? ((w.round1Proposal as Record<string, unknown>).summary as string | undefined)
+                  : undefined
+              const r2 =
+                w.round2Proposal && typeof w.round2Proposal === 'object'
+                  ? ((w.round2Proposal as Record<string, unknown>).summary as string | undefined)
+                  : undefined
+              return {
+                agentId: w.agentId,
+                round1Summary: r1,
+                round2Summary: r2,
+                updatedAt: new Date(w.updatedAt).toISOString(),
+              }
+            })
+          : undefined,
       crossConversationMessages:
         crossConversationMessages.length > 0
           ? crossConversationMessages

@@ -336,3 +336,21 @@ model GeoPreference {
 
   @@map("geo_preferences")
 }
+
+model ApiErrorEvent {
+  id         String   @id @default(cuid())
+  endpoint   String
+  errorCode  String   @map("error_code")
+  statusCode Int      @map("status_code")
+  message    String?
+  requestId  String?  @map("request_id")
+  userId     String?  @map("user_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([endpoint, createdAt])
+  @@index([errorCode, createdAt])
+  @@index([statusCode, createdAt])
+  @@index([userId, createdAt])
+  @@map("api_error_events")
+}
