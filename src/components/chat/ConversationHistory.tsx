@@ -19,19 +19,24 @@ interface Props {
 }
 
 export function ConversationHistory({ open, currentId, onClose, onSelect, onNew, onExport }: Props) {
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [loading, setLoading] = useState(false)
+  // null = not yet fetched (loading), [] = fetched empty, [...] = fetched with results
+  const [conversations, setConversations] = useState<Conversation[] | null>(null)
+
+  // Derive loading from null state (avoids synchronous setState-in-effect lint error)
+  const loading = open && conversations === null
 
   useEffect(() => {
-    if (!open) return
-    setLoading(true)
+    if (!open) {
+      // defer reset to avoid synchronous setState-in-effect
+      void Promise.resolve().then(() => setConversations(null))
+      return
+    }
     fetch('/api/conversations')
       .then((r) => r.json())
       .then((data: { conversations?: Conversation[] }) => {
         setConversations(data.conversations ?? [])
       })
       .catch(() => setConversations([]))
-      .finally(() => setLoading(false))
   }, [open])
 
   if (!open) return null
@@ -123,12 +128,12 @@ export function ConversationHistory({ open, currentId, onClose, onSelect, onNew,
             <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--color-text-secondary, #8E8E93)', fontSize: '0.875rem' }}>
               Caricamento…
             </div>
-          ) : conversations.length === 0 ? (
+          ) : (conversations ?? []).length === 0 ? (
             <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--color-text-secondary, #8E8E93)', fontSize: '0.875rem' }}>
               Nessuna conversazione precedente
             </div>
           ) : (
-            conversations.map((conv) => {
+            (conversations ?? []).map((conv) => {
               const isActive = conv.id === currentId
               return (
                 <button

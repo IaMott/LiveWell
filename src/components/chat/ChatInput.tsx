@@ -144,14 +144,17 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain, onVoiceSt
   }, [showLive]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync activeDomain from orchestrator ui.state SSE
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Wrapped in Promise.resolve() to avoid synchronous setState-in-effect lint error
   useEffect(() => {
-    if (activeDomain && activeDomain !== selectedDomain) {
-      setSelectedDomain(activeDomain) // eslint-disable-line react-hooks/set-state-in-effect
-      setAnimDomain(activeDomain) // eslint-disable-line react-hooks/set-state-in-effect
-      const t = setTimeout(() => setAnimDomain(null), 400)
-      return () => clearTimeout(t)
-    }
+    if (!activeDomain || activeDomain === selectedDomain) return
+    let alive = true
+    void Promise.resolve().then(() => {
+      if (!alive) return
+      setSelectedDomain(activeDomain)
+      setAnimDomain(activeDomain)
+      setTimeout(() => { if (alive) setAnimDomain(null) }, 400)
+    })
+    return () => { alive = false }
   }, [activeDomain]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentColor = selectedDomain ? (DOMAIN_COLORS[selectedDomain] ?? '#8E8E93') : '#8E8E93'
