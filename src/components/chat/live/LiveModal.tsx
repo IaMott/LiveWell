@@ -20,12 +20,12 @@ interface Props {
   onTranscription?: (text: string) => void
 }
 
-// ── Live model candidates (fallback chain if primary gets 1008) ────────────────
-// Primary: stable pointer recommended by @google/genai SDK docs for Google AI Studio.
-// Fallback: dated snapshot known to work (iManager-verified).
+// ── Live model — must use v1alpha BidiGenerateContentConstrained endpoint ────
+// Only dated native-audio snapshots work with ephemeral tokens + v1alpha.
+// "gemini-live-2.5-flash-preview" exists in SDK types but is NOT supported
+// for bidiGenerateContent with ephemeral tokens (tested 2026-03-10).
 
 const LIVE_MODEL_FALLBACKS = [
-  'gemini-live-2.5-flash-preview',
   'gemini-2.5-flash-native-audio-preview-12-2025',
 ]
 
