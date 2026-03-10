@@ -106,6 +106,8 @@ const DOMAINS: Array<{ domain: Domain; Icon: IconFC; label: string }> = [
 interface Props {
   onSend: (text: string, domain?: Domain) => void
   onHistory?: () => void
+  onAttach?: () => void
+  onMic?: () => void
   disabled?: boolean
   activeDomain?: Domain | null
   onVoiceStart?: () => void
@@ -118,7 +120,7 @@ interface Props {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ChatInput({ onSend, onHistory, disabled, activeDomain, onVoiceStart, onVoiceEnd, conversationId }: Props) {
+export function ChatInput({ onSend, onHistory, onAttach, onMic, disabled, activeDomain, onVoiceStart, onVoiceEnd, conversationId }: Props) {
   const [text, setText] = useState('')
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(activeDomain ?? null)
   const [showLive, setShowLive] = useState(false)
@@ -310,43 +312,51 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain, onVoiceSt
             {/* Spacer */}
             <div style={{ flex: 1 }} />
 
-            {/* LIVE button — icon matching design/icons/live.svg */}
+            {/* + Attachment button */}
+            <button
+              type="button"
+              aria-label="Allega"
+              onClick={onAttach}
+              disabled={disabled}
+              style={{
+                width: '2rem', height: '2rem', borderRadius: '50%', border: 'none',
+                backgroundColor: 'var(--color-text-primary, #1C1C1E)',
+                color: '#fff', cursor: 'pointer', flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                opacity: disabled ? 0.4 : 1,
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+
+            {/* Mic button */}
+            <button
+              type="button"
+              aria-label="Messaggio vocale"
+              onClick={onMic}
+              disabled={disabled}
+              style={iconBtnStyle(false)}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--color-text-secondary, #8E8E93)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="9" y="2" width="6" height="11" rx="3" />
+                <path d="M5 10a7 7 0 0 0 14 0M12 19v3M8 22h8" />
+              </svg>
+            </button>
+
+            {/* LIVE button */}
             <button
               type="button"
               aria-label="Sessione live"
               onClick={() => setShowLive(true)}
               style={{
-                padding: 0,
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                flexShrink: 0,
-                marginRight: '0.375rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                padding: 0, border: 'none', background: 'transparent',
+                cursor: 'pointer', flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
             >
               <IconLive active={showLive} />
-            </button>
-
-            {/* Send button */}
-            <button
-              type="button"
-              onClick={submit}
-              disabled={!text.trim() || disabled}
-              aria-label="Invia"
-              style={{
-                width: '2rem', height: '2rem', borderRadius: '50%', border: 'none',
-                backgroundColor: text.trim() ? currentColor || '#007AFF' : 'var(--color-separator, #E5E5EA)',
-                color: '#fff', cursor: text.trim() ? 'pointer' : 'default',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'background-color 0.15s', flexShrink: 0,
-              }}
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 19V5M5 12l7-7 7 7" />
-              </svg>
             </button>
           </div>
         </div>
