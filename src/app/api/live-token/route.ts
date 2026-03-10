@@ -10,8 +10,7 @@ const requestSchema = z.object({
   conversationId: z.string().min(1).optional(),
 })
 
-const toIsoInMinutes = (minutes: number) =>
-  new Date(Date.now() + minutes * 60_000).toISOString()
+const toIsoInMinutes = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString()
 
 /**
  * Normalise the ephemeral-token name returned by authTokens.create()
@@ -36,6 +35,50 @@ function getAge(birthDate: Date): number {
   return age
 }
 
+type AttrRow = {
+  domain: string
+  key: string
+  value: unknown
+  unit: string | null
+  recordedAt: Date
+  notes: string | null
+}
+
+function formatAttributesForPrompt(rows: AttrRow[]): string {
+  if (rows.length === 0) return ''
+
+  const seen = new Set<string>()
+  const kept: AttrRow[] = []
+  for (const row of rows) {
+    const k = `${row.domain}:${row.key}`
+    if (!seen.has(k)) {
+      seen.add(k)
+      kept.push(row)
+    }
+  }
+
+  const byDomain = new Map<string, AttrRow[]>()
+  for (const row of kept) {
+    const bucket = byDomain.get(row.domain) ?? []
+    bucket.push(row)
+    byDomain.set(row.domain, bucket)
+  }
+
+  const lines: string[] = ['ATTRIBUTI REGISTRATI DAGLI AGENTI:']
+  for (const [domain, entries] of byDomain.entries()) {
+    lines.push(`[${domain}]`)
+    for (const e of entries) {
+      const value = typeof e.value === 'object' ? JSON.stringify(e.value) : String(e.value)
+      const unit = e.unit ? ` ${e.unit}` : ''
+      lines.push(
+        `  ${e.key}: ${value}${unit} (${e.recordedAt.toISOString().slice(0, 10)})${e.notes ? ` — ${e.notes}` : ''}`,
+      )
+    }
+  }
+
+  return lines.join('\n')
+}
+
 /**
  * Build a rich system instruction for the Gemini Live session.
  * Includes user profile, recent chat history across ALL conversations,
@@ -43,46 +86,58 @@ function getAge(birthDate: Date): number {
  */
 async function buildLiveSystemInstruction(userId: string): Promise<string> {
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const now = new Date()
 
-  const [user, profile, recentMessages, workouts, meals, mindfulness] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
-    prisma.userProfile.findUnique({
-      where: { userId },
-      select: {
-        birthDate: true,
-        gender: true,
-        height: true,
-        weight: true,
-        health: true,
-        nutrition: true,
-        training: true,
-        mindfulness: true,
-        goals: true,
-      },
-    }),
-    // Last 30 messages across ALL user conversations (cross-conversation memory)
-    prisma.message.findMany({
-      where: { conversation: { userId } },
-      orderBy: { createdAt: 'desc' },
-      take: 30,
-      select: { role: true, content: true, createdAt: true },
-    }),
-    prisma.workoutSession.findMany({
-      where: { userId, date: { gte: since7d } },
-      select: { durationMin: true, notes: true, date: true },
-      take: 20,
-    }),
-    prisma.meal.findMany({
-      where: { createdByUserId: userId, date: { gte: since7d } },
-      select: { mealType: true, date: true },
-      take: 20,
-    }),
-    prisma.mindfulnessEntry.findMany({
-      where: { userId, createdAt: { gte: since7d } },
-      select: { mood: true, stress: true },
-      take: 10,
-    }),
-  ])
+  const [user, profile, recentMessages, workouts, meals, mindfulness, attrRows] = await Promise.all(
+    [
+      prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
+      prisma.userProfile.findUnique({
+        where: { userId },
+        select: {
+          birthDate: true,
+          gender: true,
+          height: true,
+          weight: true,
+          health: true,
+          nutrition: true,
+          training: true,
+          mindfulness: true,
+          goals: true,
+        },
+      }),
+      // Last 30 messages across ALL user conversations (cross-conversation memory)
+      prisma.message.findMany({
+        where: { conversation: { userId } },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        select: { role: true, content: true, createdAt: true },
+      }),
+      prisma.workoutSession.findMany({
+        where: { userId, date: { gte: since7d } },
+        select: { durationMin: true, notes: true, date: true },
+        take: 20,
+      }),
+      prisma.meal.findMany({
+        where: { createdByUserId: userId, date: { gte: since7d } },
+        select: { mealType: true, date: true },
+        take: 20,
+      }),
+      prisma.mindfulnessEntry.findMany({
+        where: { userId, createdAt: { gte: since7d } },
+        select: { mood: true, stress: true },
+        take: 10,
+      }),
+      prisma.userAttribute.findMany({
+        where: {
+          userId,
+          OR: [{ validUntil: null }, { validUntil: { gte: now } }],
+        },
+        orderBy: { recordedAt: 'desc' },
+        take: 100,
+        select: { domain: true, key: true, value: true, unit: true, recordedAt: true, notes: true },
+      }),
+    ],
+  )
 
   const lines: string[] = []
   lines.push(
@@ -122,6 +177,11 @@ async function buildLiveSystemInstruction(userId: string): Promise<string> {
     const training = profile.training as Record<string, unknown> | null
     const freq = training?.frequency ?? training?.weeklyDays
     if (freq) lines.push(`ALLENAMENTO: ${String(freq)} volte/settimana`)
+  }
+
+  if (attrRows.length > 0) {
+    const attrs = formatAttributesForPrompt(attrRows)
+    if (attrs) lines.push(`\n${attrs}`)
   }
 
   // ── Tracker summary (last 7 days) ──────────────────────────────────────────

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const txMessageCreate = vi.fn()
 const txToolAuditCreate = vi.fn()
+const txAgentWorkspaceUpsert = vi.fn()
 
 const prismaMock = {
   conversation: {
@@ -33,11 +34,13 @@ const prismaMock = {
       callback: (tx: {
         message: { create: typeof txMessageCreate }
         toolAuditLog: { create: typeof txToolAuditCreate }
+        agentWorkspace: { upsert: typeof txAgentWorkspaceUpsert }
       }) => Promise<void>,
     ) =>
       callback({
         message: { create: txMessageCreate },
         toolAuditLog: { create: txToolAuditCreate },
+        agentWorkspace: { upsert: txAgentWorkspaceUpsert },
       }),
   ),
 }
@@ -62,6 +65,7 @@ describe('/api/chat/send persistence integration', () => {
     prismaMock.bodyMetricEntry.create.mockResolvedValue({ id: 'metric-1' })
     txMessageCreate.mockResolvedValue({ id: 'msg-tx' })
     txToolAuditCreate.mockResolvedValue({ id: 'audit-tx' })
+    txAgentWorkspaceUpsert.mockResolvedValue({ id: 'workspace-tx' })
   })
 
   afterEach(() => {

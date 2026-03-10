@@ -1,8 +1,17 @@
-import { ContextPack, Domain, Role } from '../types'
+import { AttributeValue, ContextPack, Domain, Role, UserAttributes } from '../types'
 
 type QueryArgs = Record<string, unknown>
 type UnknownRecord = Record<string, unknown>
 type DateCarrier = { createdAt: Date | string }
+type RawAttribute = {
+  domain: string
+  key: string
+  value: unknown
+  unit: string | null
+  recordedAt: Date | string
+  notes: string | null
+  source?: string | null
+}
 
 export type DbClient = {
   user: {
@@ -49,6 +58,9 @@ export type DbClient = {
       }>
     >
   }
+  userAttribute?: {
+    findMany: (args: QueryArgs) => Promise<RawAttribute[]>
+  }
   // Optional — geo preference (privacy-first: only coarse fields, never raw coords)
   geoPreference?: {
     findUnique: (args: QueryArgs) => Promise<{
@@ -60,6 +72,33 @@ export type DbClient = {
       accuracy?: string | null
     } | null>
   }
+}
+
+function buildAttributeMap(rows: RawAttribute[]): UserAttributes {
+  const seen = new Set<string>()
+  const out: UserAttributes = {}
+
+  for (const row of rows) {
+    const composite = `${row.domain}:${row.key}`
+    if (seen.has(composite)) continue
+    seen.add(composite)
+
+    const domainKey = row.domain as keyof UserAttributes
+    const bucket = (out[domainKey] ?? {}) as Record<string, AttributeValue>
+    out[domainKey] = bucket as UserAttributes[keyof UserAttributes]
+
+    const value: AttributeValue = {
+      value: row.value,
+      unit: row.unit ?? undefined,
+      recordedAt: new Date(row.recordedAt).toISOString(),
+      notes: row.notes ?? undefined,
+      source: row.source ?? undefined,
+    }
+
+    bucket[row.key] = value
+  }
+
+  return out
 }
 
 export type ContextPackBuilderOptions = {
@@ -122,6 +161,20 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
     select: { role: true, content: true, createdAt: true },
   })
 
+  const crossConversationMessages = await opts.db.message
+    .findMany({
+      where: {
+        conversation: { userId: opts.userId },
+        NOT: { conversationId: opts.conversationId },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 15,
+      select: { role: true, content: true, createdAt: true },
+    })
+    .catch(
+      () => [] as Array<{ role: 'user' | 'assistant'; content: string; createdAt: Date | string }>,
+    )
+
   const recentArtifacts = await opts.db.recommendationArtifact.findMany({
     where: { relatedConversationId: opts.conversationId },
     orderBy: { createdAt: 'desc' },
@@ -159,6 +212,30 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
     }),
   ])
 
+  let userAttributes: UserAttributes = {}
+  if (opts.db.userAttribute) {
+    const rows = await opts.db.userAttribute
+      .findMany({
+        where: {
+          userId: opts.userId,
+          OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }],
+        },
+        orderBy: { recordedAt: 'desc' },
+        take: 200,
+        select: {
+          domain: true,
+          key: true,
+          value: true,
+          unit: true,
+          recordedAt: true,
+          notes: true,
+          source: true,
+        },
+      })
+      .catch(() => [] as RawAttribute[])
+    userAttributes = buildAttributeMap(rows)
+  }
+
   const moodScore = computeMoodScore({
     last7Workouts: workouts.length,
     last7MealsLogged: meals.length,
@@ -190,16 +267,15 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
   const geoRecord = opts.db.geoPreference
     ? await opts.db.geoPreference.findUnique({ where: { userId: opts.userId } })
     : null
-  const geo =
-    geoRecord?.enabled
-      ? {
-          country: geoRecord.country ?? null,
-          region: geoRecord.region ?? null,
-          city: geoRecord.city ?? null,
-          timezone: geoRecord.timezone ?? null,
-          accuracy: geoRecord.accuracy ?? null,
-        }
-      : undefined
+  const geo = geoRecord?.enabled
+    ? {
+        country: geoRecord.country ?? null,
+        region: geoRecord.region ?? null,
+        city: geoRecord.city ?? null,
+        timezone: geoRecord.timezone ?? null,
+        accuracy: geoRecord.accuracy ?? null,
+      }
+    : undefined
 
   return {
     user: {
@@ -209,6 +285,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
         ...(userProfile ?? {}),
         medicalInfo: medicalInfo ?? undefined,
       },
+      attributes: Object.keys(userAttributes).length > 0 ? userAttributes : undefined,
     },
     history: {
       recentMessages: recentMessages
@@ -225,6 +302,17 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
         createdAt: new Date(a.createdAt).toISOString(),
         contentMarkdown: a.content ?? undefined,
       })),
+      crossConversationMessages:
+        crossConversationMessages.length > 0
+          ? crossConversationMessages
+              .slice()
+              .reverse()
+              .map((m) => ({
+                role: m.role,
+                content: m.content,
+                createdAt: new Date(m.createdAt).toISOString(),
+              }))
+          : undefined,
     },
     trackers: {
       health: { metricsCount7d: metrics.length },

@@ -41,7 +41,10 @@ const PROFILE_FIELD_HINTS: Array<{ keywords: string[]; fieldPath: string }> = [
   { keywords: ['peso', 'kg', 'chili', 'weight', 'quanti kg', 'quanti chili'], fieldPath: 'weight' },
   { keywords: ['altezza', 'cm', 'height', 'quanto sei alto', 'how tall'], fieldPath: 'height' },
   { keywords: ['obiettivo', 'goal', 'scopo', 'cosa vuoi'], fieldPath: 'goals' },
-  { keywords: ['sesso', 'genere', 'gender', 'uomo', 'donna', 'male', 'female'], fieldPath: 'gender' },
+  {
+    keywords: ['sesso', 'genere', 'gender', 'uomo', 'donna', 'male', 'female'],
+    fieldPath: 'gender',
+  },
 ]
 
 // Gap 2: remove questions that ask for profile data already present in ContextPack
@@ -168,14 +171,27 @@ export function selectAgentsForRequest(
   team: AgentProfile[],
   domain: Domain,
   maxAgents: number,
+  allDomains: Domain[] = [],
+  message = '',
 ): AgentProfile[] {
+  const secondary = allDomains.filter((d) => d !== domain && d !== 'general')
+  const lowerMessage = message.toLowerCase()
+
   const scored = team.map((a) => ({
     agent: a,
-    score: a.domainTags.includes(domain) ? 2 : a.domainTags.includes('general') ? 1 : 0,
+    score: (() => {
+      let s = 0
+      if (a.domainTags.includes(domain)) s += 4
+      if (a.domainTags.includes('general')) s += 1
+      for (const d of secondary) if (a.domainTags.includes(d)) s += 2
+      if (lowerMessage.includes(a.id.toLowerCase())) s += 2
+      if (lowerMessage.includes(a.displayName.toLowerCase())) s += 2
+      return s
+    })(),
   }))
   return scored
     .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => b.score - a.score || a.agent.id.localeCompare(b.agent.id))
     .slice(0, maxAgents)
     .map((x) => x.agent)
 }

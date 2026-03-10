@@ -1,161 +1,191 @@
 export type Domain =
-  | "general"
-  | "nutrition"
-  | "health"
-  | "training"
-  | "mindfulness"
-  | "inspiration"
-  | "coordination";
+  | 'general'
+  | 'nutrition'
+  | 'health'
+  | 'training'
+  | 'mindfulness'
+  | 'inspiration'
+  | 'coordination'
 
-export type Role = "OWNER" | "ADMIN" | "USER";
+export type Role = 'OWNER' | 'ADMIN' | 'USER'
 
 export type ToolCall = {
-  id: string;
-  name: string;
-  args: unknown;
-};
+  id: string
+  name: string
+  args: unknown
+}
 
 export type ToolResult = {
-  toolCallId: string;
-  ok: boolean;
-  data?: unknown;
-  error?: { code: string; message: string };
-  confirmToken?: string;
-  requiresUserConfirmation?: boolean;
-  uiEvent?: { title: string; description?: string; domain?: Domain };
-};
+  toolCallId: string
+  ok: boolean
+  data?: unknown
+  error?: { code: string; message: string }
+  confirmToken?: string
+  requiresUserConfirmation?: boolean
+  uiEvent?: { title: string; description?: string; domain?: Domain }
+}
 
-export type AgentId = string;
+export type AgentId = string
 
 export type AgentProfile = {
-  id: AgentId;
-  displayName: string;
-  domainTags: Domain[];
-  systemPrompt: string;
-  toolsAllowed: string[];
-  escalationRules?: string[];
-  disclaimerStyle?: "concise" | "standard" | "strict";
-  decisionStyle: "team-led";
-};
+  id: AgentId
+  displayName: string
+  domainTags: Domain[]
+  systemPrompt: string
+  toolsAllowed: string[]
+  escalationRules?: string[]
+  disclaimerStyle?: 'concise' | 'standard' | 'strict'
+  decisionStyle: 'team-led'
+}
 
 /** Identifies the specialist currently active in a conversation turn */
 export type ActiveSpecialist = {
-  id: AgentId;
-  displayName: string;
-  domain: Domain;
-};
+  id: AgentId
+  displayName: string
+  domain: Domain
+}
 
 export type AgentInput = {
-  requestId: string;
-  userId: string;
-  conversationId: string;
-  message: string;
-  domainHint?: Domain;
+  requestId: string
+  userId: string
+  conversationId: string
+  message: string
+  domainHint?: Domain
   /** ID of the specialist locked for this conversation (persisted from previous turn) */
-  activeSpecialistId?: string;
-  contextPack: ContextPack;
+  activeSpecialistId?: string
+  contextPack: ContextPack
   constraints?: {
-    locale?: string;
-    timezone?: string;
-    userPreferences?: Record<string, unknown>;
-    practicalConstraints?: Record<string, unknown>;
-  };
-};
+    locale?: string
+    timezone?: string
+    userPreferences?: Record<string, unknown>
+    practicalConstraints?: Record<string, unknown>
+  }
+}
 
 export type AgentProposal = {
-  agentId: AgentId;
-  domain: Domain;
-  summary: string; // short
-  reasoning: string; // user-visible, no secrets
-  questions?: string[]; // gating questions
+  agentId: AgentId
+  domain: Domain
+  summary: string // short
+  reasoning: string // user-visible, no secrets
+  questions?: string[] // gating questions
   recommendations?: Array<{
-    title: string;
-    steps: string[];
-    rationale: string;
-    safetyNotes?: string[];
+    title: string
+    steps: string[]
+    rationale: string
+    safetyNotes?: string[]
     artifactsToSave?: Array<{
-      type: "nutrition" | "training" | "mindfulness" | "other";
-      title: string;
-      contentMarkdown: string;
-      relatedResourceIds?: Record<string, string>;
-    }>;
-  }>;
-  toolCalls?: ToolCall[]; // proposed, not executed by agents
-  confidence?: number; // 0..1
-  citations?: Array<{ title: string; url?: string; note?: string }>; // optional
+      type: 'nutrition' | 'training' | 'mindfulness' | 'other'
+      title: string
+      contentMarkdown: string
+      relatedResourceIds?: Record<string, string>
+    }>
+  }>
+  toolCalls?: ToolCall[] // proposed, not executed by agents
+  confidence?: number // 0..1
+  citations?: Array<{ title: string; url?: string; note?: string }> // optional
   flags?: {
-    needsMoreInfo?: boolean;
-    potentialRisk?: boolean;
-    urgentEscalation?: boolean;
-  };
-};
+    needsMoreInfo?: boolean
+    potentialRisk?: boolean
+    urgentEscalation?: boolean
+  }
+}
 
 export type ContextPack = {
   user: {
-    id: string;
-    role: Role;
-    profile?: Record<string, unknown>;
-  };
+    id: string
+    role: Role
+    profile?: Record<string, unknown>
+    attributes?: UserAttributes
+  }
   history: {
-    recentMessages: Array<{ role: "user" | "assistant"; content: string; createdAt: string }>;
-    recentArtifacts: Array<{ type: string; title: string; createdAt: string; contentMarkdown?: string }>;
-  };
+    recentMessages: Array<{ role: 'user' | 'assistant'; content: string; createdAt: string }>
+    crossConversationMessages?: Array<{
+      role: 'user' | 'assistant'
+      content: string
+      createdAt: string
+    }>
+    recentArtifacts: Array<{
+      type: string
+      title: string
+      createdAt: string
+      contentMarkdown?: string
+    }>
+  }
   trackers: {
-    health?: Record<string, unknown>;
-    nutrition?: Record<string, unknown>;
-    training?: Record<string, unknown>;
-    mindfulness?: Record<string, unknown>;
-  };
+    health?: Record<string, unknown>
+    nutrition?: Record<string, unknown>
+    training?: Record<string, unknown>
+    mindfulness?: Record<string, unknown>
+  }
   notifications: {
-    unreadCount: number;
-    lastSentAt?: string;
-  };
+    unreadCount: number
+    lastSentAt?: string
+  }
   files?: Array<{
-    id: string;
-    filename: string;
-    mimeType: string;
-    size: number;
-    extractedText?: string;
-    url?: string;
-  }>;
+    id: string
+    filename: string
+    mimeType: string
+    size: number
+    extractedText?: string
+    url?: string
+  }>
   ui: {
-    moodScore: number; // 0..100
-    sectionScores?: Partial<Record<Domain, number>>;
-  };
+    moodScore: number // 0..100
+    sectionScores?: Partial<Record<Domain, number>>
+  }
   // Geo: present ONLY if geoPreference.enabled === true (privacy-first)
   geo?: {
-    country: string | null;
-    region: string | null;
-    city: string | null;
-    timezone: string | null;
-    accuracy: string | null;
-  };
-};
+    country: string | null
+    region: string | null
+    city: string | null
+    timezone: string | null
+    accuracy: string | null
+  }
+}
+
+export type AttributeValue = {
+  value: unknown
+  unit?: string
+  recordedAt: string
+  notes?: string
+  source?: string
+}
+
+export type UserAttributes = {
+  health?: Record<string, AttributeValue>
+  nutrition?: Record<string, AttributeValue>
+  training?: Record<string, AttributeValue>
+  mindfulness?: Record<string, AttributeValue>
+  personal?: Record<string, AttributeValue>
+  general?: Record<string, AttributeValue>
+}
 
 export type ConsensusResult = {
-  domain: Domain;
-  finalMessageMarkdown: string;
-  toolCallsToExecute: ToolCall[];
+  domain: Domain
+  finalMessageMarkdown: string
+  toolCallsToExecute: ToolCall[]
   /** Active specialist for this turn (set by orchestrator) */
-  activeSpecialist?: ActiveSpecialist;
+  activeSpecialist?: ActiveSpecialist
   ui: {
-    domainIcon: Domain;
-    moodScore: number;
-    sectionScores?: Partial<Record<Domain, number>>;
-  };
-  gatingQuestions?: string[];
+    domainIcon: Domain
+    moodScore: number
+    sectionScores?: Partial<Record<Domain, number>>
+  }
+  gatingQuestions?: string[]
   safety: {
-    disclaimers?: string[];
-    escalation?: "none" | "recommend-professional" | "urgent";
-  };
+    disclaimers?: string[]
+    escalation?: 'none' | 'recommend-professional' | 'urgent'
+  }
   artifactsToSave?: Array<{
-    type: "nutrition" | "training" | "mindfulness" | "other";
-    title: string;
-    contentMarkdown: string;
-  }>;
+    type: 'nutrition' | 'training' | 'mindfulness' | 'other'
+    title: string
+    contentMarkdown: string
+  }>
   debug?: {
-    selectedAgents: AgentId[];
-    conflicts: string[];
-    proposals?: AgentProposal[];
-  };
-};
+    selectedAgents: AgentId[]
+    conflicts: string[]
+    proposals?: AgentProposal[]
+    round1Proposals?: AgentProposal[]
+    round2Proposals?: AgentProposal[]
+  }
+}

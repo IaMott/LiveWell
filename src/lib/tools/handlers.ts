@@ -12,8 +12,14 @@
  * - Destructive tools require confirmToken (handled upstream).
  */
 
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { updateUserProfile, setGeoPreference, upsertCoarseLocation, clearCoarseLocation } from '@/lib/db'
+import {
+  updateUserProfile,
+  setGeoPreference,
+  upsertCoarseLocation,
+  clearCoarseLocation,
+} from '@/lib/db'
 import type { ToolName } from './toolRegistry'
 import type { ToolExecutionHandler } from './toolExecutor'
 
@@ -35,7 +41,73 @@ function toDate(iso?: string): Date {
 const userUpdateProfile: Handler = async (args, ctx) => {
   const { fields } = args as { fields: Record<string, unknown> }
   await updateUserProfile(ctx.actor.userId, fields)
+
+  // Backward compatibility: if legacy profile scalar fields are updated,
+  // append a time-series UserAttribute entry as well.
+  const scalarMap: Record<string, { domain: string; key: string; unit?: string }> = {
+    weight: { domain: 'personal', key: 'weight', unit: 'kg' },
+    height: { domain: 'personal', key: 'height', unit: 'cm' },
+  }
+
+  const writes: Promise<unknown>[] = []
+  for (const [k, v] of Object.entries(fields)) {
+    const m = scalarMap[k]
+    if (!m) continue
+    if (typeof v !== 'number' && typeof v !== 'string') continue
+    writes.push(
+      prisma.userAttribute.create({
+        data: {
+          userId: ctx.actor.userId,
+          domain: m.domain,
+          key: m.key,
+          value: v as Prisma.InputJsonValue,
+          unit: m.unit ?? null,
+          source: 'agent',
+          conversationId: ctx.conversationId,
+        },
+      }),
+    )
+  }
+  if (writes.length > 0) await Promise.all(writes)
+
   return { saved: true }
+}
+
+const userSetAttribute: Handler = async (args, ctx) => {
+  const a = args as {
+    domain: string
+    key: string
+    value: unknown
+    unit?: string
+    recordedAt?: string
+    validUntil?: string
+    notes?: string
+  }
+
+  const row = await prisma.userAttribute.create({
+    data: {
+      userId: ctx.actor.userId,
+      domain: a.domain,
+      key: a.key,
+      value: a.value as Prisma.InputJsonValue,
+      unit: a.unit ?? null,
+      source: 'agent',
+      conversationId: ctx.conversationId,
+      recordedAt: toDate(a.recordedAt),
+      validUntil: a.validUntil ? new Date(a.validUntil) : null,
+      notes: a.notes ?? null,
+    },
+    select: { id: true },
+  })
+
+  // Keep current profile snapshot aligned for UI readers using legacy fields.
+  if (a.domain === 'personal' && (a.key === 'weight' || a.key === 'height')) {
+    await updateUserProfile(ctx.actor.userId, { [a.key]: a.value as unknown }).catch(
+      () => undefined,
+    )
+  }
+
+  return { saved: true, id: row.id }
 }
 
 const healthAddMetric: Handler = async (args, ctx) => {
@@ -252,6 +324,7 @@ const exportPdf: Handler = async () => ({ url: 'https://livewell.local/export/mo
 
 export const realToolHandlers: HandlerMap = {
   'user.updateProfile': userUpdateProfile,
+  'user.setAttribute': userSetAttribute,
   'health.addMetric': healthAddMetric,
   'nutrition.logMeal': nutritionLogMeal,
   'nutrition.createFoodItem': nutritionCreateFoodItem,
@@ -270,6 +343,7 @@ export const realToolHandlers: HandlerMap = {
 
 export const stubToolHandlers: HandlerMap = {
   'user.updateProfile': async () => ({ saved: true }),
+  'user.setAttribute': async () => ({ saved: true, id: 'stub-attr-id' }),
   'health.addMetric': async () => ({ saved: true }),
   'nutrition.logMeal': async () => ({ saved: true }),
   'nutrition.createFoodItem': async () => ({ saved: true }),

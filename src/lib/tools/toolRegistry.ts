@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 export const ALLOWED_TOOL_NAMES = [
   'user.updateProfile',
+  'user.setAttribute',
   'health.addMetric',
   'nutrition.logMeal',
   'nutrition.createFoodItem',
@@ -24,6 +25,16 @@ const baseString = z.string().trim().min(1)
 
 const userUpdateProfileSchema = z.object({
   fields: z.record(z.string(), z.unknown()).refine((v) => Object.keys(v).length > 0),
+})
+
+const userSetAttributeSchema = z.object({
+  domain: z.enum(['health', 'nutrition', 'training', 'mindfulness', 'personal', 'general']),
+  key: baseString.max(64),
+  value: z.unknown(),
+  unit: z.string().trim().max(32).optional(),
+  recordedAt: z.string().datetime().optional(),
+  validUntil: z.string().datetime().optional(),
+  notes: z.string().max(500).optional(),
 })
 
 const healthAddMetricSchema = z.object({
@@ -140,6 +151,13 @@ const definitions: Record<ToolName, ToolDefinition> = {
   'user.updateProfile': {
     name: 'user.updateProfile',
     schema: userUpdateProfileSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+  },
+  'user.setAttribute': {
+    name: 'user.setAttribute',
+    schema: userSetAttributeSchema,
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,

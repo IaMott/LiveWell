@@ -15,6 +15,7 @@ type AuthorizationResult =
 
 const USER_ALLOWED_TOOLS = new Set<ToolName>([
   'user.updateProfile',
+  'user.setAttribute',
   'health.addMetric',
   'nutrition.logMeal',
   'nutrition.createFoodItem',

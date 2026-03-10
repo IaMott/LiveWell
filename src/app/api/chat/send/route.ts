@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import { checkRateLimit, getClientIp } from '@/lib/security/httpGuards'
 import { getAuthUserId, getAuthRole, getAuthOwnerMode } from '@/lib/auth'
 import { errorResponse } from '@/lib/security/errorSchema'
@@ -7,7 +8,15 @@ import { orchestrate } from '@/lib/ai/orchestrator/orchestrator'
 import { createGeminiClient } from '@/lib/ai/gemini'
 import { loadTeam } from '@/lib/ai/team/loader'
 import { buildContextPack } from '@/lib/ai/context/contextPackBuilder'
-import type { AgentInput, ContextPack, Domain, Role, ToolCall, ToolResult } from '@/lib/ai/types'
+import type {
+  AgentInput,
+  AgentProposal,
+  ContextPack,
+  Domain,
+  Role,
+  ToolCall,
+  ToolResult,
+} from '@/lib/ai/types'
 import { ALLOWED_TOOL_NAMES } from '@/lib/tools/toolRegistry'
 import { createToolExecutor, type MutationAuditEvent } from '@/lib/tools/toolExecutor'
 import { realToolHandlers, stubToolHandlers } from '@/lib/tools/handlers'
@@ -95,14 +104,21 @@ function buildDeterministicLlm(toolCalls: ToolCall[]) {
 
 type RoutePersistenceDeps = {
   findConversationById: (id: string) => Promise<{ id: string; userId: string } | null>
-  createConversation: (input: { id?: string; userId: string; title: string }) => Promise<{ id: string }>
+  createConversation: (input: {
+    id?: string
+    userId: string
+    title: string
+  }) => Promise<{ id: string }>
   persistChatTurn: (input: {
+    userId: string
     conversationId: string
     userMessage: string
     assistantMessage: string
     domain?: string
     specialistName?: string
     auditEvents: MutationAuditEvent[]
+    round1Proposals?: AgentProposal[]
+    round2Proposals?: AgentProposal[]
   }) => Promise<void>
   buildContextPack: (input: {
     userId: string
@@ -153,7 +169,17 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
         data: { ...(id ? { id } : {}), userId, title },
         select: { id: true },
       }),
-    persistChatTurn: async ({ conversationId, userMessage, assistantMessage, domain, specialistName, auditEvents }) => {
+    persistChatTurn: async ({
+      userId,
+      conversationId,
+      userMessage,
+      assistantMessage,
+      domain,
+      specialistName,
+      auditEvents,
+      round1Proposals,
+      round2Proposals,
+    }) => {
       await prisma.$transaction(async (tx) => {
         await tx.message.create({
           data: { conversationId, role: 'user', content: userMessage },
@@ -184,6 +210,45 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
             },
           })
         }
+
+        const byAgent = new Map<string, { round1?: AgentProposal; round2?: AgentProposal }>()
+        for (const p of round1Proposals ?? []) {
+          const cur = byAgent.get(p.agentId) ?? {}
+          cur.round1 = p
+          byAgent.set(p.agentId, cur)
+        }
+        for (const p of round2Proposals ?? []) {
+          const cur = byAgent.get(p.agentId) ?? {}
+          cur.round2 = p
+          byAgent.set(p.agentId, cur)
+        }
+
+        for (const [agentId, rounds] of byAgent.entries()) {
+          await tx.agentWorkspace.upsert({
+            where: {
+              conversationId_agentId: { conversationId, agentId },
+            },
+            create: {
+              userId,
+              conversationId,
+              agentId,
+              round1Proposal: rounds.round1
+                ? (rounds.round1 as unknown as Prisma.InputJsonValue)
+                : undefined,
+              round2Proposal: rounds.round2
+                ? (rounds.round2 as unknown as Prisma.InputJsonValue)
+                : undefined,
+            },
+            update: {
+              round1Proposal: rounds.round1
+                ? (rounds.round1 as unknown as Prisma.InputJsonValue)
+                : undefined,
+              round2Proposal: rounds.round2
+                ? (rounds.round2 as unknown as Prisma.InputJsonValue)
+                : undefined,
+            },
+          })
+        }
       })
     },
     buildContextPack: async ({ userId, conversationId, role }) => {
@@ -210,12 +275,12 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
             },
             recommendationArtifact: {
               findMany: async (args) =>
-                prisma.recommendationArtifact.findMany({
-                  ...(args as object),
-                  select: { type: true, title: true, createdAt: true, contentMarkdown: true },
-                }).then((rows) =>
-                  rows.map((r) => ({ ...r, content: r.contentMarkdown })),
-                ),
+                prisma.recommendationArtifact
+                  .findMany({
+                    ...(args as object),
+                    select: { type: true, title: true, createdAt: true, contentMarkdown: true },
+                  })
+                  .then((rows) => rows.map((r) => ({ ...r, content: r.contentMarkdown }))),
             },
             notification: {
               count: async (args) => prisma.notification.count(args as object),
@@ -274,6 +339,20 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
                     url: true,
                   },
                 }),
+            },
+            userAttribute: {
+              findMany: async (args) =>
+                prisma.userAttribute.findMany(args as object) as Promise<
+                  Array<{
+                    domain: string
+                    key: string
+                    value: unknown
+                    unit: string | null
+                    recordedAt: Date
+                    notes: string | null
+                    source?: string | null
+                  }>
+                >,
             },
             geoPreference: {
               findUnique: async () =>
@@ -395,9 +474,7 @@ export async function POST(request: Request): Promise<Response> {
   const teamDirAbsolute = path.resolve(process.cwd(), 'TEAM')
   const team = loadTeam({ teamDirAbsolute, allowEmpty: true })
   const llm =
-    requestedToolCalls.length > 0
-      ? buildDeterministicLlm(requestedToolCalls)
-      : createGeminiClient()
+    requestedToolCalls.length > 0 ? buildDeterministicLlm(requestedToolCalls) : createGeminiClient()
   const consensus = await orchestrate(
     {
       llm,
@@ -408,10 +485,9 @@ export async function POST(request: Request): Promise<Response> {
   )
 
   const pendingAuditEvents: MutationAuditEvent[] = []
-  const executor = buildToolExecutor(
-    async (event) => { pendingAuditEvents.push(event) },
-    isDbPersistenceEnabled(),
-  )
+  const executor = buildToolExecutor(async (event) => {
+    pendingAuditEvents.push(event)
+  }, isDbPersistenceEnabled())
 
   const toolCallsToExecute =
     consensus.toolCallsToExecute.length > 0 ? consensus.toolCallsToExecute : requestedToolCalls
@@ -442,12 +518,15 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     await persistence.persistChatTurn({
+      userId,
       conversationId,
       userMessage: parsedBody.message,
       assistantMessage: responseText,
       domain: activeDomain,
       specialistName,
       auditEvents: pendingAuditEvents,
+      round1Proposals: consensus.debug?.round1Proposals,
+      round2Proposals: consensus.debug?.round2Proposals,
     })
   } catch (error) {
     console.error('[chat/send] persistChatTurn failed, continuing in fallback mode', error)

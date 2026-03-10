@@ -3,7 +3,9 @@ import type { ToolCall } from '@/lib/ai/types'
 import { createToolExecutor, shouldBlockByPromptInjectionGuard } from '@/lib/tools/toolExecutor'
 import { resetConfirmTokenStoreForTests } from '@/lib/tools/confirmTokenService'
 
-function context(overrides?: Partial<Parameters<ReturnType<typeof createToolExecutor>['executeToolCall']>[1]>) {
+function context(
+  overrides?: Partial<Parameters<ReturnType<typeof createToolExecutor>['executeToolCall']>[1]>,
+) {
   return {
     requestId: 'r1',
     conversationId: 'c1',
@@ -94,10 +96,38 @@ describe('tool executor security', () => {
     expect(writeAuditLog.mock.calls[0][0].status).toBe('success')
   })
 
+  it('allows user.setAttribute for USER role', async () => {
+    const writeAuditLog = vi.fn(async () => undefined)
+    const executor = createToolExecutor({
+      handlers: {
+        'user.setAttribute': async () => ({ id: 'attr1' }),
+      },
+      writeAuditLog,
+    })
+
+    const call: ToolCall = {
+      id: 't1',
+      name: 'user.setAttribute',
+      args: { domain: 'health', key: 'diagnosis', value: 'lombalgia' },
+    }
+
+    const result = await executor.executeToolCall(call, context())
+    expect(result.ok).toBe(true)
+    expect(writeAuditLog).toHaveBeenCalledTimes(1)
+  })
+
   it('prompt injection guard blocks destructive execution from untrusted sources', () => {
-    expect(shouldBlockByPromptInjectionGuard({ source: 'file-upload', destructive: true })).toBe(true)
-    expect(shouldBlockByPromptInjectionGuard({ source: 'web-content', destructive: true })).toBe(true)
-    expect(shouldBlockByPromptInjectionGuard({ source: 'assistant', destructive: true })).toBe(false)
-    expect(shouldBlockByPromptInjectionGuard({ source: 'file-upload', destructive: false })).toBe(false)
+    expect(shouldBlockByPromptInjectionGuard({ source: 'file-upload', destructive: true })).toBe(
+      true,
+    )
+    expect(shouldBlockByPromptInjectionGuard({ source: 'web-content', destructive: true })).toBe(
+      true,
+    )
+    expect(shouldBlockByPromptInjectionGuard({ source: 'assistant', destructive: true })).toBe(
+      false,
+    )
+    expect(shouldBlockByPromptInjectionGuard({ source: 'file-upload', destructive: false })).toBe(
+      false,
+    )
   })
 })

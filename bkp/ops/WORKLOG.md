@@ -53,6 +53,7 @@
 ## 2026-03-06 — principal-engineer (Phase A audit + Phase B STEP 1-2-3)
 
 ### Phase A — Due Diligence Audit (score 34/100)
+
 - Inventariato l'intero repository post-merge Step 6.
 - Identificati blocchi critici: auth trust-header insicura, Gemini non cablato (mock deterministico), tool handler tutti stub, modelli Prisma mancanti (tracker/artifact/geo), frontend completamente rimosso.
 - Prodotto compliance matrix completa (PASS/PARTIAL/FAIL) su tutti i requisiti canonici.
@@ -60,6 +61,7 @@
 - Backlog strutturato STEP 1-13 (B1→B13) con dipendenze e priorità.
 
 ### STEP 1 — Auth (NextAuth v5 reale, rimozione trust-header)
+
 - `src/lib/auth.config.ts`: NextAuth config edge-compatible (JWT+session callbacks, type augmentation Session.user.id/role).
 - `src/lib/auth.ts`: Credentials provider + bcrypt + `getAuthUserId/getAuthRole/getAuthOwnerMode` con bypass test-safe (NODE_ENV=test → x-user-id/x-user-role/x-owner-mode-enabled headers).
 - `src/middleware.ts`: protegge solo route `/profile/*`; API routes gestiscono auth internamente.
@@ -70,10 +72,12 @@
 - `src/app/api/live-token/route.ts`: stessa sostituzione auth.
 
 ### STEP 2 — DB Schema (modelli tracker/artifact/geo + User.role)
+
 - `prisma/schema.prisma`: aggiunto campo `role` su User; nuovi modelli BodyMetricEntry, Meal, WorkoutPlan, WorkoutSession, MindfulnessEntry, FileAsset, RecommendationArtifact, GeoPreference.
 - `prisma/migrations/20260306180000_add_trackers_geo_role/migration.sql`: migrazione additive-only con guard IF NOT EXISTS.
 
 ### STEP 3 — DB Adapter Layer
+
 - `src/lib/db/index.ts`: layer tipizzato su Prisma per tutti i domini + geo privacy helpers:
   - `getUserById`, `updateUserProfile`, `getConversation`, `createMessage`, `getRecentConversationMessages`
   - `getUserHealthMetrics`, `getNutritionLogs`, `getWorkoutSessions`, `getMindfulnessEntries`
@@ -473,3 +477,14 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 - Output chiave: CI `main` associata al merge (`run 22763891744`) = SUCCESS.
 - Output chiave: deploy production associato (`deployment 3997961520`) = SUCCESS, URL `https://livewell-ell76r9o8-iamotts-projects.vercel.app`.
 - Prossimo passo: Step 6 fix chiuso definitivamente; passaggio al backlog successivo.
+
+## 2026-03-10 18:28 — backend-developer (Phase B B1-B7 backend only)
+
+- B1: aggiunto modello Prisma `UserAttribute` + migration `20260310182200_add_user_attributes`.
+- B2: aggiunto tool `user.setAttribute` (registry/handler/RBAC) + compat su `user.updateProfile` per storico peso/altezza.
+- B3: esteso `ContextPack` con `user.attributes` e `history.crossConversationMessages`; context builder ora carica attributi dinamici e memoria cross-conversation.
+- B5: migliorato `selectAgentsForRequest` con scoring multi-fattore (primary+secondary domains + match id/displayName).
+- B4: orchestrator multi-round (round1 + peer-review round2) e persistenza workspace agente (`AgentWorkspace`) con migration `20260310182500_add_agent_workspaces`.
+- B6: `live-token` system instruction estesa con attributi dinamici `UserAttribute`.
+- B7: test mirati passati + `typecheck` e `build` OK (ripristinato `tsconfig.json` dopo auto-edit Next).
+- Prossimo passo: commit/push branch dedicato e migrate deploy su ambiente target.

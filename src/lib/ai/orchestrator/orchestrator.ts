@@ -1,5 +1,13 @@
-import { AgentProfile, AgentInput, AgentProposal, ConsensusResult, ContextPack, Domain, ActiveSpecialist } from '../types'
-import { detectDomainFromText } from '../domain/domainDetection'
+import {
+  AgentProfile,
+  AgentInput,
+  AgentProposal,
+  ConsensusResult,
+  ContextPack,
+  Domain,
+  ActiveSpecialist,
+} from '../types'
+import { detectDomainFromText, detectDomainsMulti } from '../domain/domainDetection'
 import { selectAgentsForRequest, runConsensus } from '../consensus/consensusEngine'
 
 export type LlmClient = {
@@ -20,38 +28,72 @@ export type OrchestratorDeps = {
 
 /** Phrases that signal the user wants to speak with a specific specialist */
 const REQUEST_VERBS = [
-  'parlami con', 'parla con', 'voglio parlare con', 'voglio parlare al',
-  'voglio il', 'voglio la', 'passami il', 'passami la',
-  'dammi il', 'fammi parlare con', 'connettimi con',
-  'vorrei parlare con', 'vorrei il', 'speak to', 'talk to', 'chiedi al',
+  'parlami con',
+  'parla con',
+  'voglio parlare con',
+  'voglio parlare al',
+  'voglio il',
+  'voglio la',
+  'passami il',
+  'passami la',
+  'dammi il',
+  'fammi parlare con',
+  'connettimi con',
+  'vorrei parlare con',
+  'vorrei il',
+  'speak to',
+  'talk to',
+  'chiedi al',
 ]
 
 /** Maps keyword → agent id for specialist detection */
 const SPECIALIST_KEYWORDS: Record<string, string> = {
-  'dietista': 'dietista', 'dietitian': 'dietista', 'nutrizionista': 'dietista',
-  'chef': 'chef', 'cuoco': 'chef',
-  'endocrinologo': 'endocrinologo', 'endocrinologa': 'endocrinologo',
-  'personal trainer': 'persona-trainer', 'personal-trainer': 'persona-trainer',
-  'trainer': 'persona-trainer', 'allenatore': 'persona-trainer',
-  'chinesologo': 'chinesologo', 'chinesiologia': 'chinesologo',
-  'medico dello sport': 'medico-dello-sport', 'medico sport': 'medico-dello-sport',
-  'fisioterapista': 'fisioterapista',
-  'fisiatra': 'fisiatra',
-  'sleep coach': 'sleep-coach', 'coach del sonno': 'sleep-coach',
-  'mmg': 'mmg', 'medico di base': 'mmg', 'medico curante': 'mmg', 'medico generico': 'mmg',
-  'gastroenterologo': 'gastroenterologo', 'gastro': 'gastroenterologo',
-  'cardiologo': 'cardiologo', 'cardiologa': 'cardiologo',
-  'dermatologo': 'dermatologo', 'dermatologa': 'dermatologo',
-  'psicologo': 'psicologo', 'psicologa': 'psicologo',
-  'mental coach': 'mental-coach', 'mental-coach': 'mental-coach',
-  'coach relazionale': 'relationship-coach', 'relationship coach': 'relationship-coach',
+  dietista: 'dietista',
+  dietitian: 'dietista',
+  nutrizionista: 'dietista',
+  chef: 'chef',
+  cuoco: 'chef',
+  endocrinologo: 'endocrinologo',
+  endocrinologa: 'endocrinologo',
+  'personal trainer': 'persona-trainer',
+  'personal-trainer': 'persona-trainer',
+  trainer: 'persona-trainer',
+  allenatore: 'persona-trainer',
+  chinesologo: 'chinesologo',
+  chinesiologia: 'chinesologo',
+  'medico dello sport': 'medico-dello-sport',
+  'medico sport': 'medico-dello-sport',
+  fisioterapista: 'fisioterapista',
+  fisiatra: 'fisiatra',
+  'sleep coach': 'sleep-coach',
+  'coach del sonno': 'sleep-coach',
+  mmg: 'mmg',
+  'medico di base': 'mmg',
+  'medico curante': 'mmg',
+  'medico generico': 'mmg',
+  gastroenterologo: 'gastroenterologo',
+  gastro: 'gastroenterologo',
+  cardiologo: 'cardiologo',
+  cardiologa: 'cardiologo',
+  dermatologo: 'dermatologo',
+  dermatologa: 'dermatologo',
+  psicologo: 'psicologo',
+  psicologa: 'psicologo',
+  'mental coach': 'mental-coach',
+  'mental-coach': 'mental-coach',
+  'coach relazionale': 'relationship-coach',
+  'relationship coach': 'relationship-coach',
   'analista contesto': 'analista-contesto',
-  'financial planner': 'financial-planner', 'pianificatore finanziario': 'financial-planner',
-  'commercialista': 'commercialista',
-  'career coach': 'career-coach', 'coach carriera': 'career-coach',
+  'financial planner': 'financial-planner',
+  'pianificatore finanziario': 'financial-planner',
+  commercialista: 'commercialista',
+  'career coach': 'career-coach',
+  'coach carriera': 'career-coach',
   'executive coach': 'executive-coach',
-  'organizzatore di vita': 'life-organizer', 'life organizer': 'life-organizer',
-  'consulente legale': 'consulente-legale', 'avvocato': 'consulente-legale',
+  'organizzatore di vita': 'life-organizer',
+  'life organizer': 'life-organizer',
+  'consulente legale': 'consulente-legale',
+  avvocato: 'consulente-legale',
 }
 
 /**
@@ -81,12 +123,19 @@ function detectSpecialistRequest(message: string, team: AgentProfile[]): string 
 
 /** Key profile fields to track for completeness */
 const KEY_PROFILE_FIELDS = [
-  'peso', 'altezza', 'eta', 'genere',
-  'obiettivi', 'condizioni_mediche', 'attivita_fisica',
-  'dieta_restrizioni', 'farmaci', 'allergie',
+  'peso',
+  'altezza',
+  'eta',
+  'genere',
+  'obiettivi',
+  'condizioni_mediche',
+  'attivita_fisica',
+  'dieta_restrizioni',
+  'farmaci',
+  'allergie',
 ]
 
-function buildAgentUserPrompt(input: AgentInput): string {
+function buildAgentUserPrompt(input: AgentInput, peerInsights?: string): string {
   const parts: string[] = [
     `USER MESSAGE:`,
     input.message,
@@ -111,7 +160,9 @@ function buildAgentUserPrompt(input: AgentInput): string {
 
   // Missing key profile fields — ask one at a time if relevant to domain
   const profile = (input.contextPack.user.profile ?? {}) as Record<string, unknown>
-  const missingFields = KEY_PROFILE_FIELDS.filter((f) => profile[f] === undefined || profile[f] === null || profile[f] === '')
+  const missingFields = KEY_PROFILE_FIELDS.filter(
+    (f) => profile[f] === undefined || profile[f] === null || profile[f] === '',
+  )
   if (missingFields.length > 0) {
     parts.push(
       ``,
@@ -139,6 +190,15 @@ function buildAgentUserPrompt(input: AgentInput): string {
         `Only include fields you can extract with confidence from the user message.`,
       )
     }
+  }
+
+  if (peerInsights) {
+    parts.push(
+      ``,
+      `PEER REVIEW (round 2):`,
+      peerInsights,
+      `Integra o correggi la tua proposta alla luce dei contributi dei colleghi.`,
+    )
   }
 
   parts.push(
@@ -178,8 +238,9 @@ async function runOneAgent(
   llm: LlmClient,
   agent: AgentProfile,
   input: AgentInput,
+  peerInsights?: string,
 ): Promise<AgentProposal> {
-  const userPrompt = buildAgentUserPrompt(input)
+  const userPrompt = buildAgentUserPrompt(input, peerInsights)
 
   const res = await llm.complete({
     system: agent.systemPrompt,
@@ -315,6 +376,7 @@ export async function orchestrate(
   input: AgentInput,
 ): Promise<ConsensusResult> {
   const domainHint = input.domainHint ?? detectDomainFromText(input.message)
+  const allDomains = detectDomainsMulti(input.message).map((d) => d.domain)
 
   // Determine active specialist: locked from previous turn OR newly requested this turn
   let activeSpecialist: ActiveSpecialist | undefined
@@ -336,15 +398,27 @@ export async function orchestrate(
     }
   }
 
-  const selectedAgents = selectAgentsForRequest(deps.team, domainHint, 4)
-  const proposals = await Promise.all(
+  const selectedAgents = selectAgentsForRequest(deps.team, domainHint, 4, allDomains, input.message)
+
+  const round1Proposals = await Promise.all(
     selectedAgents.map((a) => runOneAgent(deps.llm, a, { ...input, domainHint })),
+  )
+
+  const round2Proposals = await Promise.all(
+    selectedAgents.map((agent) => {
+      const peerInsights = round1Proposals
+        .filter((p) => p.agentId !== agent.id)
+        .slice(0, 3)
+        .map((p) => `- ${p.agentId}: ${p.summary}`)
+        .join('\n')
+      return runOneAgent(deps.llm, agent, { ...input, domainHint }, peerInsights || undefined)
+    }),
   )
 
   const consensus = runConsensus({
     opts: { orchestratorId: 'orchestrator', maxAgents: 4, requireGatingOnMissingInfo: true },
     team: deps.team,
-    proposals,
+    proposals: round2Proposals,
     domainHint,
     contextPack: input.contextPack,
     orchestratorToolsAllowed: deps.orchestratorToolsAllowed,
@@ -352,7 +426,7 @@ export async function orchestrate(
 
   const naturalResponse = await synthesizeResponse(deps.llm, {
     userMessage: input.message,
-    proposals,
+    proposals: round2Proposals,
     gatingQuestions: consensus.gatingQuestions ?? [],
     contextPack: input.contextPack,
     activeSpecialist,
@@ -365,7 +439,9 @@ export async function orchestrate(
     debug: {
       selectedAgents: consensus.debug?.selectedAgents ?? selectedAgents.map((a) => a.id),
       conflicts: consensus.debug?.conflicts ?? [],
-      proposals,
+      proposals: round2Proposals,
+      round1Proposals,
+      round2Proposals,
     },
   }
 }
