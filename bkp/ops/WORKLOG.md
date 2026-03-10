@@ -488,3 +488,13 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 - B6: `live-token` system instruction estesa con attributi dinamici `UserAttribute`.
 - B7: test mirati passati + `typecheck` e `build` OK (ripristinato `tsconfig.json` dopo auto-edit Next).
 - Prossimo passo: commit/push branch dedicato e migrate deploy su ambiente target.
+
+## 2026-03-10 18:40 — git-workflow-manager (commit/push/deploy + migrate + smoke)
+
+- Commit: `55e12b8febc387fb985acc6d0d240e2ce164aa9a` su `main`.
+- Push: `origin/main` aggiornato (`07abaeb..55e12b8`).
+- Deploy production: `https://livewell-gabte1uu0-iamotts-projects.vercel.app` + alias `https://livewell.mottisi.com`.
+- Prisma migrate deploy: inizialmente bloccato da `P3005` (DB non baselined), risolto con `migrate resolve --applied` per migration legacy e successivo `migrate deploy` delle nuove migration.
+- Migrazioni applicate in target: `20260310182200_add_user_attributes`, `20260310182500_add_agent_workspaces`.
+- Smoke post-deploy: API protette rispondono 401 senza auth; test autenticato su `/api/chat/send` con `/tool user.setAttribute` -> `tool.result ok:true`; query SQL verifica presenza row `user_attributes` e >=2 conversazioni utente smoke.
+- Prossimo passo: monitoraggio error rate in produzione e cleanup utente smoke se richiesto.
