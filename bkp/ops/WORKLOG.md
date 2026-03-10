@@ -512,3 +512,31 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 - Problema 4: mantenuta e validata memoria cross-conversation già presente in `contextPackBuilder`.
 - Test incrementali eseguiti dopo ogni blocco + regressione completa finale.
 - Esito finale: `npm run test` 38/38 PASS, `npm run build` PASS.
+
+## 2026-03-10 23:15 — git-workflow-manager (commit/push/deploy + migrate + smoke)
+
+- Commit creato su `main`: `907e04178e717ce806fcc1b463485df8c36e7e25`.
+- Push completato su `origin/main`.
+- Migration deploy target completato: applicata `20260310211000_add_api_error_events`.
+- Deploy production Vercel completato: `https://livewell-cyotlrzfo-iamotts-projects.vercel.app` + alias `https://livewell.mottisi.com`.
+- Smoke test richiesti eseguiti:
+  - `/api/chat/send` caso mal di schiena + persistenza AgentWorkspace (test backend) PASS
+  - `user.setAttribute` tool execution smoke PASS
+  - reachability endpoint production `/api/chat/send` (unauthenticated) = 401 atteso
+- Prossimo passo: se vuoi, apro task separato per smoke autenticato end-to-end su production con account test dedicato.
+
+## 2026-03-10 23:32 — backend-developer (smoke autenticato production E2E)
+
+- Eseguito smoke autenticato reale su production con utente test registrato via API (`/api/auth/register`) e sessione NextAuth (`/api/auth/csrf` + `/api/auth/callback/credentials`).
+- `/api/chat/send` caso mal di schiena su due turni consecutivi: HTTP 200 entrambi.
+- Verifica DB target via Prisma Client:
+  - `agent_workspaces` per conversation smoke: 4 righe, con `updatedAt > createdAt` su agenti persistiti tra turni.
+  - `user_attributes` include record `diagnosis = "lombalgia smoke"` scritto via `/tool user.setAttribute`.
+- Cleanup completato: utente smoke eliminato e verifica residui a zero (`agent_workspaces`/`user_attributes`).
+
+## 2026-03-11 00:34 — git-workflow-manager (script smoke auth production)
+
+- Creato script riusabile `scripts/smoke-auth-production.sh` per smoke autenticato E2E su production.
+- Flusso coperto nello script: register/login sessione, chat/send 2 turni stessa conversation, /tool user.setAttribute, verifica DB (`AgentWorkspace` + `UserAttribute`), cleanup con verifica residui.
+- Security-by-default: nessun secret hardcoded; richiesti `SMOKE_PASSWORD` e `DATABASE_URL` via env/`--env-file`.
+- Validazione eseguita: `bash -n` e `--help` OK.

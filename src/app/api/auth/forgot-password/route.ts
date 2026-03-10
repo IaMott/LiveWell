@@ -6,6 +6,26 @@ import { errorResponse } from '@/lib/security/errorSchema'
 
 const schema = z.object({ email: z.string().email().max(255) })
 
+function normalizeBaseUrl(raw: string | undefined, requestUrl: string): string {
+  const fallback = new URL(requestUrl).origin
+  const candidate = raw?.trim()
+  if (!candidate) return fallback
+  try {
+    return new URL(candidate).origin
+  } catch {
+    return fallback
+  }
+}
+
+export function buildResetPasswordUrl(input: {
+  appUrlEnv?: string
+  requestUrl: string
+  token: string
+}): string {
+  const baseUrl = normalizeBaseUrl(input.appUrlEnv, input.requestUrl)
+  return `${baseUrl}/reset-password?token=${encodeURIComponent(input.token)}`
+}
+
 export async function POST(request: Request): Promise<Response> {
   const rate = checkRateLimit({
     key: `forgot-pw:${getClientIp(request)}`,
@@ -24,10 +44,12 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Always return 200 — never reveal whether an email is registered
-  const user = await prisma.user.findUnique({
-    where: { email: body.email },
-    select: { id: true, email: true, name: true },
-  }).catch(() => null)
+  const user = await prisma.user
+    .findUnique({
+      where: { email: body.email },
+      select: { id: true, email: true, name: true },
+    })
+    .catch(() => null)
 
   if (user) {
     const secret = process.env.NEXTAUTH_SECRET
@@ -39,8 +61,11 @@ export async function POST(request: Request): Promise<Response> {
         .setExpirationTime('1h')
         .sign(key)
 
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://livewell.mottisi.com'
-      const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(token)}`
+      const resetUrl = buildResetPasswordUrl({
+        appUrlEnv: process.env.NEXT_PUBLIC_APP_URL,
+        requestUrl: request.url,
+        token,
+      })
 
       const resendKey = process.env.RESEND_API_KEY
       if (resendKey) {

@@ -1,22 +1,25 @@
 # LiveWell — Project Status
 
-## Current Step: Fix architetturali multi-agent/dynamic DB completati (backend-only)
+## Current Step: Script riusabile smoke autenticato production pronto
 
-## Stato verificato — 2026-03-10 22:28
+## Stato verificato — 2026-03-11 00:34
 
-- Problema 1 (routing competenze) corretto con scoring specialistico.
-- Problema 2 (team simulato) ridotto con persistenza reale workspace agente tra turni via ContextPack.
-- Problema 3 (profilo sovrascrivibile) mitigato: orchestrator usa `user.setAttribute` come default dinamico.
-- Problema 4 (cross-conversation memory) attivo e validato.
-- Problema 5 (attributi tipizzati mancanti) coperto da `UserAttribute` time-series + filtro domande su attributi noti.
-- Verifiche:
-  - `npm run test` ✅ (38/38)
-  - `npm run build` ✅
+- Script creato: `scripts/smoke-auth-production.sh`
+- Flusso incluso:
+  - register/login sessione
+  - `/api/chat/send` due turni stessa conversation
+  - `/tool user.setAttribute`
+  - query verifica DB + cleanup
+- Sicurezza:
+  - secret obbligatori da env (`SMOKE_PASSWORD`, `DATABASE_URL`)
+  - opzionale caricamento da `--env-file`
+  - nessuna credenziale hardcoded
+- Verifica script: sintassi e help ✅
 
 ## Next immediato
 
-- Commit + push + deploy backend + `prisma migrate deploy` su target.
+- Opzionale: integrare lo script in job CI manuale protetto con secret di ambiente.
 
 ## Ultimo aggiornamento
 
-2026-03-10 22:28
+2026-03-11 00:34
