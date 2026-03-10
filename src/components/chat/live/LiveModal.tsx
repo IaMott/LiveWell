@@ -317,7 +317,11 @@ export function LiveModal({ onClose, onTranscription }: Props) {
           const err = (await tokenRes.json().catch(() => ({}))) as { error?: string }
           throw new Error(err.error ?? 'Autenticazione fallita')
         }
-        const tokenData = (await tokenRes.json()) as { token: string; model: string }
+        const tokenData = (await tokenRes.json()) as {
+          token: string
+          model: string
+          systemInstruction?: string
+        }
         if (!tokenData.token) throw new Error('Servizio live non disponibile')
         if (!mounted) return
 
@@ -356,13 +360,15 @@ export function LiveModal({ onClose, onTranscription }: Props) {
         // Use model from server; fall back to first candidate if empty
         const liveModel = tokenData.model || (LIVE_MODEL_FALLBACKS[0] ?? '')
 
+        // Use context-aware system instruction from server (includes profile + history).
+        // Fall back to minimal instruction if server omitted it (e.g. first deploy).
+        const systemInstructionText =
+          tokenData.systemInstruction ??
+          'Sei un assistente AI per la salute e il benessere personale. Rispondi in italiano in modo naturale, conciso e conversazionale.'
+
         const liveConfig: LiveConnectConfig = {
           systemInstruction: {
-            parts: [
-              {
-                text: 'Sei un assistente AI per la salute e il benessere personale. Rispondi in italiano in modo naturale, conciso e conversazionale. Sei parte di un team multidisciplinare che include nutrizionisti, allenatori, medici e psicologi.',
-              },
-            ],
+            parts: [{ text: systemInstructionText }],
           },
           responseModalities: [Modality.AUDIO],
           speechConfig: {

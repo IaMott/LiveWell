@@ -4,6 +4,7 @@ import { errorResponse } from '@/lib/security/errorSchema'
 import { getAuthUserId } from '@/lib/auth'
 import { getServerSecret } from '@/lib/security/secrets'
 import { getServerEnv } from '@/lib/validators/env'
+import { prisma } from '@/lib/prisma'
 
 const requestSchema = z.object({
   conversationId: z.string().min(1).optional(),
@@ -25,6 +26,139 @@ function normalizeEphemeralToken(name: string): string {
   const idx = t.indexOf(marker)
   if (idx >= 0) return `auth_tokens/${t.slice(idx + marker.length)}`
   return t
+}
+
+function getAge(birthDate: Date): number {
+  const now = new Date()
+  let age = now.getFullYear() - birthDate.getFullYear()
+  const m = now.getMonth() - birthDate.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < birthDate.getDate())) age--
+  return age
+}
+
+/**
+ * Build a rich system instruction for the Gemini Live session.
+ * Includes user profile, recent chat history across ALL conversations,
+ * and tracker summary so the Live agent has full context from the start.
+ */
+async function buildLiveSystemInstruction(userId: string): Promise<string> {
+  const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+  const [user, profile, recentMessages, workouts, meals, mindfulness] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
+    prisma.userProfile.findUnique({
+      where: { userId },
+      select: {
+        birthDate: true,
+        gender: true,
+        height: true,
+        weight: true,
+        health: true,
+        nutrition: true,
+        training: true,
+        mindfulness: true,
+        goals: true,
+      },
+    }),
+    // Last 30 messages across ALL user conversations (cross-conversation memory)
+    prisma.message.findMany({
+      where: { conversation: { userId } },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+      select: { role: true, content: true, createdAt: true },
+    }),
+    prisma.workoutSession.findMany({
+      where: { userId, date: { gte: since7d } },
+      select: { durationMin: true, notes: true, date: true },
+      take: 20,
+    }),
+    prisma.meal.findMany({
+      where: { createdByUserId: userId, date: { gte: since7d } },
+      select: { mealType: true, date: true },
+      take: 20,
+    }),
+    prisma.mindfulnessEntry.findMany({
+      where: { userId, createdAt: { gte: since7d } },
+      select: { mood: true, stress: true },
+      take: 10,
+    }),
+  ])
+
+  const lines: string[] = []
+  lines.push(
+    'Sei un assistente AI per la salute e il benessere personale. ' +
+      'Rispondi in italiano in modo naturale, conciso e conversazionale. ' +
+      "Sei parte di un team multidisciplinare (nutrizionisti, allenatori, medici, psicologi) e hai pieno accesso al profilo e alla cronologia dell'utente.",
+  )
+
+  // ── User identity ──────────────────────────────────────────────────────────
+  const userName = user?.name ?? null
+  if (userName) lines.push(`\nSTAI PARLANDO CON: ${userName}`)
+
+  // ── Profile summary ────────────────────────────────────────────────────────
+  if (profile) {
+    const profileParts: string[] = []
+    if (profile.birthDate) profileParts.push(`età ${getAge(new Date(profile.birthDate))} anni`)
+    if (profile.gender) profileParts.push(`sesso: ${profile.gender}`)
+    if (profile.weight) profileParts.push(`peso: ${profile.weight} kg`)
+    if (profile.height) profileParts.push(`altezza: ${profile.height} cm`)
+
+    if (profileParts.length > 0) {
+      lines.push(`\nPROFILO: ${profileParts.join(', ')}`)
+    }
+
+    const goals = profile.goals as Record<string, unknown> | null
+    const goalsText = goals?.objectives ?? goals?.text ?? goals?.goals
+    if (goalsText) lines.push(`OBIETTIVI: ${String(goalsText).slice(0, 300)}`)
+
+    const health = profile.health as Record<string, unknown> | null
+    const conditions = health?.conditions ?? health?.chronicConditions
+    if (conditions) lines.push(`CONDIZIONI SALUTE: ${String(conditions).slice(0, 200)}`)
+
+    const nutrition = profile.nutrition as Record<string, unknown> | null
+    const diet = nutrition?.dietType ?? nutrition?.preferences
+    if (diet) lines.push(`ALIMENTAZIONE: ${String(diet).slice(0, 150)}`)
+
+    const training = profile.training as Record<string, unknown> | null
+    const freq = training?.frequency ?? training?.weeklyDays
+    if (freq) lines.push(`ALLENAMENTO: ${String(freq)} volte/settimana`)
+  }
+
+  // ── Tracker summary (last 7 days) ──────────────────────────────────────────
+  const trackerParts: string[] = []
+  if (workouts.length > 0) trackerParts.push(`${workouts.length} allenamenti`)
+  if (meals.length > 0) trackerParts.push(`${meals.length} pasti registrati`)
+  if (mindfulness.length > 0) trackerParts.push(`${mindfulness.length} sessioni mindfulness`)
+  if (trackerParts.length > 0) {
+    lines.push(`\nULTIMI 7 GIORNI: ${trackerParts.join(', ')}`)
+  }
+  if (mindfulness.length > 0) {
+    const avgMood =
+      mindfulness.filter((e) => e.mood != null).reduce((s, e) => s + (e.mood ?? 0), 0) /
+      (mindfulness.filter((e) => e.mood != null).length || 1)
+    if (avgMood > 0) lines.push(`UMORE MEDIO (settimana): ${Math.round(avgMood)}/10`)
+  }
+
+  // ── Conversation history (cross-conversation) ──────────────────────────────
+  if (recentMessages.length > 0) {
+    lines.push('\nCRONOLOGIA CHAT RECENTE (ultime conversazioni):')
+    // reverse to chronological order
+    const ordered = recentMessages.slice().reverse()
+    for (const msg of ordered) {
+      const speaker = msg.role === 'user' ? 'Utente' : 'Assistente'
+      const snippet = msg.content.slice(0, 200).replace(/\n/g, ' ')
+      lines.push(`${speaker}: ${snippet}`)
+    }
+  } else {
+    lines.push('\n(Nessuna conversazione precedente registrata)')
+  }
+
+  lines.push(
+    '\nUSA queste informazioni per rispondere in modo contestualizzato e personalizzato. ' +
+      'Fai riferimento alla cronologia e al profilo quando pertinente.',
+  )
+
+  return lines.join('\n')
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -53,6 +187,9 @@ export async function POST(request: Request): Promise<Response> {
   const env = getServerEnv()
 
   try {
+    // Build context-aware system instruction (profile + history) in parallel with token creation
+    const [systemInstruction] = await Promise.all([buildLiveSystemInstruction(userId)])
+
     // v1alpha is required for ephemeral token creation
     const ai = new GoogleGenAI({
       apiKey,
@@ -85,6 +222,7 @@ export async function POST(request: Request): Promise<Response> {
         model: env.LIVE_MODEL,
         expiresAt: toIsoInMinutes(40),
         conversationId: parsedBody.conversationId ?? null,
+        systemInstruction,
       }),
       {
         status: 200,
