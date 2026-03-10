@@ -110,11 +110,13 @@ interface Props {
   activeDomain?: Domain | null
   onVoiceStart?: () => void
   onVoiceEnd?: () => void
+  /** Active conversation ID — used to save Live session transcript to chat history. */
+  conversationId?: string | null
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ChatInput({ onSend, onHistory, disabled, activeDomain, onVoiceStart, onVoiceEnd }: Props) {
+export function ChatInput({ onSend, onHistory, disabled, activeDomain, onVoiceStart, onVoiceEnd, conversationId }: Props) {
   const [text, setText] = useState('')
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(activeDomain ?? null)
   const [showLive, setShowLive] = useState(false)
@@ -172,11 +174,22 @@ export function ChatInput({ onSend, onHistory, disabled, activeDomain, onVoiceSt
     }
   }
 
-  function handleTranscription(transcript: string) {
-    const trimmed = transcript.trim()
-    if (!trimmed) return
-    // Auto-send voice message — TTS managed by ChatShell while showLive=true
-    onSend(trimmed, selectedDomain ?? undefined)
+  /**
+   * Called by LiveModal with each completed transcript turn.
+   * Saves the message to the current conversation without triggering the AI
+   * (the Live session IS the AI — it responds in real-time audio).
+   */
+  function handleTranscription(role: 'user' | 'assistant', text: string) {
+    const trimmed = text.trim()
+    if (!trimmed || !conversationId) return
+    void fetch('/api/chat/transcript', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversationId,
+        messages: [{ role, content: trimmed }],
+      }),
+    }).catch(() => { /* best-effort — transcript saving is not critical */ })
   }
 
   return (
@@ -326,4 +339,3 @@ function iconBtnStyle(active: boolean): React.CSSProperties {
     flexShrink: 0, transition: 'background-color 0.15s',
   }
 }
-

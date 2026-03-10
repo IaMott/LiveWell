@@ -33,52 +33,25 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
     exitSpecialist,
   } = useChat()
   const [historyOpen, setHistoryOpen] = useState(false)
-  // voiceActive: true while the Live modal is open — speak assistant replies via TTS
-  const [voiceActive, setVoiceActive] = useState(false)
   const lastSpokenIdRef = useRef<string | undefined>(undefined)
-
-  // Speak new assistant messages while voice session is active (text fallback only)
-  useEffect(() => {
-    if (!voiceActive) return
-    const lastMsg = messages.at(-1)
-    if (!lastMsg || lastMsg.role !== 'assistant' || lastMsg.streaming) return
-    if (lastMsg.id === lastSpokenIdRef.current) return
-    lastSpokenIdRef.current = lastMsg.id
-
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-      const utterance = new SpeechSynthesisUtterance(lastMsg.content)
-      utterance.lang = 'it-IT'
-      utterance.rate = 1.05
-      utterance.pitch = 1.0
-      const loadVoice = () => {
-        const voices = window.speechSynthesis.getVoices()
-        const itVoice = voices.find((v) => v.lang.startsWith('it'))
-        if (itVoice) utterance.voice = itVoice
-        window.speechSynthesis.speak(utterance)
-      }
-      if (window.speechSynthesis.getVoices().length > 0) {
-        loadVoice()
-      } else {
-        window.speechSynthesis.onvoiceschanged = loadVoice
-      }
-    }
-  }, [messages, voiceActive])
+  // Ref so handleVoiceEnd closure always sees the latest conversationId
+  const conversationIdRef = useRef(conversationId)
+  useEffect(() => { conversationIdRef.current = conversationId }, [conversationId])
 
   const handleVoiceStart = useCallback(() => {
     // Pin lastSpokenId to the current last message so the TTS effect does NOT
-    // re-speak it when voiceActive flips to true. Only new messages received
-    // while the modal is open will be spoken (as text fallback).
+    // re-speak it when the modal opens. Only new messages will be spoken.
     lastSpokenIdRef.current = messages.at(-1)?.id
-    setVoiceActive(true)
   }, [messages])
 
   const handleVoiceEnd = useCallback(() => {
-    setVoiceActive(false)
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
+    // After Live session ends, reload the conversation to show saved transcript
+    const cid = conversationIdRef.current
+    if (cid) {
+      // Small delay so DB writes from the last transcript flush
+      setTimeout(() => { void loadConversation(cid) }, 600)
     }
-  }, [])
+  }, [loadConversation])
 
   const specialistColor = activeDomain ? (DOMAIN_COLORS[activeDomain] ?? '#007AFF') : '#007AFF'
 
@@ -166,6 +139,7 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
         activeDomain={activeDomain}
         onVoiceStart={handleVoiceStart}
         onVoiceEnd={handleVoiceEnd}
+        conversationId={conversationId}
       />
       <ConversationHistory
         open={historyOpen}

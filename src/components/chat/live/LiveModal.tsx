@@ -17,7 +17,8 @@ interface LiveSession extends Session {
 
 interface Props {
   onClose: () => void
-  onTranscription?: (text: string) => void
+  /** Called for each completed transcript segment from user or assistant. */
+  onTranscription?: (role: 'user' | 'assistant', text: string) => void
 }
 
 // ── Live model — must use v1alpha BidiGenerateContentConstrained endpoint ────
@@ -120,7 +121,7 @@ function IconSwitchCamera() {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function LiveModal({ onClose }: Props) {
+export function LiveModal({ onClose, onTranscription }: Props) {
   const [phase, setPhase] = useState<Phase>('connecting')
   const [statusText, setStatusText] = useState('Connessione a Gemini Live…')
   const [isAiSpeaking, setIsAiSpeaking] = useState(false)
@@ -145,6 +146,10 @@ export function LiveModal({ onClose }: Props) {
 
   const animRef = useRef<number | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
+
+  // Transcript buffers — accumulate chunks across partial messages
+  const userTranscriptBufRef = useRef('')
+  const aiTranscriptBufRef = useRef('')
 
   // ── Waveform animation ────────────────────────────────────────────────────
 
@@ -362,6 +367,9 @@ export function LiveModal({ onClose }: Props) {
               prebuiltVoiceConfig: { voiceName: 'Kore' },
             },
           },
+          // Enable real-time transcription of both user speech and AI speech
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
         }
 
         // ── Do NOT reference `rawSession` inside callbacks — Temporal Dead Zone ──
@@ -377,12 +385,38 @@ export function LiveModal({ onClose }: Props) {
             },
             onmessage: (message: LiveServerMessage) => {
               if (!mounted || closingRef.current) return
-              const parts = message.serverContent?.modelTurn?.parts ?? []
+
+              const sc = message.serverContent
+
+              // ── Audio playback ────────────────────────────────────────────
+              const parts = sc?.modelTurn?.parts ?? []
               for (const part of parts) {
                 const inline = part.inlineData
                 if (inline?.data && (inline.mimeType ?? '').startsWith('audio/pcm')) {
                   enqueuePCM(inline.data)
                 }
+              }
+
+              // ── Transcript accumulation ───────────────────────────────────
+              // User speech (inputAudioTranscription enabled in config)
+              const userText = sc?.inputTranscription?.text
+              if (typeof userText === 'string' && userText) {
+                userTranscriptBufRef.current += userText
+              }
+              // AI speech (outputAudioTranscription enabled in config)
+              const aiText = sc?.outputTranscription?.text
+              if (typeof aiText === 'string' && aiText) {
+                aiTranscriptBufRef.current += aiText
+              }
+
+              // On turn complete, emit any buffered transcript segments
+              if (sc?.turnComplete) {
+                const userSeg = userTranscriptBufRef.current.trim()
+                const aiSeg = aiTranscriptBufRef.current.trim()
+                userTranscriptBufRef.current = ''
+                aiTranscriptBufRef.current = ''
+                if (userSeg) onTranscription?.('user', userSeg)
+                if (aiSeg) onTranscription?.('assistant', aiSeg)
               }
             },
             onerror: (error: ErrorEvent) => {
