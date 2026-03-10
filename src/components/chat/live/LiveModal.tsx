@@ -151,6 +151,9 @@ export function LiveModal({ onClose, onTranscription }: Props) {
   const userTranscriptBufRef = useRef('')
   const aiTranscriptBufRef = useRef('')
 
+  // Tracks current facingMode for devices with a single camera (front/back toggle)
+  const facingModeRef = useRef<'environment' | 'user'>('environment')
+
   // ── Waveform animation ────────────────────────────────────────────────────
 
   const startAnim = useCallback(() => {
@@ -399,23 +402,32 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
               // ── Transcript accumulation ───────────────────────────────────
               // User speech (inputAudioTranscription enabled in config)
-              const userText = sc?.inputTranscription?.text
-              if (typeof userText === 'string' && userText) {
-                userTranscriptBufRef.current += userText
+              const userTranscription = sc?.inputTranscription
+              if (typeof userTranscription?.text === 'string' && userTranscription.text) {
+                userTranscriptBufRef.current += userTranscription.text
               }
+              // Emit user transcript as soon as their speech turn ends
+              if (userTranscription?.endOfTranscription) {
+                const userSeg = userTranscriptBufRef.current.trim()
+                userTranscriptBufRef.current = ''
+                if (userSeg) onTranscription?.('user', userSeg)
+              }
+
               // AI speech (outputAudioTranscription enabled in config)
               const aiText = sc?.outputTranscription?.text
               if (typeof aiText === 'string' && aiText) {
                 aiTranscriptBufRef.current += aiText
               }
 
-              // On turn complete, emit any buffered transcript segments
+              // On turn complete, emit buffered AI transcript (user already emitted above)
               if (sc?.turnComplete) {
+                // Flush any remaining user segment in case endOfTranscription was missed
                 const userSeg = userTranscriptBufRef.current.trim()
-                const aiSeg = aiTranscriptBufRef.current.trim()
                 userTranscriptBufRef.current = ''
-                aiTranscriptBufRef.current = ''
                 if (userSeg) onTranscription?.('user', userSeg)
+
+                const aiSeg = aiTranscriptBufRef.current.trim()
+                aiTranscriptBufRef.current = ''
                 if (aiSeg) onTranscription?.('assistant', aiSeg)
               }
             },
@@ -467,10 +479,11 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
   // ── Start video stream with a specific device ─────────────────────────────
 
-  const startVideoStream = useCallback(async (deviceId?: string) => {
+  const startVideoStream = useCallback(async (deviceId?: string, facingMode?: 'environment' | 'user') => {
+    const effectiveFacing = facingMode ?? facingModeRef.current
     const constraints: MediaStreamConstraints = deviceId
       ? { video: { deviceId: { exact: deviceId } } }
-      : { video: { facingMode: 'environment' } }
+      : { video: { facingMode: effectiveFacing } }
 
     let stream: MediaStream
     try {
@@ -540,9 +553,7 @@ export function LiveModal({ onClose, onTranscription }: Props) {
   // ── Camera switch ─────────────────────────────────────────────────────────
 
   async function switchCamera() {
-    if (!videoEnabled || videoDevices.length < 2) return
-    const nextIdx = (currentCameraIdx + 1) % videoDevices.length
-    setCurrentCameraIdx(nextIdx)
+    if (!videoEnabled) return
 
     // Stop current video stream
     if (videoTimerRef.current) {
@@ -554,9 +565,18 @@ export function LiveModal({ onClose, onTranscription }: Props) {
     if (videoRef.current) videoRef.current.srcObject = null
     setVideoEnabled(false)
 
-    // Start with new camera
     try {
-      await startVideoStream(videoDevices[nextIdx]?.deviceId)
+      if (videoDevices.length > 1) {
+        // Multiple cameras: cycle by device ID
+        const nextIdx = (currentCameraIdx + 1) % videoDevices.length
+        setCurrentCameraIdx(nextIdx)
+        await startVideoStream(videoDevices[nextIdx]?.deviceId)
+      } else {
+        // Single camera (or list not yet populated): toggle facingMode
+        const next = facingModeRef.current === 'environment' ? 'user' : 'environment'
+        facingModeRef.current = next
+        await startVideoStream(undefined, next)
+      }
     } catch (e) {
       console.error('[LiveModal] camera switch error', e)
     }
@@ -702,8 +722,8 @@ export function LiveModal({ onClose, onTranscription }: Props) {
             {videoEnabled ? <IconVideo /> : <IconVideoOff />}
           </button>
 
-          {/* Camera switch — shown only when video is on and multiple cameras available */}
-          {videoEnabled && videoDevices.length > 1 && (
+          {/* Camera switch — shown whenever video is on (toggles facingMode on single-camera devices) */}
+          {videoEnabled && (
             <button
               type="button"
               onClick={() => void switchCamera()}
