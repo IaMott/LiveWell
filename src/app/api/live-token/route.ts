@@ -186,9 +186,19 @@ export async function POST(request: Request): Promise<Response> {
 
   const env = getServerEnv()
 
+  const FALLBACK_SYSTEM_INSTRUCTION =
+    'Sei un assistente AI per la salute e il benessere personale. ' +
+    'Rispondi in italiano in modo naturale, conciso e conversazionale. ' +
+    'Sei parte di un team multidisciplinare che include nutrizionisti, allenatori, medici e psicologi.'
+
   try {
-    // Build context-aware system instruction (profile + history) in parallel with token creation
-    const [systemInstruction] = await Promise.all([buildLiveSystemInstruction(userId)])
+    // Build context-aware system instruction (profile + history).
+    // Wrapped in try-catch: if DB is unavailable (test env, cold-start error) we fall back
+    // gracefully to a minimal prompt rather than blocking token creation.
+    const systemInstruction = await buildLiveSystemInstruction(userId).catch((err: unknown) => {
+      console.error('[live-token] system instruction build failed, using fallback:', err)
+      return FALLBACK_SYSTEM_INSTRUCTION
+    })
 
     // v1alpha is required for ephemeral token creation
     const ai = new GoogleGenAI({
