@@ -334,25 +334,18 @@ export function LiveModal({ onClose }: Props) {
               prebuiltVoiceConfig: { voiceName: 'Kore' },
             },
           },
-          realtimeInputConfig: {
-            automaticActivityDetection: {
-              disabled: false,
-              startOfSpeechSensitivity: 'START_SENSITIVITY_LOW' as never,
-              endOfSpeechSensitivity: 'END_SENSITIVITY_LOW' as never,
-              prefixPaddingMs: 20,
-              silenceDurationMs: 400,
-            },
-          } as never,
         }
 
-        const session = (await ai.live.connect({
+        // ── Do NOT reference `rawSession` inside callbacks — Temporal Dead Zone ──
+        // onopen sets the ready flag only; startMediaStreaming is called AFTER
+        // await resolves so rawSession is guaranteed assigned (iManager pattern).
+        const rawSession = (await ai.live.connect({
           model: liveModel,
           config: liveConfig,
           callbacks: {
             onopen: () => {
-              if (!mounted) return
+              // Mark ready so ScriptProcessor onaudioprocess will start sending
               sessionReadyRef.current = true
-              void startMediaStreaming(session as unknown as LiveSession, micStream)
             },
             onmessage: (message: LiveServerMessage) => {
               if (!mounted || closingRef.current) return
@@ -380,10 +373,17 @@ export function LiveModal({ onClose }: Props) {
           },
         })) as unknown as LiveSession
 
-        sessionRef.current = session
+        // Secure session ref before starting media pipeline
+        sessionRef.current = rawSession
         if (!mounted) {
-          session.close()
+          rawSession.close()
+          return
         }
+
+        // Start audio pipeline now that rawSession is assigned.
+        // onaudioprocess checks sessionReadyRef (set in onopen) so no audio
+        // is sent until the WebSocket is actually open.
+        await startMediaStreaming(rawSession, micStream)
       } catch (err: unknown) {
         if (!mounted) return
         console.error('[LiveModal] connect error', err)
