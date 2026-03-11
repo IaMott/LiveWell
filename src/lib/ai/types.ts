@@ -43,6 +43,11 @@ export type ActiveSpecialist = {
   id: AgentId
   displayName: string
   domain: Domain
+  /**
+   * Full specialist competence tags (e.g. fisioterapista: ['training','health']).
+   * Used by backend to keep specialist mode scoped to valid domains.
+   */
+  domains?: Domain[]
 }
 
 export type AgentInput = {
@@ -88,6 +93,12 @@ export type AgentProposal = {
     potentialRisk?: boolean
     urgentEscalation?: boolean
   }
+  /**
+   * Backend interview queue metadata persisted in AgentWorkspace.
+   * Lets the system ask one question per turn without forgetting follow-ups.
+   */
+  pendingQuestions?: string[]
+  pendingDomain?: Domain
 }
 
 export type ContextPack = {
@@ -108,6 +119,8 @@ export type ContextPack = {
       agentId: string
       round1Summary?: string
       round2Summary?: string
+      pendingQuestions?: string[]
+      pendingDomain?: Domain
       updatedAt: string
     }>
     recentArtifacts: Array<{

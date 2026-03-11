@@ -214,8 +214,8 @@ function buildAgentUserPrompt(input: AgentInput, agentId: string, peerInsights?:
     `Use user.updateProfile only for legacy compatibility when needed by profile snapshot.`,
     ``,
     `NATURAL DIALOGUE RULE:`,
-    `Termina SEMPRE con una domanda aperta o un invito a continuare la conversazione.`,
-    `L'ultima parola è sempre dell'utente — mai tua. Chiedi UNA sola cosa alla volta.`,
+    `Non fare domande se puoi già rispondere in modo concreto.`,
+    `Se manca un dato critico, fai al massimo UNA domanda mirata e solo su quel dato.`,
     ``,
     `INSTRUCTIONS:`,
     `- You are a specialist agent. Respond ONLY within your domain scope.`,
@@ -313,9 +313,40 @@ function parseDobFromNaturalMessage(message: string): string | null {
   return null
 }
 
-function inferPersonalToolCallsFromMessage(message: string): ToolCall[] {
+function ageFromIsoDate(isoDate: string): number | null {
+  const d = new Date(isoDate)
+  if (Number.isNaN(d.getTime())) return null
+  const now = new Date()
+  let age = now.getFullYear() - d.getFullYear()
+  const m = now.getMonth() - d.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--
+  return age >= 0 ? age : null
+}
+
+function isAgeQuestion(message: string): boolean {
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('quanti anni') ||
+    lower.includes('quanti anni ho') ||
+    /\betà\b/.test(lower) ||
+    /\beta\b/.test(lower)
+  )
+}
+
+type InferenceContext = {
+  domainHint: Domain
+  activeSpecialist?: ActiveSpecialist
+}
+
+function inferAttributeToolCallsFromMessage(message: string, ctx: InferenceContext): ToolCall[] {
   const calls: ToolCall[] = []
   const lower = message.toLowerCase()
+
+  const effectiveDomain =
+    ctx.activeSpecialist?.domains?.includes(ctx.domainHint) ||
+    ctx.activeSpecialist?.domain === ctx.domainHint
+      ? ctx.domainHint
+      : (ctx.activeSpecialist?.domain ?? ctx.domainHint)
 
   const hasBirthSignal =
     lower.includes('sono nato') ||
@@ -340,7 +371,135 @@ function inferPersonalToolCallsFromMessage(message: string): ToolCall[] {
     }
   }
 
-  return calls
+  // Nutrition / allergy extraction (robust on "allergico alle ...", "allergia a ...")
+  const allergyPatterns = [
+    /allergic[oa]\s+a(?:l|ll|gli|lle|ll')?\s*([a-zàèéìòù'’\s]+)/i,
+    /allergia\s+a(?:l|ll|gli|lle|ll')?\s*([a-zàèéìòù'’\s]+)/i,
+  ]
+  for (const re of allergyPatterns) {
+    const m = lower.match(re)
+    const rawAllergen = m?.[1]
+    if (!rawAllergen) continue
+    const allergen = rawAllergen
+      .trim()
+      .replace(/[.,;!?]+$/g, '')
+      .replace(/^(al|allo|alla|ai|agli|alle)\s+/i, '')
+    if (allergen.length >= 2) {
+      calls.push({
+        id: crypto.randomUUID(),
+        name: 'user.setAttribute',
+        args: {
+          domain: 'nutrition',
+          key: 'allergy',
+          value: allergen,
+        },
+      })
+      break
+    }
+  }
+
+  // Training frequency extraction: "mi alleno 4 volte a settimana"
+  const freqMatch = lower.match(/alleno\s+(\d{1,2})\s+volt[ea]\s+a\s+settimana/i)
+  if (freqMatch?.[1]) {
+    calls.push({
+      id: crypto.randomUUID(),
+      name: 'user.setAttribute',
+      args: {
+        domain: 'training',
+        key: 'training_frequency_per_week',
+        value: Number(freqMatch[1]),
+        unit: 'sessions/week',
+      },
+    })
+  }
+
+  // Health conditions extraction (minimal deterministic)
+  if (lower.includes('ipertensione')) {
+    calls.push({
+      id: crypto.randomUUID(),
+      name: 'user.setAttribute',
+      args: {
+        domain: 'health',
+        key: 'hypertension',
+        value: true,
+      },
+    })
+  }
+  const yearMatch = lower.match(/\b(19\d{2}|20\d{2})\b/)
+  if (lower.includes('ipertensione') && yearMatch?.[1]) {
+    calls.push({
+      id: crypto.randomUUID(),
+      name: 'user.setAttribute',
+      args: {
+        domain: 'health',
+        key: 'hypertension_diagnosed_year',
+        value: Number(yearMatch[1]),
+      },
+    })
+  }
+
+  // Mindfulness extraction
+  const stressMatch = lower.match(/stress\s+(\d{1,2})\s*(?:su|\/)\s*10/i)
+  if (stressMatch?.[1]) {
+    calls.push({
+      id: crypto.randomUUID(),
+      name: 'user.setAttribute',
+      args: {
+        domain: 'mindfulness',
+        key: 'stress_level',
+        value: Number(stressMatch[1]),
+        unit: '/10',
+      },
+    })
+  }
+  const sleepMatch = lower.match(/dormo\s+(\d{1,2})\s+ore/i)
+  if (sleepMatch?.[1]) {
+    calls.push({
+      id: crypto.randomUUID(),
+      name: 'user.setAttribute',
+      args: {
+        domain: 'mindfulness',
+        key: 'sleep_hours',
+        value: Number(sleepMatch[1]),
+        unit: 'hours',
+      },
+    })
+  }
+
+  // Ideas / inspiration extraction
+  const isQuestionLike =
+    lower.includes('?') || lower.startsWith('qual ') || lower.startsWith('quale ')
+  if (
+    !isQuestionLike &&
+    (effectiveDomain === 'inspiration' ||
+      lower.includes('obiettivo') ||
+      lower.includes('podcast') ||
+      lower.includes('progetto'))
+  ) {
+    const goalText =
+      message.match(/obiettivo\s*(?:è|e)?\s*(.+)$/i)?.[1]?.trim() ??
+      message.match(/(?:lanciare|avviare)\s+(.+)$/i)?.[0]?.trim()
+    if (goalText && goalText.length >= 4) {
+      calls.push({
+        id: crypto.randomUUID(),
+        name: 'user.setAttribute',
+        args: {
+          domain: 'general',
+          key: 'goal',
+          value: goalText.slice(0, 240),
+        },
+      })
+    }
+  }
+
+  // Deduplicate inferred calls by (name,args)
+  const seen = new Set<string>()
+  return calls.filter((c) => {
+    const k = `${c.name}:${JSON.stringify(c.args)}`
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
 }
 
 const GENERIC_QUESTION_PATTERNS = [
@@ -394,74 +553,177 @@ function readPersonalSnapshot(contextPack: ContextPack): {
   return out
 }
 
-function hasGastritisSignal(contextPack: ContextPack, message: string): boolean {
-  const m = message.toLowerCase()
-  if (m.includes('gastrite')) return true
-  const profile = (contextPack.user.profile ?? {}) as Record<string, unknown>
-  const health = (profile.health ?? {}) as Record<string, unknown>
-  const asText = JSON.stringify(health).toLowerCase()
-  return asText.includes('gastrite')
+function buildSingleMissingQuestion(
+  domain: Domain,
+  contextPack: ContextPack,
+  userMessage: string,
+): string | null {
+  const attrs = contextPack.user.attributes ?? {}
+  const lower = userMessage.toLowerCase()
+  const personal = readPersonalSnapshot(contextPack)
+
+  if (isAgeQuestion(userMessage) && !personal.birthDate) {
+    return 'Per calcolare la tua età mi serve la tua data di nascita (gg/mm/aaaa).'
+  }
+
+  const hasAttr = (d: keyof typeof attrs, key: string): boolean => {
+    const bucket = attrs[d] as Record<string, { value?: unknown }> | undefined
+    return Boolean(bucket?.[key]?.value != null)
+  }
+
+  if (domain === 'nutrition' || lower.includes('dieta') || lower.includes('aliment')) {
+    if (!hasAttr('nutrition', 'allergy') && !hasAttr('health', 'allergy')) {
+      return 'Hai allergie o intolleranze alimentari da registrare?'
+    }
+    if (!hasAttr('nutrition', 'goal') && !hasAttr('general', 'goal')) {
+      return 'Qual è il tuo obiettivo nutrizionale principale nelle prossime settimane?'
+    }
+    return null
+  }
+
+  if (domain === 'training') {
+    if (!hasAttr('training', 'training_frequency_per_week')) {
+      return 'Quanti allenamenti a settimana riesci a fare realisticamente?'
+    }
+    return null
+  }
+
+  if (domain === 'health') {
+    if (!hasAttr('health', 'symptom_duration')) {
+      return 'Da quanto tempo è presente il sintomo principale?'
+    }
+    return null
+  }
+
+  if (domain === 'mindfulness') {
+    if (!hasAttr('mindfulness', 'stress_level')) {
+      return 'Su una scala 0-10, quanto è il tuo livello di stress medio?'
+    }
+    return null
+  }
+
+  return null
+}
+
+function buildQuestionPlan(
+  domain: Domain,
+  contextPack: ContextPack,
+  userMessage: string,
+): string[] {
+  const attrs = contextPack.user.attributes ?? {}
+  const lower = userMessage.toLowerCase()
+  const personal = readPersonalSnapshot(contextPack)
+  const plan: string[] = []
+
+  const hasAttr = (d: keyof typeof attrs, key: string): boolean => {
+    const bucket = attrs[d] as Record<string, { value?: unknown }> | undefined
+    return Boolean(bucket?.[key]?.value != null)
+  }
+
+  if (isAgeQuestion(userMessage) && !personal.birthDate) {
+    plan.push('Per calcolare la tua età mi serve la tua data di nascita (gg/mm/aaaa).')
+  }
+
+  if (domain === 'nutrition' || lower.includes('dieta') || lower.includes('aliment')) {
+    if (!hasAttr('nutrition', 'allergy') && !hasAttr('health', 'allergy')) {
+      plan.push('Hai allergie o intolleranze alimentari da registrare?')
+    }
+    if (!hasAttr('nutrition', 'goal') && !hasAttr('general', 'goal')) {
+      plan.push('Qual è il tuo obiettivo nutrizionale principale nelle prossime settimane?')
+    }
+    return plan
+  }
+
+  if (domain === 'training') {
+    if (!hasAttr('training', 'training_frequency_per_week')) {
+      plan.push('Quanti allenamenti a settimana riesci a fare realisticamente?')
+    }
+    if (!hasAttr('training', 'injury')) {
+      plan.push('Hai infortuni o limitazioni fisiche attive da considerare nel piano?')
+    }
+    return plan
+  }
+
+  if (domain === 'health') {
+    if (!hasAttr('health', 'symptom_duration')) {
+      plan.push('Da quanto tempo è presente il sintomo principale?')
+    }
+    if (!hasAttr('health', 'diagnosis')) {
+      plan.push('Hai già una diagnosi medica confermata o esami recenti disponibili?')
+    }
+    return plan
+  }
+
+  if (domain === 'mindfulness') {
+    if (!hasAttr('mindfulness', 'stress_level')) {
+      plan.push('Su una scala 0-10, quanto è il tuo livello di stress medio?')
+    }
+    if (!hasAttr('mindfulness', 'sleep_hours')) {
+      plan.push('Quante ore dormi mediamente per notte?')
+    }
+    return plan
+  }
+
+  return plan
+}
+
+function getPendingQuestionsFromWorkspace(
+  contextPack: ContextPack,
+  domain: Domain,
+  activeSpecialist?: ActiveSpecialist,
+): string[] {
+  const workspaces = contextPack.history.agentWorkspaces ?? []
+  const selected = workspaces
+    .filter((w) => {
+      if (activeSpecialist && w.agentId === activeSpecialist.id) return true
+      if (w.pendingDomain && w.pendingDomain === domain) return true
+      return false
+    })
+    .flatMap((w) => w.pendingQuestions ?? [])
+    .map((q) => q.trim())
+    .filter((q) => q.length > 0)
+
+  const seen = new Set<string>()
+  return selected.filter((q) => {
+    const k = q.toLowerCase()
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+}
+
+function buildInterviewQueue(
+  domain: Domain,
+  contextPack: ContextPack,
+  userMessage: string,
+  activeSpecialist?: ActiveSpecialist,
+): { askNow: string[]; pendingNext: string[] } {
+  const fromWorkspace = getPendingQuestionsFromWorkspace(contextPack, domain, activeSpecialist)
+  const fromPlan = buildQuestionPlan(domain, contextPack, userMessage)
+  const merged = [...fromWorkspace, ...fromPlan]
+    .map((q) => q.trim())
+    .filter((q) => q.length > 0 && !isGenericQuestion(q))
+  const seen = new Set<string>()
+  const deduped = merged.filter((q) => {
+    const k = q.toLowerCase()
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+
+  if (deduped.length === 0) return { askNow: [], pendingNext: [] }
+  return { askNow: [deduped[0]], pendingNext: deduped.slice(1) }
 }
 
 function buildCriticalQuestions(
   domain: Domain,
   contextPack: ContextPack,
   userMessage: string,
+  _activeSpecialist?: ActiveSpecialist,
 ): string[] {
-  const personal = readPersonalSnapshot(contextPack)
-  const questions: string[] = []
-  const lower = userMessage.toLowerCase()
-
-  const askAnthropometrics = () => {
-    if (personal.height == null) {
-      questions.push('Qual è la tua altezza in cm?')
-    }
-    if (personal.weight == null) {
-      questions.push('Qual è il tuo peso attuale in kg?')
-    }
-  }
-
-  if (domain === 'nutrition' || lower.includes('dieta') || lower.includes('aliment')) {
-    questions.push('Qual è il tuo obiettivo nutrizionale nelle prossime 8-12 settimane?')
-    askAnthropometrics()
-    questions.push('Quanti pasti fai al giorno e in quali orari?')
-    questions.push('Hai allergie/intolleranze alimentari o cibi che non tolleri?')
-    if (hasGastritisSignal(contextPack, userMessage)) {
-      questions.push(
-        'Negli ultimi 7 giorni quali sintomi gastrici hai avuto (bruciore, reflusso, nausea) e in quali orari?',
-      )
-      questions.push('Quali alimenti o bevande noti che peggiorano la gastrite?')
-    }
-  } else if (domain === 'training') {
-    questions.push(
-      'Qual è il tuo obiettivo allenamento principale e in quanto tempo vuoi raggiungerlo?',
-    )
-    askAnthropometrics()
-    questions.push('Quanti giorni a settimana puoi allenarti e quanto tempo per sessione?')
-    questions.push('Hai dolore o infortuni attivi che limitano alcuni movimenti?')
-  } else if (domain === 'health') {
-    questions.push('Da quanto tempo hai questo problema e con quale intensità da 0 a 10?')
-    questions.push('Ci sono segnali di allarme (febbre alta, sangue, sincope, dolore toracico)?')
-    questions.push('Assumi farmaci in modo regolare o solo al bisogno?')
-    questions.push('Hai diagnosi mediche già confermate o esami recenti utili?')
-  } else if (domain === 'mindfulness') {
-    questions.push(
-      'Qual è il sintomo principale su cui vuoi lavorare adesso (ansia, umore, sonno, stress)?',
-    )
-    questions.push('Da quanto tempo è presente e quanto impatta la tua giornata da 0 a 10?')
-    questions.push('Quante ore dormi mediamente e con quale qualità del sonno?')
-  } else {
-    questions.push(
-      'Quale area vuoi prioritizzare adesso: nutrizione, allenamento, salute o mindfulness?',
-    )
-    askAnthropometrics()
-  }
-
-  // Keep only specific questions; remove generic or duplicates.
-  const deduped = Array.from(new Set(questions.map((q) => q.trim()))).filter(
-    (q) => q.length > 0 && !isGenericQuestion(q),
-  )
-  return deduped.slice(0, 6)
+  const q = buildSingleMissingQuestion(domain, contextPack, userMessage)
+  if (!q || isGenericQuestion(q)) return []
+  return [q]
 }
 
 function mergeInterviewQuestions(existing: string[], critical: string[]): string[] {
@@ -481,9 +743,29 @@ function ensureCriticalQuestionsInText(text: string, questions: string[]): strin
   const lower = text.toLowerCase()
   const missing = questions.filter((q) => !lower.includes(q.toLowerCase().slice(0, 18)))
   if (missing.length === 0) return text
+  return `${text.trim()}\n\nMi manca solo questo dato per risponderti meglio: ${missing[0]}`
+}
 
-  const list = missing.map((q, i) => `${i + 1}. ${q}`).join('\n')
-  return `${text.trim()}\n\nPer impostare un piano davvero mirato ho bisogno di queste informazioni:\n${list}`
+const SPECIALIST_EXIT_PATTERNS = [
+  /esci\s+dalla\s+modalit[aà]\s+specialista/i,
+  /torna\s+al\s+team/i,
+  /chiudi\s+specialista/i,
+  /basta\s+specialista/i,
+]
+
+function shouldExitSpecialistMode(message: string): boolean {
+  return SPECIALIST_EXIT_PATTERNS.some((re) => re.test(message))
+}
+
+function pickSpecialistEffectiveDomain(
+  activeSpecialist: ActiveSpecialist | undefined,
+  detectedDomain: Domain,
+): Domain {
+  if (!activeSpecialist) return detectedDomain
+  const domains = activeSpecialist.domains ?? [activeSpecialist.domain]
+  if (domains.includes(detectedDomain)) return detectedDomain
+  const preferred = domains.find((d) => d !== 'general' && d !== 'coordination')
+  return preferred ?? activeSpecialist.domain
 }
 
 async function runOneAgent(
@@ -502,7 +784,9 @@ async function runOneAgent(
   try {
     const obj = JSON.parse(res.text)
     const parsedToolCalls = Array.isArray(obj.toolCalls) ? obj.toolCalls : []
-    const fallbackToolCalls = inferPersonalToolCallsFromMessage(input.message)
+    const fallbackToolCalls = inferAttributeToolCallsFromMessage(input.message, {
+      domainHint: input.domainHint ?? 'general',
+    })
     const toolCalls = parsedToolCalls.length > 0 ? parsedToolCalls : fallbackToolCalls
     return {
       agentId: agent.id,
@@ -517,7 +801,9 @@ async function runOneAgent(
       flags: obj.flags ?? {},
     }
   } catch {
-    const fallbackToolCalls = inferPersonalToolCallsFromMessage(input.message)
+    const fallbackToolCalls = inferAttributeToolCallsFromMessage(input.message, {
+      domainHint: input.domainHint ?? 'general',
+    })
     return {
       agentId: agent.id,
       domain: input.domainHint ?? 'general',
@@ -582,7 +868,7 @@ async function synthesizeResponse(
       `- Max 3-4 frasi salvo piani dettagliati esplicitamente richiesti`,
       `- Rimani nel tuo ambito di competenza; per altri ambiti rimanda ai colleghi`,
       `- Per piani o programmi strutturati, usa elenchi numerati senza intestazioni`,
-      `- Se mancano dati fondamentali per il tuo ambito, fai TUTTE le domande cliniche/pratiche necessarie in elenco numerato`,
+      `- Se manca un dato fondamentale per il tuo ambito, fai UNA sola domanda mirata`,
       `- Evita domande generiche tipo "c'è altro?" o "come ti senti in generale?"`,
       `- Chiudi con domande operative, non con inviti vaghi`,
     ].join('\n')
@@ -598,8 +884,8 @@ async function synthesizeResponse(
       `- NON dire che la risposta arriverà in 24-48 ore o simili`,
       `- Rispondi SUBITO con informazioni concrete basate sull'analisi del team`,
       `- Max 3-4 frasi salvo piani dettagliati richiesti dall'utente`,
-      `- Se mancano dati critici, fai tutte le domande necessarie in elenco numerato`,
-      `- Evita domande generiche tipo "c'è altro?" o "cosa vuoi fare?"`,
+      `- Se manca un dato critico, fai al massimo UNA domanda di integrazione`,
+      `- Evita domande generiche o inviti vaghi`,
       `- Non chiedere informazioni già presenti nel profilo utente`,
       `- Usa il punto fermo, non bullet, per risposte conversazionali brevi`,
       `- Per piani strutturati, usa elenchi numerati senza intestazioni`,
@@ -617,12 +903,10 @@ async function synthesizeResponse(
     gatingQuestions.length
       ? `\nINFORMAZIONI MANCANTI GIÀ EMERSE DAL TEAM: ${gatingQuestions.join('; ')}`
       : '',
-    criticalQuestions.length
-      ? `\nDOMANDE CRITICHE OBBLIGATORIE DA FARE ORA: ${criticalQuestions.join(' ; ')}`
-      : '',
+    criticalQuestions.length ? `\nUNICO DATO CRITICO MANCANTE: ${criticalQuestions[0]}` : '',
     ``,
     `Scrivi una risposta conversazionale in italiano, rivolta direttamente all'utente.`,
-    `Se ci sono domande critiche, riportale tutte in elenco numerato e senza genericità.`,
+    `Se manca un dato critico, fai solo quella domanda e non aggiungerne altre.`,
   ]
     .filter(Boolean)
     .join('\n')
@@ -646,12 +930,51 @@ export async function orchestrate(
   deps: OrchestratorDeps,
   input: AgentInput,
 ): Promise<ConsensusResult> {
-  const domainHint = input.domainHint ?? detectDomainFromText(input.message)
+  const personal = readPersonalSnapshot(input.contextPack)
+  if (isAgeQuestion(input.message)) {
+    const age = personal.birthDate ? ageFromIsoDate(personal.birthDate) : null
+    const response =
+      age != null
+        ? `Hai ${age} anni.`
+        : 'Non ho la tua data di nascita registrata. Per calcolare la tua età indicami la data di nascita in formato gg/mm/aaaa.'
+    return {
+      domain: 'general',
+      finalMessageMarkdown: response,
+      toolCallsToExecute: inferAttributeToolCallsFromMessage(input.message, {
+        domainHint: 'general',
+      }),
+      ui: {
+        domainIcon: 'general',
+        moodScore: input.contextPack.ui.moodScore,
+        sectionScores: input.contextPack.ui.sectionScores,
+      },
+      gatingQuestions:
+        age == null
+          ? ['Per calcolare la tua età mi serve la tua data di nascita (gg/mm/aaaa).']
+          : undefined,
+      safety: { escalation: 'none' },
+      artifactsToSave: undefined,
+      activeSpecialist: input.activeSpecialistId
+        ? {
+            id: input.activeSpecialistId,
+            displayName: input.activeSpecialistId,
+            domain: 'general',
+          }
+        : undefined,
+      debug: { selectedAgents: [], conflicts: [] },
+    }
+  }
+
+  const detectedDomain = input.domainHint ?? detectDomainFromText(input.message)
   const allDomains = detectDomainsMulti(input.message).map((d) => d.domain)
 
   // Determine active specialist: locked from previous turn OR newly requested this turn
   let activeSpecialist: ActiveSpecialist | undefined
   let lockedAgentId = input.activeSpecialistId ?? null
+
+  if (lockedAgentId && shouldExitSpecialistMode(input.message)) {
+    lockedAgentId = null
+  }
 
   if (!lockedAgentId) {
     const detectedId = detectSpecialistRequest(input.message, deps.team)
@@ -664,12 +987,31 @@ export async function orchestrate(
       activeSpecialist = {
         id: agent.id,
         displayName: agent.displayName,
-        domain: (agent.domainTags[0] ?? domainHint) as Domain,
+        domain: (agent.domainTags[0] ?? detectedDomain) as Domain,
+        domains: agent.domainTags,
       }
     }
   }
 
-  const selectedAgents = selectAgentsForRequest(deps.team, domainHint, 4, allDomains, input.message)
+  const domainHint = pickSpecialistEffectiveDomain(activeSpecialist, detectedDomain)
+
+  const selectedAgents = activeSpecialist
+    ? (() => {
+        const base = selectAgentsForRequest(
+          deps.team,
+          domainHint,
+          6,
+          allDomains,
+          input.message,
+        ).filter((a) => a.id !== 'orchestratore')
+        const ordered = [
+          deps.team.find((a) => a.id === activeSpecialist?.id),
+          ...base.filter((a) => a.id !== activeSpecialist?.id),
+        ].filter((a): a is AgentProfile => Boolean(a))
+        // Collaboration budget to avoid infinite inter-agent loops in specialist mode.
+        return ordered.slice(0, 3)
+      })()
+    : selectAgentsForRequest(deps.team, domainHint, 4, allDomains, input.message)
 
   const round1Proposals = await Promise.all(
     selectedAgents.map((a) => runOneAgent(deps.llm, a, { ...input, domainHint })),
@@ -695,28 +1037,64 @@ export async function orchestrate(
     orchestratorToolsAllowed: deps.orchestratorToolsAllowed,
   })
 
+  const queue = buildInterviewQueue(domainHint, input.contextPack, input.message, activeSpecialist)
   const interviewCriticalQuestions = buildCriticalQuestions(
     domainHint,
     input.contextPack,
     input.message,
+    activeSpecialist,
   )
   const mergedInterviewQuestions = mergeInterviewQuestions(
     consensus.gatingQuestions ?? [],
-    interviewCriticalQuestions,
+    queue.askNow.length > 0 ? queue.askNow : interviewCriticalQuestions,
   )
+  const finalInterviewQuestions = mergedInterviewQuestions.slice(0, 1)
+
+  const round2WithQueue: AgentProposal[] = round2Proposals.map((p, idx) => {
+    const shouldOwnQueue = activeSpecialist?.id === p.agentId || (!activeSpecialist && idx === 0)
+    if (!shouldOwnQueue) return p
+    return {
+      ...p,
+      pendingDomain: domainHint,
+      pendingQuestions: queue.pendingNext,
+    }
+  })
+
+  const hasQueueOwner = round2WithQueue.some((p) => Array.isArray(p.pendingQuestions))
+  const round2ForPersistence =
+    !hasQueueOwner && queue.pendingNext.length > 0
+      ? [
+          ...round2WithQueue,
+          {
+            agentId: activeSpecialist?.id ?? 'orchestratore',
+            domain: domainHint,
+            summary: 'Interview queue state',
+            reasoning: 'Persisted pending interview follow-up questions.',
+            questions: [],
+            recommendations: [],
+            toolCalls: [],
+            confidence: 1,
+            pendingDomain: domainHint,
+            pendingQuestions: queue.pendingNext,
+          } satisfies AgentProposal,
+        ]
+      : round2WithQueue
 
   const naturalResponse = await synthesizeResponse(deps.llm, {
     userMessage: input.message,
-    proposals: round2Proposals,
-    gatingQuestions: mergedInterviewQuestions,
-    criticalQuestions: mergedInterviewQuestions,
+    proposals: round2WithQueue,
+    gatingQuestions: finalInterviewQuestions,
+    criticalQuestions: finalInterviewQuestions,
     contextPack: input.contextPack,
     activeSpecialist,
   })
 
   // Deterministic safeguard: if specialists/LLM fail to emit tool-calls,
   // still persist clearly extractable personal data from user text.
-  const fallbackToolCalls = inferPersonalToolCallsFromMessage(input.message)
+  const fallbackToolCalls = inferAttributeToolCallsFromMessage(input.message, {
+    domainHint,
+    activeSpecialist,
+  })
   const mergedToolCalls = [...(consensus.toolCallsToExecute ?? []), ...fallbackToolCalls]
   const dedupedToolCalls = mergedToolCalls.filter((c, idx, arr) => {
     const key = `${c.name}:${JSON.stringify(c.args)}`
@@ -725,16 +1103,16 @@ export async function orchestrate(
 
   return {
     ...consensus,
-    gatingQuestions: mergedInterviewQuestions,
+    gatingQuestions: finalInterviewQuestions,
     toolCallsToExecute: dedupedToolCalls,
     finalMessageMarkdown: naturalResponse,
     activeSpecialist,
     debug: {
       selectedAgents: consensus.debug?.selectedAgents ?? selectedAgents.map((a) => a.id),
       conflicts: consensus.debug?.conflicts ?? [],
-      proposals: round2Proposals,
+      proposals: round2ForPersistence,
       round1Proposals,
-      round2Proposals,
+      round2Proposals: round2ForPersistence,
     },
   }
 }

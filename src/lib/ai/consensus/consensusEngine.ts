@@ -106,6 +106,52 @@ function semanticDeduplicateQuestions(questions: string[]): string[] {
   return result
 }
 
+const BLOCKED_TEMPLATE_PATTERNS: RegExp[] = [
+  /quale area vuoi prioritizzare adesso/i,
+  /qual[’']?e la tua altezza in cm/i,
+  /qual[’']?e il tuo peso attuale in kg/i,
+  /c[’']?e qualcos[’']?altro/i,
+  /cosa vuoi fare/i,
+]
+
+const GENERIC_QUESTION_PATTERNS: RegExp[] = [
+  /vuoi aggiungere/i,
+  /desideri aggiungere/i,
+  /come ti senti in generale/i,
+  /come posso aiutarti/i,
+  /quale area/i,
+]
+
+const DOMAIN_PRIORITY_HINTS: Record<Domain, string[]> = {
+  health: ['dolore', 'durata', 'sintomo', 'farmaci', 'diagnosi', 'allerg'],
+  nutrition: ['allerg', 'intoller', 'obiettivo', 'pasti', 'aliment'],
+  training: ['allen', 'infortun', 'dolore', 'session', 'obiettivo'],
+  mindfulness: ['stress', 'sonno', 'ansia', 'umore'],
+  inspiration: ['obiettivo', 'progetto', 'piano'],
+  coordination: ['obiettivo', 'priorit'],
+  general: ['obiettivo', 'dato'],
+}
+
+function applyGlobalInterviewPolicy(questions: string[], domain: Domain): string[] {
+  const cleaned = questions
+    .map((q) => q.trim())
+    .filter((q) => q.length > 0)
+    .filter((q) => !BLOCKED_TEMPLATE_PATTERNS.some((re) => re.test(q)))
+    .filter((q) => !GENERIC_QUESTION_PATTERNS.some((re) => re.test(q)))
+
+  if (cleaned.length === 0) return []
+  const hints = DOMAIN_PRIORITY_HINTS[domain] ?? DOMAIN_PRIORITY_HINTS.general
+  const scored = cleaned.map((q) => {
+    const lower = q.toLowerCase()
+    const score = hints.reduce((acc, h) => (lower.includes(h) ? acc + 1 : acc), 0)
+    return { q, score }
+  })
+
+  scored.sort((a, b) => b.score - a.score || a.q.length - b.q.length)
+  // Global policy: at most one missing-data question in final output.
+  return scored.slice(0, 1).map((x) => x.q)
+}
+
 // Gap 3: enforce domain isolation — normalize agent proposals to their primary domain
 function enforceDomainIsolation(
   proposals: AgentProposal[],
@@ -130,11 +176,15 @@ function enforceDomainIsolation(
 }
 
 // Collect gating questions with semantic dedup + known-data filtering
-function collectGatingQuestions(proposals: AgentProposal[], contextPack: ContextPack): string[] {
+function collectGatingQuestions(
+  proposals: AgentProposal[],
+  contextPack: ContextPack,
+  domain: Domain,
+): string[] {
   const raw = proposals.flatMap((p) => p.questions ?? [])
   const deduped = semanticDeduplicateQuestions(raw)
   const filtered = filterKnownDataQuestions(deduped, contextPack)
-  return filtered.slice(0, 8)
+  return applyGlobalInterviewPolicy(filtered, domain)
 }
 
 function detectConflicts(proposals: AgentProposal[]): string[] {
@@ -176,7 +226,7 @@ function composeFinalMarkdown(
 
   if (top?.summary) parts.push(top.summary)
 
-  const gating = collectGatingQuestions(proposals, context)
+  const gating = collectGatingQuestions(proposals, context, domain)
   if (gating.length) parts.push(`[gating: ${gating.join(' | ')}]`)
 
   const recs = proposals.flatMap((p) => p.recommendations ?? [])
@@ -286,7 +336,7 @@ export function runConsensus(params: {
 
   const toolCalls = mergeToolCalls(isolatedProposals, new Set(params.orchestratorToolsAllowed))
   // Gap 2: semantic dedup + known-data filtering
-  const gatingQuestions = collectGatingQuestions(isolatedProposals, params.contextPack)
+  const gatingQuestions = collectGatingQuestions(isolatedProposals, params.contextPack, domain)
 
   const urgent = isolatedProposals.some((p) => p.flags?.urgentEscalation)
   const risk = urgent || isolatedProposals.some((p) => p.flags?.potentialRisk)

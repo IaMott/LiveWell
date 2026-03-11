@@ -34,17 +34,18 @@ Optional fields:
 
 function buildMockClient(): LlmClient {
   return {
-    async complete({ format = 'json' } = {} as { system: string; user: string; format?: 'json' | 'text' }) {
+    async complete(
+      { format = 'json' } = {} as { system: string; user: string; format?: 'json' | 'text' },
+    ) {
       if (format === 'text') {
-        return { text: 'Sono qui per aiutarti. Dimmi pure come posso supportarti oggi.' }
+        return { text: 'Modalità mock attiva.' }
       }
       return {
         text: JSON.stringify({
           domain: 'general',
-          summary:
-            'Sono qui per aiutarti. Dimmi pure come posso supportarti oggi.',
+          summary: 'Modalità mock attiva.',
           reasoning: 'Modalità mock attiva: GEMINI_API_KEY non configurata.',
-          questions: ['Qual è il tuo obiettivo principale in questo momento?'],
+          questions: [],
           recommendations: [],
           toolCalls: [],
           confidence: 0.5,
@@ -85,7 +86,10 @@ export function createGeminiClient(): LlmClient {
 
       const raw = response.text ?? ''
       // Strip markdown code fences if the model wraps JSON in ```json ... ```
-      const text = raw.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+      const text = raw
+        .trim()
+        .replace(/^```(?:json)?\n?/, '')
+        .replace(/\n?```$/, '')
       return { text }
     },
   }

@@ -50,7 +50,7 @@ const transcriptLikeContext: ContextPack = {
 }
 
 describe('interview flow hardening — transcript 2026-03-11', () => {
-  it('asks targeted nutrition/clinical questions instead of generic follow-ups', async () => {
+  it('asks at most one targeted missing question and never generic follow-ups', async () => {
     const llm = {
       complete: async ({ format }: { system: string; user: string; format?: 'json' | 'text' }) => {
         // Simulate weak generic behavior from model: orchestrator must harden output.
@@ -88,19 +88,14 @@ describe('interview flow hardening — transcript 2026-03-11', () => {
       },
     )
 
-    // Must include targeted missing critical fields.
-    expect(result.gatingQuestions?.some((q) => q.includes('obiettivo nutrizionale'))).toBe(true)
-    expect(result.gatingQuestions?.some((q) => q.includes('altezza'))).toBe(true)
-    expect(result.gatingQuestions?.some((q) => q.includes('peso'))).toBe(true)
-    expect(
-      result.gatingQuestions?.some((q) => q.includes('sintomi gastrici') || q.includes('gastrite')),
-    ).toBe(true)
+    // Must ask only one targeted question.
+    expect((result.gatingQuestions ?? []).length).toBeLessThanOrEqual(1)
+    expect((result.gatingQuestions?.[0] ?? '').length).toBeGreaterThan(8)
 
     // Generic chatty follow-up should not dominate.
     expect(result.gatingQuestions?.some((q) => /qualcos['’]altro|aggiungere/i.test(q))).toBe(false)
 
-    // Final response should include concrete numbered critical questions.
-    expect(result.finalMessageMarkdown).toContain('Per impostare un piano davvero mirato')
-    expect(result.finalMessageMarkdown).toContain('1.')
+    // Final response should include only one integration request.
+    expect(result.finalMessageMarkdown).toContain('Mi manca solo questo dato')
   })
 })

@@ -331,14 +331,27 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
                 w.round1Proposal && typeof w.round1Proposal === 'object'
                   ? ((w.round1Proposal as Record<string, unknown>).summary as string | undefined)
                   : undefined
-              const r2 =
+              const r2Obj =
                 w.round2Proposal && typeof w.round2Proposal === 'object'
-                  ? ((w.round2Proposal as Record<string, unknown>).summary as string | undefined)
+                  ? (w.round2Proposal as Record<string, unknown>)
                   : undefined
+              const r2 = r2Obj ? (r2Obj.summary as string | undefined) : undefined
+              const pendingQuestionsRaw = r2Obj?.pendingQuestions
+              const pendingQuestions =
+                Array.isArray(pendingQuestionsRaw) && pendingQuestionsRaw.length > 0
+                  ? pendingQuestionsRaw
+                      .map((q) => (typeof q === 'string' ? q.trim() : ''))
+                      .filter((q) => q.length > 0)
+                  : undefined
+              const pendingDomainRaw = r2Obj?.pendingDomain
+              const pendingDomain =
+                typeof pendingDomainRaw === 'string' ? pendingDomainRaw : undefined
               return {
                 agentId: w.agentId,
                 round1Summary: r1,
                 round2Summary: r2,
+                pendingQuestions,
+                pendingDomain,
                 updatedAt: new Date(w.updatedAt).toISOString(),
               }
             })

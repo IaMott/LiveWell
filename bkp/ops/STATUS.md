@@ -1,6 +1,6 @@
 # LiveWell — Project Status
 
-## Current Step: UI micro-fix overview export button
+## Current Step: Queue domande cross-turn + verifica no template runtime
 
 ## Stato verificato — 2026-03-11 14:36
 
@@ -23,9 +23,9 @@
 
 ## Next immediato
 
-- Se confermato, commit/push/deploy della sola modifica UI: pulsante export in overview.
-- Poi riprendere fix backend residui multi-dominio.
+- Commit/push/deploy dei fix strutturali globali + queue domande cross-turn.
+- Smoke production su persistenza domande residue (turni successivi) e assenza template runtime.
 
 ## Ultimo aggiornamento
 
-2026-03-11 14:59
+2026-03-11 15:35

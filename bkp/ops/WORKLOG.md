@@ -677,3 +677,44 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 - Fatto: aggiunto in overview pulsante "Export DB dinamico" (download JSON da `/api/profile/dynamic-db`) senza alterare layout generale.
 - Verifica: lint mirato PASS su `src/components/profile/sections/OverviewSection.tsx`.
 - Prossimo passo: eventuale commit/push/deploy su tua conferma.
+
+## 2026-03-11 15:10 — git-workflow-manager
+
+- Fatto: commit/push/deploy della sola UI autorizzata (`OverviewSection.tsx`) + file OPS richiesti.
+- Commit: `4ef0d5e` su `main`; deploy production alias su `https://livewell.mottisi.com`.
+- Verifica production: login autenticato OK, `/profile/overview` 200 con testo pulsante presente, `/api/profile/dynamic-db` 200 con JSON export.
+- Prossimo passo: eventuale cleanup utente smoke `export_ui_1773238208@example.com`.
+
+## 2026-03-11 15:21 — backend-developer
+
+- Fatto: hardening backend su export DB dinamico + interview-flow anti-domande preimpostate.
+- Modifiche chiave: `/api/profile/dynamic-db` ora esporta solo record clinici strutturati per dominio/chiave (no agentWorkspaces/chat); orchestrator risponde a domande dirette (es. età) e fa al massimo 1 domanda di integrazione strettamente necessaria.
+- Test: PASS (`tests/api/profile-dynamic-db-route.test.ts`, `tests/api/orchestrator-domain-persistence.test.ts`, `tests/api/interview-flow-transcript-2026-03-11.test.ts`).
+- Prossimo passo: tua conferma per commit/push/deploy e smoke production su export + caso "quanti anni ho?".
+
+## 2026-03-11 15:21 — backend-developer
+
+- Fatto: hardening backend su export DB dinamico + interview-flow anti-domande preimpostate.
+- Modifiche chiave: /api/profile/dynamic-db ora esporta solo record clinici strutturati per dominio/chiave (no agentWorkspaces/chat); orchestrator risponde a domande dirette (es. età) e fa al massimo 1 domanda di integrazione strettamente necessaria.
+- Test: PASS (tests/api/profile-dynamic-db-route.test.ts, tests/api/orchestrator-domain-persistence.test.ts, tests/api/interview-flow-transcript-2026-03-11.test.ts).
+- Prossimo passo: conferma per commit/push/deploy e smoke production su export + caso 'quanti anni ho?'.
+
+## 2026-03-11 15:28 — backend-developer
+
+- Fatto: policy globale cross-agenti su interview flow centralizzata in consensus engine (non per singolo agente).
+- Output chiave: filtro domande template/generiche + massimo 1 domanda integrativa finale globale; rimozione fallback question preimpostata in gemini mock.
+- Test: PASS (8/8) su consensus/orchestrator/export route.
+- Prossimo passo: commit/push/deploy + smoke production.
+
+## 2026-03-11 15:35 — backend-developer
+
+- Fatto: coda domande persistente cross-turn implementata in orchestrator + workspace (1 domanda per turno, residue salvate e riprese ai turni successivi).
+- Hardening globale: policy centrale in consensus su filtri domande template/generiche + max 1 integrazione.
+- Verifica template: scan runtime `src/` senza le frasi preimpostate segnalate.
+- Test: PASS (8/8) su orchestrator/consensus/interview-flow.
+- Prossimo passo: commit/push/deploy e smoke production.
+
+## 2026-03-11 15:36 — backend-developer
+
+- Hardening add-on: rimossa frase preimpostata anche dal fallback mock Gemini.
+- Verifica globale stringhe template: assenti nel runtime `src/`; presenti solo in test/worklog storico.

@@ -58,4 +58,35 @@ describe('runConsensus known-data filtering with UserAttributes', () => {
     expect(out.gatingQuestions).toContain('Da quanto tempo hai dolore?')
     expect(out.gatingQuestions).not.toContain('Hai già una diagnosi?')
   })
+
+  it('applies global interview policy: removes templates and keeps max one question', () => {
+    const proposals: AgentProposal[] = [
+      {
+        agentId: 'mmg',
+        domain: 'health',
+        summary: 'Analisi salute',
+        reasoning: 'x',
+        questions: [
+          'Quale area vuoi prioritizzare adesso: nutrizione, allenamento, salute o mindfulness?',
+          'Qual è la tua altezza in cm?',
+          'Da quanto tempo hai dolore?',
+          'Hai diagnosi mediche già confermate o esami recenti utili?',
+        ],
+        toolCalls: [],
+      },
+    ]
+
+    const out = runConsensus({
+      opts: { orchestratorId: 'orchestrator', maxAgents: 4, requireGatingOnMissingInfo: true },
+      team,
+      proposals,
+      domainHint: 'health',
+      contextPack,
+      orchestratorToolsAllowed: [],
+    })
+
+    expect((out.gatingQuestions ?? []).length).toBeLessThanOrEqual(1)
+    expect(JSON.stringify(out.gatingQuestions ?? [])).not.toContain('Quale area vuoi prioritizzare')
+    expect(JSON.stringify(out.gatingQuestions ?? [])).not.toContain('altezza')
+  })
 })
