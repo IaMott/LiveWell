@@ -87,6 +87,46 @@ describe('orchestrator deterministic domain persistence', () => {
     expect(r2?.pendingDomain).toBe('nutrition')
   })
 
+  it('does not append duplicated integration question when already asked in response body', async () => {
+    const llm = {
+      complete: async ({ format }: { system: string; user: string; format?: 'json' | 'text' }) => {
+        if (format === 'text') {
+          return {
+            text: 'Per procedere, hai allergie o intolleranze alimentari da registrare?',
+          }
+        }
+        return {
+          text: JSON.stringify({
+            domain: 'nutrition',
+            summary: 'ok',
+            reasoning: 'ok',
+            questions: [],
+            recommendations: [],
+            toolCalls: [],
+            confidence: 0.8,
+          }),
+        }
+      },
+    }
+
+    const out = await orchestrate(
+      { llm, team, orchestratorToolsAllowed: ['user.setAttribute'] },
+      {
+        requestId: 'r-nodup',
+        userId: 'u1',
+        conversationId: 'c1',
+        domainHint: 'nutrition',
+        message: 'continuiamo con la nutrizione',
+        contextPack,
+      },
+    )
+
+    expect(out.finalMessageMarkdown).not.toContain(
+      'Mi manca solo questo dato per risponderti meglio',
+    )
+    expect(out.gatingQuestions?.length).toBeLessThanOrEqual(1)
+  })
+
   it('answers age question directly when birthDate exists and asks only DOB when missing', async () => {
     const llm = {
       complete: async ({ format }: { system: string; user: string; format?: 'json' | 'text' }) => {

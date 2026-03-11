@@ -738,10 +738,23 @@ function mergeInterviewQuestions(existing: string[], critical: string[]): string
   return merged
 }
 
+function hasEquivalentQuestionInText(text: string, question: string): boolean {
+  const clean = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length >= 4)
+  const textTokens = new Set(clean(text))
+  const qTokens = clean(question)
+  if (qTokens.length === 0) return false
+  const overlap = qTokens.filter((t) => textTokens.has(t)).length
+  return overlap >= Math.max(2, Math.ceil(qTokens.length * 0.5))
+}
+
 function ensureCriticalQuestionsInText(text: string, questions: string[]): string {
   if (questions.length === 0) return text
-  const lower = text.toLowerCase()
-  const missing = questions.filter((q) => !lower.includes(q.toLowerCase().slice(0, 18)))
+  const missing = questions.filter((q) => !hasEquivalentQuestionInText(text, q))
   if (missing.length === 0) return text
   return `${text.trim()}\n\nMi manca solo questo dato per risponderti meglio: ${missing[0]}`
 }
