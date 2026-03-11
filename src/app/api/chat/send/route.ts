@@ -18,7 +18,7 @@ import type {
   ToolCall,
   ToolResult,
 } from '@/lib/ai/types'
-import { ALLOWED_TOOL_NAMES } from '@/lib/tools/toolRegistry'
+import { ALLOWED_TOOL_NAMES, isAllowedToolName } from '@/lib/tools/toolRegistry'
 import { createToolExecutor, type MutationAuditEvent } from '@/lib/tools/toolExecutor'
 import { realToolHandlers, stubToolHandlers } from '@/lib/tools/handlers'
 import { prisma } from '@/lib/prisma'
@@ -61,8 +61,44 @@ type ChatStreamEvent =
   | { type: 'message.complete'; id: string; content: string }
   | { type: 'error'; code: string; message: string }
 
+type ChatFallbackPhase =
+  | 'CONVERSATION_RESOLVE'
+  | 'ORCHESTRATE_SAFE_RESPONSE'
+  | 'TOOL_EXECUTION'
+  | 'PERSIST_CHAT_TURN'
+
 function toSse(event: ChatStreamEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`
+}
+
+async function logChatFallbackEvent(input: {
+  phase: ChatFallbackPhase
+  requestId: string
+  userId: string
+  message: string
+  error?: unknown
+  metadata?: Record<string, unknown>
+}): Promise<void> {
+  const err =
+    input.error instanceof Error
+      ? { name: input.error.name, message: input.error.message }
+      : input.error
+        ? { message: String(input.error) }
+        : undefined
+
+  await logApiErrorEvent({
+    endpoint: '/api/chat/send',
+    errorCode: `FALLBACK_${input.phase}`,
+    statusCode: 200,
+    message: input.message,
+    requestId: input.requestId,
+    userId: input.userId,
+    metadata: {
+      fallbackPhase: input.phase,
+      ...(err ? { cause: err } : {}),
+      ...(input.metadata ?? {}),
+    },
+  })
 }
 
 function isDbPersistenceEnabled(): boolean {
@@ -614,6 +650,13 @@ export async function POST(request: Request): Promise<Response> {
     })
   } catch (error) {
     console.error('[chat/send] conversation resolve failed, using fallback', error)
+    await logChatFallbackEvent({
+      phase: 'CONVERSATION_RESOLVE',
+      requestId,
+      userId,
+      message: 'conversation resolve failed, fallback conversation id used',
+      error,
+    })
   }
 
   const requestedToolCalls = parseToolDirective(parsedBody.message)
@@ -648,13 +691,12 @@ export async function POST(request: Request): Promise<Response> {
     )
   } catch (error) {
     console.error('[chat/send] orchestrate failed, using safe fallback', error)
-    await logApiErrorEvent({
-      endpoint: '/api/chat/send',
-      errorCode: 'INTERNAL_ERROR',
-      statusCode: 500,
-      message: 'orchestrate failure fallback',
+    await logChatFallbackEvent({
+      phase: 'ORCHESTRATE_SAFE_RESPONSE',
       requestId,
       userId,
+      message: 'orchestrate failure fallback',
+      error,
     })
     const fallbackDomain = detectDomainFromText(parsedBody.message)
     const fallbackText = buildSafeFallbackResponse(parsedBody.message, contextPack, fallbackDomain)
@@ -679,6 +721,13 @@ export async function POST(request: Request): Promise<Response> {
 
   const toolCallsToExecute =
     consensus.toolCallsToExecute.length > 0 ? consensus.toolCallsToExecute : requestedToolCalls
+  const isDirectToolDirective =
+    consensus.toolCallsToExecute.length === 0 && requestedToolCalls.length > 0
+  const capabilityAgentId =
+    consensus.activeSpecialist?.id ?? consensus.debug?.selectedAgents?.[0] ?? 'orchestratore'
+  const capabilityTools = (team.find((a) => a.id === capabilityAgentId)?.toolsAllowed ?? []).filter(
+    isAllowedToolName,
+  )
 
   const toolResults: ToolResult[] = []
   for (const call of toolCallsToExecute) {
@@ -691,6 +740,12 @@ export async function POST(request: Request): Promise<Response> {
           role,
           ownerModeEnabled,
         },
+        agent: isDirectToolDirective
+          ? undefined
+          : {
+              id: capabilityAgentId,
+              toolsAllowed: capabilityTools,
+            },
         source: 'assistant',
         confirmedByUser: parsedBody.confirmedByUser ?? false,
         confirmToken: parsedBody.confirmToken,
@@ -698,6 +753,14 @@ export async function POST(request: Request): Promise<Response> {
       toolResults.push(result)
     } catch (error) {
       console.error('[chat/send] tool execution failed, continuing stream', error)
+      await logChatFallbackEvent({
+        phase: 'TOOL_EXECUTION',
+        requestId,
+        userId,
+        message: 'tool execution failed, tool result downgraded to INTERNAL_ERROR',
+        error,
+        metadata: { toolCallId: call.id, toolName: call.name },
+      })
       toolResults.push({
         toolCallId: call.id,
         ok: false,
@@ -728,6 +791,14 @@ export async function POST(request: Request): Promise<Response> {
     })
   } catch (error) {
     console.error('[chat/send] persistChatTurn failed, continuing in fallback mode', error)
+    await logChatFallbackEvent({
+      phase: 'PERSIST_CHAT_TURN',
+      requestId,
+      userId,
+      message: 'persistChatTurn failed, response still streamed',
+      error,
+      metadata: { conversationId },
+    })
   }
 
   const chunks = responseText.match(/.{1,32}/g) ?? [responseText]
