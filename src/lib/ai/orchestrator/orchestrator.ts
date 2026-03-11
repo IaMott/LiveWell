@@ -6,6 +6,7 @@ import {
   ContextPack,
   Domain,
   ActiveSpecialist,
+  ToolCall,
 } from '../types'
 import { detectDomainFromText, detectDomainsMulti } from '../domain/domainDetection'
 import { selectAgentsForRequest, runConsensus } from '../consensus/consensusEngine'
@@ -238,6 +239,110 @@ function buildAgentUserPrompt(input: AgentInput, agentId: string, peerInsights?:
   return parts.join('\n')
 }
 
+function normalizeDateToIsoDate(d: Date): string {
+  const year = d.getUTCFullYear()
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function parseDobFromNaturalMessage(message: string): string | null {
+  const text = message.toLowerCase().trim()
+  const now = new Date()
+  const currentYear = now.getUTCFullYear()
+
+  const ensureValid = (day: number, month: number, year: number): string | null => {
+    if (year < 1900 || year > currentYear) return null
+    if (month < 1 || month > 12) return null
+    if (day < 1 || day > 31) return null
+    const d = new Date(Date.UTC(year, month - 1, day))
+    if (d.getUTCFullYear() !== year || d.getUTCMonth() + 1 !== month || d.getUTCDate() !== day) {
+      return null
+    }
+    return normalizeDateToIsoDate(d)
+  }
+
+  // dd/mm/yyyy | dd-mm-yyyy | dd.mm.yyyy
+  const numeric = text.match(/\b([0-3]?\d)[\/\-.]([0-1]?\d)[\/\-.](\d{4})\b/)
+  if (numeric) {
+    const day = Number(numeric[1])
+    const month = Number(numeric[2])
+    const year = Number(numeric[3])
+    const parsed = ensureValid(day, month, year)
+    if (parsed) return parsed
+  }
+
+  // "26 giugno 1991", "26 giu 1991"
+  const monthMap: Record<string, number> = {
+    gennaio: 1,
+    gen: 1,
+    febbraio: 2,
+    feb: 2,
+    marzo: 3,
+    mar: 3,
+    aprile: 4,
+    apr: 4,
+    maggio: 5,
+    mag: 5,
+    giugno: 6,
+    giu: 6,
+    luglio: 7,
+    lug: 7,
+    agosto: 8,
+    ago: 8,
+    settembre: 9,
+    set: 9,
+    ottobre: 10,
+    ott: 10,
+    novembre: 11,
+    nov: 11,
+    dicembre: 12,
+    dic: 12,
+  }
+  const words = text.match(
+    /\b([0-3]?\d)\s+(gennaio|gen|febbraio|feb|marzo|mar|aprile|apr|maggio|mag|giugno|giu|luglio|lug|agosto|ago|settembre|set|ottobre|ott|novembre|nov|dicembre|dic)\s+(\d{4})\b/,
+  )
+  if (words) {
+    const day = Number(words[1])
+    const month = monthMap[words[2]]
+    const year = Number(words[3])
+    const parsed = ensureValid(day, month, year)
+    if (parsed) return parsed
+  }
+
+  return null
+}
+
+function inferPersonalToolCallsFromMessage(message: string): ToolCall[] {
+  const calls: ToolCall[] = []
+  const lower = message.toLowerCase()
+
+  const hasBirthSignal =
+    lower.includes('sono nato') ||
+    lower.includes('sono nata') ||
+    lower.includes('data di nascita') ||
+    lower.includes('nato il') ||
+    lower.includes('nata il')
+
+  if (hasBirthSignal) {
+    const dobIso = parseDobFromNaturalMessage(message)
+    if (dobIso) {
+      calls.push({
+        id: crypto.randomUUID(),
+        name: 'user.setAttribute',
+        args: {
+          domain: 'personal',
+          key: 'birthDate',
+          value: dobIso,
+          notes: 'Estratto automaticamente da messaggio naturale utente',
+        },
+      })
+    }
+  }
+
+  return calls
+}
+
 async function runOneAgent(
   llm: LlmClient,
   agent: AgentProfile,
@@ -253,6 +358,9 @@ async function runOneAgent(
 
   try {
     const obj = JSON.parse(res.text)
+    const parsedToolCalls = Array.isArray(obj.toolCalls) ? obj.toolCalls : []
+    const fallbackToolCalls = inferPersonalToolCallsFromMessage(input.message)
+    const toolCalls = parsedToolCalls.length > 0 ? parsedToolCalls : fallbackToolCalls
     return {
       agentId: agent.id,
       domain: (obj.domain as Domain) ?? input.domainHint ?? 'general',
@@ -260,12 +368,13 @@ async function runOneAgent(
       reasoning: String(obj.reasoning ?? '').slice(0, 4000),
       questions: Array.isArray(obj.questions) ? obj.questions.map(String).slice(0, 8) : [],
       recommendations: Array.isArray(obj.recommendations) ? obj.recommendations : [],
-      toolCalls: Array.isArray(obj.toolCalls) ? obj.toolCalls : [],
+      toolCalls,
       confidence: typeof obj.confidence === 'number' ? obj.confidence : 0.6,
       citations: Array.isArray(obj.citations) ? obj.citations : [],
       flags: obj.flags ?? {},
     }
   } catch {
+    const fallbackToolCalls = inferPersonalToolCallsFromMessage(input.message)
     return {
       agentId: agent.id,
       domain: input.domainHint ?? 'general',
@@ -273,7 +382,7 @@ async function runOneAgent(
       reasoning: res.text.slice(0, 4000),
       questions: [],
       recommendations: [],
-      toolCalls: [],
+      toolCalls: fallbackToolCalls,
       confidence: 0.4,
     }
   }
@@ -436,8 +545,18 @@ export async function orchestrate(
     activeSpecialist,
   })
 
+  // Deterministic safeguard: if specialists/LLM fail to emit tool-calls,
+  // still persist clearly extractable personal data from user text.
+  const fallbackToolCalls = inferPersonalToolCallsFromMessage(input.message)
+  const mergedToolCalls = [...(consensus.toolCallsToExecute ?? []), ...fallbackToolCalls]
+  const dedupedToolCalls = mergedToolCalls.filter((c, idx, arr) => {
+    const key = `${c.name}:${JSON.stringify(c.args)}`
+    return arr.findIndex((x) => `${x.name}:${JSON.stringify(x.args)}` === key) === idx
+  })
+
   return {
     ...consensus,
+    toolCallsToExecute: dedupedToolCalls,
     finalMessageMarkdown: naturalResponse,
     activeSpecialist,
     debug: {

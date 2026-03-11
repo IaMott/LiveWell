@@ -34,6 +34,24 @@ function toDate(iso?: string): Date {
   return iso ? new Date(iso) : new Date()
 }
 
+function coerceNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value)
+    if (Number.isFinite(n)) return n
+  }
+  return null
+}
+
+function coerceDate(value: unknown): Date | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const d = new Date(value)
+    if (!Number.isNaN(d.getTime())) return d
+  }
+  return null
+}
+
 // ─────────────────────────────────────────
 // Real handler implementations
 // ─────────────────────────────────────────
@@ -47,6 +65,8 @@ const userUpdateProfile: Handler = async (args, ctx) => {
   const scalarMap: Record<string, { domain: string; key: string; unit?: string }> = {
     weight: { domain: 'personal', key: 'weight', unit: 'kg' },
     height: { domain: 'personal', key: 'height', unit: 'cm' },
+    birthDate: { domain: 'personal', key: 'birthDate' },
+    gender: { domain: 'personal', key: 'gender' },
   }
 
   const writes: Promise<unknown>[] = []
@@ -101,10 +121,39 @@ const userSetAttribute: Handler = async (args, ctx) => {
   })
 
   // Keep current profile snapshot aligned for UI readers using legacy fields.
-  if (a.domain === 'personal' && (a.key === 'weight' || a.key === 'height')) {
-    await updateUserProfile(ctx.actor.userId, { [a.key]: a.value as unknown }).catch(
-      () => undefined,
-    )
+  if (a.domain === 'personal') {
+    const normalizedKey = a.key.toLowerCase()
+    const profileUpdate: Record<string, unknown> = {}
+
+    if (normalizedKey === 'weight') {
+      const n = coerceNumber(a.value)
+      if (n != null) profileUpdate.weight = n
+    }
+
+    if (normalizedKey === 'height') {
+      const n = coerceNumber(a.value)
+      if (n != null) profileUpdate.height = n
+    }
+
+    if (
+      normalizedKey === 'birthdate' ||
+      normalizedKey === 'dateofbirth' ||
+      normalizedKey === 'date_of_birth' ||
+      normalizedKey === 'dob'
+    ) {
+      const d = coerceDate(a.value)
+      if (d) profileUpdate.birthDate = d
+    }
+
+    if (normalizedKey === 'gender' || normalizedKey === 'sex' || normalizedKey === 'sesso') {
+      if (typeof a.value === 'string' && a.value.trim() !== '') {
+        profileUpdate.gender = a.value.trim().slice(0, 20)
+      }
+    }
+
+    if (Object.keys(profileUpdate).length > 0) {
+      await updateUserProfile(ctx.actor.userId, profileUpdate).catch(() => undefined)
+    }
   }
 
   return { saved: true, id: row.id }

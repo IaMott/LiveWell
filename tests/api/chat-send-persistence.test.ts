@@ -24,9 +24,14 @@ const prismaMock = {
   },
   userProfile: {
     findUnique: vi.fn(),
+    upsert: vi.fn(),
   },
   // Required by realToolHandlers: health.addMetric calls prisma.bodyMetricEntry.create
   bodyMetricEntry: {
+    create: vi.fn(),
+  },
+  // Required by realToolHandlers: user.setAttribute calls prisma.userAttribute.create
+  userAttribute: {
     create: vi.fn(),
   },
   $transaction: vi.fn(
@@ -61,8 +66,10 @@ describe('/api/chat/send persistence integration', () => {
     prismaMock.notification.count.mockResolvedValue(0)
     prismaMock.notification.findFirst.mockResolvedValue(null)
     prismaMock.userProfile.findUnique.mockResolvedValue(null)
+    prismaMock.userProfile.upsert.mockResolvedValue({ id: 'profile-1' })
     prismaMock.toolAuditLog.create.mockResolvedValue({ id: 'audit-1' })
     prismaMock.bodyMetricEntry.create.mockResolvedValue({ id: 'metric-1' })
+    prismaMock.userAttribute.create.mockResolvedValue({ id: 'attr-1' })
     txMessageCreate.mockResolvedValue({ id: 'msg-tx' })
     txToolAuditCreate.mockResolvedValue({ id: 'audit-tx' })
     txAgentWorkspaceUpsert.mockResolvedValue({ id: 'workspace-tx' })
@@ -174,5 +181,33 @@ describe('/api/chat/send persistence integration', () => {
       (c) => (c[0] as { create?: { agentId?: string } }).create?.agentId,
     )
     expect(agentIds).toContain('fisioterapista')
+  })
+
+  it('persists DOB from natural chat via user.setAttribute fallback', async () => {
+    vi.resetModules()
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const req = new Request('http://localhost/api/chat/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': 'u-db',
+      },
+      body: JSON.stringify({ message: 'sono nato il 26/06/1991' }),
+    })
+
+    const res = await POST(req)
+    const body = await res.text()
+
+    expect(res.status).toBe(200)
+    expect(body).toContain('"type":"message.complete"')
+    expect(prismaMock.userAttribute.create).toHaveBeenCalled()
+
+    const toolAuditCalls = txToolAuditCreate.mock.calls
+      .map((c) => c[0] as { data?: { toolName?: string; status?: string } })
+      .filter((c) => c.data?.toolName === 'user.setAttribute')
+
+    expect(toolAuditCalls.length).toBeGreaterThan(0)
+    expect(toolAuditCalls[0]?.data?.status).toBe('success')
   })
 })
