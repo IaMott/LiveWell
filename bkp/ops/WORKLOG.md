@@ -718,3 +718,23 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 
 - Hardening add-on: rimossa frase preimpostata anche dal fallback mock Gemini.
 - Verifica globale stringhe template: assenti nel runtime `src/`; presenti solo in test/worklog storico.
+
+## 2026-03-11 15:53 — git-workflow-manager
+
+- Fatto: commit/push/deploy fix global queue+policy.
+- SHA deployata: 612fd46 (follow-up fix build type narrowing).
+- Deploy production: https://livewell-4hyd029ps-iamotts-projects.vercel.app (alias livewell.mottisi.com).
+- Smoke multi-turno (3 turni stessa conversationId): 200/200/200, continuità domanda residua confermata al turno successivo.
+
+## 2026-03-11 16:24 — backend-developer
+
+- Fatto: micro-fix strutturale su lock modalità specialista + stream ragionamento agenti + fallback non inconcludente.
+- Modifiche chiave:
+  - `src/hooks/useChat.ts`: persistenza `activeSpecialistId`/`activeSpecialistName` su localStorage anche dopo passaggio temporaneo su profilo/impostazioni.
+  - `src/app/api/chat/send/route.ts`: nuovo evento SSE `agent.thinking` (switch nome agente + titolo ragionamento), fallback safe contestuale al dominio (niente frase "problema tecnico").
+  - `src/components/chat/MessageBubble.tsx`: visualizzazione animata thinking con nome specialista + titolo breve del ragionamento.
+  - `tests/api/chat-send-persistence.test.ts`: test nuovo su stream `agent.thinking` + update aspettativa fallback.
+- Database reset: eseguito con `set -a; source .env.production.local; set +a; npx prisma db push --force-reset --skip-generate`.
+- Test mirati: PASS (14/14) su chat-send persistence + orchestrator domain persistence + transcript interview-flow.
+- Smoke production rapido: 2 turni autenticati 200/200 con `activeSpecialistId=fisioterapista` mantenuto e nessun fallback tecnico.
+- Prossimo passo: commit/push/deploy e verifica production post-deploy eventi `agent.thinking`.

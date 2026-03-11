@@ -32,6 +32,7 @@ const prismaMock = {
   },
   // Required by realToolHandlers: user.setAttribute calls prisma.userAttribute.create
   userAttribute: {
+    findFirst: vi.fn(),
     create: vi.fn(),
   },
   $transaction: vi.fn(
@@ -70,6 +71,7 @@ describe('/api/chat/send persistence integration', () => {
     prismaMock.toolAuditLog.create.mockResolvedValue({ id: 'audit-1' })
     prismaMock.bodyMetricEntry.create.mockResolvedValue({ id: 'metric-1' })
     prismaMock.userAttribute.create.mockResolvedValue({ id: 'attr-1' })
+    prismaMock.userAttribute.findFirst.mockResolvedValue(null)
     txMessageCreate.mockResolvedValue({ id: 'msg-tx' })
     txToolAuditCreate.mockResolvedValue({ id: 'audit-tx' })
     txAgentWorkspaceUpsert.mockResolvedValue({ id: 'workspace-tx' })
@@ -209,5 +211,90 @@ describe('/api/chat/send persistence integration', () => {
 
     expect(toolAuditCalls.length).toBeGreaterThan(0)
     expect(toolAuditCalls[0]?.data?.status).toBe('success')
+  })
+
+  it('streams agent.thinking events with specialist switch titles before response deltas', async () => {
+    vi.resetModules()
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: vi.fn(async () => ({
+        domain: 'training',
+        finalMessageMarkdown:
+          'Ti aiuto con il dolore lombare. Dimmi quando è iniziato esattamente.',
+        toolCallsToExecute: [],
+        activeSpecialist: {
+          id: 'fisioterapista',
+          displayName: 'Fisioterapista',
+          domain: 'training',
+          domains: ['training', 'health'],
+        },
+        ui: { domainIcon: 'training', moodScore: 50, sectionScores: { training: 60, general: 50 } },
+        safety: { escalation: 'none' },
+        debug: {
+          selectedAgents: ['fisioterapista', 'fisiatra'],
+          conflicts: [],
+          round1Proposals: [
+            {
+              agentId: 'fisioterapista',
+              domain: 'training',
+              summary: 'Valuto pattern del dolore e trigger meccanici',
+              reasoning: 'r1',
+            },
+            {
+              agentId: 'fisiatra',
+              domain: 'health',
+              summary: 'Escludo red flags cliniche immediate',
+              reasoning: 'r1',
+            },
+          ],
+          round2Proposals: [],
+        },
+      })),
+    }))
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const req = new Request('http://localhost/api/chat/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': 'u-db',
+      },
+      body: JSON.stringify({ message: 'ho mal di schiena' }),
+    })
+
+    const res = await POST(req)
+    const body = await res.text()
+
+    expect(res.status).toBe(200)
+    expect(body).toContain('"type":"agent.thinking"')
+    expect(body).toContain('Valuto pattern del dolore')
+    expect(body).toContain('Escludo red flags cliniche')
+    expect(body).toContain('"type":"message.complete"')
+  })
+
+  it('does not return 500 when orchestrate throws (safe fallback response)', async () => {
+    vi.resetModules()
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: vi.fn(async () => {
+        throw new Error('orchestrate boom')
+      }),
+    }))
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const req = new Request('http://localhost/api/chat/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': 'u-db',
+      },
+      body: JSON.stringify({ message: 'in allenamento mi alleno 4 volte a settimana' }),
+    })
+
+    const res = await POST(req)
+    const body = await res.text()
+
+    expect(res.status).toBe(200)
+    expect(body).toContain('"type":"message.complete"')
+    expect(body.toLowerCase()).toContain('procediamo')
+    expect(body.toLowerCase()).not.toContain('problema tecnico')
   })
 })

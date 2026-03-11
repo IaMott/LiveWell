@@ -5,6 +5,7 @@ import { checkRateLimit, getClientIp } from '@/lib/security/httpGuards'
 import { getAuthUserId, getAuthRole, getAuthOwnerMode } from '@/lib/auth'
 import { errorResponse } from '@/lib/security/errorSchema'
 import { orchestrate } from '@/lib/ai/orchestrator/orchestrator'
+import { detectDomainFromText } from '@/lib/ai/domain/domainDetection'
 import { createGeminiClient } from '@/lib/ai/gemini'
 import { loadTeam } from '@/lib/ai/team/loader'
 import { buildContextPack } from '@/lib/ai/context/contextPackBuilder'
@@ -34,12 +35,19 @@ const requestSchema = z.object({
 type ChatStreamEvent =
   | { type: 'message.delta'; id: string; delta: string }
   | {
+      type: 'agent.thinking'
+      specialistName: string
+      title: string
+      domain?: Domain
+    }
+  | {
       type: 'ui.state'
       domain: Domain
       moodScore: number
       sectionScores: Record<string, number>
       specialistName?: string
       activeSpecialistId?: string
+      specialistDomains?: Domain[]
     }
   | {
       type: 'tool.result'
@@ -101,6 +109,91 @@ function buildDeterministicLlm(toolCalls: ToolCall[]) {
       }
     },
   }
+}
+
+function hasPersonalData(
+  contextPack: ContextPack,
+  key: 'height' | 'weight' | 'birthDate',
+): boolean {
+  const personal = contextPack.user.attributes?.personal
+  if (personal?.[key]?.value != null) return true
+  const profile = contextPack.user.profile ?? {}
+  return profile[key] != null
+}
+
+function buildSafeFallbackResponse(
+  message: string,
+  contextPack: ContextPack,
+  domain: Domain,
+): string {
+  const lower = message.toLowerCase()
+  const greeting = /\b(ciao|salve|buongiorno|hey)\b/i.test(lower)
+  if (greeting) return 'Ciao. Procediamo subito: dimmi in una frase il tuo obiettivo principale.'
+
+  const asksAge = /\b(quanti anni|et[àa]|age)\b/i.test(lower)
+  if (asksAge) {
+    const birthDate =
+      contextPack.user.attributes?.personal?.birthDate?.value ?? contextPack.user.profile?.birthDate
+    if (!birthDate) {
+      return 'Non ho la tua data di nascita registrata. Per calcolare la tua età indicami la data di nascita in formato gg/mm/aaaa.'
+    }
+  }
+
+  if (domain === 'nutrition') {
+    if (!hasPersonalData(contextPack, 'weight')) {
+      return 'Per costruire un piano nutrizionale personalizzato mi manca solo il tuo peso attuale in kg.'
+    }
+    if (!hasPersonalData(contextPack, 'height')) {
+      return 'Per costruire un piano nutrizionale personalizzato mi manca solo la tua altezza in cm.'
+    }
+    if (!hasPersonalData(contextPack, 'birthDate')) {
+      return 'Per completare il piano nutrizionale mi manca solo la tua data di nascita (gg/mm/aaaa).'
+    }
+    return 'Ho già i dati essenziali. Dimmi il target concreto: quanti kg vuoi perdere e in quanto tempo.'
+  }
+
+  if (domain === 'training') {
+    return 'Procediamo in modo pratico: indicami il sintomo o il limite principale su cui vuoi intervenire adesso.'
+  }
+
+  if (domain === 'health') {
+    return 'Procediamo subito: indicami il sintomo principale, da quanto è presente e cosa lo peggiora.'
+  }
+
+  if (domain === 'mindfulness') {
+    return 'Procediamo con un obiettivo concreto: preferisci lavorare su stress, sonno o ansia?'
+  }
+
+  return 'Procediamo subito: dimmi l’obiettivo principale su cui vuoi lavorare ora.'
+}
+
+function buildThinkingEvents(
+  consensus: {
+    debug?: { round1Proposals?: AgentProposal[]; selectedAgents?: string[] }
+  },
+  team: Array<{ id: string; displayName: string; domainTags: Domain[] }>,
+): Array<{ specialistName: string; title: string; domain?: Domain }> {
+  const round1 = consensus.debug?.round1Proposals ?? []
+  if (round1.length > 0) {
+    return round1.slice(0, 3).map((p) => {
+      const agent = team.find((a) => a.id === p.agentId)
+      return {
+        specialistName: agent?.displayName ?? p.agentId,
+        title: p.summary?.trim().slice(0, 72) || 'Analisi del caso in corso',
+        domain: p.domain,
+      }
+    })
+  }
+
+  const selected = consensus.debug?.selectedAgents ?? []
+  return selected.slice(0, 3).map((agentId) => {
+    const agent = team.find((a) => a.id === agentId)
+    return {
+      specialistName: agent?.displayName ?? agentId,
+      title: 'Valutazione specialistica in corso',
+      domain: agent?.domainTags?.[0],
+    }
+  })
 }
 
 type RoutePersistenceDeps = {
@@ -522,14 +615,41 @@ export async function POST(request: Request): Promise<Response> {
   const team = loadTeam({ teamDirAbsolute, allowEmpty: true })
   const llm =
     requestedToolCalls.length > 0 ? buildDeterministicLlm(requestedToolCalls) : createGeminiClient()
-  const consensus = await orchestrate(
-    {
-      llm,
-      team,
-      orchestratorToolsAllowed: [...ALLOWED_TOOL_NAMES],
-    },
-    agentInput,
-  )
+  let consensus
+  try {
+    consensus = await orchestrate(
+      {
+        llm,
+        team,
+        orchestratorToolsAllowed: [...ALLOWED_TOOL_NAMES],
+      },
+      agentInput,
+    )
+  } catch (error) {
+    console.error('[chat/send] orchestrate failed, using safe fallback', error)
+    await logApiErrorEvent({
+      endpoint: '/api/chat/send',
+      errorCode: 'INTERNAL_ERROR',
+      statusCode: 500,
+      message: 'orchestrate failure fallback',
+      requestId,
+      userId,
+    })
+    const fallbackDomain = detectDomainFromText(parsedBody.message)
+    const fallbackText = buildSafeFallbackResponse(parsedBody.message, contextPack, fallbackDomain)
+    consensus = {
+      domain: fallbackDomain,
+      finalMessageMarkdown: fallbackText,
+      toolCallsToExecute: [],
+      ui: {
+        domainIcon: fallbackDomain,
+        moodScore: contextPack.ui.moodScore,
+        sectionScores: contextPack.ui.sectionScores,
+      },
+      safety: { escalation: 'none' as const },
+      debug: { selectedAgents: [], conflicts: [] },
+    }
+  }
 
   const pendingAuditEvents: MutationAuditEvent[] = []
   const executor = buildToolExecutor(async (event) => {
@@ -541,19 +661,28 @@ export async function POST(request: Request): Promise<Response> {
 
   const toolResults: ToolResult[] = []
   for (const call of toolCallsToExecute) {
-    const result = await executor.executeToolCall(call, {
-      requestId: agentInput.requestId,
-      conversationId: agentInput.conversationId,
-      actor: {
-        userId,
-        role,
-        ownerModeEnabled,
-      },
-      source: 'assistant',
-      confirmedByUser: parsedBody.confirmedByUser ?? false,
-      confirmToken: parsedBody.confirmToken,
-    })
-    toolResults.push(result)
+    try {
+      const result = await executor.executeToolCall(call, {
+        requestId: agentInput.requestId,
+        conversationId: agentInput.conversationId,
+        actor: {
+          userId,
+          role,
+          ownerModeEnabled,
+        },
+        source: 'assistant',
+        confirmedByUser: parsedBody.confirmedByUser ?? false,
+        confirmToken: parsedBody.confirmToken,
+      })
+      toolResults.push(result)
+    } catch (error) {
+      console.error('[chat/send] tool execution failed, continuing stream', error)
+      toolResults.push({
+        toolCallId: call.id,
+        ok: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Tool execution failed' },
+      })
+    }
   }
 
   // Natural response text only — tool execution details go as separate SSE events
@@ -562,6 +691,7 @@ export async function POST(request: Request): Promise<Response> {
   const activeDomain = consensus.activeSpecialist?.domain ?? consensus.ui.domainIcon
   const specialistName = consensus.activeSpecialist?.displayName
   const activeSpecialistId = consensus.activeSpecialist?.id
+  const specialistDomains = consensus.activeSpecialist?.domains
 
   try {
     await persistence.persistChatTurn({
@@ -580,13 +710,41 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const chunks = responseText.match(/.{1,32}/g) ?? [responseText]
+  const thinkingEvents = buildThinkingEvents(
+    {
+      debug: {
+        round1Proposals: consensus.debug?.round1Proposals,
+        selectedAgents: consensus.debug?.selectedAgents,
+      },
+    },
+    team,
+  )
   const encoder = new TextEncoder()
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    async start(controller) {
       try {
-        for (const chunk of chunks) {
+        if (thinkingEvents.length > 0) {
+          for (let i = 0; i < thinkingEvents.length; i += 1) {
+            const ev = thinkingEvents[i]
+            controller.enqueue(
+              encoder.encode(
+                toSse({
+                  type: 'agent.thinking',
+                  specialistName: ev.specialistName,
+                  title: ev.title,
+                  domain: ev.domain,
+                }),
+              ),
+            )
+            if (i < thinkingEvents.length - 1) {
+              await new Promise((resolve) => setTimeout(resolve, 240))
+            }
+          }
+        }
+
+        for (let i = 0; i < chunks.length; i += 1) {
           controller.enqueue(
-            encoder.encode(toSse({ type: 'message.delta', id: assistantId, delta: chunk })),
+            encoder.encode(toSse({ type: 'message.delta', id: assistantId, delta: chunks[i] })),
           )
         }
 
@@ -599,6 +757,7 @@ export async function POST(request: Request): Promise<Response> {
               sectionScores: consensus.ui.sectionScores ?? { general: consensus.ui.moodScore },
               specialistName,
               activeSpecialistId,
+              specialistDomains,
             }),
           ),
         )

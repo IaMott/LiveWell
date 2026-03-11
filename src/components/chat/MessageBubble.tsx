@@ -35,7 +35,11 @@ export function MessageBubble({ message, streamingSpecialistName }: Props) {
         : null
 
   // Name to show in ThinkingDots: prefer message-level name (from ui.state), fallback to streaming context
-  const thinkingName = message.specialistName ?? (message.streaming ? streamingSpecialistName : undefined)
+  const thinkingName =
+    message.thinkingSpecialistName ??
+    message.specialistName ??
+    (message.streaming ? streamingSpecialistName : undefined)
+  const thinkingTitle = message.thinkingTitle
 
   return (
     <div
@@ -63,7 +67,13 @@ export function MessageBubble({ message, streamingSpecialistName }: Props) {
         </span>
       )}
 
-      <div style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', width: '100%' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: isUser ? 'flex-end' : 'flex-start',
+          width: '100%',
+        }}
+      >
         {!isUser && domainColor && (
           <div
             style={{
@@ -89,12 +99,9 @@ export function MessageBubble({ message, streamingSpecialistName }: Props) {
           }}
         >
           {message.streaming && !message.content ? (
-            <ThinkingDots specialistName={thinkingName} />
+            <ThinkingDots specialistName={thinkingName} title={thinkingTitle} />
           ) : (
-            <MarkdownContent
-              content={message.content}
-              streaming={message.streaming}
-            />
+            <MarkdownContent content={message.content} streaming={message.streaming} />
           )}
         </div>
       </div>
@@ -103,13 +110,7 @@ export function MessageBubble({ message, streamingSpecialistName }: Props) {
 }
 
 /** Lightweight inline markdown renderer */
-function MarkdownContent({
-  content,
-  streaming,
-}: {
-  content: string
-  streaming?: boolean
-}) {
+function MarkdownContent({ content, streaming }: { content: string; streaming?: boolean }) {
   const blocks = parseBlocks(content)
 
   return (
@@ -147,9 +148,7 @@ function MarkdownContent({
         return (
           <p key={i} style={{ margin: i === 0 ? '0' : '0.5rem 0 0' }}>
             {renderInline(block.text ?? '')}
-            {streaming && i === blocks.length - 1 && (
-              <span style={{ opacity: 0.5 }}>▋</span>
-            )}
+            {streaming && i === blocks.length - 1 && <span style={{ opacity: 0.5 }}>▋</span>}
           </p>
         )
       })}
@@ -254,37 +253,49 @@ function renderInline(text: string): React.ReactNode {
   return parts.length === 1 ? parts[0] : parts
 }
 
-function ThinkingDots({ specialistName }: { specialistName?: string }) {
+function ThinkingDots({ specialistName, title }: { specialistName?: string; title?: string }) {
   return (
     <div style={{ display: 'flex', gap: '4px', padding: '2px 0', alignItems: 'center' }}>
-      {[0, 1, 2].map((i) => (
+      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: 'var(--color-text-secondary)',
+              animation: `lw-bounce 1.4s ease-in-out ${i * 0.2}s infinite`,
+              display: 'inline-block',
+            }}
+          />
+        ))}
+      </div>
+      {(specialistName || title) && (
         <span
-          key={i}
+          key={`${specialistName ?? 'team'}:${title ?? ''}`}
           style={{
-            width: '6px',
-            height: '6px',
-            borderRadius: '50%',
-            backgroundColor: 'var(--color-text-secondary)',
-            animation: `lw-bounce 1.4s ease-in-out ${i * 0.2}s infinite`,
-            display: 'inline-block',
-          }}
-        />
-      ))}
-      {specialistName && (
-        // key={specialistName} causes remount on agent switch → CSS animation replays (crossfade effect)
-        <span
-          key={specialistName}
-          style={{
-            marginLeft: '7px',
+            marginLeft: '8px',
             fontSize: '0.6875rem',
-            fontWeight: 500,
             color: 'var(--color-text-secondary)',
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-            animation: 'lw-name-in 0.4s ease forwards',
+            letterSpacing: '0.03em',
+            animation: 'lw-name-in 0.35s ease forwards',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            maxWidth: '320px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
         >
-          {specialistName}
+          {specialistName ? (
+            <span style={{ fontWeight: 600, textTransform: 'uppercase' }}>{specialistName}</span>
+          ) : (
+            <span style={{ fontWeight: 600, textTransform: 'uppercase' }}>TEAM</span>
+          )}
+          <span style={{ opacity: 0.5 }}>→</span>
+          <span>{title ?? 'elaborazione in corso'}</span>
         </span>
       )}
       <style>{`

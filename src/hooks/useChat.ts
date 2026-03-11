@@ -9,11 +9,14 @@ export type ChatMessage = {
   content: string
   domain?: Domain
   specialistName?: string
+  thinkingSpecialistName?: string
+  thinkingTitle?: string
   streaming?: boolean
 }
 
 const STORAGE_KEY = 'livewell_conversation_id'
 const SPECIALIST_KEY = 'livewell_active_specialist'
+const SPECIALIST_NAME_KEY = 'livewell_active_specialist_name'
 // Max time to wait for conversation history before giving up (Neon cold-start)
 const LOAD_TIMEOUT_MS = 8000
 
@@ -37,6 +40,16 @@ export function useChat() {
   }, [activeSpecialistId])
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedSpecialistId = localStorage.getItem(SPECIALIST_KEY)
+      const savedSpecialistName = localStorage.getItem(SPECIALIST_NAME_KEY)
+      if (savedSpecialistId) {
+        setActiveSpecialistId(savedSpecialistId)
+        activeSpecialistIdRef.current = savedSpecialistId
+      }
+      if (savedSpecialistName) setActiveSpecialistName(savedSpecialistName)
+    }
+
     const savedId = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
     if (savedId) {
       void loadConversation(savedId)
@@ -48,9 +61,6 @@ export function useChat() {
     setIsStreaming(true)
     setMessages([])
     setActiveDomain(null)
-    setActiveSpecialistId(undefined)
-    setActiveSpecialistName(undefined)
-    activeSpecialistIdRef.current = undefined
 
     // Abort the request if it takes too long (protects against Neon DB cold-start hangs)
     const controller = new AbortController()
@@ -63,7 +73,13 @@ export function useChat() {
         return
       }
       const data = (await res.json()) as {
-        messages: Array<{ id: string; role: string; content: string; domain?: string; specialistName?: string }>
+        messages: Array<{
+          id: string
+          role: string
+          content: string
+          domain?: string
+          specialistName?: string
+        }>
       }
       setMessages(
         data.messages.map((m) => ({
@@ -77,6 +93,16 @@ export function useChat() {
       setConversationId(id)
       conversationIdRef.current = id
       localStorage.setItem(STORAGE_KEY, id)
+
+      // Keep specialist mode locked across temporary navigation (profile/settings)
+      // and recover visible specialist name from the latest assistant turn.
+      const latestAssistantWithSpecialist = [...data.messages]
+        .reverse()
+        .find((m) => m.role === 'assistant' && m.specialistName)
+      if (latestAssistantWithSpecialist?.specialistName) {
+        setActiveSpecialistName(latestAssistantWithSpecialist.specialistName)
+        localStorage.setItem(SPECIALIST_NAME_KEY, latestAssistantWithSpecialist.specialistName)
+      }
     } catch {
       localStorage.removeItem(STORAGE_KEY)
     } finally {
@@ -96,6 +122,7 @@ export function useChat() {
     conversationIdRef.current = newId
     localStorage.setItem(STORAGE_KEY, newId)
     localStorage.removeItem(SPECIALIST_KEY)
+    localStorage.removeItem(SPECIALIST_NAME_KEY)
   }, [])
 
   const exitSpecialist = useCallback(() => {
@@ -103,6 +130,7 @@ export function useChat() {
     setActiveSpecialistName(undefined)
     activeSpecialistIdRef.current = undefined
     localStorage.removeItem(SPECIALIST_KEY)
+    localStorage.removeItem(SPECIALIST_NAME_KEY)
   }, [])
 
   const exportConversation = useCallback(async (id?: string) => {
@@ -200,7 +228,13 @@ export function useChat() {
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantId
-                      ? { ...m, content: String(event.content ?? m.content), streaming: false }
+                      ? {
+                          ...m,
+                          content: String(event.content ?? m.content),
+                          streaming: false,
+                          thinkingSpecialistName: undefined,
+                          thinkingTitle: undefined,
+                        }
                       : m,
                   ),
                 )
@@ -216,12 +250,30 @@ export function useChat() {
                   setActiveSpecialistId(newSpecialistId)
                   setActiveSpecialistName(specialistName)
                   activeSpecialistIdRef.current = newSpecialistId
-                  if (newSpecialistId) localStorage.setItem(SPECIALIST_KEY, newSpecialistId)
+                  if (newSpecialistId) {
+                    localStorage.setItem(SPECIALIST_KEY, newSpecialistId)
+                    if (specialistName) localStorage.setItem(SPECIALIST_NAME_KEY, specialistName)
+                  }
                 }
 
                 setMessages((prev) =>
+                  prev.map((m) => (m.id === assistantId ? { ...m, domain, specialistName } : m)),
+                )
+              } else if (event.type === 'agent.thinking') {
+                const thinkingSpecialistName = String(event.specialistName ?? '')
+                const thinkingTitle = String(event.title ?? '')
+                setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === assistantId ? { ...m, domain, specialistName } : m,
+                    m.id === assistantId
+                      ? {
+                          ...m,
+                          specialistName: thinkingSpecialistName || m.specialistName,
+                          content: m.content,
+                          streaming: true,
+                          thinkingSpecialistName: thinkingSpecialistName || undefined,
+                          thinkingTitle: thinkingTitle || undefined,
+                        }
+                      : m,
                   ),
                 )
               }
