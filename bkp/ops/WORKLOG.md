@@ -556,3 +556,26 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 - Integrato `UserAvatar` nella sezione profilo con riquadro circolare dedicato (dimensione grande in header profilo).
 - Corretto contrasto in dark mode: testo iniziali ora usa `var(--color-bg)` su sfondo `var(--color-text-primary)` (visibile in light/dark/system).
 - Verifica eseguita: `npm run build` PASS.
+
+## 2026-03-11 10:01 — git-workflow-manager
+
+- Fatto: verifica post commit/push/deploy avatar su production (`livewell.mottisi.com`).
+- Evidenze: homepage autenticata con avatar top-right e iniziali `MR`; layout profilo con avatar header (`40px`) + avatar grande (`92px`) e iniziali `MR`.
+- Tema: confermato via CSS production uso token `var(--color-text-primary)`/`var(--color-bg)` e override `[data-theme=dark]` + `[data-theme=system]` per contrasto.
+- Esito: check richiesti PASS (light/dark/system a livello token + markup production).
+- Prossimo passo: eventuale cleanup utente smoke di verifica con accesso DB production.
+
+## 2026-03-11 10:52 — backend-developer
+
+- Fatto: cleanup user smoke production `avatar_smoke_1773220368@example.com` richiesto dall'utente.
+- Query eseguite (Prisma): `user.findUnique(email)`, `conversation.findMany(userId)`, count pre su `user/userProfile/conversation/message/userAttribute`, `user.deleteMany(id)`, count post sugli stessi modelli.
+- Esito: utente trovato (`cmmltmjga00006ioepwlj1god`) e cancellato (`deletedUsers=1`); residui post-cleanup tutti a `0`.
+- Prossimo passo: nessuno, task cleanup concluso.
+
+## 2026-03-11 12:10 — git-workflow-manager
+
+- Fatto: mini report operativo finale richiesto (stato repo, SHA main, stato deploy production, stato cleanup smoke user).
+- Verifica repo: branch `main`, HEAD `4aa22d48f52f20184d6e8582ff607854177802af`, working tree non completamente clean per file ops (`bkp/ops/STATUS.md`, `bkp/ops/WORKLOG.md`) + untracked intenzionale `design/`.
+- Verifica deploy: `https://livewell.mottisi.com` online, root risponde `HTTP 307` verso `/login` (comportamento auth atteso).
+- Cleanup smoke: confermato completato nei log con `deletedUsers=1` e residui post-cleanup a `0`.
+- Prossimo passo: opzionale commit dei file ops per tornare a working tree clean (lasciando `design/` untracked intenzionale).
