@@ -2,7 +2,7 @@
 
 ## Current Step: Micro-fix specialist lock + anti-output inconcludente + thinking trace
 
-## Stato verificato — 2026-03-11 16:24
+## Stato verificato — 2026-03-11 16:28
 
 - Fix applicati su backend:
   - persistenza lock specialista cross-pagina in `useChat` (localStorage + restore stato),
@@ -14,7 +14,8 @@
 - Smoke production rapido:
   - lock specialista confermato su 2 turni (`activeSpecialistId=fisioterapista`),
   - fallback tecnico assente.
-  - Nota: eventi `agent.thinking` non ancora visibili in production finché non viene fatto deploy di questo step.
+  - eventi `agent.thinking` confermati (3 eventi/turno nello smoke post-deploy).
+  - titolo ragionamento normalizzato per evitare testo JSON sporco.
 
 ## Next immediato
 
@@ -23,4 +24,4 @@
 
 ## Ultimo aggiornamento
 
-2026-03-11 16:24
+2026-03-11 16:28

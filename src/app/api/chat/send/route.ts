@@ -173,13 +173,23 @@ function buildThinkingEvents(
   },
   team: Array<{ id: string; displayName: string; domainTags: Domain[] }>,
 ): Array<{ specialistName: string; title: string; domain?: Domain }> {
+  const normalizeTitle = (value: string | undefined): string => {
+    if (!value) return 'Analisi del caso in corso'
+    const stripped = value
+      .replace(/[{}[\]"]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!stripped) return 'Analisi del caso in corso'
+    return stripped.slice(0, 72)
+  }
+
   const round1 = consensus.debug?.round1Proposals ?? []
   if (round1.length > 0) {
     return round1.slice(0, 3).map((p) => {
       const agent = team.find((a) => a.id === p.agentId)
       return {
         specialistName: agent?.displayName ?? p.agentId,
-        title: p.summary?.trim().slice(0, 72) || 'Analisi del caso in corso',
+        title: normalizeTitle(p.summary),
         domain: p.domain,
       }
     })
