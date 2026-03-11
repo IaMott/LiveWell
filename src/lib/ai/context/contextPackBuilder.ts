@@ -345,7 +345,15 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
                   : undefined
               const pendingDomainRaw = r2Obj?.pendingDomain
               const pendingDomain =
-                typeof pendingDomainRaw === 'string' ? pendingDomainRaw : undefined
+                pendingDomainRaw === 'general' ||
+                pendingDomainRaw === 'nutrition' ||
+                pendingDomainRaw === 'health' ||
+                pendingDomainRaw === 'training' ||
+                pendingDomainRaw === 'mindfulness' ||
+                pendingDomainRaw === 'inspiration' ||
+                pendingDomainRaw === 'coordination'
+                  ? (pendingDomainRaw as Domain)
+                  : undefined
               return {
                 agentId: w.agentId,
                 round1Summary: r1,
