@@ -750,3 +750,9 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 - Fatto: ulteriore normalizzazione titoli thinking per rimuovere prefissi `domain:`/`summary:` residui.
 - Output chiave: titolo breve, leggibile e coerente con richiesta UX.
 - Test: PASS `tests/api/chat-send-persistence.test.ts` (7/7).
+
+## 2026-03-11 16:46 — backend-developer
+
+- Fatto: parser titolo `agent.thinking` reso deterministico prendendo il segmento dopo l’ultima occorrenza di `summary:`.
+- Risultato atteso: nessun prefisso tecnico residuo nel titolo durante switch specialisti.
+- Test: PASS `tests/api/chat-send-persistence.test.ts` (7/7).

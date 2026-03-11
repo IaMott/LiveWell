@@ -2,7 +2,7 @@
 
 ## Current Step: Micro-fix specialist lock + anti-output inconcludente + thinking trace
 
-## Stato verificato — 2026-03-11 16:41
+## Stato verificato — 2026-03-11 16:46
 
 - Fix applicati su backend:
   - persistenza lock specialista cross-pagina in `useChat` (localStorage + restore stato),
@@ -24,4 +24,4 @@
 
 ## Ultimo aggiornamento
 
-2026-03-11 16:41
+2026-03-11 16:46
