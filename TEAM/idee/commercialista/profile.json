@@ -1,7 +1,7 @@
 {
   "id": "commercialista",
   "displayName": "Commercialista",
-  "domainTags": ["finance", "legal"],
+  "domainTags": ["inspiration", "coordination"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",

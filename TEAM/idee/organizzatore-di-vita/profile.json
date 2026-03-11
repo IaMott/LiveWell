@@ -1,7 +1,7 @@
 {
   "id": "life-organizer",
   "displayName": "Life Organizer",
-  "domainTags": ["productivity", "coordination"],
+  "domainTags": ["coordination", "inspiration"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",

@@ -84,6 +84,11 @@ export function loadTeam(opts: TeamLoaderOptions): AgentProfile[] {
     }
   }
 
+  // Hard-fail on partial/invalid TEAM to avoid silent exclusion of specialists.
+  if (errors.length > 0) {
+    throw new Error(`Invalid TEAM profiles detected: ${errors.join(' | ')}`)
+  }
+
   if (agents.length === 0) {
     if (opts.allowEmpty) return []
     throw new Error(`No valid TEAM agents. Errors: ${errors.join(' | ')}`)

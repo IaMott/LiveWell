@@ -1,7 +1,7 @@
 {
   "id": "executive-coach",
   "displayName": "Executive Coach",
-  "domainTags": ["career", "productivity"],
+  "domainTags": ["inspiration", "coordination"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
