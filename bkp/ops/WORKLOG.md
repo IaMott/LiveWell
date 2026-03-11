@@ -118,6 +118,22 @@
 - Output chiave: mantenuta cancellazione totale e introdotta cancellazione puntuale con aggiornamento UI immediato.
 - Prossimo passo: push PR e verifica da preview.
 
+## 2026-03-11 13:15 — backend-developer (hardening interview-flow)
+
+- Fatto: hardening backend interview-flow in `src/lib/ai/orchestrator/orchestrator.ts`.
+- Output chiave:
+  - filtro esplicito domande generiche (`isGenericQuestion`) con pattern anti "c'è altro?/vuoi-desideri aggiungere?/cosa vuoi fare?".
+  - costruzione domande critiche mirate per dominio (`buildCriticalQuestions`) con focus clinico/pratico e campi critici mancanti.
+  - merge `consensus.gatingQuestions` + domande critiche deterministiche, dedup e rimozione genericità.
+  - enforcement sul testo finale (`ensureCriticalQuestionsInText`) per garantire che le domande critiche escano anche se LLM risponde in modo vago.
+  - aggiornato prompt synthesis: niente inviti vaghi, elenco numerato completo quando mancano dati.
+- Test:
+  - `tests/api/interview-flow-transcript-2026-03-11.test.ts` (nuovo): PASS.
+  - regressione: `tests/api/orchestrator-dob-fallback.test.ts`: PASS.
+  - regressione: `tests/api/chat-send-persistence.test.ts`: PASS.
+- Nota: primo run fallito su frase "desideri aggiungere", corretto aggiungendo pattern dedicato e rerun PASS.
+- Prossimo passo: tua conferma per blocco successivo (commit/push/deploy oppure ulteriori test e2e).
+
 ## 2026-03-04 16:55 — backend-developer
 
 - Fatto: hardening endpoint DELETE /api/conversations su query conversationId vuota/blank con 400; estesi test API (401 + invalid query) e aggiunto test UI HistoryPageContent per delete singola/totale.
@@ -579,3 +595,38 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 - Verifica deploy: `https://livewell.mottisi.com` online, root risponde `HTTP 307` verso `/login` (comportamento auth atteso).
 - Cleanup smoke: confermato completato nei log con `deletedUsers=1` e residui post-cleanup a `0`.
 - Prossimo passo: opzionale commit dei file ops per tornare a working tree clean (lasciando `design/` untracked intenzionale).
+
+## 2026-03-11 12:45 — backend-developer
+
+- Fatto: implementati fix backend per persistenza automatica dati personali da chat (DOB naturale + fallback tool-call + sync UserAttribute→UserProfile).
+- File core: `src/lib/ai/orchestrator/orchestrator.ts`, `src/lib/tools/handlers.ts`.
+- Test aggiunti/aggiornati: `tests/api/orchestrator-dob-fallback.test.ts`, `tests/api/user-set-attribute-smoke.test.ts`, `tests/api/chat-send-persistence.test.ts`.
+- Esito test mirati: PASS (10/10).
+- Backup post-modifica creato: `bkp/backups/2026-03-11/1245_backend-dob-fallback.tar.gz`.
+- Prossimo passo: eventuale commit/push/deploy + smoke production sul caso DOB.
+
+## 2026-03-11 12:58 — git-workflow-manager
+
+- Fatto: commit/push/deploy dei fix backend DOB richiesti.
+- Commit: `07cedfa` su `main` (solo file backend/test richiesti).
+- Push: `origin/main` aggiornato.
+- Deploy production: alias attivo `https://livewell.mottisi.com` (deployment URL: `https://livewell-ks4lqelru-iamotts-projects.vercel.app`).
+- Smoke production autenticato caso `sono nato il 26/06/1991`: PASS.
+- Verifica DB: `UserAttribute(personal,birthDate)` creato, `UserProfile.birthDate` sincronizzato, `/api/profile` dashboard restituisce `profile.birthDate` valorizzato.
+- Cleanup smoke user eseguito (`deletedUsers=1`).
+
+## 2026-03-11 13:06 — git-workflow-manager
+
+- Fatto: verifica allineamento branch/repo locale-remoto e controllo copie repo su Desktop.
+- Esito: `main` locale e `origin/main` allineati (ahead/behind `0/0`, stesso SHA `07cedfa...`).
+- Repo su Desktop: una sola `LiveWell` (`/Users/mattiamottisi/Desktop/LiveWell`), nessun duplicato omonimo rilevato.
+- Nota: working tree non clean per file OPS (`STATUS.md`, `WORKLOG.md`) + untracked `design/`.
+- Prossimo passo: opzionale commit OPS per tornare clean.
+
+## 2026-03-11 13:10 — code-reviewer
+
+- Fatto: analisi transcript utente + verifica DB production sulla stessa conversazione.
+- Evidenza chiave: conversazione `eb14bd08-f08c-4102-9828-c6153b051756` con `toolAuditCount=0`, `attrCountConv=0`, `UserProfile.birthDate=null` al tempo del test.
+- Diagnosi: persistenza dinamica allora non avveniva; inoltre prompt di sintesi impone domanda finale costante, favorendo output generico.
+- Stato attuale: fix DOB già deployato e verificato successivamente con smoke PASS (`/tmp/livewell_dob_summary_1773230251.json`).
+- Prossimo passo: correggere “intervista professionista” (domande mirate per obiettivo, non domande generiche di cortesia).

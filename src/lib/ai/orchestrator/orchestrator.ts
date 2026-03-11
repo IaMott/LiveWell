@@ -343,6 +343,149 @@ function inferPersonalToolCallsFromMessage(message: string): ToolCall[] {
   return calls
 }
 
+const GENERIC_QUESTION_PATTERNS = [
+  /c['’]e\s+qualcos['’]altro/i,
+  /vuoi\s+aggiungere/i,
+  /desideri\s+aggiungere/i,
+  /come\s+ti\s+senti\s+generalmente/i,
+  /cosa\s+vuoi\s+fare/i,
+  /cosa\s+intendi/i,
+  /posso\s+aiutarti/i,
+]
+
+function isGenericQuestion(q: string): boolean {
+  const trimmed = q.trim()
+  if (!trimmed) return true
+  return GENERIC_QUESTION_PATTERNS.some((re) => re.test(trimmed))
+}
+
+function readPersonalSnapshot(contextPack: ContextPack): {
+  birthDate?: string
+  gender?: string
+  height?: number
+  weight?: number
+} {
+  const profile = (contextPack.user.profile ?? {}) as Record<string, unknown>
+  const attrs = contextPack.user.attributes ?? {}
+  const personal = (attrs.personal ?? {}) as Record<string, { value?: unknown }>
+
+  const out: { birthDate?: string; gender?: string; height?: number; weight?: number } = {}
+
+  const birthFromProfile = profile.birthDate
+  if (typeof birthFromProfile === 'string' && birthFromProfile) out.birthDate = birthFromProfile
+  const birthFromAttr = personal.birthDate?.value
+  if (typeof birthFromAttr === 'string' && birthFromAttr) out.birthDate = birthFromAttr
+
+  const genderFromProfile = profile.gender
+  if (typeof genderFromProfile === 'string' && genderFromProfile) out.gender = genderFromProfile
+  const genderFromAttr = personal.gender?.value
+  if (typeof genderFromAttr === 'string' && genderFromAttr) out.gender = genderFromAttr
+
+  const hProfile = profile.height
+  if (typeof hProfile === 'number') out.height = hProfile
+  const hAttr = personal.height?.value
+  if (typeof hAttr === 'number') out.height = hAttr
+
+  const wProfile = profile.weight
+  if (typeof wProfile === 'number') out.weight = wProfile
+  const wAttr = personal.weight?.value
+  if (typeof wAttr === 'number') out.weight = wAttr
+
+  return out
+}
+
+function hasGastritisSignal(contextPack: ContextPack, message: string): boolean {
+  const m = message.toLowerCase()
+  if (m.includes('gastrite')) return true
+  const profile = (contextPack.user.profile ?? {}) as Record<string, unknown>
+  const health = (profile.health ?? {}) as Record<string, unknown>
+  const asText = JSON.stringify(health).toLowerCase()
+  return asText.includes('gastrite')
+}
+
+function buildCriticalQuestions(
+  domain: Domain,
+  contextPack: ContextPack,
+  userMessage: string,
+): string[] {
+  const personal = readPersonalSnapshot(contextPack)
+  const questions: string[] = []
+  const lower = userMessage.toLowerCase()
+
+  const askAnthropometrics = () => {
+    if (personal.height == null) {
+      questions.push('Qual è la tua altezza in cm?')
+    }
+    if (personal.weight == null) {
+      questions.push('Qual è il tuo peso attuale in kg?')
+    }
+  }
+
+  if (domain === 'nutrition' || lower.includes('dieta') || lower.includes('aliment')) {
+    questions.push('Qual è il tuo obiettivo nutrizionale nelle prossime 8-12 settimane?')
+    askAnthropometrics()
+    questions.push('Quanti pasti fai al giorno e in quali orari?')
+    questions.push('Hai allergie/intolleranze alimentari o cibi che non tolleri?')
+    if (hasGastritisSignal(contextPack, userMessage)) {
+      questions.push(
+        'Negli ultimi 7 giorni quali sintomi gastrici hai avuto (bruciore, reflusso, nausea) e in quali orari?',
+      )
+      questions.push('Quali alimenti o bevande noti che peggiorano la gastrite?')
+    }
+  } else if (domain === 'training') {
+    questions.push(
+      'Qual è il tuo obiettivo allenamento principale e in quanto tempo vuoi raggiungerlo?',
+    )
+    askAnthropometrics()
+    questions.push('Quanti giorni a settimana puoi allenarti e quanto tempo per sessione?')
+    questions.push('Hai dolore o infortuni attivi che limitano alcuni movimenti?')
+  } else if (domain === 'health') {
+    questions.push('Da quanto tempo hai questo problema e con quale intensità da 0 a 10?')
+    questions.push('Ci sono segnali di allarme (febbre alta, sangue, sincope, dolore toracico)?')
+    questions.push('Assumi farmaci in modo regolare o solo al bisogno?')
+    questions.push('Hai diagnosi mediche già confermate o esami recenti utili?')
+  } else if (domain === 'mindfulness') {
+    questions.push(
+      'Qual è il sintomo principale su cui vuoi lavorare adesso (ansia, umore, sonno, stress)?',
+    )
+    questions.push('Da quanto tempo è presente e quanto impatta la tua giornata da 0 a 10?')
+    questions.push('Quante ore dormi mediamente e con quale qualità del sonno?')
+  } else {
+    questions.push(
+      'Quale area vuoi prioritizzare adesso: nutrizione, allenamento, salute o mindfulness?',
+    )
+    askAnthropometrics()
+  }
+
+  // Keep only specific questions; remove generic or duplicates.
+  const deduped = Array.from(new Set(questions.map((q) => q.trim()))).filter(
+    (q) => q.length > 0 && !isGenericQuestion(q),
+  )
+  return deduped.slice(0, 6)
+}
+
+function mergeInterviewQuestions(existing: string[], critical: string[]): string[] {
+  const specificExisting = existing
+    .map((q) => q.trim())
+    .filter((q) => q.length > 0 && !isGenericQuestion(q))
+
+  const merged = [...specificExisting]
+  for (const q of critical) {
+    if (!merged.some((e) => e.toLowerCase() === q.toLowerCase())) merged.push(q)
+  }
+  return merged
+}
+
+function ensureCriticalQuestionsInText(text: string, questions: string[]): string {
+  if (questions.length === 0) return text
+  const lower = text.toLowerCase()
+  const missing = questions.filter((q) => !lower.includes(q.toLowerCase().slice(0, 18)))
+  if (missing.length === 0) return text
+
+  const list = missing.map((q, i) => `${i + 1}. ${q}`).join('\n')
+  return `${text.trim()}\n\nPer impostare un piano davvero mirato ho bisogno di queste informazioni:\n${list}`
+}
+
 async function runOneAgent(
   llm: LlmClient,
   agent: AgentProfile,
@@ -394,11 +537,19 @@ async function synthesizeResponse(
     userMessage: string
     proposals: AgentProposal[]
     gatingQuestions: string[]
+    criticalQuestions: string[]
     contextPack: ContextPack
     activeSpecialist?: ActiveSpecialist
   },
 ): Promise<string> {
-  const { userMessage, proposals, gatingQuestions, contextPack, activeSpecialist } = params
+  const {
+    userMessage,
+    proposals,
+    gatingQuestions,
+    criticalQuestions,
+    contextPack,
+    activeSpecialist,
+  } = params
 
   const summaries = proposals
     .filter((p) => p.summary)
@@ -431,8 +582,9 @@ async function synthesizeResponse(
       `- Max 3-4 frasi salvo piani dettagliati esplicitamente richiesti`,
       `- Rimani nel tuo ambito di competenza; per altri ambiti rimanda ai colleghi`,
       `- Per piani o programmi strutturati, usa elenchi numerati senza intestazioni`,
-      `- Se mancano dati fondamentali per il tuo ambito, chiedi UNA sola informazione alla volta`,
-      `- REGOLA FONDAMENTALE: Termina SEMPRE con una domanda aperta o un invito a rispondere — l'ultima parola è sempre dell'utente, mai tua`,
+      `- Se mancano dati fondamentali per il tuo ambito, fai TUTTE le domande cliniche/pratiche necessarie in elenco numerato`,
+      `- Evita domande generiche tipo "c'è altro?" o "come ti senti in generale?"`,
+      `- Chiudi con domande operative, non con inviti vaghi`,
     ].join('\n')
   } else {
     systemPrompt = [
@@ -446,11 +598,12 @@ async function synthesizeResponse(
       `- NON dire che la risposta arriverà in 24-48 ore o simili`,
       `- Rispondi SUBITO con informazioni concrete basate sull'analisi del team`,
       `- Max 3-4 frasi salvo piani dettagliati richiesti dall'utente`,
-      `- Se devi fare domande, includine al massimo 1, in modo conversazionale`,
+      `- Se mancano dati critici, fai tutte le domande necessarie in elenco numerato`,
+      `- Evita domande generiche tipo "c'è altro?" o "cosa vuoi fare?"`,
       `- Non chiedere informazioni già presenti nel profilo utente`,
       `- Usa il punto fermo, non bullet, per risposte conversazionali brevi`,
       `- Per piani strutturati, usa elenchi numerati senza intestazioni`,
-      `- REGOLA FONDAMENTALE: Termina SEMPRE con una domanda aperta o un invito a rispondere — l'ultima parola è sempre dell'utente, mai tua`,
+      `- Termina con domande operative mirate solo se mancano dati critici`,
     ].join('\n')
   }
 
@@ -462,11 +615,14 @@ async function synthesizeResponse(
     summaries || '(nessuna analisi disponibile)',
     topRecs ? `\nRACCOMANDAZIONI:\n${topRecs}` : '',
     gatingQuestions.length
-      ? `\nINFORMAZIONI ANCORA MANCANTI (chiedi solo la più importante): ${gatingQuestions.slice(0, 3).join('; ')}`
+      ? `\nINFORMAZIONI MANCANTI GIÀ EMERSE DAL TEAM: ${gatingQuestions.join('; ')}`
+      : '',
+    criticalQuestions.length
+      ? `\nDOMANDE CRITICHE OBBLIGATORIE DA FARE ORA: ${criticalQuestions.join(' ; ')}`
       : '',
     ``,
     `Scrivi una risposta conversazionale in italiano, rivolta direttamente all'utente.`,
-    `Termina SEMPRE con una domanda o un invito — non chiudere mai la conversazione unilateralmente.`,
+    `Se ci sono domande critiche, riportale tutte in elenco numerato e senza genericità.`,
   ]
     .filter(Boolean)
     .join('\n')
@@ -476,11 +632,13 @@ async function synthesizeResponse(
     const text = res.text.trim()
     // Fallback if model accidentally returned JSON
     if (text.startsWith('{') || text.startsWith('[')) {
-      return proposals.find((p) => p.summary)?.summary ?? 'Come posso aiutarti?'
+      const fallback = proposals.find((p) => p.summary)?.summary ?? 'Come posso aiutarti?'
+      return ensureCriticalQuestionsInText(fallback, criticalQuestions)
     }
-    return text
+    return ensureCriticalQuestionsInText(text, criticalQuestions)
   } catch {
-    return proposals.find((p) => p.summary)?.summary ?? 'Come posso aiutarti?'
+    const fallback = proposals.find((p) => p.summary)?.summary ?? 'Come posso aiutarti?'
+    return ensureCriticalQuestionsInText(fallback, criticalQuestions)
   }
 }
 
@@ -537,10 +695,21 @@ export async function orchestrate(
     orchestratorToolsAllowed: deps.orchestratorToolsAllowed,
   })
 
+  const interviewCriticalQuestions = buildCriticalQuestions(
+    domainHint,
+    input.contextPack,
+    input.message,
+  )
+  const mergedInterviewQuestions = mergeInterviewQuestions(
+    consensus.gatingQuestions ?? [],
+    interviewCriticalQuestions,
+  )
+
   const naturalResponse = await synthesizeResponse(deps.llm, {
     userMessage: input.message,
     proposals: round2Proposals,
-    gatingQuestions: consensus.gatingQuestions ?? [],
+    gatingQuestions: mergedInterviewQuestions,
+    criticalQuestions: mergedInterviewQuestions,
     contextPack: input.contextPack,
     activeSpecialist,
   })
@@ -556,6 +725,7 @@ export async function orchestrate(
 
   return {
     ...consensus,
+    gatingQuestions: mergedInterviewQuestions,
     toolCallsToExecute: dedupedToolCalls,
     finalMessageMarkdown: naturalResponse,
     activeSpecialist,
