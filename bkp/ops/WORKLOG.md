@@ -744,3 +744,9 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 - Fatto: micro-fix su titolo `agent.thinking` per evitare output sporchi (JSON/raw tokens) nel banner ragionamento.
 - Modifica: normalizzazione title in `buildThinkingEvents()` con stripping caratteri strutturali e fallback robusto.
 - Test: PASS `tests/api/chat-send-persistence.test.ts` (7/7).
+
+## 2026-03-11 16:41 — backend-developer
+
+- Fatto: ulteriore normalizzazione titoli thinking per rimuovere prefissi `domain:`/`summary:` residui.
+- Output chiave: titolo breve, leggibile e coerente con richiesta UX.
+- Test: PASS `tests/api/chat-send-persistence.test.ts` (7/7).

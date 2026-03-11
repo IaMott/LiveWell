@@ -2,7 +2,7 @@
 
 ## Current Step: Micro-fix specialist lock + anti-output inconcludente + thinking trace
 
-## Stato verificato — 2026-03-11 16:28
+## Stato verificato — 2026-03-11 16:41
 
 - Fix applicati su backend:
   - persistenza lock specialista cross-pagina in `useChat` (localStorage + restore stato),
@@ -15,7 +15,7 @@
   - lock specialista confermato su 2 turni (`activeSpecialistId=fisioterapista`),
   - fallback tecnico assente.
   - eventi `agent.thinking` confermati (3 eventi/turno nello smoke post-deploy).
-  - titolo ragionamento normalizzato per evitare testo JSON sporco.
+  - titolo ragionamento ulteriormente normalizzato (senza prefissi `domain/summary`).
 
 ## Next immediato
 
@@ -24,4 +24,4 @@
 
 ## Ultimo aggiornamento
 
-2026-03-11 16:28
+2026-03-11 16:41

@@ -175,12 +175,20 @@ function buildThinkingEvents(
 ): Array<{ specialistName: string; title: string; domain?: Domain }> {
   const normalizeTitle = (value: string | undefined): string => {
     if (!value) return 'Analisi del caso in corso'
+    const summaryMatch = value.match(/summary\s*:\s*([^\n]+)/i)
+    const preferred = summaryMatch?.[1] ?? value
     const stripped = value
+      .replace(/\bdomain\s*:\s*[^\n,]+/gi, ' ')
+      .replace(/\bsummary\s*:/gi, ' ')
       .replace(/[{}[\]"]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
-    if (!stripped) return 'Analisi del caso in corso'
-    return stripped.slice(0, 72)
+    const clean = (summaryMatch ? preferred : stripped)
+      .replace(/[{}[\]"]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!clean) return 'Analisi del caso in corso'
+    return clean.slice(0, 72)
   }
 
   const round1 = consensus.debug?.round1Proposals ?? []
