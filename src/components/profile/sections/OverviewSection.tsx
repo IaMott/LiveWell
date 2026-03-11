@@ -13,6 +13,7 @@ export function OverviewSection({ data }: Props) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [form, setForm] = useState({
     name: user.name ?? '',
     birthDate: profile?.birthDate ? String(profile.birthDate).slice(0, 10) : '',
@@ -49,6 +50,26 @@ export function OverviewSection({ data }: Props) {
     }
   }
 
+  async function exportDynamicDb() {
+    setExporting(true)
+    try {
+      const res = await fetch('/api/profile/dynamic-db', { method: 'GET' })
+      if (!res.ok) throw new Error('Export non disponibile')
+      const payload = await res.json()
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `livewell-dynamic-db-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Personal card */}
@@ -60,7 +81,14 @@ export function OverviewSection({ data }: Props) {
           boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '0.75rem',
+          }}
+        >
           <h2
             style={{
               margin: 0,
@@ -73,25 +101,44 @@ export function OverviewSection({ data }: Props) {
           >
             Dati personali
           </h2>
-          <button
-            onClick={() => setEditing((v) => !v)}
-            style={{
-              padding: '0.25rem 0.625rem',
-              borderRadius: '999px',
-              border: '1px solid var(--color-separator)',
-              background: 'transparent',
-              color: 'var(--color-accent)',
-              fontSize: '0.8125rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.25rem',
-            }}
-          >
-            <Pencil size={12} />
-            {editing ? 'Annulla' : 'Modifica'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <button
+              onClick={exportDynamicDb}
+              disabled={exporting}
+              style={{
+                padding: '0.25rem 0.625rem',
+                borderRadius: '999px',
+                border: '1px solid var(--color-separator)',
+                background: 'transparent',
+                color: 'var(--color-text-primary)',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                cursor: exporting ? 'not-allowed' : 'pointer',
+                opacity: exporting ? 0.7 : 1,
+              }}
+            >
+              {exporting ? 'Export…' : 'Export DB dinamico'}
+            </button>
+            <button
+              onClick={() => setEditing((v) => !v)}
+              style={{
+                padding: '0.25rem 0.625rem',
+                borderRadius: '999px',
+                border: '1px solid var(--color-separator)',
+                background: 'transparent',
+                color: 'var(--color-accent)',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+              }}
+            >
+              <Pencil size={12} />
+              {editing ? 'Annulla' : 'Modifica'}
+            </button>
+          </div>
         </div>
 
         {!editing ? (
@@ -99,14 +146,8 @@ export function OverviewSection({ data }: Props) {
             <Row label="Nome" value={user.name ?? '—'} />
             <Row label="Età" value={age != null ? `${age} anni` : '—'} />
             <Row label="Sesso" value={profile?.gender ?? '—'} />
-            <Row
-              label="Altezza"
-              value={profile?.height != null ? `${profile.height} cm` : '—'}
-            />
-            <Row
-              label="Peso"
-              value={profile?.weight != null ? `${profile.weight} kg` : '—'}
-            />
+            <Row label="Altezza" value={profile?.height != null ? `${profile.height} cm` : '—'} />
+            <Row label="Peso" value={profile?.weight != null ? `${profile.weight} kg` : '—'} />
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -163,11 +204,7 @@ export function OverviewSection({ data }: Props) {
                 />
               </Field>
             </div>
-            <button
-              onClick={save}
-              disabled={saving}
-              style={saveButtonStyle}
-            >
+            <button onClick={save} disabled={saving} style={saveButtonStyle}>
               {saving ? 'Salvataggio…' : 'Salva modifiche'}
             </button>
           </div>
@@ -176,11 +213,20 @@ export function OverviewSection({ data }: Props) {
 
       {/* Stats grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
-        <StatCard label="Conversazioni" value={stats.conversationCount} color="var(--color-accent)" />
+        <StatCard
+          label="Conversazioni"
+          value={stats.conversationCount}
+          color="var(--color-accent)"
+        />
         <StatCard label="Allenamenti (7gg)" value={stats.workoutSessions7d} color="#007AFF" />
         <StatCard label="Pasti (7gg)" value={stats.mealsLogged7d} color="#AF52DE" />
         {stats.avgMood7d != null && (
-          <StatCard label="Umore medio" value={Math.round(stats.avgMood7d * 10) / 10} unit="/10" color="#5AC8FA" />
+          <StatCard
+            label="Umore medio"
+            value={Math.round(stats.avgMood7d * 10) / 10}
+            unit="/10"
+            color="#5AC8FA"
+          />
         )}
         {stats.lastWeightEntry && (
           <StatCard
@@ -218,12 +264,28 @@ export function OverviewSection({ data }: Props) {
                   boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                 }}
               >
-                <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    color: 'var(--color-text-primary)',
+                  }}
+                >
                   {a.title}
                 </p>
-                <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+                <p
+                  style={{
+                    margin: '0.25rem 0 0',
+                    fontSize: '0.8125rem',
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
                   {a.type} ·{' '}
-                  {new Date(a.createdAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
+                  {new Date(a.createdAt).toLocaleDateString('it-IT', {
+                    day: 'numeric',
+                    month: 'short',
+                  })}
                 </p>
               </div>
             ))}
@@ -238,7 +300,9 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
       <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{label}</span>
-      <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>{value}</span>
+      <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+        {value}
+      </span>
     </div>
   )
 }

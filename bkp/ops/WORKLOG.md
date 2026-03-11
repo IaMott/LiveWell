@@ -134,6 +134,41 @@
 - Nota: primo run fallito su frase "desideri aggiungere", corretto aggiungendo pattern dedicato e rerun PASS.
 - Prossimo passo: tua conferma per blocco successivo (commit/push/deploy oppure ulteriori test e2e).
 
+## 2026-03-11 13:53 — backend-developer (verifica completa DB dinamico multi-dominio)
+
+- Fatto: eseguito smoke autenticato production su tutti i domini richiesti (`dati_generali`, `nutrizione`, `allenamento`, `salute`, `mindfulness`, `idee`) con sequenza 2 turni per dominio (turno1=salvataggio dato, turno2=verifica riuso esplicito).
+- Ambiente: `https://livewell.mottisi.com` + query DB via Prisma su Neon production.
+- Script operativo eseguito: `/private/tmp/livewell_verify_all_domains.sh`.
+- Output chiave:
+  - `dati_generali`: salvataggio + riuso + persistenza DB OK (`personal.birthDate=1991-06-26`).
+  - `nutrizione`: riuso risposta OK, persistenza presente ma sotto `domain=health,key=allergies` (mismatch dominio).
+  - `allenamento`: `turn1` ha risposto `500`, nessuna persistenza/richiamo utile al turno2.
+  - `salute`: riuso risposta OK, persistenza ampia su più chiavi (`hypertension*`), ma con duplicazioni/incoerenza naming.
+  - `mindfulness`: riuso in risposta OK, nessuna persistenza su `UserAttribute`.
+  - `idee`: riuso in risposta OK, nessuna persistenza su `UserAttribute`.
+- Cleanup: utente smoke rimosso correttamente (`cleanup_user_count=0`).
+- Prossimo passo: hardening backend per obbligare persistenza dominio-specifica anche per mindfulness/idee e fix root-cause 500 su allenamento.
+
+## 2026-03-11 14:36 — backend-developer (fix gap multi-dominio + rerun smoke)
+
+- Fatto: applicati fix backend-only richiesti:
+  - anti-500 su `chat/send` con fallback safe se `orchestrate` fallisce;
+  - inferenza deterministica multi-dominio (`user.setAttribute`) da messaggi naturali per nutrition/training/health/mindfulness/idee;
+  - specialist mode più coerente (scope specialistico, supporto multi-domain tag, no domanda generica area in lock specialistico);
+  - normalizzazione `user.setAttribute` (domain/key aliases) + dedup su valori ripetuti;
+  - nuovo endpoint export database dinamico: `GET /api/profile/dynamic-db`.
+- Test aggiunti/aggiornati:
+  - `tests/api/orchestrator-domain-persistence.test.ts` (nuovo),
+  - `tests/api/profile-dynamic-db-route.test.ts` (nuovo),
+  - aggiornati `tests/api/chat-send-persistence.test.ts`, `tests/api/user-set-attribute-smoke.test.ts`.
+- Risultato test: PASS (`13/13` sulla suite mirata).
+- Deploy production effettuato (alias live): `https://livewell.mottisi.com`.
+- Smoke multi-dominio post-fix eseguito:
+  - report: `/tmp/livewell_domains_report_1773236007.json`
+  - miglioramenti: allenamento turn1 500 risolto; mindfulness/idee persistono; specialist check fisioterapista no domanda area (`HAS_AREA_QUESTION=0`).
+  - gap residui: persistenza nutrizione intermittente; normalizzazione salute/nutrizione ancora non pienamente consistente in tutti i run.
+- Prossimo passo: chiudere i due gap residui con hardening ulteriore su mapping dominio-key e filtro domande area quando non necessario.
+
 ## 2026-03-04 16:55 — backend-developer
 
 - Fatto: hardening endpoint DELETE /api/conversations su query conversationId vuota/blank con 400; estesi test API (401 + invalid query) e aggiunto test UI HistoryPageContent per delete singola/totale.
@@ -630,3 +665,15 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 - Diagnosi: persistenza dinamica allora non avveniva; inoltre prompt di sintesi impone domanda finale costante, favorendo output generico.
 - Stato attuale: fix DOB già deployato e verificato successivamente con smoke PASS (`/tmp/livewell_dob_summary_1773230251.json`).
 - Prossimo passo: correggere “intervista professionista” (domande mirate per obiettivo, non domande generiche di cortesia).
+
+## 2026-03-11 14:57 — backend-developer
+
+- Fatto: analisi delta report multi-dominio tra `/tmp/livewell_domains_report_1773236007.json` e `/tmp/livewell_domains_report_1773237126.json`.
+- Output chiave: nutrizione migliorata (persistenza presente), regressioni emerse su allenamento e salute, duplicazione mindfulness su dominio health.
+- Prossimo passo: applicare hardening su parser inferenza + mapping dominio e rerun smoke.
+
+## 2026-03-11 14:59 — frontend-developer
+
+- Fatto: aggiunto in overview pulsante "Export DB dinamico" (download JSON da `/api/profile/dynamic-db`) senza alterare layout generale.
+- Verifica: lint mirato PASS su `src/components/profile/sections/OverviewSection.tsx`.
+- Prossimo passo: eventuale commit/push/deploy su tua conferma.

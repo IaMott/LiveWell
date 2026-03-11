@@ -1,24 +1,31 @@
 # LiveWell — Project Status
 
-## Current Step: Hardening backend interview-flow (domande mirate)
+## Current Step: UI micro-fix overview export button
 
-## Stato verificato — 2026-03-11 13:15
+## Stato verificato — 2026-03-11 14:36
 
-- Hardening applicato in `src/lib/ai/orchestrator/orchestrator.ts`:
-  - filtro domande generiche
-  - motore domande critiche per dominio/campi mancanti
-  - enforcement testo finale con elenco numerato obbligatorio delle domande critiche mancanti
-- Test transcript reale aggiunto: `tests/api/interview-flow-transcript-2026-03-11.test.ts`.
-- Suite mirata verde:
-  - `tests/api/interview-flow-transcript-2026-03-11.test.ts`
-  - `tests/api/orchestrator-dob-fallback.test.ts`
-  - `tests/api/chat-send-persistence.test.ts`
+- Fix applicati su backend:
+  - fallback anti-500 in `chat/send`,
+  - inferenza/persistenza multi-dominio in orchestrator,
+  - normalizzazione/ dedup `user.setAttribute`,
+  - endpoint export DB dinamico `/api/profile/dynamic-db`,
+  - specialist mode più coerente con dominio professionista.
+- Test mirati PASS: `13/13`.
+- Deploy production eseguito e smoke multi-dominio rerun:
+  - report: `/tmp/livewell_domains_report_1773236007.json`
+  - miglioramenti confermati:
+    - `allenamento`: turn1 500 risolto
+    - `mindfulness` e `idee`: persistenza ora presente
+    - check fisioterapista: niente domanda “quale area vuoi prioritizzare”
+- Gap residui:
+  - `nutrizione`: persistenza non stabile in tutti i run
+  - `salute`: varianti key ancora eterogenee in alcuni casi
 
 ## Next immediato
 
-- Eseguire smoke autenticato su production del nuovo interview-flow e verificare persistenza su DB dinamico.
-- Se confermato, commit/push/deploy backend-only.
+- Se confermato, commit/push/deploy della sola modifica UI: pulsante export in overview.
+- Poi riprendere fix backend residui multi-dominio.
 
 ## Ultimo aggiornamento
 
-2026-03-11 13:15
+2026-03-11 14:59
