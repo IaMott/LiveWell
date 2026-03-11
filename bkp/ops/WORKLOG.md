@@ -540,3 +540,19 @@ Duration 2.97s (transform 97ms, setup 432ms, collect 67ms, tests 48ms, environme
 - Flusso coperto nello script: register/login sessione, chat/send 2 turni stessa conversation, /tool user.setAttribute, verifica DB (`AgentWorkspace` + `UserAttribute`), cleanup con verifica residui.
 - Security-by-default: nessun secret hardcoded; richiesti `SMOKE_PASSWORD` e `DATABASE_URL` via env/`--env-file`.
 - Validazione eseguita: `bash -n` e `--help` OK.
+
+## 2026-03-11 00:47 — backend-developer (fix reset-password 404)
+
+- Root cause identificata: reset link costruito da `NEXT_PUBLIC_APP_URL` senza sanitizzazione; env con trailing newline può generare URL non valido nella mail.
+- Fix applicato: `buildResetPasswordUrl()` con normalizzazione (`trim` + validazione URL) e fallback su `new URL(request.url).origin`.
+- Test aggiunto: `tests/api/forgot-password-url.test.ts` (trim newline + fallback URL invalido).
+- Verifiche: test mirato PASS, build PASS, deploy production PASS, check route `GET /reset-password?token=dummy-token` = HTTP 200.
+- Commit pubblicato: `da1488aa2594bb0663a9b5d1d5c3c7ae6b579f3c`.
+
+## 2026-03-11 09:39 — frontend-developer (avatar profilo + contrasto dark)
+
+- Aggiunto componente condiviso `UserAvatar` con supporto immagine profilo + fallback iniziali (es. Mario Rossi -> MR).
+- Integrato `UserAvatar` in TopBar chat (stesso avatar usato per accesso al profilo).
+- Integrato `UserAvatar` nella sezione profilo con riquadro circolare dedicato (dimensione grande in header profilo).
+- Corretto contrasto in dark mode: testo iniziali ora usa `var(--color-bg)` su sfondo `var(--color-text-primary)` (visibile in light/dark/system).
+- Verifica eseguita: `npm run build` PASS.

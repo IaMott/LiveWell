@@ -1,25 +1,19 @@
 # LiveWell — Project Status
 
-## Current Step: Script riusabile smoke autenticato production pronto
+## Current Step: Avatar profilo unificato e visibile in tutti i temi
 
-## Stato verificato — 2026-03-11 00:34
+## Stato verificato — 2026-03-11 09:39
 
-- Script creato: `scripts/smoke-auth-production.sh`
-- Flusso incluso:
-  - register/login sessione
-  - `/api/chat/send` due turni stessa conversation
-  - `/tool user.setAttribute`
-  - query verifica DB + cleanup
-- Sicurezza:
-  - secret obbligatori da env (`SMOKE_PASSWORD`, `DATABASE_URL`)
-  - opzionale caricamento da `--env-file`
-  - nessuna credenziale hardcoded
-- Verifica script: sintassi e help ✅
+- Aggiunto avatar circolare nella sezione profilo.
+- Avatar top-right chat e profilo ora usano componente condiviso.
+- Se immagine profilo assente: visualizzate iniziali nome/cognome (es. MR).
+- Fix dark mode: iniziali visibili anche in tema scuro/automatico.
+- Verifica tecnica: `npm run build` ✅
 
 ## Next immediato
 
-- Opzionale: integrare lo script in job CI manuale protetto con secret di ambiente.
+- (Opzionale) commit/push/deploy della modifica UI.
 
 ## Ultimo aggiornamento
 
-2026-03-11 00:34
+2026-03-11 09:39

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { ProfileNav } from '@/components/profile/ProfileNav'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import { UserAvatar } from '@/components/profile/UserAvatar'
 
 export default async function ProfileLayout({ children }: { children: ReactNode }) {
   const session = await auth()
@@ -17,6 +18,7 @@ export default async function ProfileLayout({ children }: { children: ReactNode 
         .slice(0, 2)
         .toUpperCase()
     : 'MM'
+  const profileImage = session.user?.image ?? null
 
   return (
     <div
@@ -65,31 +67,33 @@ export default async function ProfileLayout({ children }: { children: ReactNode 
           Profilo
         </span>
 
-        <div
-          style={{
-            width: '2.5rem',
-            height: '2.5rem',
-            borderRadius: '50%',
-            backgroundColor: 'var(--color-text-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            fontSize: '0.875rem',
-            fontWeight: 600,
-          }}
-        >
-          {initials}
-        </div>
+        <UserAvatar
+          name={session.user?.name}
+          imageUrl={profileImage}
+          initialsOverride={initials}
+          size={40}
+          ariaLabel="Avatar profilo"
+        />
       </header>
 
-      {/* Profile name */}
+      {/* Profile header */}
       <div
         style={{
           textAlign: 'center',
           padding: '0.5rem 1rem 1rem',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '0.75rem',
         }}
       >
+        <UserAvatar
+          name={session.user?.name}
+          imageUrl={profileImage}
+          initialsOverride={initials}
+          size={92}
+          ariaLabel="Immagine profilo"
+        />
         <p
           style={{
             fontSize: '1.25rem',

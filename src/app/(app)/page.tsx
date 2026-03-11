@@ -4,6 +4,7 @@ import { ChatShell } from '@/components/chat/ChatShell'
 export default async function ChatPage() {
   const session = await auth()
   const name = session?.user?.name ?? ''
+  const image = session?.user?.image ?? null
   const initials = name
     ? name
         .split(' ')
@@ -12,5 +13,5 @@ export default async function ChatPage() {
         .slice(0, 2)
         .toUpperCase()
     : 'ME'
-  return <ChatShell userInitials={initials} />
+  return <ChatShell userInitials={initials} userName={name} userImage={image} />
 }

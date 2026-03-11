@@ -7,7 +7,11 @@ import { ChatInput } from './ChatInput'
 import { ConversationHistory } from './ConversationHistory'
 import { useChat } from '@/hooks/useChat'
 
-type Props = { userInitials?: string }
+type Props = {
+  userInitials?: string
+  userName?: string | null
+  userImage?: string | null
+}
 
 const DOMAIN_COLORS: Record<string, string> = {
   nutrition: '#34C759',
@@ -18,7 +22,7 @@ const DOMAIN_COLORS: Record<string, string> = {
   coordination: '#8E8E93',
 }
 
-export function ChatShell({ userInitials = 'ME' }: Props) {
+export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
   const {
     messages,
     send,
@@ -36,7 +40,9 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
   const lastSpokenIdRef = useRef<string | undefined>(undefined)
   // Ref so handleVoiceEnd closure always sees the latest conversationId
   const conversationIdRef = useRef(conversationId)
-  useEffect(() => { conversationIdRef.current = conversationId }, [conversationId])
+  useEffect(() => {
+    conversationIdRef.current = conversationId
+  }, [conversationId])
 
   const handleVoiceStart = useCallback(() => {
     // Pin lastSpokenId to the current last message so the TTS effect does NOT
@@ -44,15 +50,20 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
     lastSpokenIdRef.current = messages.at(-1)?.id
   }, [messages])
 
-  const handleVoiceEnd = useCallback((liveConversationId?: string) => {
-    // Prefer the conversation used during the Live session (may be newly created)
-    // over the one that was active before it started.
-    const cid = liveConversationId ?? conversationIdRef.current
-    if (cid) {
-      // Small delay so the last DB writes from the session flush before reload
-      setTimeout(() => { void loadConversation(cid) }, 600)
-    }
-  }, [loadConversation])
+  const handleVoiceEnd = useCallback(
+    (liveConversationId?: string) => {
+      // Prefer the conversation used during the Live session (may be newly created)
+      // over the one that was active before it started.
+      const cid = liveConversationId ?? conversationIdRef.current
+      if (cid) {
+        // Small delay so the last DB writes from the session flush before reload
+        setTimeout(() => {
+          void loadConversation(cid)
+        }, 600)
+      }
+    },
+    [loadConversation],
+  )
 
   const specialistColor = activeDomain ? (DOMAIN_COLORS[activeDomain] ?? '#007AFF') : '#007AFF'
 
@@ -67,7 +78,7 @@ export function ChatShell({ userInitials = 'ME' }: Props) {
         margin: '0 auto',
       }}
     >
-      <TopBar userInitials={userInitials} />
+      <TopBar userInitials={userInitials} userName={userName} userImage={userImage} />
 
       {/* Specialist mode banner */}
       {activeSpecialistId && activeSpecialistName && (
