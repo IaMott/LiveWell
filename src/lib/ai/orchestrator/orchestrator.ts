@@ -9,8 +9,9 @@ import {
   ToolCall,
 } from '../types'
 import { detectDomainFromText, detectDomainsMulti } from '../domain/domainDetection'
-import { selectAgentsForRequest, runConsensus } from '../consensus/consensusEngine'
+import { runConsensus } from '../consensus/consensusEngine'
 import { applyQuestionPolicy, isGenericQuestion } from '../policy/questionPolicy'
+import { resolveRoutingContext } from './routing'
 import { getServerEnv } from '@/lib/validators/env'
 
 export type LlmClient = {
@@ -71,101 +72,6 @@ function filterNonRetriableToolCallsFromRecentTrace(
   const blocked = toolCalls.filter((c) => recentBlockingToolNames.has(c.name))
   const kept = toolCalls.filter((c) => !recentBlockingToolNames.has(c.name))
   return { kept, blocked }
-}
-
-/** Phrases that signal the user wants to speak with a specific specialist */
-const REQUEST_VERBS = [
-  'parlami con',
-  'parla con',
-  'voglio parlare con',
-  'voglio parlare al',
-  'voglio il',
-  'voglio la',
-  'passami il',
-  'passami la',
-  'dammi il',
-  'fammi parlare con',
-  'connettimi con',
-  'vorrei parlare con',
-  'vorrei il',
-  'speak to',
-  'talk to',
-  'chiedi al',
-]
-
-/** Maps keyword → agent id for specialist detection */
-const SPECIALIST_KEYWORDS: Record<string, string> = {
-  dietista: 'dietista',
-  dietitian: 'dietista',
-  nutrizionista: 'dietista',
-  chef: 'chef',
-  cuoco: 'chef',
-  endocrinologo: 'endocrinologo',
-  endocrinologa: 'endocrinologo',
-  'personal trainer': 'persona-trainer',
-  'personal-trainer': 'persona-trainer',
-  trainer: 'persona-trainer',
-  allenatore: 'persona-trainer',
-  chinesologo: 'chinesologo',
-  chinesiologia: 'chinesologo',
-  'medico dello sport': 'medico-dello-sport',
-  'medico sport': 'medico-dello-sport',
-  fisioterapista: 'fisioterapista',
-  fisiatra: 'fisiatra',
-  'sleep coach': 'sleep-coach',
-  'coach del sonno': 'sleep-coach',
-  mmg: 'mmg',
-  'medico di base': 'mmg',
-  'medico curante': 'mmg',
-  'medico generico': 'mmg',
-  gastroenterologo: 'gastroenterologo',
-  gastro: 'gastroenterologo',
-  cardiologo: 'cardiologo',
-  cardiologa: 'cardiologo',
-  dermatologo: 'dermatologo',
-  dermatologa: 'dermatologo',
-  psicologo: 'psicologo',
-  psicologa: 'psicologo',
-  'mental coach': 'mental-coach',
-  'mental-coach': 'mental-coach',
-  'coach relazionale': 'relationship-coach',
-  'relationship coach': 'relationship-coach',
-  'analista contesto': 'analista-contesto',
-  'financial planner': 'financial-planner',
-  'pianificatore finanziario': 'financial-planner',
-  commercialista: 'commercialista',
-  'career coach': 'career-coach',
-  'coach carriera': 'career-coach',
-  'executive coach': 'executive-coach',
-  'organizzatore di vita': 'life-organizer',
-  'life organizer': 'life-organizer',
-  'consulente legale': 'consulente-legale',
-  avvocato: 'consulente-legale',
-}
-
-/**
- * Detects if the user is explicitly requesting a specific specialist.
- * Returns the agent id if found, null otherwise.
- */
-function detectSpecialistRequest(message: string, team: AgentProfile[]): string | null {
-  const lower = message.toLowerCase()
-
-  // Check specialist keywords in message
-  for (const [kw, agentId] of Object.entries(SPECIALIST_KEYWORDS)) {
-    if (lower.includes(kw)) {
-      if (team.some((a) => a.id === agentId)) return agentId
-    }
-  }
-
-  // If a request verb is present, also match by agent displayName
-  const hasRequestVerb = REQUEST_VERBS.some((v) => lower.includes(v))
-  if (hasRequestVerb) {
-    for (const agent of team) {
-      if (lower.includes(agent.displayName.toLowerCase())) return agent.id
-    }
-  }
-
-  return null
 }
 
 function formatUserAttributes(input: AgentInput): string[] {
@@ -799,28 +705,6 @@ function ensureCriticalQuestionsInText(text: string, questions: string[]): strin
   return `${text.trim()}\n\nMi manca solo questo dato per risponderti meglio: ${missing[0]}`
 }
 
-const SPECIALIST_EXIT_PATTERNS = [
-  /esci\s+dalla\s+modalit[aà]\s+specialista/i,
-  /torna\s+al\s+team/i,
-  /chiudi\s+specialista/i,
-  /basta\s+specialista/i,
-]
-
-function shouldExitSpecialistMode(message: string): boolean {
-  return SPECIALIST_EXIT_PATTERNS.some((re) => re.test(message))
-}
-
-function pickSpecialistEffectiveDomain(
-  activeSpecialist: ActiveSpecialist | undefined,
-  detectedDomain: Domain,
-): Domain {
-  if (!activeSpecialist) return detectedDomain
-  const domains = activeSpecialist.domains ?? [activeSpecialist.domain]
-  if (domains.includes(detectedDomain)) return detectedDomain
-  const preferred = domains.find((d) => d !== 'general' && d !== 'coordination')
-  return preferred ?? activeSpecialist.domain
-}
-
 async function runOneAgent(
   llm: LlmClient,
   agent: AgentProfile,
@@ -1020,51 +904,13 @@ export async function orchestrate(
 
   const detectedDomain = input.domainHint ?? detectDomainFromText(input.message)
   const allDomains = detectDomainsMulti(input.message).map((d) => d.domain)
-
-  // Determine active specialist: locked from previous turn OR newly requested this turn
-  let activeSpecialist: ActiveSpecialist | undefined
-  let lockedAgentId = input.activeSpecialistId ?? null
-
-  if (lockedAgentId && shouldExitSpecialistMode(input.message)) {
-    lockedAgentId = null
-  }
-
-  if (!lockedAgentId) {
-    const detectedId = detectSpecialistRequest(input.message, deps.team)
-    if (detectedId) lockedAgentId = detectedId
-  }
-
-  if (lockedAgentId) {
-    const agent = deps.team.find((a) => a.id === lockedAgentId)
-    if (agent) {
-      activeSpecialist = {
-        id: agent.id,
-        displayName: agent.displayName,
-        domain: (agent.domainTags[0] ?? detectedDomain) as Domain,
-        domains: agent.domainTags,
-      }
-    }
-  }
-
-  const domainHint = pickSpecialistEffectiveDomain(activeSpecialist, detectedDomain)
-
-  const selectedAgents = activeSpecialist
-    ? (() => {
-        const base = selectAgentsForRequest(
-          deps.team,
-          domainHint,
-          6,
-          allDomains,
-          input.message,
-        ).filter((a) => a.id !== 'orchestratore')
-        const ordered = [
-          deps.team.find((a) => a.id === activeSpecialist?.id),
-          ...base.filter((a) => a.id !== activeSpecialist?.id),
-        ].filter((a): a is AgentProfile => Boolean(a))
-        // Collaboration budget to avoid infinite inter-agent loops in specialist mode.
-        return ordered.slice(0, 3)
-      })()
-    : selectAgentsForRequest(deps.team, domainHint, 4, allDomains, input.message)
+  const { activeSpecialist, domainHint, selectedAgents } = resolveRoutingContext({
+    team: deps.team,
+    message: input.message,
+    detectedDomain,
+    allDomains,
+    activeSpecialistId: input.activeSpecialistId,
+  })
 
   const round1Proposals = await Promise.all(
     selectedAgents.map((a) => runOneAgent(deps.llm, a, { ...input, domainHint })),
