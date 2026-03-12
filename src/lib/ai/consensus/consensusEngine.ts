@@ -5,7 +5,6 @@ import {
   ContextPack,
   Domain,
   ToolCall,
-  UserAttributes,
 } from '../types'
 import { applyQuestionPolicy } from '../policy/questionPolicy'
 
@@ -33,51 +32,6 @@ function mergeToolCalls(proposals: AgentProposal[], allowedTools: Set<string>): 
     const k = `${c.name}:${JSON.stringify(c.args)}`
     if (seen.has(k)) return false
     seen.add(k)
-    return true
-  })
-}
-
-// Gap 2: profile-field keyword hints for filtering already-known data
-const PROFILE_FIELD_HINTS: Array<{ keywords: string[]; fieldPath: string }> = [
-  { keywords: ['età', 'anni', 'age', 'quanti anni', 'how old'], fieldPath: 'age' },
-  { keywords: ['peso', 'kg', 'chili', 'weight', 'quanti kg', 'quanti chili'], fieldPath: 'weight' },
-  { keywords: ['altezza', 'cm', 'height', 'quanto sei alto', 'how tall'], fieldPath: 'height' },
-  { keywords: ['obiettivo', 'goal', 'scopo', 'cosa vuoi'], fieldPath: 'goals' },
-  {
-    keywords: ['sesso', 'genere', 'gender', 'uomo', 'donna', 'male', 'female'],
-    fieldPath: 'gender',
-  },
-]
-
-// Gap 2: remove questions that ask for profile data already present in ContextPack
-function filterKnownDataQuestions(questions: string[], contextPack: ContextPack): string[] {
-  const profile = (contextPack.user.profile ?? {}) as Record<string, unknown>
-  const attrs = contextPack.user.attributes ?? {}
-  const ATTRIBUTE_FIELD_HINTS: Array<{
-    keywords: string[]
-    domain: keyof UserAttributes
-    key: string
-  }> = [
-    { keywords: ['peso', 'weight', 'kg'], domain: 'personal', key: 'weight' },
-    { keywords: ['altezza', 'height', 'cm'], domain: 'personal', key: 'height' },
-    { keywords: ['diagnosi', 'diagnosis', 'patologia'], domain: 'health', key: 'diagnosis' },
-    { keywords: ['farmaco', 'medicazione', 'medication'], domain: 'health', key: 'medication' },
-    { keywords: ['allergia', 'allergy'], domain: 'health', key: 'allergy' },
-    { keywords: ['infortunio', 'injury', 'lesione'], domain: 'health', key: 'injury' },
-    { keywords: ['dieta', 'diet', 'regime alimentare'], domain: 'nutrition', key: 'diet' },
-    { keywords: ['obiettivo', 'goal'], domain: 'general', key: 'goal' },
-  ]
-
-  return questions.filter((q) => {
-    const ql = q.toLowerCase()
-    for (const { keywords, fieldPath } of PROFILE_FIELD_HINTS) {
-      if (keywords.some((kw) => ql.includes(kw)) && profile[fieldPath] != null) return false
-    }
-    for (const { keywords, domain, key } of ATTRIBUTE_FIELD_HINTS) {
-      if (!keywords.some((kw) => ql.includes(kw))) continue
-      const domainAttrs = attrs[domain] as Record<string, unknown> | undefined
-      if (domainAttrs?.[key] != null) return false
-    }
     return true
   })
 }
@@ -112,10 +66,19 @@ function collectGatingQuestions(
   domain: Domain,
 ): string[] {
   const raw = proposals.flatMap((p) => p.questions ?? [])
-  const filtered = filterKnownDataQuestions(raw, contextPack)
   return applyQuestionPolicy(
-    filtered.map((question) => ({ question })),
-    { domain, maxQuestions: 1, dedupeStrategy: 'semantic' },
+    raw.map((question) => ({ question })),
+    {
+      domain,
+      maxQuestions: 1,
+      dedupeStrategy: 'semantic',
+      knownData: {
+        profile: (contextPack.user.profile ?? {}) as Record<string, unknown>,
+        attributes: contextPack.user.attributes as
+          | Record<string, Record<string, unknown>>
+          | undefined,
+      },
+    },
   ).selectedQuestions
 }
 

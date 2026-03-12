@@ -5,7 +5,12 @@ export type QuestionCandidate = {
   priority?: number
 }
 
-export type QuestionPolicyDiscardReason = 'empty' | 'generic' | 'duplicate' | 'max-per-turn'
+export type QuestionPolicyDiscardReason =
+  | 'empty'
+  | 'generic'
+  | 'known-data'
+  | 'duplicate'
+  | 'max-per-turn'
 
 export type QuestionPolicyDecision = {
   question: string
@@ -22,6 +27,23 @@ export type QuestionPolicyOptions = {
   domain: Domain
   maxQuestions?: number
   dedupeStrategy?: 'exact' | 'semantic'
+  knownData?: KnownQuestionData
+}
+
+export type KnownQuestionData = {
+  profile?: Record<string, unknown>
+  attributes?: Partial<Record<string, Record<string, unknown>>>
+}
+
+type KnownProfileFieldHint = {
+  keywords: string[]
+  fieldPath: string
+}
+
+type KnownAttributeFieldHint = {
+  keywords: string[]
+  domain: string
+  key: string
 }
 
 const BLOCKED_TEMPLATE_PATTERNS: RegExp[] = [
@@ -54,6 +76,28 @@ const DOMAIN_PRIORITY_HINTS: Record<Domain, string[]> = {
   coordination: ['obiettivo', 'priorit'],
   general: ['obiettivo', 'dato'],
 }
+
+const DEFAULT_PROFILE_FIELD_HINTS: KnownProfileFieldHint[] = [
+  { keywords: ['età', 'anni', 'age', 'quanti anni', 'how old'], fieldPath: 'age' },
+  { keywords: ['peso', 'kg', 'chili', 'weight', 'quanti kg', 'quanti chili'], fieldPath: 'weight' },
+  { keywords: ['altezza', 'cm', 'height', 'quanto sei alto', 'how tall'], fieldPath: 'height' },
+  { keywords: ['obiettivo', 'goal', 'scopo', 'cosa vuoi'], fieldPath: 'goals' },
+  {
+    keywords: ['sesso', 'genere', 'gender', 'uomo', 'donna', 'male', 'female'],
+    fieldPath: 'gender',
+  },
+]
+
+const DEFAULT_ATTRIBUTE_FIELD_HINTS: KnownAttributeFieldHint[] = [
+  { keywords: ['peso', 'weight', 'kg'], domain: 'personal', key: 'weight' },
+  { keywords: ['altezza', 'height', 'cm'], domain: 'personal', key: 'height' },
+  { keywords: ['diagnosi', 'diagnosis', 'patologia'], domain: 'health', key: 'diagnosis' },
+  { keywords: ['farmaco', 'medicazione', 'medication'], domain: 'health', key: 'medication' },
+  { keywords: ['allergia', 'allergy'], domain: 'health', key: 'allergy' },
+  { keywords: ['infortunio', 'injury', 'lesione'], domain: 'health', key: 'injury' },
+  { keywords: ['dieta', 'diet', 'regime alimentare'], domain: 'nutrition', key: 'diet' },
+  { keywords: ['obiettivo', 'goal'], domain: 'general', key: 'goal' },
+]
 
 function normalizeWhitespace(value: string): string {
   return value.trim().replace(/\s+/g, ' ')
@@ -105,6 +149,33 @@ export function isGenericQuestion(question: string): boolean {
   )
 }
 
+export function filterKnownDataQuestions(
+  questions: string[],
+  knownData?: KnownQuestionData,
+  profileHints: KnownProfileFieldHint[] = DEFAULT_PROFILE_FIELD_HINTS,
+  attributeHints: KnownAttributeFieldHint[] = DEFAULT_ATTRIBUTE_FIELD_HINTS,
+): string[] {
+  const profile = knownData?.profile ?? {}
+  const attributes = knownData?.attributes ?? {}
+
+  return questions.filter((question) => {
+    const normalizedQuestion = normalizeWhitespace(question).toLowerCase()
+
+    for (const { keywords, fieldPath } of profileHints) {
+      if (!keywords.some((keyword) => normalizedQuestion.includes(keyword))) continue
+      if (profile[fieldPath] != null) return false
+    }
+
+    for (const { keywords, domain, key } of attributeHints) {
+      if (!keywords.some((keyword) => normalizedQuestion.includes(keyword))) continue
+      const domainAttributes = attributes[domain]
+      if (domainAttributes?.[key] != null) return false
+    }
+
+    return true
+  })
+}
+
 export function applyQuestionPolicy(
   candidates: QuestionCandidate[],
   options: QuestionPolicyOptions,
@@ -112,6 +183,13 @@ export function applyQuestionPolicy(
   const maxQuestions = options.maxQuestions ?? 1
   const dedupeStrategy = options.dedupeStrategy ?? 'semantic'
   const hints = DOMAIN_PRIORITY_HINTS[options.domain] ?? DOMAIN_PRIORITY_HINTS.general
+  const filteredCandidates = filterKnownDataQuestions(
+    candidates.map((candidate) => candidate.question),
+    options.knownData,
+  )
+  const allowedQuestions = new Set(
+    filteredCandidates.map((question) => normalizeWhitespace(question).toLowerCase()),
+  )
 
   const kept: Array<{ question: string; priority: number; score: number; index: number }> = []
   const discardedQuestions: QuestionPolicyDecision[] = []
@@ -125,6 +203,11 @@ export function applyQuestionPolicy(
 
     if (isGenericQuestion(question)) {
       discardedQuestions.push({ question, reason: 'generic' })
+      return
+    }
+
+    if (!allowedQuestions.has(question.toLowerCase())) {
+      discardedQuestions.push({ question, reason: 'known-data' })
       return
     }
 
