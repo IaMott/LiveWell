@@ -9,7 +9,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai'
-import type { LlmClient } from './orchestrator/orchestrator'
+import type { LlmClient } from './orchestrator/agentExecution'
 import { getServerEnv } from '../validators/env'
 
 // Appended to each agent's system prompt to enforce structured JSON output.
