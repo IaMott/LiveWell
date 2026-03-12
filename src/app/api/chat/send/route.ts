@@ -270,6 +270,13 @@ type RoutePersistenceDeps = {
     auditEvents: MutationAuditEvent[]
     round1Proposals?: AgentProposal[]
     round2Proposals?: AgentProposal[]
+    toolExecutionTrace?: Array<{
+      toolCallId: string
+      name: string
+      ok: boolean
+      code?: string
+      message?: string
+    }>
   }) => Promise<void>
   buildContextPack: (input: {
     userId: string
@@ -330,6 +337,7 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
       auditEvents,
       round1Proposals,
       round2Proposals,
+      toolExecutionTrace,
     }) => {
       await prisma.$transaction(async (tx) => {
         await tx.message.create({
@@ -397,6 +405,29 @@ function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps {
               round2Proposal: rounds.round2
                 ? (rounds.round2 as unknown as Prisma.InputJsonValue)
                 : undefined,
+            },
+          })
+        }
+
+        if (toolExecutionTrace && toolExecutionTrace.length > 0) {
+          await tx.agentWorkspace.upsert({
+            where: {
+              conversationId_agentId: { conversationId, agentId: 'orchestratore-trace' },
+            },
+            create: {
+              userId,
+              conversationId,
+              agentId: 'orchestratore-trace',
+              round2Proposal: {
+                summary: 'Tool execution trace',
+                toolExecutionTrace,
+              } as unknown as Prisma.InputJsonValue,
+            },
+            update: {
+              round2Proposal: {
+                summary: 'Tool execution trace',
+                toolExecutionTrace,
+              } as unknown as Prisma.InputJsonValue,
             },
           })
         }
@@ -769,6 +800,25 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
+  const toolExecutionTrace = toolCallsToExecute.map((call) => {
+    const result = toolResults.find((r) => r.toolCallId === call.id)
+    return {
+      toolCallId: call.id,
+      name: call.name,
+      ok: result?.ok ?? false,
+      code: result?.error?.code,
+      message: result?.error?.message,
+    }
+  })
+  const blockedToolExecutionTrace = (consensus.debug?.blockedToolCalls ?? []).map((call) => ({
+    toolCallId: call.id,
+    name: call.name,
+    ok: false,
+    code: 'RETRY_GUARD_BLOCKED',
+    message: 'Blocked by non-retriable tool retry guard',
+  }))
+  const persistedToolExecutionTrace = [...toolExecutionTrace, ...blockedToolExecutionTrace]
+
   // Natural response text only — tool execution details go as separate SSE events
   const responseText = consensus.finalMessageMarkdown
 
@@ -788,6 +838,7 @@ export async function POST(request: Request): Promise<Response> {
       auditEvents: pendingAuditEvents,
       round1Proposals: consensus.debug?.round1Proposals,
       round2Proposals: consensus.debug?.round2Proposals,
+      toolExecutionTrace: persistedToolExecutionTrace,
     })
   } catch (error) {
     console.error('[chat/send] persistChatTurn failed, continuing in fallback mode', error)

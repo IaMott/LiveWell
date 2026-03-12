@@ -123,6 +123,14 @@ export type ContextPack = {
       pendingDomain?: Domain
       updatedAt: string
     }>
+    toolExecutionTrace?: Array<{
+      toolCallId: string
+      name: string
+      ok: boolean
+      code?: string
+      message?: string
+      createdAt: string
+    }>
     recentArtifacts: Array<{
       type: string
       title: string
@@ -206,5 +214,6 @@ export type ConsensusResult = {
     proposals?: AgentProposal[]
     round1Proposals?: AgentProposal[]
     round2Proposals?: AgentProposal[]
+    blockedToolCalls?: ToolCall[]
   }
 }

@@ -6,6 +6,19 @@ const serverEnvSchema = z.object({
   NEXTAUTH_SECRET: z.string().min(1).optional(),
   AI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
   LIVE_MODEL: z.string().min(1).default('gemini-2.5-flash-native-audio-preview-12-2025'),
+  ORCH_RETRY_GUARD_WINDOW_MS: z.preprocess(
+    (value) => {
+      if (value == null || value === '') return undefined
+      const num = Number(value)
+      return Number.isFinite(num) ? num : value
+    },
+    z
+      .number()
+      .int()
+      .positive()
+      .max(24 * 60 * 60 * 1000)
+      .optional(),
+  ),
 })
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>
@@ -15,7 +28,9 @@ let cachedEnv: ServerEnv | null = null
 export function parseServerEnv(raw: NodeJS.ProcessEnv = process.env): ServerEnv {
   const parsed = serverEnvSchema.safeParse(raw)
   if (!parsed.success) {
-    throw new Error(`Invalid server env: ${parsed.error.issues.map((issue) => issue.path.join('.') + ':' + issue.message).join(', ')}`)
+    throw new Error(
+      `Invalid server env: ${parsed.error.issues.map((issue) => issue.path.join('.') + ':' + issue.message).join(', ')}`,
+    )
   }
 
   const env = parsed.data

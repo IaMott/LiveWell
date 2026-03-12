@@ -61,6 +61,20 @@ function makeDb(): DbClient {
           round2Proposal: { summary: 'Valutare irradiazione e trigger di movimento' },
           updatedAt: new Date('2026-03-10T10:05:00Z'),
         },
+        {
+          agentId: 'orchestratore-trace',
+          round2Proposal: {
+            summary: 'Tool execution trace',
+            toolExecutionTrace: [
+              {
+                toolCallId: 'tc-1',
+                name: 'user.setAttribute',
+                ok: true,
+              },
+            ],
+          },
+          updatedAt: new Date('2026-03-10T10:06:00Z'),
+        },
       ],
     },
   }
@@ -76,5 +90,11 @@ describe('buildContextPack', () => {
     expect(pack.user.attributes?.health?.diagnosis?.value).toBe('lombalgia')
     expect(pack.history.agentWorkspaces?.[0]?.agentId).toBe('fisioterapista')
     expect(pack.history.agentWorkspaces?.[0]?.round2Summary).toContain('Valutare irradiazione')
+    expect(pack.history.toolExecutionTrace?.length).toBe(1)
+    expect(pack.history.toolExecutionTrace?.[0]).toMatchObject({
+      toolCallId: 'tc-1',
+      name: 'user.setAttribute',
+      ok: true,
+    })
   })
 })

@@ -19,6 +19,28 @@ type WorkspaceRow = {
   updatedAt: Date | string
 }
 
+type ToolExecutionTraceEntry = {
+  toolCallId: string
+  name: string
+  ok: boolean
+  code?: string
+  message?: string
+  createdAt: string
+}
+
+function isToolExecutionTraceEntry(value: unknown): value is ToolExecutionTraceEntry {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+  return (
+    typeof v.toolCallId === 'string' &&
+    v.toolCallId.length > 0 &&
+    typeof v.name === 'string' &&
+    v.name.length > 0 &&
+    typeof v.ok === 'boolean' &&
+    typeof v.createdAt === 'string'
+  )
+}
+
 export type DbClient = {
   user: {
     findUnique: (args: QueryArgs) => Promise<{ id: string; role?: string } | null>
@@ -299,6 +321,33 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
       }
     : undefined
 
+  const toolExecutionTrace: ToolExecutionTraceEntry[] = workspaces
+    .filter((w) => w.agentId === 'orchestratore-trace')
+    .flatMap((w) => {
+      if (!w.round2Proposal || typeof w.round2Proposal !== 'object') return []
+      const proposal = w.round2Proposal as Record<string, unknown>
+      const raw = proposal.toolExecutionTrace
+      if (!Array.isArray(raw)) return []
+      return raw
+        .map((entry): ToolExecutionTraceEntry | null => {
+          if (!entry || typeof entry !== 'object') return null
+          const obj = entry as Record<string, unknown>
+          const toolCallId = typeof obj.toolCallId === 'string' ? obj.toolCallId : ''
+          const name = typeof obj.name === 'string' ? obj.name : ''
+          const ok = typeof obj.ok === 'boolean' ? obj.ok : false
+          if (!toolCallId || !name) return null
+          return {
+            toolCallId,
+            name,
+            ok,
+            code: typeof obj.code === 'string' ? obj.code : undefined,
+            message: typeof obj.message === 'string' ? obj.message : undefined,
+            createdAt: new Date(w.updatedAt).toISOString(),
+          }
+        })
+        .filter(isToolExecutionTraceEntry)
+    })
+
   return {
     user: {
       id: user?.id ?? opts.userId,
@@ -364,6 +413,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
               }
             })
           : undefined,
+      toolExecutionTrace: toolExecutionTrace.length > 0 ? toolExecutionTrace : undefined,
       crossConversationMessages:
         crossConversationMessages.length > 0
           ? crossConversationMessages
