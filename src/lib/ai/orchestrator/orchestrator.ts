@@ -13,25 +13,14 @@ import { runConsensus } from '../consensus/consensusEngine'
 import { applyQuestionPolicy, isGenericQuestion } from '../policy/questionPolicy'
 import {
   ageFromIsoDate,
-  inferAttributeToolCallsFromMessage,
   isAgeQuestion,
   readPersonalSnapshot,
+  inferAttributeToolCallsFromMessage,
 } from './inputInference'
-import { buildAgentUserPrompt } from './agentPrompt'
+import { executeAgent, LlmClient } from './agentExecution'
 import { buildDomainDetectedTraceEvent } from './decisionTrace'
-import { normalizeAgentProposal } from './proposalNormalization'
 import { resolveRoutingContext } from './routing'
 import { getServerEnv } from '@/lib/validators/env'
-
-export type LlmClient = {
-  complete: (args: {
-    system: string
-    user: string
-    jsonSchema?: unknown
-    stream?: boolean
-    format?: 'json' | 'text'
-  }) => Promise<{ text: string }>
-}
 
 export type OrchestratorDeps = {
   llm: LlmClient
@@ -299,31 +288,6 @@ function ensureCriticalQuestionsInText(text: string, questions: string[]): strin
   return `${text.trim()}\n\nMi manca solo questo dato per risponderti meglio: ${missing[0]}`
 }
 
-async function runOneAgent(
-  llm: LlmClient,
-  agent: AgentProfile,
-  input: AgentInput,
-  peerInsights?: string,
-): Promise<AgentProposal> {
-  const userPrompt = buildAgentUserPrompt(input, agent.id, peerInsights)
-
-  const res = await llm.complete({
-    system: agent.systemPrompt,
-    user: userPrompt,
-  })
-
-  const fallbackToolCalls = inferAttributeToolCallsFromMessage(input.message, {
-    domainHint: input.domainHint ?? 'general',
-  })
-
-  return normalizeAgentProposal({
-    text: res.text,
-    agentId: agent.id,
-    domainHint: input.domainHint ?? 'general',
-    fallbackToolCalls,
-  })
-}
-
 async function synthesizeResponse(
   llm: LlmClient,
   params: {
@@ -497,7 +461,14 @@ export async function orchestrate(
   decisionTrace.push(...routingDecisionTrace)
 
   const round1Proposals = await Promise.all(
-    selectedAgents.map((a) => runOneAgent(deps.llm, a, { ...input, domainHint })),
+    selectedAgents.map((a) =>
+      executeAgent({
+        llm: deps.llm,
+        agent: a,
+        input: { ...input, domainHint },
+        domainHint,
+      }),
+    ),
   )
 
   const round2Proposals = await Promise.all(
@@ -507,7 +478,13 @@ export async function orchestrate(
         .slice(0, 3)
         .map((p) => `- ${p.agentId}: ${p.summary}`)
         .join('\n')
-      return runOneAgent(deps.llm, agent, { ...input, domainHint }, peerInsights || undefined)
+      return executeAgent({
+        llm: deps.llm,
+        agent,
+        input: { ...input, domainHint },
+        domainHint,
+        peerInsights: peerInsights || undefined,
+      })
     }),
   )
 
