@@ -1,9 +1,7 @@
 {
   "id": "consulente-legale",
   "displayName": "Consulente Legale",
-  "domainTags": [
-    "legal"
-  ],
+  "domainTags": ["inspiration"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "artifacts.saveRecommendation"

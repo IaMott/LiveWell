@@ -10,6 +10,8 @@ import {
 } from '../types'
 import { detectDomainFromText, detectDomainsMulti } from '../domain/domainDetection'
 import { selectAgentsForRequest, runConsensus } from '../consensus/consensusEngine'
+import { applyQuestionPolicy, isGenericQuestion } from '../policy/questionPolicy'
+import { getServerEnv } from '@/lib/validators/env'
 
 export type LlmClient = {
   complete: (args: {
@@ -25,6 +27,50 @@ export type OrchestratorDeps = {
   llm: LlmClient
   team: AgentProfile[]
   orchestratorToolsAllowed: string[]
+  retryGuardWindowMs?: number
+}
+
+const NON_RETRIABLE_TOOL_ERROR_CODES = new Set([
+  'TOOL_FORBIDDEN_BY_AGENT_CAPABILITY',
+  'FORBIDDEN',
+  'OWNER_MODE_REQUIRED',
+  'VALIDATION_ERROR',
+])
+
+function getRetryGuardWindowMs(): number {
+  const env = getServerEnv()
+  return env.ORCH_RETRY_GUARD_WINDOW_MS ?? 2 * 60 * 1000
+}
+
+function filterNonRetriableToolCallsFromRecentTrace(
+  toolCalls: ToolCall[],
+  contextPack: ContextPack,
+  retryGuardWindowMs: number,
+): { kept: ToolCall[]; blocked: ToolCall[] } {
+  const trace = contextPack.history.toolExecutionTrace ?? []
+  if (trace.length === 0 || toolCalls.length === 0) {
+    return { kept: toolCalls, blocked: [] }
+  }
+
+  const now = Date.now()
+  const recentBlockingToolNames = new Set(
+    trace
+      .filter((t) => {
+        if (t.ok) return false
+        if (!t.code || !NON_RETRIABLE_TOOL_ERROR_CODES.has(t.code)) return false
+        const ageMs = now - new Date(t.createdAt).getTime()
+        return Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= retryGuardWindowMs
+      })
+      .map((t) => t.name),
+  )
+
+  if (recentBlockingToolNames.size === 0) {
+    return { kept: toolCalls, blocked: [] }
+  }
+
+  const blocked = toolCalls.filter((c) => recentBlockingToolNames.has(c.name))
+  const kept = toolCalls.filter((c) => !recentBlockingToolNames.has(c.name))
+  return { kept, blocked }
 }
 
 /** Phrases that signal the user wants to speak with a specific specialist */
@@ -502,22 +548,6 @@ function inferAttributeToolCallsFromMessage(message: string, ctx: InferenceConte
   })
 }
 
-const GENERIC_QUESTION_PATTERNS = [
-  /c['’]e\s+qualcos['’]altro/i,
-  /vuoi\s+aggiungere/i,
-  /desideri\s+aggiungere/i,
-  /come\s+ti\s+senti\s+generalmente/i,
-  /cosa\s+vuoi\s+fare/i,
-  /cosa\s+intendi/i,
-  /posso\s+aiutarti/i,
-]
-
-function isGenericQuestion(q: string): boolean {
-  const trimmed = q.trim()
-  if (!trimmed) return true
-  return GENERIC_QUESTION_PATTERNS.some((re) => re.test(trimmed))
-}
-
 function readPersonalSnapshot(contextPack: ContextPack): {
   birthDate?: string
   gender?: string
@@ -700,19 +730,31 @@ function buildInterviewQueue(
 ): { askNow: string[]; pendingNext: string[] } {
   const fromWorkspace = getPendingQuestionsFromWorkspace(contextPack, domain, activeSpecialist)
   const fromPlan = buildQuestionPlan(domain, contextPack, userMessage)
-  const merged = [...fromWorkspace, ...fromPlan]
-    .map((q) => q.trim())
-    .filter((q) => q.length > 0 && !isGenericQuestion(q))
-  const seen = new Set<string>()
-  const deduped = merged.filter((q) => {
-    const k = q.toLowerCase()
-    if (seen.has(k)) return false
-    seen.add(k)
+  const workspaceQueue = fromWorkspace
+    .map((question) => question.trim())
+    .filter((question) => question.length > 0 && !isGenericQuestion(question))
+
+  const seenWorkspace = new Set<string>()
+  const orderedWorkspace = workspaceQueue.filter((question) => {
+    const key = question.toLowerCase()
+    if (seenWorkspace.has(key)) return false
+    seenWorkspace.add(key)
     return true
   })
 
-  if (deduped.length === 0) return { askNow: [], pendingNext: [] }
-  return { askNow: [deduped[0]], pendingNext: deduped.slice(1) }
+  const policy = applyQuestionPolicy(
+    fromPlan
+      .filter((question) => !seenWorkspace.has(question.trim().toLowerCase()))
+      .map((question) => ({ question, priority: 10 })),
+    { domain, maxQuestions: Math.max(0, 1 - orderedWorkspace.length), dedupeStrategy: 'exact' },
+  )
+
+  const orderedQuestions = [...orderedWorkspace, ...policy.orderedQuestions]
+  if (orderedQuestions.length === 0) return { askNow: [], pendingNext: [] }
+  return {
+    askNow: orderedQuestions.slice(0, 1),
+    pendingNext: orderedQuestions.slice(1),
+  }
 }
 
 function buildCriticalQuestions(
@@ -727,15 +769,13 @@ function buildCriticalQuestions(
 }
 
 function mergeInterviewQuestions(existing: string[], critical: string[]): string[] {
-  const specificExisting = existing
-    .map((q) => q.trim())
-    .filter((q) => q.length > 0 && !isGenericQuestion(q))
-
-  const merged = [...specificExisting]
-  for (const q of critical) {
-    if (!merged.some((e) => e.toLowerCase() === q.toLowerCase())) merged.push(q)
-  }
-  return merged
+  return applyQuestionPolicy(
+    [
+      ...existing.map((question) => ({ question, priority: 20 })),
+      ...critical.map((question) => ({ question, priority: 10 })),
+    ],
+    { domain: 'general', maxQuestions: 1, dedupeStrategy: 'exact' },
+  ).orderedQuestions
 }
 
 function hasEquivalentQuestionInText(text: string, question: string): boolean {
@@ -1113,16 +1153,33 @@ export async function orchestrate(
     const key = `${c.name}:${JSON.stringify(c.args)}`
     return arr.findIndex((x) => `${x.name}:${JSON.stringify(x.args)}` === key) === idx
   })
+  const retryGuardWindowMs =
+    typeof deps.retryGuardWindowMs === 'number' && deps.retryGuardWindowMs > 0
+      ? deps.retryGuardWindowMs
+      : getRetryGuardWindowMs()
+  const filteredByTrace = filterNonRetriableToolCallsFromRecentTrace(
+    dedupedToolCalls,
+    input.contextPack,
+    retryGuardWindowMs,
+  )
 
   return {
     ...consensus,
     gatingQuestions: finalInterviewQuestions,
-    toolCallsToExecute: dedupedToolCalls,
+    toolCallsToExecute: filteredByTrace.kept,
     finalMessageMarkdown: naturalResponse,
     activeSpecialist,
     debug: {
       selectedAgents: consensus.debug?.selectedAgents ?? selectedAgents.map((a) => a.id),
-      conflicts: consensus.debug?.conflicts ?? [],
+      conflicts: [
+        ...(consensus.debug?.conflicts ?? []),
+        ...(filteredByTrace.blocked.length > 0
+          ? [
+              `Blocked ${filteredByTrace.blocked.length} non-retriable tool call(s) from recent trace`,
+            ]
+          : []),
+      ],
+      blockedToolCalls: filteredByTrace.blocked,
       proposals: round2ForPersistence,
       round1Proposals,
       round2Proposals: round2ForPersistence,

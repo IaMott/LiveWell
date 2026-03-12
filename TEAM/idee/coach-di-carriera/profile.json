@@ -1,7 +1,7 @@
 {
   "id": "career-coach",
   "displayName": "Career Coach",
-  "domainTags": ["career"],
+  "domainTags": ["inspiration"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",

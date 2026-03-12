@@ -87,6 +87,62 @@ describe('orchestrator deterministic domain persistence', () => {
     expect(r2?.pendingDomain).toBe('nutrition')
   })
 
+  it('preserves the original workspace queue order even when policy ranking would prefer another question', async () => {
+    const llm = {
+      complete: async ({ format }: { system: string; user: string; format?: 'json' | 'text' }) => {
+        if (format === 'text') return { text: 'Procediamo.' }
+        return {
+          text: JSON.stringify({
+            domain: 'health',
+            summary: 'ok',
+            reasoning: 'ok',
+            questions: [],
+            recommendations: [],
+            toolCalls: [],
+            confidence: 0.8,
+          }),
+        }
+      },
+    }
+
+    const withPending: ContextPack = {
+      ...contextPack,
+      history: {
+        ...contextPack.history,
+        agentWorkspaces: [
+          {
+            agentId: 'fisioterapista',
+            round2Summary: 'pending',
+            pendingDomain: 'health',
+            pendingQuestions: [
+              'Hai già una diagnosi medica confermata o esami recenti disponibili?',
+              'Da quanto tempo è presente il sintomo principale?',
+            ],
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      },
+    }
+
+    const out = await orchestrate(
+      { llm, team, orchestratorToolsAllowed: ['user.setAttribute'] },
+      {
+        requestId: 'r-queue-order',
+        userId: 'u1',
+        conversationId: 'c1',
+        message: 'continuiamo con la salute',
+        domainHint: 'health',
+        contextPack: withPending,
+      },
+    )
+
+    expect(out.gatingQuestions).toEqual([
+      'Hai già una diagnosi medica confermata o esami recenti disponibili?',
+    ])
+    const r2 = out.debug?.round2Proposals?.[0]
+    expect(r2?.pendingQuestions).toEqual(['Da quanto tempo è presente il sintomo principale?'])
+  })
+
   it('does not append duplicated integration question when already asked in response body', async () => {
     const llm = {
       complete: async ({ format }: { system: string; user: string; format?: 'json' | 'text' }) => {

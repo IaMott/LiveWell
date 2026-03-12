@@ -1,4 +1,4 @@
-import { Domain } from '../runtime-types'
+import type { Domain } from '../types'
 
 const KEYWORDS: Record<Domain, string[]> = {
   nutrition: [
@@ -75,6 +75,7 @@ const KEYWORDS: Record<Domain, string[]> = {
     'career',
     'obiettivo professionale',
   ],
+  coordination: ['coordina', 'coordinamento', 'team', 'orchestratore', 'specialista'],
   general: [],
 }
 

@@ -281,10 +281,27 @@ export async function POST(request: Request): Promise<Response> {
     // Build context-aware system instruction (profile + history).
     // Wrapped in try-catch: if DB is unavailable (test env, cold-start error) we fall back
     // gracefully to a minimal prompt rather than blocking token creation.
-    const systemInstruction = await buildLiveSystemInstruction(userId).catch((err: unknown) => {
-      console.error('[live-token] system instruction build failed, using fallback:', err)
-      return FALLBACK_SYSTEM_INSTRUCTION
-    })
+    const systemInstruction = await buildLiveSystemInstruction(userId).catch(
+      async (err: unknown) => {
+        console.error('[live-token] system instruction build failed, using fallback:', err)
+        await logApiErrorEvent({
+          endpoint: '/api/live-token',
+          errorCode: 'FALLBACK_SYSTEM_INSTRUCTION',
+          statusCode: 200,
+          message: 'system instruction build failed, fallback prompt used',
+          requestId,
+          userId,
+          metadata: {
+            fallbackPhase: 'SYSTEM_INSTRUCTION_BUILD',
+            cause:
+              err instanceof Error
+                ? { name: err.name, message: err.message }
+                : { message: String(err) },
+          },
+        })
+        return FALLBACK_SYSTEM_INSTRUCTION
+      },
+    )
 
     // v1alpha is required for ephemeral token creation
     const ai = new GoogleGenAI({

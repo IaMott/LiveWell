@@ -66,4 +66,181 @@ describe('orchestrator multi-round', () => {
     expect(result.debug?.round1Proposals?.length).toBeGreaterThan(0)
     expect(result.debug?.round2Proposals?.length).toBeGreaterThan(0)
   })
+
+  it('does not retry non-retriable tool calls from recent toolExecutionTrace', async () => {
+    const llm = {
+      complete: async () => ({
+        text: JSON.stringify({
+          domain: 'health',
+          summary: 'ok',
+          reasoning: 'ok',
+          questions: [],
+          recommendations: [],
+          toolCalls: [
+            {
+              id: 'tc-retry',
+              name: 'user.updateProfile',
+              args: { fields: { weight: 80 } },
+            },
+          ],
+          confidence: 0.9,
+        }),
+      }),
+    }
+
+    const contextWithRecentFailure: ContextPack = {
+      ...baseContext,
+      history: {
+        ...baseContext.history,
+        toolExecutionTrace: [
+          {
+            toolCallId: 'tc-old',
+            name: 'user.updateProfile',
+            ok: false,
+            code: 'FORBIDDEN',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    }
+
+    const result = await orchestrate(
+      {
+        llm,
+        team,
+        orchestratorToolsAllowed: ['user.updateProfile'],
+      },
+      {
+        requestId: 'r2',
+        userId: 'u1',
+        conversationId: 'c1',
+        message: 'aggiorna il mio peso',
+        contextPack: contextWithRecentFailure,
+      },
+    )
+
+    expect(result.toolCallsToExecute).toEqual([])
+    expect(
+      result.debug?.conflicts?.some((c) => c.includes('Blocked 1 non-retriable tool call')),
+    ).toBe(true)
+    expect(result.debug?.blockedToolCalls?.length).toBe(1)
+    expect(result.debug?.blockedToolCalls?.[0]?.name).toBe('user.updateProfile')
+  })
+
+  it('allows retry when previous non-retriable failure is outside retry-guard window', async () => {
+    const llm = {
+      complete: async () => ({
+        text: JSON.stringify({
+          domain: 'health',
+          summary: 'ok',
+          reasoning: 'ok',
+          questions: [],
+          recommendations: [],
+          toolCalls: [
+            {
+              id: 'tc-old-window',
+              name: 'user.updateProfile',
+              args: { fields: { weight: 81 } },
+            },
+          ],
+          confidence: 0.9,
+        }),
+      }),
+    }
+
+    const oldFailure = new Date(Date.now() - 3 * 60 * 1000).toISOString()
+    const contextWithOldFailure: ContextPack = {
+      ...baseContext,
+      history: {
+        ...baseContext.history,
+        toolExecutionTrace: [
+          {
+            toolCallId: 'tc-fail-old',
+            name: 'user.updateProfile',
+            ok: false,
+            code: 'FORBIDDEN',
+            createdAt: oldFailure,
+          },
+        ],
+      },
+    }
+
+    const result = await orchestrate(
+      {
+        llm,
+        team,
+        orchestratorToolsAllowed: ['user.updateProfile'],
+      },
+      {
+        requestId: 'r3',
+        userId: 'u1',
+        conversationId: 'c1',
+        message: 'riprova ad aggiornare il peso',
+        contextPack: contextWithOldFailure,
+      },
+    )
+
+    expect(result.toolCallsToExecute.length).toBeGreaterThan(0)
+    expect(result.toolCallsToExecute[0]?.name).toBe('user.updateProfile')
+    expect(result.debug?.blockedToolCalls?.length ?? 0).toBe(0)
+  })
+
+  it('uses retryGuardWindowMs override from deps when evaluating retry guard', async () => {
+    const llm = {
+      complete: async () => ({
+        text: JSON.stringify({
+          domain: 'health',
+          summary: 'ok',
+          reasoning: 'ok',
+          questions: [],
+          recommendations: [],
+          toolCalls: [
+            {
+              id: 'tc-env-window',
+              name: 'user.updateProfile',
+              args: { fields: { weight: 82 } },
+            },
+          ],
+          confidence: 0.9,
+        }),
+      }),
+    }
+
+    const failureAt5000ms = new Date(Date.now() - 5000).toISOString()
+    const contextWithFailure: ContextPack = {
+      ...baseContext,
+      history: {
+        ...baseContext.history,
+        toolExecutionTrace: [
+          {
+            toolCallId: 'tc-fail-env',
+            name: 'user.updateProfile',
+            ok: false,
+            code: 'FORBIDDEN',
+            createdAt: failureAt5000ms,
+          },
+        ],
+      },
+    }
+
+    const result = await orchestrate(
+      {
+        llm,
+        team,
+        orchestratorToolsAllowed: ['user.updateProfile'],
+        retryGuardWindowMs: 1000,
+      },
+      {
+        requestId: 'r4',
+        userId: 'u1',
+        conversationId: 'c1',
+        message: 'riprova ad aggiornare il peso',
+        contextPack: contextWithFailure,
+      },
+    )
+
+    expect(result.toolCallsToExecute.length).toBeGreaterThan(0)
+    expect(result.toolCallsToExecute[0]?.name).toBe('user.updateProfile')
+    expect(result.debug?.blockedToolCalls?.length ?? 0).toBe(0)
+  })
 })

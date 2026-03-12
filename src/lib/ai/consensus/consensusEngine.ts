@@ -7,6 +7,7 @@ import {
   ToolCall,
   UserAttributes,
 } from '../types'
+import { applyQuestionPolicy } from '../policy/questionPolicy'
 
 export type ConsensusEngineOptions = {
   orchestratorId: string
@@ -81,77 +82,6 @@ function filterKnownDataQuestions(questions: string[], contextPack: ContextPack)
   })
 }
 
-// Gap 2: semantic deduplication via token-based Jaccard similarity (threshold 0.4)
-function semanticDeduplicateQuestions(questions: string[]): string[] {
-  const result: string[] = []
-  const seenTokenSets: Array<Set<string>> = []
-  for (const q of questions) {
-    const tokens = new Set(
-      q
-        .toLowerCase()
-        .replace(/[?.,!]/g, '')
-        .split(/\s+/)
-        .filter((t) => t.length > 3),
-    )
-    const isDuplicate = seenTokenSets.some((seen) => {
-      const inter = [...tokens].filter((t) => seen.has(t)).length
-      const union = new Set([...tokens, ...seen]).size
-      return union > 0 && inter / union > 0.4
-    })
-    if (!isDuplicate) {
-      result.push(q)
-      seenTokenSets.push(tokens)
-    }
-  }
-  return result
-}
-
-const BLOCKED_TEMPLATE_PATTERNS: RegExp[] = [
-  /quale area vuoi prioritizzare adesso/i,
-  /qual[’']?e la tua altezza in cm/i,
-  /qual[’']?e il tuo peso attuale in kg/i,
-  /c[’']?e qualcos[’']?altro/i,
-  /cosa vuoi fare/i,
-]
-
-const GENERIC_QUESTION_PATTERNS: RegExp[] = [
-  /vuoi aggiungere/i,
-  /desideri aggiungere/i,
-  /come ti senti in generale/i,
-  /come posso aiutarti/i,
-  /quale area/i,
-]
-
-const DOMAIN_PRIORITY_HINTS: Record<Domain, string[]> = {
-  health: ['dolore', 'durata', 'sintomo', 'farmaci', 'diagnosi', 'allerg'],
-  nutrition: ['allerg', 'intoller', 'obiettivo', 'pasti', 'aliment'],
-  training: ['allen', 'infortun', 'dolore', 'session', 'obiettivo'],
-  mindfulness: ['stress', 'sonno', 'ansia', 'umore'],
-  inspiration: ['obiettivo', 'progetto', 'piano'],
-  coordination: ['obiettivo', 'priorit'],
-  general: ['obiettivo', 'dato'],
-}
-
-function applyGlobalInterviewPolicy(questions: string[], domain: Domain): string[] {
-  const cleaned = questions
-    .map((q) => q.trim())
-    .filter((q) => q.length > 0)
-    .filter((q) => !BLOCKED_TEMPLATE_PATTERNS.some((re) => re.test(q)))
-    .filter((q) => !GENERIC_QUESTION_PATTERNS.some((re) => re.test(q)))
-
-  if (cleaned.length === 0) return []
-  const hints = DOMAIN_PRIORITY_HINTS[domain] ?? DOMAIN_PRIORITY_HINTS.general
-  const scored = cleaned.map((q) => {
-    const lower = q.toLowerCase()
-    const score = hints.reduce((acc, h) => (lower.includes(h) ? acc + 1 : acc), 0)
-    return { q, score }
-  })
-
-  scored.sort((a, b) => b.score - a.score || a.q.length - b.q.length)
-  // Global policy: at most one missing-data question in final output.
-  return scored.slice(0, 1).map((x) => x.q)
-}
-
 // Gap 3: enforce domain isolation — normalize agent proposals to their primary domain
 function enforceDomainIsolation(
   proposals: AgentProposal[],
@@ -182,9 +112,11 @@ function collectGatingQuestions(
   domain: Domain,
 ): string[] {
   const raw = proposals.flatMap((p) => p.questions ?? [])
-  const deduped = semanticDeduplicateQuestions(raw)
-  const filtered = filterKnownDataQuestions(deduped, contextPack)
-  return applyGlobalInterviewPolicy(filtered, domain)
+  const filtered = filterKnownDataQuestions(raw, contextPack)
+  return applyQuestionPolicy(
+    filtered.map((question) => ({ question })),
+    { domain, maxQuestions: 1, dedupeStrategy: 'semantic' },
+  ).selectedQuestions
 }
 
 function detectConflicts(proposals: AgentProposal[]): string[] {

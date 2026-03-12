@@ -1,4 +1,4 @@
-import type { Role, ToolCall, ToolResult } from '@/lib/ai/runtime-types'
+import type { Role, ToolCall, ToolResult } from '@/lib/ai/types'
 import { getToolDefinition, type ToolName } from './toolRegistry'
 import { authorizeToolExecution } from './rbac'
 import { consumeConfirmToken, issueConfirmToken } from './confirmTokenService'
@@ -29,6 +29,10 @@ export type ToolExecutionContext = {
     userId: string
     role: Role
     ownerModeEnabled: boolean
+  }
+  agent?: {
+    id: string
+    toolsAllowed: ToolName[]
   }
   source: ToolCallSource
   confirmedByUser: boolean
@@ -105,10 +109,47 @@ export function createToolExecutor(deps: ToolExecutorDeps) {
         ownerModeEnabled: context.actor.ownerModeEnabled,
       })
       if (!auth.ok) {
+        if (definition.mutation) {
+          await deps.writeAuditLog({
+            actorUserId: context.actor.userId,
+            conversationId: context.conversationId,
+            toolCallId: call.id,
+            toolName: definition.name,
+            inputSummary: summarizeInput(parsed.data),
+            inputHash: hashInput(parsed.data),
+            status: 'failure',
+            requestId: context.requestId,
+            errorCode: auth.code,
+          })
+        }
         return {
           toolCallId: call.id,
           ok: false,
           error: { code: auth.code, message: auth.reason },
+        }
+      }
+
+      if (context.agent && !context.agent.toolsAllowed.includes(definition.name)) {
+        if (definition.mutation) {
+          await deps.writeAuditLog({
+            actorUserId: context.actor.userId,
+            conversationId: context.conversationId,
+            toolCallId: call.id,
+            toolName: definition.name,
+            inputSummary: summarizeInput(parsed.data),
+            inputHash: hashInput(parsed.data),
+            status: 'failure',
+            requestId: context.requestId,
+            errorCode: 'TOOL_FORBIDDEN_BY_AGENT_CAPABILITY',
+          })
+        }
+        return {
+          toolCallId: call.id,
+          ok: false,
+          error: {
+            code: 'TOOL_FORBIDDEN_BY_AGENT_CAPABILITY',
+            message: `Tool ${definition.name} is not allowed for agent ${context.agent.id}`,
+          },
         }
       }
 

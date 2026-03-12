@@ -136,6 +136,25 @@ describe('/api/chat/send persistence integration', () => {
         status: 'success',
       },
     })
+
+    const traceWorkspaceCall = txAgentWorkspaceUpsert.mock.calls.find(
+      (c) => (c[0] as { create?: { agentId?: string } }).create?.agentId === 'orchestratore-trace',
+    )
+    expect(traceWorkspaceCall).toBeTruthy()
+    expect(traceWorkspaceCall?.[0]).toMatchObject({
+      create: {
+        agentId: 'orchestratore-trace',
+        round2Proposal: {
+          summary: 'Tool execution trace',
+          toolExecutionTrace: [
+            expect.objectContaining({
+              name: 'health.addMetric',
+              ok: true,
+            }),
+          ],
+        },
+      },
+    })
   })
 
   it('falls back to streaming response when transaction persistence fails', async () => {
@@ -185,8 +204,28 @@ describe('/api/chat/send persistence integration', () => {
     expect(agentIds).toContain('fisioterapista')
   })
 
-  it('persists DOB from natural chat via user.setAttribute fallback', async () => {
+  it('persists blocked tool calls from retry guard into orchestratore-trace workspace', async () => {
     vi.resetModules()
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: vi.fn(async () => ({
+        domain: 'health',
+        finalMessageMarkdown: 'Procediamo senza rieseguire quel tool.',
+        toolCallsToExecute: [],
+        ui: { domainIcon: 'health', moodScore: 50, sectionScores: { health: 60, general: 50 } },
+        safety: { escalation: 'none' },
+        debug: {
+          selectedAgents: ['mmg'],
+          conflicts: ['Blocked 1 non-retriable tool call(s) from recent trace'],
+          blockedToolCalls: [
+            {
+              id: 'blocked-1',
+              name: 'user.updateProfile',
+              args: { fields: { weight: 80 } },
+            },
+          ],
+        },
+      })),
+    }))
     const { POST } = await import('@/app/api/chat/send/route')
 
     const req = new Request('http://localhost/api/chat/send', {
@@ -195,22 +234,31 @@ describe('/api/chat/send persistence integration', () => {
         'Content-Type': 'application/json',
         'x-user-id': 'u-db',
       },
-      body: JSON.stringify({ message: 'sono nato il 26/06/1991' }),
+      body: JSON.stringify({ message: 'aggiorna di nuovo il peso' }),
     })
 
     const res = await POST(req)
-    const body = await res.text()
-
     expect(res.status).toBe(200)
-    expect(body).toContain('"type":"message.complete"')
-    expect(prismaMock.userAttribute.create).toHaveBeenCalled()
 
-    const toolAuditCalls = txToolAuditCreate.mock.calls
-      .map((c) => c[0] as { data?: { toolName?: string; status?: string } })
-      .filter((c) => c.data?.toolName === 'user.setAttribute')
-
-    expect(toolAuditCalls.length).toBeGreaterThan(0)
-    expect(toolAuditCalls[0]?.data?.status).toBe('success')
+    const traceWorkspaceCall = txAgentWorkspaceUpsert.mock.calls.find(
+      (c) => (c[0] as { create?: { agentId?: string } }).create?.agentId === 'orchestratore-trace',
+    )
+    expect(traceWorkspaceCall).toBeTruthy()
+    expect(traceWorkspaceCall?.[0]).toMatchObject({
+      create: {
+        agentId: 'orchestratore-trace',
+        round2Proposal: {
+          toolExecutionTrace: [
+            expect.objectContaining({
+              toolCallId: 'blocked-1',
+              name: 'user.updateProfile',
+              ok: false,
+              code: 'RETRY_GUARD_BLOCKED',
+            }),
+          ],
+        },
+      },
+    })
   })
 
   it('streams agent.thinking events with specialist switch titles before response deltas', async () => {
