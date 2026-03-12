@@ -2,14 +2,18 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createToolExecutor } from '@/lib/tools/toolExecutor'
 import { realToolHandlers } from '@/lib/tools/handlers'
 
-const { mockUserAttributeCreate, mockUpdateUserProfile } = vi.hoisted(() => ({
-  mockUserAttributeCreate: vi.fn(async () => ({ id: 'attr-1' })),
-  mockUpdateUserProfile: vi.fn(async () => ({ id: 'profile-1' })),
-}))
+const { mockUserAttributeCreate, mockUserAttributeFindFirst, mockUpdateUserProfile } = vi.hoisted(
+  () => ({
+    mockUserAttributeCreate: vi.fn(async () => ({ id: 'attr-1' })),
+    mockUserAttributeFindFirst: vi.fn(async () => null),
+    mockUpdateUserProfile: vi.fn(async () => ({ id: 'profile-1' })),
+  }),
+)
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     userAttribute: {
+      findFirst: mockUserAttributeFindFirst,
       create: mockUserAttributeCreate,
     },
   },
@@ -25,6 +29,8 @@ vi.mock('@/lib/db', () => ({
 describe('smoke auth user.setAttribute (mock DB)', () => {
   beforeEach(() => {
     mockUserAttributeCreate.mockClear()
+    mockUserAttributeFindFirst.mockClear()
+    mockUserAttributeFindFirst.mockResolvedValue(null)
     mockUpdateUserProfile.mockClear()
   })
 
@@ -140,5 +146,45 @@ describe('smoke auth user.setAttribute (mock DB)', () => {
 
     expect(result.ok).toBe(true)
     expect(mockUpdateUserProfile).toHaveBeenCalledWith('user-auth-3', { gender: 'M' })
+  })
+
+  it('normalizes allergy domain/key and de-dupes repeated attributes', async () => {
+    const writeAuditLog = vi.fn(async () => undefined)
+    const executor = createToolExecutor({
+      handlers: realToolHandlers,
+      writeAuditLog,
+    })
+
+    mockUserAttributeFindFirst.mockResolvedValueOnce({ id: 'existing-1', value: 'nocciole' })
+
+    const result = await executor.executeToolCall(
+      {
+        id: 'tc-4',
+        name: 'user.setAttribute',
+        args: {
+          domain: 'health',
+          key: 'allergies',
+          value: 'nocciole',
+        },
+      },
+      {
+        requestId: 'req-4',
+        conversationId: 'conv-4',
+        actor: { userId: 'user-auth-4', role: 'USER', ownerModeEnabled: false },
+        source: 'assistant',
+        confirmedByUser: false,
+      },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(mockUserAttributeFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          domain: 'nutrition',
+          key: 'allergy',
+        }),
+      }),
+    )
+    expect(mockUserAttributeCreate).not.toHaveBeenCalled()
   })
 })

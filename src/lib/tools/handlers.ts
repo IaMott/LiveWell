@@ -52,6 +52,66 @@ function coerceDate(value: unknown): Date | null {
   return null
 }
 
+function normalizeDomain(
+  raw: string,
+): 'health' | 'nutrition' | 'training' | 'mindfulness' | 'personal' | 'general' {
+  const d = raw.trim().toLowerCase()
+  if (d === 'mind' || d === 'mental') return 'mindfulness'
+  if (d === 'idea' || d === 'inspiration' || d === 'ideas') return 'general'
+  if (d === 'person' || d === 'profile') return 'personal'
+  if (
+    d === 'health' ||
+    d === 'nutrition' ||
+    d === 'training' ||
+    d === 'mindfulness' ||
+    d === 'personal' ||
+    d === 'general'
+  ) {
+    return d
+  }
+  return 'general'
+}
+
+function normalizeKey(raw: string, domain: string): string {
+  const k = raw.trim()
+  const low = k.toLowerCase()
+
+  if (domain === 'health') {
+    // Canonical health dictionary
+    if (
+      low === 'hypertension' ||
+      low.startsWith('medicalconditions.hypertension') ||
+      low.startsWith('hypertension_status')
+    ) {
+      return 'hypertension'
+    }
+    if (
+      low === 'hypertensiondiagnoseddate' ||
+      low === 'hypertension_diagnosed_date' ||
+      low === 'hypertension_diagnosis_year' ||
+      low === 'hypertensiondiagnosedyear' ||
+      low === 'hypertension_diagnosed_year'
+    ) {
+      return 'hypertension_diagnosed_year'
+    }
+    if (low === 'medicalconditions') return 'medical_condition_note'
+  }
+
+  if (low === 'allergies' || low === 'allergy' || low === 'intolerance' || low === 'intolleranza')
+    return 'allergy'
+  if (low === 'sleephours' || low === 'sleep_hours' || low === 'ore_sonno') return 'sleep_hours'
+  if (low === 'stress' || low === 'stresslevel' || low === 'stress_level') return 'stress_level'
+  if (
+    low === 'trainingfrequency' ||
+    low === 'weeklytraining' ||
+    low === 'training_frequency_per_week'
+  )
+    return 'training_frequency_per_week'
+  if (low === 'goal' || low === 'obiettivo' || low === 'objective') return 'goal'
+  if (low === 'birth_date' || low === 'dateofbirth' || low === 'dob') return 'birthDate'
+  return k
+}
+
 // ─────────────────────────────────────────
 // Real handler implementations
 // ─────────────────────────────────────────
@@ -104,48 +164,76 @@ const userSetAttribute: Handler = async (args, ctx) => {
     notes?: string
   }
 
+  let normalizedDomain = normalizeDomain(a.domain)
+  const normalizedKey = normalizeKey(a.key, normalizedDomain)
+
+  // Nutrition allergies should stay in nutrition unless explicitly clinical.
+  if (normalizedDomain === 'health' && normalizedKey === 'allergy') {
+    normalizedDomain = 'nutrition'
+  }
+
+  const normalizedValue = a.value as Prisma.InputJsonValue
+  const normalizedUnit = a.unit ?? null
+  const normalizedRecordedAt = toDate(a.recordedAt)
+  const normalizedNotes = a.notes ?? null
+
+  // De-dup exact repeats to reduce noisy duplicated health keys.
+  const existing = await prisma.userAttribute.findFirst({
+    where: {
+      userId: ctx.actor.userId,
+      conversationId: ctx.conversationId,
+      domain: normalizedDomain,
+      key: normalizedKey,
+    },
+    orderBy: { recordedAt: 'desc' },
+    select: { id: true, value: true },
+  })
+  if (existing && JSON.stringify(existing.value) === JSON.stringify(normalizedValue)) {
+    return { saved: true, id: existing.id, deduped: true }
+  }
+
   const row = await prisma.userAttribute.create({
     data: {
       userId: ctx.actor.userId,
-      domain: a.domain,
-      key: a.key,
-      value: a.value as Prisma.InputJsonValue,
-      unit: a.unit ?? null,
+      domain: normalizedDomain,
+      key: normalizedKey,
+      value: normalizedValue,
+      unit: normalizedUnit,
       source: 'agent',
       conversationId: ctx.conversationId,
-      recordedAt: toDate(a.recordedAt),
+      recordedAt: normalizedRecordedAt,
       validUntil: a.validUntil ? new Date(a.validUntil) : null,
-      notes: a.notes ?? null,
+      notes: normalizedNotes,
     },
     select: { id: true },
   })
 
   // Keep current profile snapshot aligned for UI readers using legacy fields.
-  if (a.domain === 'personal') {
-    const normalizedKey = a.key.toLowerCase()
+  if (normalizedDomain === 'personal') {
+    const profileKey = normalizedKey.toLowerCase()
     const profileUpdate: Record<string, unknown> = {}
 
-    if (normalizedKey === 'weight') {
+    if (profileKey === 'weight') {
       const n = coerceNumber(a.value)
       if (n != null) profileUpdate.weight = n
     }
 
-    if (normalizedKey === 'height') {
+    if (profileKey === 'height') {
       const n = coerceNumber(a.value)
       if (n != null) profileUpdate.height = n
     }
 
     if (
-      normalizedKey === 'birthdate' ||
-      normalizedKey === 'dateofbirth' ||
-      normalizedKey === 'date_of_birth' ||
-      normalizedKey === 'dob'
+      profileKey === 'birthdate' ||
+      profileKey === 'dateofbirth' ||
+      profileKey === 'date_of_birth' ||
+      profileKey === 'dob'
     ) {
       const d = coerceDate(a.value)
       if (d) profileUpdate.birthDate = d
     }
 
-    if (normalizedKey === 'gender' || normalizedKey === 'sex' || normalizedKey === 'sesso') {
+    if (profileKey === 'gender' || profileKey === 'sex' || profileKey === 'sesso') {
       if (typeof a.value === 'string' && a.value.trim() !== '') {
         profileUpdate.gender = a.value.trim().slice(0, 20)
       }

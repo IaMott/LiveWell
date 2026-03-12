@@ -18,4 +18,15 @@ describe('server env validation', () => {
       'Missing NEXTAUTH_SECRET in production',
     )
   })
+
+  it('parses ORCH_RETRY_GUARD_WINDOW_MS as positive integer when provided', () => {
+    const env = parseServerEnv({ NODE_ENV: 'test', ORCH_RETRY_GUARD_WINDOW_MS: '45000' })
+    expect(env.ORCH_RETRY_GUARD_WINDOW_MS).toBe(45000)
+  })
+
+  it('throws when ORCH_RETRY_GUARD_WINDOW_MS is invalid', () => {
+    expect(() =>
+      parseServerEnv({ NODE_ENV: 'test', ORCH_RETRY_GUARD_WINDOW_MS: 'not-a-number' }),
+    ).toThrow('Invalid server env')
+  })
 })
