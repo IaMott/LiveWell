@@ -56,4 +56,28 @@ describe('question policy engine', () => {
 
     expect(out.selectedQuestions).toEqual(['Da quanto tempo hai dolore?'])
   })
+
+  it('filters questions already satisfied by known profile or attributes', () => {
+    const out = applyQuestionPolicy(
+      [
+        { question: 'Hai già una diagnosi?' },
+        { question: 'Quanti anni hai?' },
+        { question: 'Da quanto tempo hai dolore?' },
+      ],
+      {
+        domain: 'health',
+        maxQuestions: 1,
+        dedupeStrategy: 'semantic',
+        knownData: {
+          profile: { age: 34 },
+          attributes: {
+            health: { diagnosis: { value: 'lombalgia' } },
+          },
+        },
+      },
+    )
+
+    expect(out.selectedQuestions).toEqual(['Da quanto tempo hai dolore?'])
+    expect(out.orderedQuestions).toEqual(['Da quanto tempo hai dolore?'])
+  })
 })
