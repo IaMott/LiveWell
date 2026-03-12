@@ -19,6 +19,7 @@ import {
 } from './inputInference'
 import { buildAgentUserPrompt } from './agentPrompt'
 import { buildDomainDetectedTraceEvent } from './decisionTrace'
+import { normalizeAgentProposal } from './proposalNormalization'
 import { resolveRoutingContext } from './routing'
 import { getServerEnv } from '@/lib/validators/env'
 
@@ -311,40 +312,16 @@ async function runOneAgent(
     user: userPrompt,
   })
 
-  try {
-    const obj = JSON.parse(res.text)
-    const parsedToolCalls = Array.isArray(obj.toolCalls) ? obj.toolCalls : []
-    const fallbackToolCalls = inferAttributeToolCallsFromMessage(input.message, {
-      domainHint: input.domainHint ?? 'general',
-    })
-    const toolCalls = parsedToolCalls.length > 0 ? parsedToolCalls : fallbackToolCalls
-    return {
-      agentId: agent.id,
-      domain: (obj.domain as Domain) ?? input.domainHint ?? 'general',
-      summary: String(obj.summary ?? '').slice(0, 600),
-      reasoning: String(obj.reasoning ?? '').slice(0, 4000),
-      questions: Array.isArray(obj.questions) ? obj.questions.map(String).slice(0, 8) : [],
-      recommendations: Array.isArray(obj.recommendations) ? obj.recommendations : [],
-      toolCalls,
-      confidence: typeof obj.confidence === 'number' ? obj.confidence : 0.6,
-      citations: Array.isArray(obj.citations) ? obj.citations : [],
-      flags: obj.flags ?? {},
-    }
-  } catch {
-    const fallbackToolCalls = inferAttributeToolCallsFromMessage(input.message, {
-      domainHint: input.domainHint ?? 'general',
-    })
-    return {
-      agentId: agent.id,
-      domain: input.domainHint ?? 'general',
-      summary: res.text.slice(0, 600),
-      reasoning: res.text.slice(0, 4000),
-      questions: [],
-      recommendations: [],
-      toolCalls: fallbackToolCalls,
-      confidence: 0.4,
-    }
-  }
+  const fallbackToolCalls = inferAttributeToolCallsFromMessage(input.message, {
+    domainHint: input.domainHint ?? 'general',
+  })
+
+  return normalizeAgentProposal({
+    text: res.text,
+    agentId: agent.id,
+    domainHint: input.domainHint ?? 'general',
+    fallbackToolCalls,
+  })
 }
 
 async function synthesizeResponse(
