@@ -187,6 +187,13 @@ export type UserAttributes = {
   general?: Record<string, AttributeValue>
 }
 
+export type DecisionTraceEvent = {
+  step: number
+  kind: 'domain_detected' | 'specialist_mode_resolved' | 'agents_selected'
+  summary: string
+  data: Record<string, string | number | boolean | null | string[]>
+}
+
 export type ConsensusResult = {
   domain: Domain
   finalMessageMarkdown: string
@@ -211,6 +218,7 @@ export type ConsensusResult = {
   debug?: {
     selectedAgents: AgentId[]
     conflicts: string[]
+    decisionTrace?: DecisionTraceEvent[]
     proposals?: AgentProposal[]
     round1Proposals?: AgentProposal[]
     round2Proposals?: AgentProposal[]
