@@ -1,5 +1,9 @@
-import { AgentProfile, ActiveSpecialist, Domain } from '../types'
+import { AgentProfile, ActiveSpecialist, DecisionTraceEvent, Domain } from '../types'
 import { selectAgentsForRequest } from '../consensus/consensusEngine'
+import {
+  buildAgentsSelectedTraceEvent,
+  buildSpecialistModeResolvedTraceEvent,
+} from './decisionTrace'
 
 /** Phrases that signal the user wants to speak with a specific specialist */
 const REQUEST_VERBS = [
@@ -124,19 +128,23 @@ type RoutingResolution = {
   activeSpecialist?: ActiveSpecialist
   domainHint: Domain
   selectedAgents: AgentProfile[]
+  decisionTrace: DecisionTraceEvent[]
 }
 
 export function resolveRoutingContext(params: ResolveRoutingParams): RoutingResolution {
   const { team, message, detectedDomain, allDomains, activeSpecialistId } = params
+  const decisionTrace: DecisionTraceEvent[] = []
 
   let lockedAgentId = activeSpecialistId ?? null
-  if (lockedAgentId && shouldExitSpecialistMode(message)) {
+  const requestedSpecialistId = detectSpecialistRequest(message, team)
+  const exitSpecialistMode = Boolean(lockedAgentId && shouldExitSpecialistMode(message))
+
+  if (exitSpecialistMode) {
     lockedAgentId = null
   }
 
   if (!lockedAgentId) {
-    const detectedId = detectSpecialistRequest(message, team)
-    if (detectedId) lockedAgentId = detectedId
+    if (requestedSpecialistId) lockedAgentId = requestedSpecialistId
   }
 
   let activeSpecialist: ActiveSpecialist | undefined
@@ -167,9 +175,39 @@ export function resolveRoutingContext(params: ResolveRoutingParams): RoutingReso
       })()
     : selectAgentsForRequest(team, domainHint, 4, allDomains, message)
 
+  const specialistReason = exitSpecialistMode
+    ? 'explicit_exit_request'
+    : requestedSpecialistId
+      ? 'explicit_specialist_request'
+      : activeSpecialistId && activeSpecialist
+        ? 'keep_previous_specialist'
+        : 'no_specialist_lock'
+
+  decisionTrace.push(
+    buildSpecialistModeResolvedTraceEvent({
+      step: 2,
+      requestedSpecialistId,
+      previousActiveSpecialistId: activeSpecialistId ?? null,
+      activeSpecialist,
+      exitSpecialistMode,
+      reason: specialistReason,
+    }),
+  )
+
+  decisionTrace.push(
+    buildAgentsSelectedTraceEvent({
+      step: 3,
+      domainHint,
+      selectedAgentIds: selectedAgents.map((agent) => agent.id),
+      collaborationCap: activeSpecialist ? 3 : 4,
+      reason: activeSpecialist ? 'specialist_first_collaboration' : 'domain_based_selection',
+    }),
+  )
+
   return {
     activeSpecialist,
     domainHint,
     selectedAgents,
+    decisionTrace,
   }
 }

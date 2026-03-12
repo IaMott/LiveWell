@@ -18,6 +18,7 @@ import {
   readPersonalSnapshot,
 } from './inputInference'
 import { buildAgentUserPrompt } from './agentPrompt'
+import { buildDomainDetectedTraceEvent } from './decisionTrace'
 import { resolveRoutingContext } from './routing'
 import { getServerEnv } from '@/lib/validators/env'
 
@@ -496,13 +497,27 @@ export async function orchestrate(
 
   const detectedDomain = input.domainHint ?? detectDomainFromText(input.message)
   const allDomains = detectDomainsMulti(input.message).map((d) => d.domain)
-  const { activeSpecialist, domainHint, selectedAgents } = resolveRoutingContext({
+  const decisionTrace = [
+    buildDomainDetectedTraceEvent({
+      step: 1,
+      detectedDomain,
+      allDomains,
+      source: input.domainHint ? 'input.domainHint' : 'domainDetection',
+    }),
+  ]
+  const {
+    activeSpecialist,
+    domainHint,
+    selectedAgents,
+    decisionTrace: routingDecisionTrace,
+  } = resolveRoutingContext({
     team: deps.team,
     message: input.message,
     detectedDomain,
     allDomains,
     activeSpecialistId: input.activeSpecialistId,
   })
+  decisionTrace.push(...routingDecisionTrace)
 
   const round1Proposals = await Promise.all(
     selectedAgents.map((a) => runOneAgent(deps.llm, a, { ...input, domainHint })),
@@ -617,6 +632,7 @@ export async function orchestrate(
             ]
           : []),
       ],
+      decisionTrace,
       blockedToolCalls: filteredByTrace.blocked,
       proposals: round2ForPersistence,
       round1Proposals,
