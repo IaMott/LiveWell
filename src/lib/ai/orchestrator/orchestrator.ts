@@ -10,6 +10,7 @@ import {
 } from '../types'
 import { detectDomainFromText, detectDomainsMulti } from '../domain/domainDetection'
 import { selectAgentsForRequest, runConsensus } from '../consensus/consensusEngine'
+import { applyQuestionPolicy, isGenericQuestion } from '../policy/questionPolicy'
 import { getServerEnv } from '@/lib/validators/env'
 
 export type LlmClient = {
@@ -547,22 +548,6 @@ function inferAttributeToolCallsFromMessage(message: string, ctx: InferenceConte
   })
 }
 
-const GENERIC_QUESTION_PATTERNS = [
-  /c['’]e\s+qualcos['’]altro/i,
-  /vuoi\s+aggiungere/i,
-  /desideri\s+aggiungere/i,
-  /come\s+ti\s+senti\s+generalmente/i,
-  /cosa\s+vuoi\s+fare/i,
-  /cosa\s+intendi/i,
-  /posso\s+aiutarti/i,
-]
-
-function isGenericQuestion(q: string): boolean {
-  const trimmed = q.trim()
-  if (!trimmed) return true
-  return GENERIC_QUESTION_PATTERNS.some((re) => re.test(trimmed))
-}
-
 function readPersonalSnapshot(contextPack: ContextPack): {
   birthDate?: string
   gender?: string
@@ -745,19 +730,19 @@ function buildInterviewQueue(
 ): { askNow: string[]; pendingNext: string[] } {
   const fromWorkspace = getPendingQuestionsFromWorkspace(contextPack, domain, activeSpecialist)
   const fromPlan = buildQuestionPlan(domain, contextPack, userMessage)
-  const merged = [...fromWorkspace, ...fromPlan]
-    .map((q) => q.trim())
-    .filter((q) => q.length > 0 && !isGenericQuestion(q))
-  const seen = new Set<string>()
-  const deduped = merged.filter((q) => {
-    const k = q.toLowerCase()
-    if (seen.has(k)) return false
-    seen.add(k)
-    return true
-  })
+  const policy = applyQuestionPolicy(
+    [
+      ...fromWorkspace.map((question) => ({ question, priority: 20 })),
+      ...fromPlan.map((question) => ({ question, priority: 10 })),
+    ],
+    { domain, maxQuestions: 1, dedupeStrategy: 'exact' },
+  )
 
-  if (deduped.length === 0) return { askNow: [], pendingNext: [] }
-  return { askNow: [deduped[0]], pendingNext: deduped.slice(1) }
+  if (policy.orderedQuestions.length === 0) return { askNow: [], pendingNext: [] }
+  return {
+    askNow: policy.selectedQuestions,
+    pendingNext: policy.orderedQuestions.slice(policy.selectedQuestions.length),
+  }
 }
 
 function buildCriticalQuestions(
@@ -772,15 +757,13 @@ function buildCriticalQuestions(
 }
 
 function mergeInterviewQuestions(existing: string[], critical: string[]): string[] {
-  const specificExisting = existing
-    .map((q) => q.trim())
-    .filter((q) => q.length > 0 && !isGenericQuestion(q))
-
-  const merged = [...specificExisting]
-  for (const q of critical) {
-    if (!merged.some((e) => e.toLowerCase() === q.toLowerCase())) merged.push(q)
-  }
-  return merged
+  return applyQuestionPolicy(
+    [
+      ...existing.map((question) => ({ question, priority: 20 })),
+      ...critical.map((question) => ({ question, priority: 10 })),
+    ],
+    { domain: 'general', maxQuestions: 1, dedupeStrategy: 'exact' },
+  ).orderedQuestions
 }
 
 function hasEquivalentQuestionInText(text: string, question: string): boolean {
