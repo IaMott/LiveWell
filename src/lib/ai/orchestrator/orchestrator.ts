@@ -730,18 +730,30 @@ function buildInterviewQueue(
 ): { askNow: string[]; pendingNext: string[] } {
   const fromWorkspace = getPendingQuestionsFromWorkspace(contextPack, domain, activeSpecialist)
   const fromPlan = buildQuestionPlan(domain, contextPack, userMessage)
+  const workspaceQueue = fromWorkspace
+    .map((question) => question.trim())
+    .filter((question) => question.length > 0 && !isGenericQuestion(question))
+
+  const seenWorkspace = new Set<string>()
+  const orderedWorkspace = workspaceQueue.filter((question) => {
+    const key = question.toLowerCase()
+    if (seenWorkspace.has(key)) return false
+    seenWorkspace.add(key)
+    return true
+  })
+
   const policy = applyQuestionPolicy(
-    [
-      ...fromWorkspace.map((question) => ({ question, priority: 20 })),
-      ...fromPlan.map((question) => ({ question, priority: 10 })),
-    ],
-    { domain, maxQuestions: 1, dedupeStrategy: 'exact' },
+    fromPlan
+      .filter((question) => !seenWorkspace.has(question.trim().toLowerCase()))
+      .map((question) => ({ question, priority: 10 })),
+    { domain, maxQuestions: Math.max(0, 1 - orderedWorkspace.length), dedupeStrategy: 'exact' },
   )
 
-  if (policy.orderedQuestions.length === 0) return { askNow: [], pendingNext: [] }
+  const orderedQuestions = [...orderedWorkspace, ...policy.orderedQuestions]
+  if (orderedQuestions.length === 0) return { askNow: [], pendingNext: [] }
   return {
-    askNow: policy.selectedQuestions,
-    pendingNext: policy.orderedQuestions.slice(policy.selectedQuestions.length),
+    askNow: orderedQuestions.slice(0, 1),
+    pendingNext: orderedQuestions.slice(1),
   }
 }
 
