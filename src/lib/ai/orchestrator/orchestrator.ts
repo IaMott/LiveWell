@@ -17,7 +17,8 @@ import {
   readPersonalSnapshot,
   inferAttributeToolCallsFromMessage,
 } from './inputInference'
-import { executeAgent, LlmClient } from './agentExecution'
+import { LlmClient } from './agentExecution'
+import { executeAgentRounds } from './agentRoundExecution'
 import { buildDomainDetectedTraceEvent } from './decisionTrace'
 import { resolveRoutingContext } from './routing'
 import { getServerEnv } from '@/lib/validators/env'
@@ -460,33 +461,12 @@ export async function orchestrate(
   })
   decisionTrace.push(...routingDecisionTrace)
 
-  const round1Proposals = await Promise.all(
-    selectedAgents.map((a) =>
-      executeAgent({
-        llm: deps.llm,
-        agent: a,
-        input: { ...input, domainHint },
-        domainHint,
-      }),
-    ),
-  )
-
-  const round2Proposals = await Promise.all(
-    selectedAgents.map((agent) => {
-      const peerInsights = round1Proposals
-        .filter((p) => p.agentId !== agent.id)
-        .slice(0, 3)
-        .map((p) => `- ${p.agentId}: ${p.summary}`)
-        .join('\n')
-      return executeAgent({
-        llm: deps.llm,
-        agent,
-        input: { ...input, domainHint },
-        domainHint,
-        peerInsights: peerInsights || undefined,
-      })
-    }),
-  )
+  const { round1Proposals, round2Proposals } = await executeAgentRounds({
+    llm: deps.llm,
+    selectedAgents,
+    input,
+    domainHint,
+  })
 
   const consensus = runConsensus({
     opts: { orchestratorId: 'orchestrator', maxAgents: 4, requireGatingOnMissingInfo: true },
