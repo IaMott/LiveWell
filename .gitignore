@@ -64,3 +64,6 @@ playwright-report/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+bkp/
+.DS_Store
