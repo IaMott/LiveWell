@@ -9,6 +9,7 @@ import {
 import { LlmClient } from './agentExecution'
 import { executeAgentRounds } from './agentRoundExecution'
 import { executeConsensusFlow } from './consensusFlow'
+import { adaptConsensusOutcome } from './consensusOutcome'
 import { buildDomainDetectedTraceEvent } from './decisionTrace'
 import { applyInterviewFlow } from './interviewFlow'
 import { resolveRoutingContext } from './routing'
@@ -143,12 +144,13 @@ export async function orchestrate(
     contextPack: input.contextPack,
     orchestratorToolsAllowed: deps.orchestratorToolsAllowed,
   })
+  const consensusOutcome = adaptConsensusOutcome({ consensus })
 
   const { finalInterviewQuestions, round2WithQueue, round2ForPersistence } = applyInterviewFlow({
     domain: domainHint,
     contextPack: input.contextPack,
     userMessage: input.message,
-    consensusGatingQuestions: consensus.gatingQuestions ?? [],
+    consensusGatingQuestions: consensusOutcome.gatingQuestions,
     round2Proposals,
     activeSpecialist,
   })
@@ -173,7 +175,7 @@ export async function orchestrate(
     domainHint,
     activeSpecialist,
   })
-  const mergedToolCalls = [...(consensus.toolCallsToExecute ?? []), ...fallbackToolCalls]
+  const mergedToolCalls = [...consensusOutcome.toolCallsToExecute, ...fallbackToolCalls]
   const dedupedToolCalls = mergedToolCalls.filter((c, idx, arr) => {
     const key = `${c.name}:${JSON.stringify(c.args)}`
     return arr.findIndex((x) => `${x.name}:${JSON.stringify(x.args)}` === key) === idx
@@ -189,15 +191,18 @@ export async function orchestrate(
   )
 
   return {
-    ...consensus,
+    ...consensusOutcome.baseConsensus,
     gatingQuestions: finalInterviewQuestions,
     toolCallsToExecute: filteredByTrace.kept,
     finalMessageMarkdown: finalAnswer.finalText,
     activeSpecialist,
     debug: {
-      selectedAgents: consensus.debug?.selectedAgents ?? selectedAgents.map((a) => a.id),
+      selectedAgents:
+        consensusOutcome.selectedAgentsFromConsensus.length > 0
+          ? consensusOutcome.selectedAgentsFromConsensus
+          : selectedAgents.map((a) => a.id),
       conflicts: [
-        ...(consensus.debug?.conflicts ?? []),
+        ...consensusOutcome.conflicts,
         ...(filteredByTrace.blocked.length > 0
           ? [
               `Blocked ${filteredByTrace.blocked.length} non-retriable tool call(s) from recent trace`,

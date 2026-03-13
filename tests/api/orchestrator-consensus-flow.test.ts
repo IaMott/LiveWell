@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentProfile, AgentProposal, ConsensusResult, ContextPack } from '@/lib/ai/types'
 import { executeConsensusFlow } from '@/lib/ai/orchestrator/consensusFlow'
+import { adaptConsensusOutcome } from '@/lib/ai/orchestrator/consensusOutcome'
 
 const { runConsensusMock } = vi.hoisted(() => ({
   runConsensusMock: vi.fn(),
@@ -72,6 +73,66 @@ describe('consensus flow boundary', () => {
       domainHint: 'health',
       contextPack,
       orchestratorToolsAllowed: ['user.setAttribute'],
+    })
+  })
+})
+
+describe('consensus outcome boundary', () => {
+  it('normalizes the consensus result into a downstream-friendly contract', () => {
+    const consensus: ConsensusResult = {
+      domain: 'health',
+      finalMessageMarkdown: 'final',
+      toolCallsToExecute: [
+        { id: 'tool-1', name: 'user.setAttribute', args: { domain: 'health', key: 'pain' } },
+      ],
+      ui: { domainIcon: 'health', moodScore: 50, sectionScores: { health: 60 } },
+      safety: { escalation: 'recommend-professional' },
+      gatingQuestions: ['Hai dolore?'],
+      artifactsToSave: [{ type: 'other', title: 'Plan', contentMarkdown: 'content' }],
+      debug: { selectedAgents: ['mmg'], conflicts: ['Potential conflict'] },
+    }
+
+    const out = adaptConsensusOutcome({ consensus })
+
+    expect(out).toEqual({
+      baseConsensus: {
+        domain: 'health',
+        finalMessageMarkdown: 'final',
+        ui: { domainIcon: 'health', moodScore: 50, sectionScores: { health: 60 } },
+        safety: { escalation: 'recommend-professional' },
+        artifactsToSave: [{ type: 'other', title: 'Plan', contentMarkdown: 'content' }],
+      },
+      gatingQuestions: ['Hai dolore?'],
+      toolCallsToExecute: [
+        { id: 'tool-1', name: 'user.setAttribute', args: { domain: 'health', key: 'pain' } },
+      ],
+      conflicts: ['Potential conflict'],
+      selectedAgentsFromConsensus: ['mmg'],
+    })
+  })
+
+  it('returns empty normalized arrays when optional consensus fields are absent', () => {
+    const consensus: ConsensusResult = {
+      domain: 'general',
+      finalMessageMarkdown: 'final',
+      toolCallsToExecute: [],
+      ui: { domainIcon: 'general', moodScore: 50, sectionScores: { health: 60 } },
+      safety: { escalation: 'none' },
+    }
+
+    const out = adaptConsensusOutcome({ consensus })
+
+    expect(out).toEqual({
+      baseConsensus: {
+        domain: 'general',
+        finalMessageMarkdown: 'final',
+        ui: { domainIcon: 'general', moodScore: 50, sectionScores: { health: 60 } },
+        safety: { escalation: 'none' },
+      },
+      gatingQuestions: [],
+      toolCallsToExecute: [],
+      conflicts: [],
+      selectedAgentsFromConsensus: [],
     })
   })
 })
