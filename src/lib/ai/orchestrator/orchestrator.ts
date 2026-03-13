@@ -13,6 +13,7 @@ import { buildDomainDetectedTraceEvent } from './decisionTrace'
 import { applyInterviewFlow } from './interviewFlow'
 import { resolveRoutingContext } from './routing'
 import { synthesizeRawResponse } from './synthesis'
+import { hardenFinalAnswer } from './finalAnswer'
 import { getServerEnv } from '@/lib/validators/env'
 
 export type OrchestratorDeps = {
@@ -63,27 +64,6 @@ function filterNonRetriableToolCallsFromRecentTrace(
   const blocked = toolCalls.filter((c) => recentBlockingToolNames.has(c.name))
   const kept = toolCalls.filter((c) => !recentBlockingToolNames.has(c.name))
   return { kept, blocked }
-}
-
-function hasEquivalentQuestionInText(text: string, question: string): boolean {
-  const clean = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-      .split(/\s+/)
-      .filter((t) => t.length >= 4)
-  const textTokens = new Set(clean(text))
-  const qTokens = clean(question)
-  if (qTokens.length === 0) return false
-  const overlap = qTokens.filter((t) => textTokens.has(t)).length
-  return overlap >= Math.max(2, Math.ceil(qTokens.length * 0.5))
-}
-
-function ensureCriticalQuestionsInText(text: string, questions: string[]): string {
-  if (questions.length === 0) return text
-  const missing = questions.filter((q) => !hasEquivalentQuestionInText(text, q))
-  if (missing.length === 0) return text
-  return `${text.trim()}\n\nMi manca solo questo dato per risponderti meglio: ${missing[0]}`
 }
 
 export async function orchestrate(
@@ -183,7 +163,10 @@ export async function orchestrate(
     contextPack: input.contextPack,
     activeSpecialist,
   })
-  const naturalResponse = ensureCriticalQuestionsInText(synthesis.rawText, finalInterviewQuestions)
+  const finalAnswer = hardenFinalAnswer({
+    rawText: synthesis.rawText,
+    criticalQuestions: finalInterviewQuestions,
+  })
 
   // Deterministic safeguard: if specialists/LLM fail to emit tool-calls,
   // still persist clearly extractable personal data from user text.
@@ -210,7 +193,7 @@ export async function orchestrate(
     ...consensus,
     gatingQuestions: finalInterviewQuestions,
     toolCallsToExecute: filteredByTrace.kept,
-    finalMessageMarkdown: naturalResponse,
+    finalMessageMarkdown: finalAnswer.finalText,
     activeSpecialist,
     debug: {
       selectedAgents: consensus.debug?.selectedAgents ?? selectedAgents.map((a) => a.id),
