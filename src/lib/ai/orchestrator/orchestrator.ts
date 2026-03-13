@@ -1,6 +1,5 @@
 import { AgentProfile, AgentInput, ConsensusResult, ContextPack, ToolCall } from '../types'
 import { detectDomainFromText, detectDomainsMulti } from '../domain/domainDetection'
-import { runConsensus } from '../consensus/consensusEngine'
 import {
   ageFromIsoDate,
   isAgeQuestion,
@@ -9,6 +8,7 @@ import {
 } from './inputInference'
 import { LlmClient } from './agentExecution'
 import { executeAgentRounds } from './agentRoundExecution'
+import { executeConsensusFlow } from './consensusFlow'
 import { buildDomainDetectedTraceEvent } from './decisionTrace'
 import { applyInterviewFlow } from './interviewFlow'
 import { resolveRoutingContext } from './routing'
@@ -136,10 +136,9 @@ export async function orchestrate(
     domainHint,
   })
 
-  const consensus = runConsensus({
-    opts: { orchestratorId: 'orchestrator', maxAgents: 4, requireGatingOnMissingInfo: true },
+  const { consensus } = executeConsensusFlow({
     team: deps.team,
-    proposals: round2Proposals,
+    round2Proposals,
     domainHint,
     contextPack: input.contextPack,
     orchestratorToolsAllowed: deps.orchestratorToolsAllowed,
