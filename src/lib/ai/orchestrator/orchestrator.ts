@@ -1,12 +1,4 @@
-import {
-  AgentProfile,
-  AgentInput,
-  AgentProposal,
-  ConsensusResult,
-  ContextPack,
-  ActiveSpecialist,
-  ToolCall,
-} from '../types'
+import { AgentProfile, AgentInput, ConsensusResult, ContextPack, ToolCall } from '../types'
 import { detectDomainFromText, detectDomainsMulti } from '../domain/domainDetection'
 import { runConsensus } from '../consensus/consensusEngine'
 import {
@@ -20,6 +12,7 @@ import { executeAgentRounds } from './agentRoundExecution'
 import { buildDomainDetectedTraceEvent } from './decisionTrace'
 import { applyInterviewFlow } from './interviewFlow'
 import { resolveRoutingContext } from './routing'
+import { synthesizeRawResponse } from './synthesis'
 import { getServerEnv } from '@/lib/validators/env'
 
 export type OrchestratorDeps = {
@@ -91,115 +84,6 @@ function ensureCriticalQuestionsInText(text: string, questions: string[]): strin
   const missing = questions.filter((q) => !hasEquivalentQuestionInText(text, q))
   if (missing.length === 0) return text
   return `${text.trim()}\n\nMi manca solo questo dato per risponderti meglio: ${missing[0]}`
-}
-
-async function synthesizeResponse(
-  llm: LlmClient,
-  params: {
-    userMessage: string
-    proposals: AgentProposal[]
-    gatingQuestions: string[]
-    criticalQuestions: string[]
-    contextPack: ContextPack
-    activeSpecialist?: ActiveSpecialist
-  },
-): Promise<string> {
-  const {
-    userMessage,
-    proposals,
-    gatingQuestions,
-    criticalQuestions,
-    contextPack,
-    activeSpecialist,
-  } = params
-
-  const summaries = proposals
-    .filter((p) => p.summary)
-    .sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5))
-    .map((p) => p.summary)
-    .join('\n')
-
-  const topRecs = proposals
-    .flatMap((p) => p.recommendations ?? [])
-    .slice(0, 3)
-    .map((r) => `• ${r.title}: ${r.steps.slice(0, 2).join('; ')}`)
-    .join('\n')
-
-  const recentHistory = contextPack.history.recentMessages
-    .slice(-4)
-    .map((m) => `${m.role === 'user' ? 'Utente' : 'Assistente'}: ${m.content.slice(0, 120)}`)
-    .join('\n')
-
-  let systemPrompt: string
-  if (activeSpecialist) {
-    systemPrompt = [
-      `Sei ${activeSpecialist.displayName}, specialista del team LiveWell.`,
-      `Rispondi in prima persona come ${activeSpecialist.displayName}, con tono professionale e umano, in italiano.`,
-      `Stai avendo una conversazione diretta con il tuo paziente/cliente nel tuo ruolo specifico.`,
-      ``,
-      `REGOLE OBBLIGATORIE:`,
-      `- NON usare intestazioni markdown (###, ##, #)`,
-      `- NON iniziare con "Certo!", "Assolutamente!", "Ottima domanda!" o simili`,
-      `- Rispondi come professionista direttamente al paziente/cliente, in prima persona`,
-      `- Max 3-4 frasi salvo piani dettagliati esplicitamente richiesti`,
-      `- Rimani nel tuo ambito di competenza; per altri ambiti rimanda ai colleghi`,
-      `- Per piani o programmi strutturati, usa elenchi numerati senza intestazioni`,
-      `- Se manca un dato fondamentale per il tuo ambito, fai UNA sola domanda mirata`,
-      `- Evita domande generiche tipo "c'è altro?" o "come ti senti in generale?"`,
-      `- Chiudi con domande operative, non con inviti vaghi`,
-    ].join('\n')
-  } else {
-    systemPrompt = [
-      `Sei LiveWell, assistente per il benessere personale che coordina un team di specialisti italiani.`,
-      `Parli in italiano, con tono caldo, diretto e professionale — mai generico.`,
-      ``,
-      `REGOLE OBBLIGATORIE:`,
-      `- NON usare intestazioni markdown (###, ##, #)`,
-      `- NON iniziare con "Certo!", "Assolutamente!", "Ottima domanda!" o simili`,
-      `- NON scrivere "Il team sta elaborando..." o promesse di risposte future`,
-      `- NON dire che la risposta arriverà in 24-48 ore o simili`,
-      `- Rispondi SUBITO con informazioni concrete basate sull'analisi del team`,
-      `- Max 3-4 frasi salvo piani dettagliati richiesti dall'utente`,
-      `- Se manca un dato critico, fai al massimo UNA domanda di integrazione`,
-      `- Evita domande generiche o inviti vaghi`,
-      `- Non chiedere informazioni già presenti nel profilo utente`,
-      `- Usa il punto fermo, non bullet, per risposte conversazionali brevi`,
-      `- Per piani strutturati, usa elenchi numerati senza intestazioni`,
-      `- Termina con domande operative mirate solo se mancano dati critici`,
-    ].join('\n')
-  }
-
-  const userPrompt = [
-    recentHistory ? `CONVERSAZIONE RECENTE:\n${recentHistory}\n` : '',
-    `MESSAGGIO UTENTE: "${userMessage}"`,
-    ``,
-    `ANALISI DEL TEAM SPECIALISTICO:`,
-    summaries || '(nessuna analisi disponibile)',
-    topRecs ? `\nRACCOMANDAZIONI:\n${topRecs}` : '',
-    gatingQuestions.length
-      ? `\nINFORMAZIONI MANCANTI GIÀ EMERSE DAL TEAM: ${gatingQuestions.join('; ')}`
-      : '',
-    criticalQuestions.length ? `\nUNICO DATO CRITICO MANCANTE: ${criticalQuestions[0]}` : '',
-    ``,
-    `Scrivi una risposta conversazionale in italiano, rivolta direttamente all'utente.`,
-    `Se manca un dato critico, fai solo quella domanda e non aggiungerne altre.`,
-  ]
-    .filter(Boolean)
-    .join('\n')
-
-  try {
-    const res = await llm.complete({ system: systemPrompt, user: userPrompt, format: 'text' })
-    const text = res.text.trim()
-    // Fallback if model accidentally returned JSON
-    if (text.startsWith('{') || text.startsWith('[')) {
-      const fallback = proposals.find((p) => p.summary)?.summary ?? 'Come posso aiutarti?'
-      return ensureCriticalQuestionsInText(fallback, criticalQuestions)
-    }
-    return ensureCriticalQuestionsInText(text, criticalQuestions)
-  } catch {
-    const fallback = proposals.find((p) => p.summary)?.summary ?? 'Come posso aiutarti?'
-    return ensureCriticalQuestionsInText(fallback, criticalQuestions)
-  }
 }
 
 export async function orchestrate(
@@ -290,7 +174,8 @@ export async function orchestrate(
     activeSpecialist,
   })
 
-  const naturalResponse = await synthesizeResponse(deps.llm, {
+  const synthesis = await synthesizeRawResponse({
+    llm: deps.llm,
     userMessage: input.message,
     proposals: round2WithQueue,
     gatingQuestions: finalInterviewQuestions,
@@ -298,6 +183,7 @@ export async function orchestrate(
     contextPack: input.contextPack,
     activeSpecialist,
   })
+  const naturalResponse = ensureCriticalQuestionsInText(synthesis.rawText, finalInterviewQuestions)
 
   // Deterministic safeguard: if specialists/LLM fail to emit tool-calls,
   // still persist clearly extractable personal data from user text.
