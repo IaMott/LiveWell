@@ -96,6 +96,6 @@ describe('interview flow hardening — transcript 2026-03-11', () => {
     expect(result.gatingQuestions?.some((q) => /qualcos['’]altro|aggiungere/i.test(q))).toBe(false)
 
     // Final response should include only one integration request.
-    expect(result.finalMessageMarkdown).toContain('Mi manca solo questo dato')
+    expect(result.finalMessageMarkdown).toContain('Per personalizzare meglio il piano:')
   })
 })

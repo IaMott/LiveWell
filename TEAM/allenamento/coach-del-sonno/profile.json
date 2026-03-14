@@ -5,9 +5,12 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
     "health.addMetric",
+    "health.logBodyComposition",
     "mindfulness.createEntry",
-    "artifacts.saveRecommendation"
+    "artifacts.saveRecommendation",
+    "reminder.create"
   ],
   "escalationRules": [
     "Segnali di apnea notturna (russamento intenso, risvegli con sensazione di soffocamento, eccessiva sonnolenza diurna non spiegata) -> raccomandare visita specialistica (pneumologo/otorinolaringoiatra) e polisonnografia.",

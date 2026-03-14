@@ -72,7 +72,8 @@ describe('interview flow boundary', () => {
     expect(result.round2ForPersistence).toEqual(result.round2WithQueue)
   })
 
-  it('adds a synthetic persistence proposal when no round2 proposal owns the queue', () => {
+  it('asks all questions upfront on first domain interaction (no workspace, no attributes)', () => {
+    // When profile is empty and no pending questions queued, maxAskNow=3 → all questions at once
     const result = applyInterviewFlow({
       domain: 'nutrition',
       contextPack: baseContext,
@@ -86,18 +87,14 @@ describe('interview flow boundary', () => {
       },
     })
 
-    expect(result.finalInterviewQuestions).toEqual([
+    expect(result.finalInterviewQuestions).toContain(
       'Hai allergie o intolleranze alimentari da registrare?',
-    ])
+    )
+    expect(result.finalInterviewQuestions).toContain(
+      'Qual è il tuo obiettivo nutrizionale principale nelle prossime settimane?',
+    )
     expect(result.round2WithQueue).toEqual([])
-    expect(result.round2ForPersistence).toHaveLength(1)
-    expect(result.round2ForPersistence[0]).toMatchObject({
-      agentId: 'dietista',
-      domain: 'nutrition',
-      pendingDomain: 'nutrition',
-      pendingQuestions: [
-        'Qual è il tuo obiettivo nutrizionale principale nelle prossime settimane?',
-      ],
-    })
+    // No pendingNext when all asked at once → no synthetic persistence proposal needed
+    expect(result.round2ForPersistence).toEqual([])
   })
 })

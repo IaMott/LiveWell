@@ -4,7 +4,9 @@
   "domainTags": ["inspiration"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
-    "artifacts.saveRecommendation"
+    "user.setAttribute",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp"
   ],
   "escalationRules": [
     "Procedimenti penali in corso o rischio di incriminazione -> raccomandare urgentemente avvocato penalista iscritto all'Albo.",

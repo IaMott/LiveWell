@@ -5,9 +5,13 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
     "health.addMetric",
+    "health.logDiagnosis",
+    "health.updateMedications",
     "nutrition.logMeal",
     "nutrition.createFoodItem",
+    "nutrition.logWater",
     "nutrition.recipes.createRecipe",
     "artifacts.saveRecommendation"
   ],

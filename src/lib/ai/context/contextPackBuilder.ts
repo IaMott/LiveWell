@@ -1,4 +1,5 @@
 import { AttributeValue, ContextPack, Domain, Role, UserAttributes } from '../types'
+import { computeMedicalRecord } from './medicalRecord'
 
 type QueryArgs = Record<string, unknown>
 type UnknownRecord = Record<string, unknown>
@@ -280,6 +281,10 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
     userAttributes = buildAttributeMap(rows)
   }
 
+  const medicalRecord = computeMedicalRecord(
+    Object.keys(userAttributes).length > 0 ? userAttributes : undefined,
+  )
+
   const moodScore = computeMoodScore({
     last7Workouts: workouts.length,
     last7MealsLogged: meals.length,
@@ -357,6 +362,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
         medicalInfo: medicalInfo ?? undefined,
       },
       attributes: Object.keys(userAttributes).length > 0 ? userAttributes : undefined,
+      medicalRecord,
     },
     history: {
       recentMessages: recentMessages

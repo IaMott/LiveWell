@@ -5,10 +5,15 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
+    "health.logBodyComposition",
     "nutrition.logMeal",
     "nutrition.createFoodItem",
     "nutrition.recipes.createRecipe",
-    "artifacts.saveRecommendation"
+    "nutrition.logWater",
+    "nutrition.setCalorieGoal",
+    "artifacts.saveRecommendation",
+    "reminder.create"
   ],
   "escalationRules": [
     "Possibili disturbi del comportamento alimentare, perdita di peso rapida, compensazioni -> raccomandare clinico qualificato e approccio prudente.",

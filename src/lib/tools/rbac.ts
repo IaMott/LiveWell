@@ -17,13 +17,23 @@ const USER_ALLOWED_TOOLS = new Set<ToolName>([
   'user.updateProfile',
   'user.setAttribute',
   'health.addMetric',
+  'health.logBodyComposition',
+  'health.logBloodwork',
+  'health.logDiagnosis',
+  'health.updateMedications',
   'nutrition.logMeal',
   'nutrition.createFoodItem',
+  'nutrition.logWater',
+  'nutrition.setCalorieGoal',
   'training.logWorkoutSession',
+  'training.logInjury',
+  'training.updatePlan',
   'mindfulness.createEntry',
   'artifacts.saveRecommendation',
   'share.createLink',
   'export.pdf',
+  'appointment.schedule',
+  'reminder.create',
 ])
 
 const ADMIN_ALLOWED_TOOLS = new Set<ToolName>([

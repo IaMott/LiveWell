@@ -76,7 +76,7 @@ describe('orchestrator agent prompt builder', () => {
     expect(prompt).toContain('WORKSPACE MEMORIA TURNO PRECEDENTE:')
     expect(prompt).toContain('Hai già condiviso allergie e peso.')
     expect(prompt).toContain('PROFILE EXTRACTION (MANDATORY):')
-    expect(prompt).toContain('NATURAL DIALOGUE RULE:')
+    expect(prompt).toContain('RUOLO E APPROCCIO:')
     expect(prompt).toContain('OUTPUT JSON SCHEMA (rispetta esattamente questa struttura):')
   })
 

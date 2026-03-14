@@ -5,7 +5,10 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
     "health.addMetric",
+    "health.logDiagnosis",
+    "health.updateMedications",
     "artifacts.saveRecommendation"
   ],
   "escalationRules": [

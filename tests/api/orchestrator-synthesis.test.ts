@@ -68,12 +68,12 @@ describe('synthesis boundary', () => {
     expect(complete).toHaveBeenCalledTimes(1)
     const call = complete.mock.calls[0]?.[0]
     expect(call?.format).toBe('text')
-    expect(call?.system).toContain('Sei LiveWell')
+    expect(call?.system).toContain('coordinatore del team LiveWell')
     expect(call?.user).toContain('CONVERSAZIONE RECENTE:')
     expect(call?.user).toContain('ANALISI DEL TEAM SPECIALISTICO:')
-    expect(call?.user).toContain('RACCOMANDAZIONI:')
-    expect(call?.user).toContain('INFORMAZIONI MANCANTI GIÀ EMERSE DAL TEAM: Hai allergie?')
-    expect(call?.user).toContain('UNICO DATO CRITICO MANCANTE: Hai allergie?')
+    expect(call?.user).toContain('RACCOMANDAZIONI DEL TEAM:')
+    expect(call?.user).toContain('DATI MANCANTI IDENTIFICATI DAL TEAM')
+    expect(call?.user).toContain('Hai allergie?')
     expect(call?.user.indexOf('Seconda summary')).toBeLessThan(call?.user.indexOf('Prima summary'))
   })
 

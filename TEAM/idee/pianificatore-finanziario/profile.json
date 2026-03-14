@@ -1,10 +1,13 @@
 {
   "id": "financial-planner",
   "displayName": "Financial Planner",
-  "domainTags": ["inspiration"],
+  "domainTags": [
+    "inspiration"
+  ],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
     "artifacts.saveRecommendation",
     "notifications.createInApp"
   ],

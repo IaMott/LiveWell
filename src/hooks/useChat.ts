@@ -11,6 +11,7 @@ export type ChatMessage = {
   specialistName?: string
   thinkingSpecialistName?: string
   thinkingTitle?: string
+  thinkingThought?: string
   streaming?: boolean
 }
 
@@ -234,6 +235,7 @@ export function useChat() {
                           streaming: false,
                           thinkingSpecialistName: undefined,
                           thinkingTitle: undefined,
+                          thinkingThought: undefined,
                         }
                       : m,
                   ),
@@ -262,6 +264,7 @@ export function useChat() {
               } else if (event.type === 'agent.thinking') {
                 const thinkingSpecialistName = String(event.specialistName ?? '')
                 const thinkingTitle = String(event.title ?? '')
+                const thinkingThought = event.thought != null ? String(event.thought) : undefined
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantId
@@ -272,6 +275,7 @@ export function useChat() {
                           streaming: true,
                           thinkingSpecialistName: thinkingSpecialistName || undefined,
                           thinkingTitle: thinkingTitle || undefined,
+                          thinkingThought: thinkingThought || undefined,
                         }
                       : m,
                   ),

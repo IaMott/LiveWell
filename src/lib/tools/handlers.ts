@@ -581,6 +581,208 @@ const reminderCreate: Handler = async (args, ctx) => {
 }
 
 // ─────────────────────────────────────────
+// New specialised clinical handlers
+// ─────────────────────────────────────────
+
+const healthLogBodyComposition: Handler = async (args, ctx) => {
+  const a = args as {
+    bodyFatPct?: number
+    leanMassKg?: number
+    waistCm?: number
+    bmi?: number
+    recordedAt?: string
+    notes?: string
+  }
+  const row = await prisma.userAttribute.create({
+    data: {
+      userId: ctx.actor.userId,
+      domain: 'health',
+      key: 'bodyComposition',
+      value: {
+        bodyFatPct: a.bodyFatPct,
+        leanMassKg: a.leanMassKg,
+        waistCm: a.waistCm,
+        bmi: a.bmi,
+      } as Prisma.InputJsonValue,
+      notes: a.notes ?? null,
+      source: 'agent',
+      conversationId: ctx.conversationId,
+      recordedAt: a.recordedAt ? new Date(a.recordedAt) : new Date(),
+    },
+  })
+  return { saved: true, attributeId: row.id }
+}
+
+const healthLogBloodwork: Handler = async (args, ctx) => {
+  const a = args as {
+    testDate?: string
+    values: Record<string, number | undefined>
+    notes?: string
+  }
+  const row = await prisma.userAttribute.create({
+    data: {
+      userId: ctx.actor.userId,
+      domain: 'health',
+      key: 'bloodwork',
+      value: a.values as Prisma.InputJsonValue,
+      notes: a.notes ?? null,
+      source: 'agent',
+      conversationId: ctx.conversationId,
+      recordedAt: a.testDate ? new Date(a.testDate) : new Date(),
+    },
+  })
+  return { saved: true, attributeId: row.id }
+}
+
+const healthLogDiagnosis: Handler = async (args, ctx) => {
+  const a = args as {
+    condition: string
+    diagnosedAt?: string
+    severity?: string
+    status?: string
+    notes?: string
+  }
+  const row = await prisma.userAttribute.create({
+    data: {
+      userId: ctx.actor.userId,
+      domain: 'health',
+      key: 'conditions',
+      value: {
+        condition: a.condition,
+        severity: a.severity,
+        status: a.status ?? 'active',
+        diagnosedAt: a.diagnosedAt,
+      } as Prisma.InputJsonValue,
+      notes: a.notes ?? null,
+      source: 'agent',
+      conversationId: ctx.conversationId,
+      recordedAt: a.diagnosedAt ? new Date(a.diagnosedAt) : new Date(),
+    },
+  })
+  return { saved: true, attributeId: row.id }
+}
+
+const healthUpdateMedications: Handler = async (args, ctx) => {
+  const a = args as {
+    medications: Array<{
+      name: string
+      dosage?: string
+      frequency?: string
+      since?: string
+      notes?: string
+    }>
+  }
+  const row = await prisma.userAttribute.create({
+    data: {
+      userId: ctx.actor.userId,
+      domain: 'health',
+      key: 'medications',
+      value: a.medications as Prisma.InputJsonValue,
+      source: 'agent',
+      conversationId: ctx.conversationId,
+    },
+  })
+  return { saved: true, attributeId: row.id, count: a.medications.length }
+}
+
+const nutritionLogWater: Handler = async (args, ctx) => {
+  const a = args as { amountMl: number; date?: string }
+  const row = await prisma.userAttribute.create({
+    data: {
+      userId: ctx.actor.userId,
+      domain: 'nutrition',
+      key: 'waterIntake',
+      value: a.amountMl as Prisma.InputJsonValue,
+      unit: 'ml',
+      source: 'agent',
+      conversationId: ctx.conversationId,
+      recordedAt: a.date ? new Date(a.date) : new Date(),
+    },
+  })
+  return { saved: true, attributeId: row.id, amountMl: a.amountMl }
+}
+
+const nutritionSetCalorieGoal: Handler = async (args, ctx) => {
+  const a = args as {
+    targetKcal: number
+    proteinPct?: number
+    carbsPct?: number
+    fatPct?: number
+    notes?: string
+  }
+  const row = await prisma.userAttribute.create({
+    data: {
+      userId: ctx.actor.userId,
+      domain: 'nutrition',
+      key: 'caloricGoal',
+      value: {
+        targetKcal: a.targetKcal,
+        proteinPct: a.proteinPct,
+        carbsPct: a.carbsPct,
+        fatPct: a.fatPct,
+      } as Prisma.InputJsonValue,
+      unit: 'kcal',
+      notes: a.notes ?? null,
+      source: 'agent',
+      conversationId: ctx.conversationId,
+    },
+  })
+  return { saved: true, attributeId: row.id, targetKcal: a.targetKcal }
+}
+
+const trainingLogInjury: Handler = async (args, ctx) => {
+  const a = args as {
+    location: string
+    severity: number
+    type?: string
+    since?: string
+    status?: string
+    notes?: string
+  }
+  const row = await prisma.userAttribute.create({
+    data: {
+      userId: ctx.actor.userId,
+      domain: 'training',
+      key: 'injuries',
+      value: {
+        location: a.location,
+        severity: a.severity,
+        type: a.type,
+        status: a.status ?? 'active',
+      } as Prisma.InputJsonValue,
+      notes: a.notes ?? null,
+      source: 'agent',
+      conversationId: ctx.conversationId,
+      recordedAt: a.since ? new Date(a.since) : new Date(),
+    },
+  })
+  return { saved: true, attributeId: row.id, location: a.location }
+}
+
+const trainingUpdatePlan: Handler = async (args, ctx) => {
+  const a = args as {
+    sessions: Array<{ day: string; type: string; durationMin: number; intensity?: string }>
+    goal?: string
+    notes?: string
+  }
+  const row = await prisma.userAttribute.create({
+    data: {
+      userId: ctx.actor.userId,
+      domain: 'training',
+      key: 'trainingPlan',
+      value: {
+        sessions: a.sessions,
+        goal: a.goal,
+      } as Prisma.InputJsonValue,
+      notes: a.notes ?? null,
+      source: 'agent',
+      conversationId: ctx.conversationId,
+    },
+  })
+  return { saved: true, attributeId: row.id, sessionsCount: a.sessions.length }
+}
+
+// ─────────────────────────────────────────
 // Exports
 // ─────────────────────────────────────────
 
@@ -604,6 +806,14 @@ export const realToolHandlers: HandlerMap = {
   'appointment.schedule': appointmentSchedule,
   'appointment.cancel': appointmentCancel,
   'reminder.create': reminderCreate,
+  'health.logBodyComposition': healthLogBodyComposition,
+  'health.logBloodwork': healthLogBloodwork,
+  'health.logDiagnosis': healthLogDiagnosis,
+  'health.updateMedications': healthUpdateMedications,
+  'nutrition.logWater': nutritionLogWater,
+  'nutrition.setCalorieGoal': nutritionSetCalorieGoal,
+  'training.logInjury': trainingLogInjury,
+  'training.updatePlan': trainingUpdatePlan,
 }
 
 export const stubToolHandlers: HandlerMap = {
@@ -652,5 +862,25 @@ export const stubToolHandlers: HandlerMap = {
   'reminder.create': async (args) => {
     const a = args as { title: string; remindAt: string }
     return { reminderId: 'stub-reminder-id', title: a.title, remindAt: a.remindAt, repeat: 'none' }
+  },
+  'health.logBodyComposition': async () => ({ saved: true, attributeId: 'stub-attr-id' }),
+  'health.logBloodwork': async () => ({ saved: true, attributeId: 'stub-attr-id' }),
+  'health.logDiagnosis': async () => ({ saved: true, attributeId: 'stub-attr-id' }),
+  'health.updateMedications': async () => ({ saved: true, attributeId: 'stub-attr-id', count: 1 }),
+  'nutrition.logWater': async (args) => {
+    const a = args as { amountMl: number }
+    return { saved: true, attributeId: 'stub-attr-id', amountMl: a.amountMl }
+  },
+  'nutrition.setCalorieGoal': async (args) => {
+    const a = args as { targetKcal: number }
+    return { saved: true, attributeId: 'stub-attr-id', targetKcal: a.targetKcal }
+  },
+  'training.logInjury': async (args) => {
+    const a = args as { location: string }
+    return { saved: true, attributeId: 'stub-attr-id', location: a.location }
+  },
+  'training.updatePlan': async (args) => {
+    const a = args as { sessions: unknown[] }
+    return { saved: true, attributeId: 'stub-attr-id', sessionsCount: a.sessions.length }
   },
 }

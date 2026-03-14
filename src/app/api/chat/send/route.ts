@@ -386,6 +386,7 @@ export async function POST(request: Request): Promise<Response> {
                   specialistName: ev.specialistName,
                   title: ev.title,
                   domain: ev.domain,
+                  thought: ev.thought,
                 }),
               ),
             )

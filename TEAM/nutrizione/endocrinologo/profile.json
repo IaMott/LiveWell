@@ -5,10 +5,19 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
     "health.addMetric",
+    "health.logBodyComposition",
+    "health.logBloodwork",
+    "health.logDiagnosis",
+    "health.updateMedications",
     "nutrition.logMeal",
     "nutrition.createFoodItem",
-    "artifacts.saveRecommendation"
+    "nutrition.logWater",
+    "nutrition.setCalorieGoal",
+    "artifacts.saveRecommendation",
+    "appointment.schedule",
+    "reminder.create"
   ],
   "escalationRules": [
     "Coma diabetico, ipoglicemia severa, chetoacidosi, stato iperglicemico iperosmolare -> emergenza immediata (118).",

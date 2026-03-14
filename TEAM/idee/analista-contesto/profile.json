@@ -7,6 +7,7 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "artifacts.saveRecommendation",
+    "user.setAttribute",
     "notifications.createInApp",
     "share.createLink"
   ],

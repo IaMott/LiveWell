@@ -1,10 +1,14 @@
 {
   "id": "executive-coach",
   "displayName": "Executive Coach",
-  "domainTags": ["inspiration", "coordination"],
+  "domainTags": [
+    "inspiration",
+    "coordination"
+  ],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
     "artifacts.saveRecommendation",
     "notifications.createInApp"
   ],

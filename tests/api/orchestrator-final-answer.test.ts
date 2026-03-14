@@ -34,7 +34,7 @@ describe('final answer hardening boundary', () => {
       }),
     ).toEqual({
       finalText:
-        'Ti aiuto volentieri.\n\nMi manca solo questo dato per risponderti meglio: Hai allergie o intolleranze alimentari da registrare?',
+        'Ti aiuto volentieri.\n\nPer personalizzare meglio il piano: Hai allergie o intolleranze alimentari da registrare?',
       appendedCriticalQuestion: true,
     })
   })

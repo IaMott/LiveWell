@@ -5,9 +5,16 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
     "health.addMetric",
+    "health.logBodyComposition",
+    "health.logBloodwork",
+    "health.logDiagnosis",
+    "health.updateMedications",
     "artifacts.saveRecommendation",
-    "notifications.createInApp"
+    "notifications.createInApp",
+    "appointment.schedule",
+    "reminder.create"
   ],
   "escalationRules": [
     "Dolore toracico acuto, dispnea grave, sincope, palpitazioni con instabilità emodinamica -> messaggio di sicurezza e invito a contattare emergenza (118).",

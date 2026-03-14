@@ -107,6 +107,8 @@ export type ContextPack = {
     role: Role
     profile?: Record<string, unknown>
     attributes?: UserAttributes
+    /** Completeness analysis across domains — populated by contextPackBuilder */
+    medicalRecord?: MedicalRecord
   }
   history: {
     recentMessages: Array<{ role: 'user' | 'assistant'; content: string; createdAt: string }>
@@ -185,6 +187,19 @@ export type UserAttributes = {
   mindfulness?: Record<string, AttributeValue>
   personal?: Record<string, AttributeValue>
   general?: Record<string, AttributeValue>
+}
+
+export type DomainCompleteness = {
+  filled: number
+  total: number
+  pct: number
+}
+
+/** Aggregated completeness and missing-key analysis across all tracked domains. */
+export type MedicalRecord = {
+  completeness: Record<string, DomainCompleteness>
+  /** Domain → list of essential keys not yet recorded */
+  missingKeys: Record<string, string[]>
 }
 
 export type DecisionTraceEvent = {

@@ -4,11 +4,19 @@ export const ALLOWED_TOOL_NAMES = [
   'user.updateProfile',
   'user.setAttribute',
   'health.addMetric',
+  'health.logBodyComposition',
+  'health.logBloodwork',
+  'health.logDiagnosis',
+  'health.updateMedications',
   'nutrition.logMeal',
   'nutrition.createFoodItem',
   'nutrition.recipes.createRecipe',
+  'nutrition.logWater',
+  'nutrition.setCalorieGoal',
   'training.createWorkoutPlan',
   'training.logWorkoutSession',
+  'training.logInjury',
+  'training.updatePlan',
   'mindfulness.createEntry',
   'artifacts.saveRecommendation',
   'notifications.createInApp',
@@ -163,6 +171,93 @@ const reminderCreateSchema = z.object({
   remindAt: z.string().datetime(),
   appointmentId: z.string().max(128).optional(),
   repeat: z.enum(['none', 'daily', 'weekly', 'monthly']).optional(),
+})
+
+// ── New specialised clinical tools ──────────────────────────────────────────
+
+const healthLogBodyCompositionSchema = z.object({
+  bodyFatPct: z.number().min(1).max(70).optional(),
+  leanMassKg: z.number().min(10).max(200).optional(),
+  waistCm: z.number().min(30).max(200).optional(),
+  bmi: z.number().min(10).max(70).optional(),
+  recordedAt: z.string().datetime().optional(),
+  notes: z.string().max(500).optional(),
+})
+
+const healthLogBloodworkSchema = z.object({
+  testDate: z.string().datetime().optional(),
+  values: z.object({
+    HbA1c: z.number().min(0).max(30).optional(),
+    glucose: z.number().min(0).max(1000).optional(),
+    totalCholesterol: z.number().min(0).max(2000).optional(),
+    HDL: z.number().min(0).max(500).optional(),
+    LDL: z.number().min(0).max(1000).optional(),
+    triglycerides: z.number().min(0).max(5000).optional(),
+    TSH: z.number().min(0).max(100).optional(),
+    ferritin: z.number().min(0).max(10000).optional(),
+    vitaminD: z.number().min(0).max(500).optional(),
+    hemoglobin: z.number().min(0).max(30).optional(),
+  }),
+  notes: z.string().max(500).optional(),
+})
+
+const healthLogDiagnosisSchema = z.object({
+  condition: baseString.max(200),
+  diagnosedAt: z.string().datetime().optional(),
+  severity: z.enum(['mild', 'moderate', 'severe']).optional(),
+  status: z.enum(['active', 'resolved', 'managed']).default('active'),
+  notes: z.string().max(500).optional(),
+})
+
+const healthUpdateMedicationsSchema = z.object({
+  medications: z
+    .array(
+      z.object({
+        name: baseString.max(120),
+        dosage: z.string().max(64).optional(),
+        frequency: z.string().max(64).optional(),
+        since: z.string().datetime().optional(),
+        notes: z.string().max(200).optional(),
+      }),
+    )
+    .min(1),
+})
+
+const nutritionLogWaterSchema = z.object({
+  amountMl: z.number().int().min(50).max(10000),
+  date: z.string().datetime().optional(),
+})
+
+const nutritionSetCalorieGoalSchema = z.object({
+  targetKcal: z.number().int().min(500).max(10000),
+  proteinPct: z.number().min(5).max(80).optional(),
+  carbsPct: z.number().min(5).max(80).optional(),
+  fatPct: z.number().min(5).max(80).optional(),
+  notes: z.string().max(300).optional(),
+})
+
+const trainingLogInjurySchema = z.object({
+  location: baseString.max(120),
+  severity: z.number().int().min(1).max(5),
+  type: z.enum(['muscle', 'joint', 'bone', 'tendon', 'other']).optional(),
+  since: z.string().datetime().optional(),
+  status: z.enum(['active', 'recovering', 'healed']).default('active'),
+  notes: z.string().max(500).optional(),
+})
+
+const trainingUpdatePlanSchema = z.object({
+  sessions: z
+    .array(
+      z.object({
+        day: baseString.max(20),
+        type: baseString.max(80),
+        durationMin: z.number().int().min(5).max(300),
+        intensity: z.enum(['low', 'moderate', 'high', 'very_high']).optional(),
+      }),
+    )
+    .min(1),
+  goal: z.string().max(200).optional(),
+  notes: z.string().max(500).optional(),
 })
 
 export type ToolDefinition = {
@@ -323,6 +418,78 @@ const definitions: Record<ToolName, ToolDefinition> = {
     requiresOwnerMode: false,
     version: '1.0.0',
     since: '2025-01-01',
+  },
+  'health.logBodyComposition': {
+    name: 'health.logBodyComposition',
+    schema: healthLogBodyCompositionSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2026-03-14',
+  },
+  'health.logBloodwork': {
+    name: 'health.logBloodwork',
+    schema: healthLogBloodworkSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2026-03-14',
+  },
+  'health.logDiagnosis': {
+    name: 'health.logDiagnosis',
+    schema: healthLogDiagnosisSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2026-03-14',
+  },
+  'health.updateMedications': {
+    name: 'health.updateMedications',
+    schema: healthUpdateMedicationsSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2026-03-14',
+  },
+  'nutrition.logWater': {
+    name: 'nutrition.logWater',
+    schema: nutritionLogWaterSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2026-03-14',
+  },
+  'nutrition.setCalorieGoal': {
+    name: 'nutrition.setCalorieGoal',
+    schema: nutritionSetCalorieGoalSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2026-03-14',
+  },
+  'training.logInjury': {
+    name: 'training.logInjury',
+    schema: trainingLogInjurySchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2026-03-14',
+  },
+  'training.updatePlan': {
+    name: 'training.updatePlan',
+    schema: trainingUpdatePlanSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2026-03-14',
   },
   'appointment.schedule': {
     name: 'appointment.schedule',

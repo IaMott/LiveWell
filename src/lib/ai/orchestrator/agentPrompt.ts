@@ -90,6 +90,26 @@ export function buildAgentUserPrompt(
     )
   }
 
+  // Medical record completeness — show what data is still missing
+  const medRec = input.contextPack.user.medicalRecord
+  if (medRec) {
+    const completenessLines: string[] = []
+    for (const [domain, comp] of Object.entries(medRec.completeness)) {
+      const missing = medRec.missingKeys[domain] ?? []
+      if (comp.pct < 100) {
+        const missingStr = missing.slice(0, 4).join(', ')
+        completenessLines.push(`[${domain}] ${comp.pct}% — mancano: ${missingStr}`)
+      }
+    }
+    if (completenessLines.length > 0) {
+      parts.push(``, `CARTELLA CLINICA — COMPLETEZZA PROFILO:`, ...completenessLines)
+      parts.push(
+        `Quando l'utente menziona uno di questi dati, includi SEMPRE un tool call user.setAttribute.`,
+        `Chiedi i dati mancanti solo se contestualmente rilevante, tutti insieme come lista numerata.`,
+      )
+    }
+  }
+
   if (peerInsights) {
     parts.push(
       ``,

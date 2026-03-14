@@ -5,7 +5,9 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
-    "artifacts.saveRecommendation"
+    "user.setAttribute",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp"
   ],
   "escalationRules": [
     "Accertamenti fiscali, contenziosi tributari o procedimenti penali fiscali in corso -> raccomandare urgentemente commercialista/avvocato tributarista abilitato.",

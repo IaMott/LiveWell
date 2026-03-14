@@ -5,9 +5,16 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
     "health.addMetric",
+    "health.logBodyComposition",
+    "health.logBloodwork",
+    "health.logDiagnosis",
+    "health.updateMedications",
     "artifacts.saveRecommendation",
-    "notifications.createInApp"
+    "notifications.createInApp",
+    "appointment.schedule",
+    "reminder.create"
   ],
   "escalationRules": [
     "Segnali di emergenza (dolore toracico, dispnea grave, sincope, deficit neurologici, sangue nelle feci/vomito, febbre alta persistente, reazione allergica) -> messaggio di sicurezza e invito a contattare emergenza/medico.",

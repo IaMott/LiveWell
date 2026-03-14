@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const txConversationUpdate = vi.fn()
 const txMessageCreate = vi.fn()
 const txToolAuditCreate = vi.fn()
 const txAgentWorkspaceUpsert = vi.fn()
@@ -38,12 +39,14 @@ const prismaMock = {
   $transaction: vi.fn(
     async (
       callback: (tx: {
+        conversation: { update: typeof txConversationUpdate }
         message: { create: typeof txMessageCreate }
         toolAuditLog: { create: typeof txToolAuditCreate }
         agentWorkspace: { upsert: typeof txAgentWorkspaceUpsert }
       }) => Promise<void>,
     ) =>
       callback({
+        conversation: { update: txConversationUpdate },
         message: { create: txMessageCreate },
         toolAuditLog: { create: txToolAuditCreate },
         agentWorkspace: { upsert: txAgentWorkspaceUpsert },
@@ -72,6 +75,7 @@ describe('/api/chat/send persistence integration', () => {
     prismaMock.bodyMetricEntry.create.mockResolvedValue({ id: 'metric-1' })
     prismaMock.userAttribute.create.mockResolvedValue({ id: 'attr-1' })
     prismaMock.userAttribute.findFirst.mockResolvedValue(null)
+    txConversationUpdate.mockResolvedValue({ id: 'conv-db-1' })
     txMessageCreate.mockResolvedValue({ id: 'msg-tx' })
     txToolAuditCreate.mockResolvedValue({ id: 'audit-tx' })
     txAgentWorkspaceUpsert.mockResolvedValue({ id: 'workspace-tx' })

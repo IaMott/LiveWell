@@ -5,8 +5,12 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
+    "health.logBodyComposition",
     "training.createWorkoutPlan",
     "training.logWorkoutSession",
+    "training.logInjury",
+    "training.updatePlan",
     "artifacts.saveRecommendation"
   ],
   "escalationRules": [

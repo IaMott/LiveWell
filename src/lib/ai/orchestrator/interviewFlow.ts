@@ -124,11 +124,13 @@ function buildInterviewQueue(
     return true
   })
 
-  // Allow more questions upfront when the profile is still empty (first interaction in domain)
+  // Allow more questions upfront only in locked-specialist mode when profile is empty + no queued questions.
+  // In team-led mode (no activeSpecialist) stay conservative at 1 to avoid flooding the user.
   const attrs = contextPack.user.attributes ?? {}
   const domainAttrs =
     ((attrs as Record<string, unknown>)[domain] as Record<string, unknown> | undefined) ?? {}
-  const isFirstInteractionInDomain = Object.keys(domainAttrs).length === 0
+  const isFirstInteractionInDomain =
+    Object.keys(domainAttrs).length === 0 && fromWorkspace.length === 0 && activeSpecialist != null
   const maxAskNow = isFirstInteractionInDomain ? 3 : 1
 
   const policy = applyQuestionPolicy(

@@ -1,10 +1,14 @@
 {
   "id": "life-organizer",
   "displayName": "Life Organizer",
-  "domainTags": ["coordination", "inspiration"],
+  "domainTags": [
+    "coordination",
+    "inspiration"
+  ],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
     "artifacts.saveRecommendation",
     "notifications.createInApp"
   ],
