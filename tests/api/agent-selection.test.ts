@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectAgentsForRequest } from '@/lib/ai/consensus/consensusEngine'
+import { selectAgentsForRequest } from '@/lib/ai/orchestrator/agentSelection'
 import type { AgentProfile } from '@/lib/ai/types'
 
 const mk = (
