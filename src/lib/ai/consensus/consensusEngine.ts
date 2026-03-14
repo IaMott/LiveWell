@@ -1,137 +1,12 @@
-import {
-  AgentProfile,
-  AgentProposal,
-  ConsensusResult,
-  ContextPack,
-  Domain,
-  ToolCall,
-} from '../types'
-import { applyQuestionPolicy } from '../policy/questionPolicy'
+import { AgentProfile, AgentProposal, ConsensusResult, ContextPack, Domain } from '../types'
+import { uniq, mergeToolCalls } from './merger'
+import { enforceDomainIsolation, pickPrimaryDomain } from './domainResolver'
+import { collectGatingQuestions, detectConflicts, composeFinalMarkdown } from './synthesizer'
 
 export type ConsensusEngineOptions = {
   orchestratorId: string
   maxAgents: number
   requireGatingOnMissingInfo: boolean
-}
-
-function uniq<T>(arr: T[]): T[] {
-  return Array.from(new Set(arr))
-}
-
-function mergeToolCalls(proposals: AgentProposal[], allowedTools: Set<string>): ToolCall[] {
-  const out: ToolCall[] = []
-  for (const p of proposals) {
-    for (const c of p.toolCalls ?? []) {
-      if (!allowedTools.has(c.name)) continue
-      out.push(c)
-    }
-  }
-  // de-dupe by (name + args JSON)
-  const seen = new Set<string>()
-  return out.filter((c) => {
-    const k = `${c.name}:${JSON.stringify(c.args)}`
-    if (seen.has(k)) return false
-    seen.add(k)
-    return true
-  })
-}
-
-// Gap 3: enforce domain isolation — normalize agent proposals to their primary domain
-function enforceDomainIsolation(
-  proposals: AgentProposal[],
-  team: AgentProfile[],
-): { normalized: AgentProposal[]; violations: string[] } {
-  const agentPrimaryDomain = new Map(
-    team.map((a) => [
-      a.id,
-      a.domainTags.find((d) => d !== 'general') ?? a.domainTags[0] ?? 'general',
-    ]),
-  )
-  const violations: string[] = []
-  const normalized = proposals.map((p) => {
-    const expected = agentPrimaryDomain.get(p.agentId)
-    if (expected && expected !== 'general' && p.domain !== expected && p.domain !== 'general') {
-      violations.push(`Agent ${p.agentId} (${expected}) proposed domain ${p.domain} — normalized`)
-      return { ...p, domain: expected as Domain }
-    }
-    return p
-  })
-  return { normalized, violations }
-}
-
-// Collect gating questions with semantic dedup + known-data filtering
-function collectGatingQuestions(
-  proposals: AgentProposal[],
-  contextPack: ContextPack,
-  domain: Domain,
-): string[] {
-  const raw = proposals.flatMap((p) => p.questions ?? [])
-  return applyQuestionPolicy(
-    raw.map((question) => ({ question })),
-    {
-      domain,
-      maxQuestions: 1,
-      dedupeStrategy: 'semantic',
-      knownData: {
-        profile: (contextPack.user.profile ?? {}) as Record<string, unknown>,
-        attributes: contextPack.user.attributes as
-          | Record<string, Record<string, unknown>>
-          | undefined,
-      },
-    },
-  ).selectedQuestions
-}
-
-function detectConflicts(proposals: AgentProposal[]): string[] {
-  // Simple conflict detector: different high-level summary intents in same domain
-  const summaries = proposals.map((p) => p.summary.trim().toLowerCase()).filter(Boolean)
-  if (summaries.length <= 1) return []
-  // if summaries are too different, we flag; heuristic: Jaccard distance on tokens
-  const tokens = summaries.map((s) => new Set(s.split(/\s+/).slice(0, 30)))
-  const conflicts: string[] = []
-  for (let i = 0; i < tokens.length; i++) {
-    for (let j = i + 1; j < tokens.length; j++) {
-      const a = tokens[i],
-        b = tokens[j]
-      const inter = new Set([...a].filter((x) => b.has(x)))
-      const union = new Set([...a, ...b])
-      const jacc = union.size ? inter.size / union.size : 1
-      if (jacc < 0.25) conflicts.push(`Potential conflict between proposals ${i + 1} and ${j + 1}`)
-    }
-  }
-  return uniq(conflicts)
-}
-
-function pickPrimaryDomain(domainHint: Domain | undefined, proposals: AgentProposal[]): Domain {
-  if (domainHint && domainHint !== 'general') return domainHint
-  const counts = new Map<Domain, number>()
-  for (const p of proposals) counts.set(p.domain, (counts.get(p.domain) ?? 0) + 1)
-  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1])
-  return sorted.length ? sorted[0][0] : 'general'
-}
-
-// Internal summary used as context for the synthesis LLM call — never shown directly to the user.
-function composeFinalMarkdown(
-  domain: Domain,
-  proposals: AgentProposal[],
-  context: ContextPack,
-): string {
-  const top = proposals.sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5))[0]
-  const parts: string[] = [`[internal:domain=${domain}]`]
-
-  if (top?.summary) parts.push(top.summary)
-
-  const gating = collectGatingQuestions(proposals, context, domain)
-  if (gating.length) parts.push(`[gating: ${gating.join(' | ')}]`)
-
-  const recs = proposals.flatMap((p) => p.recommendations ?? [])
-  if (recs.length) {
-    recs.slice(0, 3).forEach((r) => {
-      parts.push(`${r.title}: ${r.steps.slice(0, 2).join('; ')}`)
-    })
-  }
-
-  return parts.join('\n')
 }
 
 export function runConsensus(params: {
@@ -142,7 +17,6 @@ export function runConsensus(params: {
   contextPack: ContextPack
   orchestratorToolsAllowed: string[]
 }): ConsensusResult {
-  // Gap 3: enforce domain isolation before consensus
   const { normalized: isolatedProposals, violations: domainViolations } = enforceDomainIsolation(
     params.proposals,
     params.team,
@@ -152,7 +26,6 @@ export function runConsensus(params: {
   const conflicts = detectConflicts(isolatedProposals)
 
   const toolCalls = mergeToolCalls(isolatedProposals, new Set(params.orchestratorToolsAllowed))
-  // Gap 2: semantic dedup + known-data filtering
   const gatingQuestions = collectGatingQuestions(isolatedProposals, params.contextPack, domain)
 
   const urgent = isolatedProposals.some((p) => p.flags?.urgentEscalation)
