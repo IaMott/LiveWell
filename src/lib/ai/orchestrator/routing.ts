@@ -1,5 +1,5 @@
 import { AgentProfile, ActiveSpecialist, DecisionTraceEvent, Domain } from '../types'
-import { selectAgentsForRequest } from '../consensus/consensusEngine'
+import { selectAgentsForRequest } from './agentSelection'
 import {
   buildAgentsSelectedTraceEvent,
   buildSpecialistModeResolvedTraceEvent,
