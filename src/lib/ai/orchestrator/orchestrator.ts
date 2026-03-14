@@ -1,16 +1,11 @@
-import { AgentProfile, AgentInput, ConsensusResult, ContextPack } from '../types'
+import { AgentProfile, AgentInput, ConsensusResult } from '../types'
 import { detectDomainFromText, detectDomainsMulti } from '../domain/domainDetection'
-import {
-  ageFromIsoDate,
-  isAgeQuestion,
-  readPersonalSnapshot,
-  inferAttributeToolCallsFromMessage,
-} from './inputInference'
 import { LlmClient } from './agentExecution'
 import { executeAgentRounds } from './agentRoundExecution'
 import { executeConsensusFlow } from './consensusFlow'
 import { adaptConsensusOutcome } from './consensusOutcome'
 import { buildDomainDetectedTraceEvent } from './decisionTrace'
+import { tryAgeQuestionFastPath } from './fastPaths'
 import { applyInterviewFlow } from './interviewFlow'
 import { resolveRoutingContext } from './routing'
 import { synthesizeRawResponse } from './synthesis'
@@ -34,40 +29,8 @@ export async function orchestrate(
   deps: OrchestratorDeps,
   input: AgentInput,
 ): Promise<ConsensusResult> {
-  const personal = readPersonalSnapshot(input.contextPack)
-  if (isAgeQuestion(input.message)) {
-    const age = personal.birthDate ? ageFromIsoDate(personal.birthDate) : null
-    const response =
-      age != null
-        ? `Hai ${age} anni.`
-        : 'Non ho la tua data di nascita registrata. Per calcolare la tua età indicami la data di nascita in formato gg/mm/aaaa.'
-    return {
-      domain: 'general',
-      finalMessageMarkdown: response,
-      toolCallsToExecute: inferAttributeToolCallsFromMessage(input.message, {
-        domainHint: 'general',
-      }),
-      ui: {
-        domainIcon: 'general',
-        moodScore: input.contextPack.ui.moodScore,
-        sectionScores: input.contextPack.ui.sectionScores,
-      },
-      gatingQuestions:
-        age == null
-          ? ['Per calcolare la tua età mi serve la tua data di nascita (gg/mm/aaaa).']
-          : undefined,
-      safety: { escalation: 'none' },
-      artifactsToSave: undefined,
-      activeSpecialist: input.activeSpecialistId
-        ? {
-            id: input.activeSpecialistId,
-            displayName: input.activeSpecialistId,
-            domain: 'general',
-          }
-        : undefined,
-      debug: { selectedAgents: [], conflicts: [] },
-    }
-  }
+  const fastPath = tryAgeQuestionFastPath(input)
+  if (fastPath.handled) return fastPath.result
 
   const detectedDomain = input.domainHint ?? detectDomainFromText(input.message)
   const allDomains = detectDomainsMulti(input.message).map((d) => d.domain)
