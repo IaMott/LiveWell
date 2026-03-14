@@ -17,58 +17,6 @@ export type InterviewFlowResult = {
   round2ForPersistence: AgentProposal[]
 }
 
-function buildSingleMissingQuestion(
-  domain: Domain,
-  contextPack: ContextPack,
-  userMessage: string,
-): string | null {
-  const attrs = contextPack.user.attributes ?? {}
-  const lower = userMessage.toLowerCase()
-  const personal = readPersonalSnapshot(contextPack)
-
-  if (isAgeQuestion(userMessage) && !personal.birthDate) {
-    return 'Per calcolare la tua età mi serve la tua data di nascita (gg/mm/aaaa).'
-  }
-
-  const hasAttr = (d: keyof typeof attrs, key: string): boolean => {
-    const bucket = attrs[d] as Record<string, { value?: unknown }> | undefined
-    return Boolean(bucket?.[key]?.value != null)
-  }
-
-  if (domain === 'nutrition' || lower.includes('dieta') || lower.includes('aliment')) {
-    if (!hasAttr('nutrition', 'allergy') && !hasAttr('health', 'allergy')) {
-      return 'Hai allergie o intolleranze alimentari da registrare?'
-    }
-    if (!hasAttr('nutrition', 'goal') && !hasAttr('general', 'goal')) {
-      return 'Qual è il tuo obiettivo nutrizionale principale nelle prossime settimane?'
-    }
-    return null
-  }
-
-  if (domain === 'training') {
-    if (!hasAttr('training', 'training_frequency_per_week')) {
-      return 'Quanti allenamenti a settimana riesci a fare realisticamente?'
-    }
-    return null
-  }
-
-  if (domain === 'health') {
-    if (!hasAttr('health', 'symptom_duration')) {
-      return 'Da quanto tempo è presente il sintomo principale?'
-    }
-    return null
-  }
-
-  if (domain === 'mindfulness') {
-    if (!hasAttr('mindfulness', 'stress_level')) {
-      return 'Su una scala 0-10, quanto è il tuo livello di stress medio?'
-    }
-    return null
-  }
-
-  return null
-}
-
 function buildQuestionPlan(
   domain: Domain,
   contextPack: ContextPack,
@@ -198,7 +146,7 @@ function buildCriticalQuestions(
   userMessage: string,
   _activeSpecialist?: ActiveSpecialist,
 ): string[] {
-  const question = buildSingleMissingQuestion(domain, contextPack, userMessage)
+  const question = buildQuestionPlan(domain, contextPack, userMessage)[0] ?? null
   if (!question || isGenericQuestion(question)) return []
   return [question]
 }
