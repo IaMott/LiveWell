@@ -1,19 +1,17 @@
-import { AgentProposal, Domain, ToolCall } from '../types'
+import { AgentProposal, Domain } from '../types'
 
 type NormalizeAgentProposalParams = {
   text: string
   agentId: string
   domainHint: Domain
-  fallbackToolCalls: ToolCall[]
 }
 
 export function normalizeAgentProposal(params: NormalizeAgentProposalParams): AgentProposal {
-  const { text, agentId, domainHint, fallbackToolCalls } = params
+  const { text, agentId, domainHint } = params
 
   try {
     const obj = JSON.parse(text)
-    const parsedToolCalls = Array.isArray(obj.toolCalls) ? obj.toolCalls : []
-    const toolCalls = parsedToolCalls.length > 0 ? parsedToolCalls : fallbackToolCalls
+    const toolCalls = Array.isArray(obj.toolCalls) ? obj.toolCalls : []
 
     return {
       agentId,
@@ -35,7 +33,7 @@ export function normalizeAgentProposal(params: NormalizeAgentProposalParams): Ag
       reasoning: text.slice(0, 4000),
       questions: [],
       recommendations: [],
-      toolCalls: fallbackToolCalls,
+      toolCalls: [],
       confidence: 0.4,
     }
   }

@@ -58,7 +58,7 @@ describe('agent execution boundary', () => {
     })
   })
 
-  it('uses fallback tool calls when the LLM omits them', async () => {
+  it('returns empty toolCalls when the LLM omits them — attribute inference is handled by toolCallPlan', async () => {
     const llm: LlmClient = {
       complete: vi.fn().mockResolvedValue({
         text: JSON.stringify({
@@ -73,20 +73,7 @@ describe('agent execution boundary', () => {
 
     const proposal = await executeAgent({ llm, agent, input, domainHint: 'nutrition' })
 
-    expect(proposal.toolCalls).toEqual([
-      expect.objectContaining({
-        name: 'user.setAttribute',
-        args: expect.objectContaining({
-          domain: 'nutrition',
-          key: 'allergy',
-        }),
-      }),
-    ])
-    expect(
-      String(
-        proposal.toolCalls?.[0]?.args && (proposal.toolCalls[0].args as { value?: unknown }).value,
-      ),
-    ).toContain('arachidi')
+    expect(proposal.toolCalls).toEqual([])
   })
 
   it('returns a fallback proposal on non-JSON output', async () => {
