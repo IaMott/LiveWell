@@ -2,6 +2,7 @@ import { AgentProfile, AgentProposal, ConsensusResult, ContextPack, Domain } fro
 import { uniq, mergeToolCalls } from './merger'
 import { enforceDomainIsolation, pickPrimaryDomain } from './domainResolver'
 import { collectGatingQuestions, detectConflicts, composeFinalMarkdown } from './synthesizer'
+import { rankByWeight, mergeToolCallsWeighted, detectWeightedConflicts } from './weightedMerge'
 
 export type ConsensusEngineOptions = {
   orchestratorId: string
@@ -22,18 +23,33 @@ export function runConsensus(params: {
     params.team,
   )
 
-  const domain = pickPrimaryDomain(params.domainHint, isolatedProposals)
-  const conflicts = detectConflicts(isolatedProposals)
+  // Rank proposals by confidence weight before any merge/synthesis.
+  // Fallback proposals (confidence=0) are stripped out here.
+  const rankedProposals = rankByWeight(isolatedProposals)
+  // For domain/gating/synthesis we use ranked (active) proposals;
+  // for legacy conflict detection we keep isolated for backward compat.
+  const effectiveProposals = rankedProposals.length > 0 ? rankedProposals : isolatedProposals
 
-  const toolCalls = mergeToolCalls(isolatedProposals, new Set(params.orchestratorToolsAllowed))
-  const gatingQuestions = collectGatingQuestions(isolatedProposals, params.contextPack, domain)
+  const domain = pickPrimaryDomain(params.domainHint, effectiveProposals)
+  const baseConflicts = detectConflicts(effectiveProposals)
+  const weightedConflicts = detectWeightedConflicts(effectiveProposals)
+  const conflicts = [...new Set([...baseConflicts, ...weightedConflicts])]
 
-  const urgent = isolatedProposals.some((p) => p.flags?.urgentEscalation)
-  const risk = urgent || isolatedProposals.some((p) => p.flags?.potentialRisk)
+  // Use weighted tool call merge to prefer high-confidence agents
+  const weightedCalls = mergeToolCallsWeighted(effectiveProposals)
+  const toolCalls: NonNullable<AgentProposal['toolCalls']> =
+    weightedCalls.length > 0
+      ? weightedCalls
+      : mergeToolCalls(effectiveProposals, new Set(params.orchestratorToolsAllowed))
 
-  const finalMessageMarkdown = composeFinalMarkdown(domain, isolatedProposals, params.contextPack)
+  const gatingQuestions = collectGatingQuestions(effectiveProposals, params.contextPack, domain)
 
-  const artifactsToSave = isolatedProposals
+  const urgent = effectiveProposals.some((p) => p.flags?.urgentEscalation)
+  const risk = urgent || effectiveProposals.some((p) => p.flags?.potentialRisk)
+
+  const finalMessageMarkdown = composeFinalMarkdown(domain, effectiveProposals, params.contextPack)
+
+  const artifactsToSave = effectiveProposals
     .flatMap((p) => (p.recommendations ?? []).flatMap((r) => r.artifactsToSave ?? []))
     .slice(0, 5)
     .map((a) => ({ type: a.type, title: a.title, contentMarkdown: a.contentMarkdown }))
@@ -58,7 +74,7 @@ export function runConsensus(params: {
     },
     artifactsToSave: artifactsToSave.length ? artifactsToSave : undefined,
     debug: {
-      selectedAgents: uniq(isolatedProposals.map((p) => p.agentId)),
+      selectedAgents: uniq(effectiveProposals.map((p) => p.agentId)),
       conflicts: [...conflicts, ...domainViolations],
     },
   }

@@ -104,6 +104,7 @@ model Conversation {
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   shareToken String?   @unique @map("share_token")
   sharedAt   DateTime? @map("shared_at")
+  deletedAt  DateTime? @map("deleted_at") // soft-delete: null = active
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
@@ -143,9 +144,10 @@ model Message {
   conversationId String       @map("conversation_id")
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   attachments    Attachment[]
+  deletedAt      DateTime?    @map("deleted_at") // soft-delete: null = active
   createdAt      DateTime     @default(now()) @map("created_at")
 
-  @@index([conversationId])
+  @@index([conversationId, deletedAt])
   @@map("messages")
 }
 
@@ -426,4 +428,61 @@ model AgentPerformanceLog {
   @@index([userId, createdAt])
   @@index([conversationId])
   @@map("agent_performance_logs")
+}
+
+// ─────────────────────────────────────────
+// Long-term memory — summaries across convos
+// ─────────────────────────────────────────
+
+model ConversationSummary {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  conversationId String   @unique @map("conversation_id")
+  summary        String   // 200-300 chars max, generated after turn
+  domain         String   @default("general")
+  messageCount   Int      @default(0) @map("message_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([userId, updatedAt])
+  @@map("conversation_summaries")
+}
+
+// ─────────────────────────────────────────
+// User Feedback — rating per response
+// ─────────────────────────────────────────
+
+model UserFeedback {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  conversationId String   @map("conversation_id")
+  requestId      String   @map("request_id")
+  rating         Int      // 1-5
+  comment        String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, requestId])
+  @@index([userId, createdAt])
+  @@index([conversationId])
+  @@map("user_feedbacks")
+}
+
+// ─────────────────────────────────────────
+// Moderation — log of flagged content
+// ─────────────────────────────────────────
+
+model ModerationLog {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  conversationId String?  @map("conversation_id")
+  requestId      String   @map("request_id")
+  flagType       String   @map("flag_type") // 'self_harm' | 'violence' | 'medical_emergency' | 'pii'
+  severity       String   // 'low' | 'medium' | 'high'
+  excerpt        String?  // first 200 chars of flagged message (hashed/truncated)
+  action         String   // 'warn' | 'block' | 'escalate'
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([flagType, createdAt])
+  @@map("moderation_logs")
 }

@@ -6,13 +6,14 @@ import { errorResponse } from '@/lib/security/errorSchema'
 import { logApiErrorEvent } from '@/lib/monitoring/apiErrorEvents'
 import { orchestrate } from '@/lib/ai/orchestrator/orchestrator'
 import { detectDomainFromText } from '@/lib/ai/domain/domainDetection'
-import { createGeminiClient } from '@/lib/ai/gemini'
+import { createLlmWithFallback } from '@/lib/ai/llmFactory'
 import { loadTeam } from '@/lib/ai/team/loader'
 import type { AgentInput, ToolCall, ToolResult } from '@/lib/ai/types'
 import { ALLOWED_TOOL_NAMES, isAllowedToolName } from '@/lib/tools/toolRegistry'
 import { createToolExecutor, type MutationAuditEvent } from '@/lib/tools/toolExecutor'
 import { realToolHandlers, stubToolHandlers } from '@/lib/tools/handlers'
 import { logChatFallbackEvent, buildSafeFallbackResponse } from './chatFallback'
+import { moderateText, persistModerationLog } from '@/lib/ai/contentModeration'
 import { toSse, buildThinkingEvents } from './chatStream'
 import {
   isDbPersistenceEnabled,
@@ -159,6 +160,46 @@ export async function POST(request: Request): Promise<Response> {
     })
   }
 
+  // ── Content moderation ──────────────────────────────────────────────────
+  const modResult = moderateText(parsedBody.message)
+  if (modResult.action !== 'none') {
+    persistModerationLog({
+      userId,
+      conversationId,
+      requestId,
+      result: modResult,
+      messageExcerpt: parsedBody.message.slice(0, 100),
+    })
+  }
+  if (modResult.action === 'block' && modResult.emergencyMessage) {
+    // Stream the emergency message directly as SSE using the existing event types
+    const emergencyId = crypto.randomUUID()
+    const enc = new TextEncoder()
+    const body = new ReadableStream<Uint8Array>({
+      start(ctrl) {
+        ctrl.enqueue(
+          enc.encode(
+            toSse({ type: 'message.delta', id: emergencyId, delta: modResult.emergencyMessage! }),
+          ),
+        )
+        ctrl.enqueue(
+          enc.encode(
+            toSse({
+              type: 'message.complete',
+              id: emergencyId,
+              content: modResult.emergencyMessage!,
+            }),
+          ),
+        )
+        ctrl.close()
+      },
+    })
+    return new Response(body, {
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+    })
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   const requestedToolCalls = parseToolDirective(parsedBody.message)
   const contextPack = await persistence.buildContextPack({
     userId,
@@ -178,7 +219,9 @@ export async function POST(request: Request): Promise<Response> {
   const teamDirAbsolute = path.resolve(process.cwd(), 'TEAM')
   const team = loadTeam({ teamDirAbsolute, allowEmpty: true })
   const llm =
-    requestedToolCalls.length > 0 ? buildDeterministicLlm(requestedToolCalls) : createGeminiClient()
+    requestedToolCalls.length > 0
+      ? buildDeterministicLlm(requestedToolCalls)
+      : createLlmWithFallback()
   let consensus
   try {
     consensus = await orchestrate(
