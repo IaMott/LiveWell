@@ -124,19 +124,30 @@ function buildInterviewQueue(
     return true
   })
 
+  // Allow more questions upfront when the profile is still empty (first interaction in domain)
+  const attrs = contextPack.user.attributes ?? {}
+  const domainAttrs =
+    ((attrs as Record<string, unknown>)[domain] as Record<string, unknown> | undefined) ?? {}
+  const isFirstInteractionInDomain = Object.keys(domainAttrs).length === 0
+  const maxAskNow = isFirstInteractionInDomain ? 3 : 1
+
   const policy = applyQuestionPolicy(
     fromPlan
       .filter((question) => !seenWorkspace.has(question.trim().toLowerCase()))
       .map((question) => ({ question, priority: 10 })),
-    { domain, maxQuestions: Math.max(0, 1 - orderedWorkspace.length), dedupeStrategy: 'exact' },
+    {
+      domain,
+      maxQuestions: Math.max(0, maxAskNow - orderedWorkspace.length),
+      dedupeStrategy: 'exact',
+    },
   )
 
   const orderedQuestions = [...orderedWorkspace, ...policy.orderedQuestions]
   if (orderedQuestions.length === 0) return { askNow: [], pendingNext: [] }
 
   return {
-    askNow: orderedQuestions.slice(0, 1),
-    pendingNext: orderedQuestions.slice(1),
+    askNow: orderedQuestions.slice(0, maxAskNow),
+    pendingNext: orderedQuestions.slice(maxAskNow),
   }
 }
 
@@ -157,7 +168,7 @@ function mergeInterviewQuestions(existing: string[], critical: string[]): string
       ...existing.map((question) => ({ question, priority: 20 })),
       ...critical.map((question) => ({ question, priority: 10 })),
     ],
-    { domain: 'general', maxQuestions: 1, dedupeStrategy: 'exact' },
+    { domain: 'general', maxQuestions: 3, dedupeStrategy: 'exact' },
   ).orderedQuestions
 }
 
@@ -182,7 +193,7 @@ export function applyInterviewFlow(input: InterviewFlowInput): InterviewFlowResu
     consensusGatingQuestions,
     queue.askNow.length > 0 ? queue.askNow : interviewCriticalQuestions,
   )
-  const finalInterviewQuestions = mergedInterviewQuestions.slice(0, 1)
+  const finalInterviewQuestions = mergedInterviewQuestions.slice(0, 3)
 
   const round2WithQueue = round2Proposals.map((proposal, index) => {
     const shouldOwnQueue =

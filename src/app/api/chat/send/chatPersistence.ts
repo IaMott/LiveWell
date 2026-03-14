@@ -106,6 +106,12 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       toolExecutionTrace,
     }) => {
       await prisma.$transaction(async (tx) => {
+        // Bump conversation.updatedAt so it surfaces at the top of the history list
+        await tx.conversation.update({
+          where: { id: conversationId },
+          data: { updatedAt: new Date() },
+        })
+
         await tx.message.create({
           data: { conversationId, role: 'user', content: userMessage },
         })

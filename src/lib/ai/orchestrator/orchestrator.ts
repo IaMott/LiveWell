@@ -93,6 +93,7 @@ export async function orchestrate(
   const finalAnswer = hardenFinalAnswer({
     rawText: synthesis.rawText,
     criticalQuestions: finalInterviewQuestions,
+    userMessage: input.message,
   })
 
   const retryGuardWindowMs =

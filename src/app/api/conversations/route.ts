@@ -15,7 +15,7 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const conversations = await prisma.conversation.findMany({
-      where: { userId },
+      where: { userId, deletedAt: null },
       orderBy: { updatedAt: 'desc' },
       take: 30,
       select: {
