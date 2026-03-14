@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeAgentProposal } from '@/lib/ai/orchestrator/proposalNormalization'
-import type { ToolCall } from '@/lib/ai/types'
-
-const fallbackToolCalls: ToolCall[] = [
-  {
-    id: 'tc-fallback',
-    name: 'user.setAttribute',
-    args: { domain: 'health', key: 'weight', value: 80, unit: 'kg' },
-  },
-]
 
 describe('orchestrator proposal normalization', () => {
   it('parses valid JSON output and preserves normalized optional fields', () => {
@@ -26,7 +17,6 @@ describe('orchestrator proposal normalization', () => {
       }),
       agentId: 'mmg',
       domainHint: 'general',
-      fallbackToolCalls,
     })
 
     expect(proposal).toMatchObject({
@@ -44,7 +34,7 @@ describe('orchestrator proposal normalization', () => {
     ])
   })
 
-  it('uses fallback tool calls when JSON output omits toolCalls', () => {
+  it('returns empty toolCalls when JSON output omits them — fallback is handled by toolCallPlan', () => {
     const proposal = normalizeAgentProposal({
       text: JSON.stringify({
         domain: 'health',
@@ -55,20 +45,18 @@ describe('orchestrator proposal normalization', () => {
       }),
       agentId: 'mmg',
       domainHint: 'health',
-      fallbackToolCalls,
     })
 
-    expect(proposal.toolCalls).toEqual(fallbackToolCalls)
+    expect(proposal.toolCalls).toEqual([])
     expect(proposal.domain).toBe('health')
     expect(proposal.confidence).toBe(0.6)
   })
 
-  it('builds a fallback proposal when output is not valid JSON', () => {
+  it('builds a fallback proposal with empty toolCalls when output is not valid JSON', () => {
     const proposal = normalizeAgentProposal({
       text: 'Risposta libera non JSON',
       agentId: 'mmg',
       domainHint: 'health',
-      fallbackToolCalls,
     })
 
     expect(proposal).toMatchObject({
@@ -78,7 +66,7 @@ describe('orchestrator proposal normalization', () => {
       reasoning: 'Risposta libera non JSON',
       questions: [],
       recommendations: [],
-      toolCalls: fallbackToolCalls,
+      toolCalls: [],
       confidence: 0.4,
     })
   })

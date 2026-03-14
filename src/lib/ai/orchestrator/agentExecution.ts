@@ -1,6 +1,5 @@
 import { AgentInput, AgentProfile, AgentProposal, Domain } from '../types'
 import { buildAgentUserPrompt } from './agentPrompt'
-import { inferAttributeToolCallsFromMessage } from './inputInference'
 import { normalizeAgentProposal } from './proposalNormalization'
 
 export type LlmClient = {
@@ -30,14 +29,9 @@ export async function executeAgent(params: ExecuteAgentParams): Promise<AgentPro
     user: userPrompt,
   })
 
-  const fallbackToolCalls = inferAttributeToolCallsFromMessage(input.message, {
-    domainHint,
-  })
-
   return normalizeAgentProposal({
     text: res.text,
     agentId: agent.id,
     domainHint,
-    fallbackToolCalls,
   })
 }

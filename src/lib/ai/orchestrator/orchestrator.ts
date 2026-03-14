@@ -1,4 +1,4 @@
-import { AgentProfile, AgentInput, ConsensusResult, ContextPack, ToolCall } from '../types'
+import { AgentProfile, AgentInput, ConsensusResult, ContextPack } from '../types'
 import { detectDomainFromText, detectDomainsMulti } from '../domain/domainDetection'
 import {
   ageFromIsoDate,
@@ -15,6 +15,7 @@ import { applyInterviewFlow } from './interviewFlow'
 import { resolveRoutingContext } from './routing'
 import { synthesizeRawResponse } from './synthesis'
 import { hardenFinalAnswer } from './finalAnswer'
+import { planToolCalls } from './toolCallPlan'
 import { getServerEnv } from '@/lib/validators/env'
 
 export type OrchestratorDeps = {
@@ -24,47 +25,9 @@ export type OrchestratorDeps = {
   retryGuardWindowMs?: number
 }
 
-const NON_RETRIABLE_TOOL_ERROR_CODES = new Set([
-  'TOOL_FORBIDDEN_BY_AGENT_CAPABILITY',
-  'FORBIDDEN',
-  'OWNER_MODE_REQUIRED',
-  'VALIDATION_ERROR',
-])
-
 function getRetryGuardWindowMs(): number {
   const env = getServerEnv()
   return env.ORCH_RETRY_GUARD_WINDOW_MS ?? 2 * 60 * 1000
-}
-
-function filterNonRetriableToolCallsFromRecentTrace(
-  toolCalls: ToolCall[],
-  contextPack: ContextPack,
-  retryGuardWindowMs: number,
-): { kept: ToolCall[]; blocked: ToolCall[] } {
-  const trace = contextPack.history.toolExecutionTrace ?? []
-  if (trace.length === 0 || toolCalls.length === 0) {
-    return { kept: toolCalls, blocked: [] }
-  }
-
-  const now = Date.now()
-  const recentBlockingToolNames = new Set(
-    trace
-      .filter((t) => {
-        if (t.ok) return false
-        if (!t.code || !NON_RETRIABLE_TOOL_ERROR_CODES.has(t.code)) return false
-        const ageMs = now - new Date(t.createdAt).getTime()
-        return Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= retryGuardWindowMs
-      })
-      .map((t) => t.name),
-  )
-
-  if (recentBlockingToolNames.size === 0) {
-    return { kept: toolCalls, blocked: [] }
-  }
-
-  const blocked = toolCalls.filter((c) => recentBlockingToolNames.has(c.name))
-  const kept = toolCalls.filter((c) => !recentBlockingToolNames.has(c.name))
-  return { kept, blocked }
 }
 
 export async function orchestrate(
@@ -169,31 +132,23 @@ export async function orchestrate(
     criticalQuestions: finalInterviewQuestions,
   })
 
-  // Deterministic safeguard: if specialists/LLM fail to emit tool-calls,
-  // still persist clearly extractable personal data from user text.
-  const fallbackToolCalls = inferAttributeToolCallsFromMessage(input.message, {
-    domainHint,
-    activeSpecialist,
-  })
-  const mergedToolCalls = [...consensusOutcome.toolCallsToExecute, ...fallbackToolCalls]
-  const dedupedToolCalls = mergedToolCalls.filter((c, idx, arr) => {
-    const key = `${c.name}:${JSON.stringify(c.args)}`
-    return arr.findIndex((x) => `${x.name}:${JSON.stringify(x.args)}` === key) === idx
-  })
   const retryGuardWindowMs =
     typeof deps.retryGuardWindowMs === 'number' && deps.retryGuardWindowMs > 0
       ? deps.retryGuardWindowMs
       : getRetryGuardWindowMs()
-  const filteredByTrace = filterNonRetriableToolCallsFromRecentTrace(
-    dedupedToolCalls,
-    input.contextPack,
+  const toolCallPlan = planToolCalls({
+    consensusToolCalls: consensusOutcome.toolCallsToExecute,
+    message: input.message,
+    domainHint,
+    activeSpecialist,
+    contextPack: input.contextPack,
     retryGuardWindowMs,
-  )
+  })
 
   return {
     ...consensusOutcome.baseConsensus,
     gatingQuestions: finalInterviewQuestions,
-    toolCallsToExecute: filteredByTrace.kept,
+    toolCallsToExecute: toolCallPlan.toolCallsToExecute,
     finalMessageMarkdown: finalAnswer.finalText,
     activeSpecialist,
     debug: {
@@ -201,16 +156,9 @@ export async function orchestrate(
         consensusOutcome.selectedAgentsFromConsensus.length > 0
           ? consensusOutcome.selectedAgentsFromConsensus
           : selectedAgents.map((a) => a.id),
-      conflicts: [
-        ...consensusOutcome.conflicts,
-        ...(filteredByTrace.blocked.length > 0
-          ? [
-              `Blocked ${filteredByTrace.blocked.length} non-retriable tool call(s) from recent trace`,
-            ]
-          : []),
-      ],
+      conflicts: [...consensusOutcome.conflicts, ...toolCallPlan.conflictMessages],
       decisionTrace,
-      blockedToolCalls: filteredByTrace.blocked,
+      blockedToolCalls: toolCallPlan.blockedToolCalls,
       proposals: round2ForPersistence,
       round1Proposals,
       round2Proposals: round2ForPersistence,
