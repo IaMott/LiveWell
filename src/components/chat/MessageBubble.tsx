@@ -347,7 +347,7 @@ function ThinkingDots({
         }
         @keyframes lw-thought-in {
           from { opacity: 0; transform: translateY(-3px); }
-          to { opacity: 0.4; transform: translateY(0); }
+          to { opacity: 0.65; transform: translateY(0); }
         }
       `}</style>
     </div>

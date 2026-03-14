@@ -106,10 +106,17 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       toolExecutionTrace,
     }) => {
       await prisma.$transaction(async (tx) => {
-        // Bump conversation.updatedAt so it surfaces at the top of the history list
-        await tx.conversation.update({
+        // Ensure conversation exists and bump updatedAt so it surfaces at the top of the list.
+        // Using upsert so that if resolveConversationId failed (cold-start / race condition)
+        // we still create the record rather than throwing "Record not found".
+        await tx.conversation.upsert({
           where: { id: conversationId },
-          data: { updatedAt: new Date() },
+          create: {
+            id: conversationId,
+            userId,
+            title: userMessage.slice(0, 80),
+          },
+          update: { updatedAt: new Date() },
         })
 
         await tx.message.create({

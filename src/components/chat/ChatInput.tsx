@@ -5,6 +5,8 @@ import type React from 'react'
 import type { Domain } from '@/lib/ai/types'
 import { LiveModal } from './live/LiveModal'
 
+const ALLOWED_UPLOAD_TYPES = 'image/*,.pdf,.txt,.md,.doc,.docx,.csv,.json'
+
 const DOMAIN_COLORS: Partial<Record<Domain, string>> = {
   nutrition: '#AF52DE',
   training: '#007AFF',
@@ -107,6 +109,24 @@ function IconCronology({ color }: { color: string }) {
   )
 }
 
+function IconPaperclip() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="var(--color-text-secondary, #8E8E93)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+    </svg>
+  )
+}
+
 // LIVE icon — matches design/icons/live.svg exactly
 // active=true → red circle; active=false → gray circle
 function IconLive({ active }: { active: boolean }) {
@@ -151,7 +171,7 @@ const DOMAINS: Array<{ domain: Domain; Icon: IconFC; label: string }> = [
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  onSend: (text: string, domain?: Domain) => void
+  onSend: (text: string, domain?: Domain, files?: File[]) => void
   onHistory?: () => void
   disabled?: boolean
   activeDomain?: Domain | null
@@ -178,7 +198,9 @@ export function ChatInput({
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(activeDomain ?? null)
   const [showLive, setShowLive] = useState(false)
   const [animDomain, setAnimDomain] = useState<Domain | null>(null)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   // Tracks the conversation used during the current Live session — may be a newly
   // auto-created one if the user started Live with no prior text conversation.
   const liveConversationIdRef = useRef<string | null>(conversationId ?? null)
@@ -232,12 +254,37 @@ export function ChatInput({
 
   function submit() {
     const trimmed = text.trim()
-    if (!trimmed || disabled) return
-    onSend(trimmed, selectedDomain ?? undefined)
+    if ((!trimmed && pendingFiles.length === 0) || disabled) return
+    onSend(trimmed, selectedDomain ?? undefined, pendingFiles.length > 0 ? pendingFiles : undefined)
     setText('')
+    setPendingFiles([])
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
+  }
+
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? [])
+    if (selected.length === 0) return
+    setPendingFiles((prev) => {
+      const combined = [...prev, ...selected]
+      // Dedupe by name+size, cap at 5
+      const seen = new Set<string>()
+      return combined
+        .filter((f) => {
+          const key = `${f.name}:${f.size}`
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        .slice(0, 5)
+    })
+    // Reset so the same file can be re-selected if removed
+    e.target.value = ''
+  }
+
+  function removeFile(index: number) {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
   /**
@@ -276,6 +323,17 @@ export function ChatInput({
         <LiveModal onClose={() => setShowLive(false)} onTranscription={handleTranscription} />
       )}
 
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept={ALLOWED_UPLOAD_TYPES}
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+        aria-hidden="true"
+      />
+
       <div
         style={{
           padding: '0.5rem 0.75rem 0.75rem',
@@ -291,6 +349,63 @@ export function ChatInput({
             boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
           }}
         >
+          {/* Pending files chips */}
+          {pendingFiles.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.375rem',
+                marginBottom: '0.5rem',
+              }}
+            >
+              {pendingFiles.map((file, i) => (
+                <span
+                  key={`${file.name}:${i}`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                    padding: '0.1875rem 0.5rem',
+                    borderRadius: '0.75rem',
+                    backgroundColor: 'var(--color-bg, #F2F2F7)',
+                    fontSize: '0.75rem',
+                    color: 'var(--color-text-primary, #1C1C1E)',
+                    maxWidth: '180px',
+                  }}
+                >
+                  <span
+                    style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {file.type.startsWith('image/') ? '🖼 ' : '📎 '}
+                    {file.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeFile(i)}
+                    aria-label={`Rimuovi ${file.name}`}
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                      lineHeight: 1,
+                      color: 'var(--color-text-secondary, #8E8E93)',
+                      fontSize: '0.875rem',
+                      flexShrink: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
           {/* Textarea */}
           <textarea
             ref={textareaRef}
@@ -377,6 +492,56 @@ export function ChatInput({
             {/* Spacer */}
             <div style={{ flex: 1 }} />
 
+            {/* Attach button — opens file picker */}
+            <button
+              type="button"
+              aria-label="Allega file"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                flexShrink: 0,
+                marginRight: '0.125rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '2rem',
+                height: '2rem',
+                borderRadius: '50%',
+                backgroundColor:
+                  pendingFiles.length > 0 ? 'var(--color-bg, #F2F2F7)' : 'transparent',
+                transition: 'background-color 0.15s',
+                position: 'relative',
+              }}
+            >
+              <IconPaperclip />
+              {pendingFiles.length > 0 && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '2px',
+                    right: '2px',
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '50%',
+                    backgroundColor: '#007AFF',
+                    border: '1.5px solid var(--color-surface, #fff)',
+                    fontSize: '0.5rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    fontWeight: 700,
+                    lineHeight: 1,
+                  }}
+                >
+                  {pendingFiles.length}
+                </span>
+              )}
+            </button>
+
             {/* LIVE button — icon matching design/icons/live.svg */}
             <button
               type="button"
@@ -401,18 +566,19 @@ export function ChatInput({
             <button
               type="button"
               onClick={submit}
-              disabled={!text.trim() || disabled}
+              disabled={(!text.trim() && pendingFiles.length === 0) || disabled}
               aria-label="Invia"
               style={{
                 width: '2rem',
                 height: '2rem',
                 borderRadius: '50%',
                 border: 'none',
-                backgroundColor: text.trim()
-                  ? currentColor || '#007AFF'
-                  : 'var(--color-separator, #E5E5EA)',
+                backgroundColor:
+                  text.trim() || pendingFiles.length > 0
+                    ? currentColor || '#007AFF'
+                    : 'var(--color-separator, #E5E5EA)',
                 color: '#fff',
-                cursor: text.trim() ? 'pointer' : 'default',
+                cursor: text.trim() || pendingFiles.length > 0 ? 'pointer' : 'default',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

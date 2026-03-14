@@ -151,9 +151,9 @@ export function useChat() {
   }, [])
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, _domain?: Domain, files?: File[]) => {
       const trimmed = text.trim()
-      if (!trimmed || isStreaming) return
+      if ((!trimmed && (!files || files.length === 0)) || isStreaming) return
 
       if (!conversationIdRef.current) {
         const newId = crypto.randomUUID()
@@ -162,12 +162,33 @@ export function useChat() {
         localStorage.setItem(STORAGE_KEY, newId)
       }
 
+      // Upload files before sending the message so the context pack can include them
+      let fileIds: string[] = []
+      if (files && files.length > 0) {
+        try {
+          const formData = new FormData()
+          formData.append('conversationId', conversationIdRef.current ?? '')
+          files.forEach((f) => formData.append('file', f))
+          const uploadRes = await fetch('/api/chat/upload', { method: 'POST', body: formData })
+          if (uploadRes.ok) {
+            const data = (await uploadRes.json()) as { files: Array<{ id: string }> }
+            fileIds = data.files.map((f) => f.id)
+          }
+        } catch {
+          // best-effort upload
+        }
+      }
+
       setActiveDomain(null)
+
+      // Append file names to the visible user message for clarity
+      const filesSuffix =
+        files && files.length > 0 ? '\n' + files.map((f) => `📎 ${f.name}`).join('\n') : ''
 
       const userMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'user',
-        content: trimmed,
+        content: trimmed + filesSuffix,
       }
       const assistantId = crypto.randomUUID()
       const assistantMsg: ChatMessage = {
@@ -188,6 +209,7 @@ export function useChat() {
             message: trimmed,
             conversationId: conversationIdRef.current,
             activeSpecialistId: activeSpecialistIdRef.current,
+            fileIds: fileIds.length > 0 ? fileIds : undefined,
           }),
         })
 

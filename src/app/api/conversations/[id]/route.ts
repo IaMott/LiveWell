@@ -25,8 +25,16 @@ export async function GET(
       title: true,
       userId: true,
       messages: {
+        where: { deletedAt: null },
         orderBy: { createdAt: 'asc' },
-        select: { id: true, role: true, content: true, createdAt: true },
+        select: {
+          id: true,
+          role: true,
+          content: true,
+          domain: true,
+          specialistName: true,
+          createdAt: true,
+        },
       },
     },
   })
@@ -41,6 +49,8 @@ export async function GET(
       id: m.id,
       role: m.role,
       content: m.content,
+      domain: m.domain ?? undefined,
+      specialistName: m.specialistName ?? undefined,
       createdAt: m.createdAt.toISOString(),
     })),
   })
