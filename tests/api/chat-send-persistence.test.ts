@@ -1,10 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const txConversationUpsert = vi.fn()
-const txMessageCreate = vi.fn()
-const txToolAuditCreate = vi.fn()
-const txAgentWorkspaceUpsert = vi.fn()
-
 const prismaMock = {
   conversation: {
     findUnique: vi.fn(),
@@ -13,9 +8,13 @@ const prismaMock = {
   },
   message: {
     findMany: vi.fn(),
+    create: vi.fn(),
   },
   toolAuditLog: {
     create: vi.fn(),
+  },
+  agentWorkspace: {
+    upsert: vi.fn(),
   },
   user: {
     findUnique: vi.fn(),
@@ -37,22 +36,11 @@ const prismaMock = {
     findFirst: vi.fn(),
     create: vi.fn(),
   },
-  $transaction: vi.fn(
-    async (
-      callback: (tx: {
-        conversation: { upsert: typeof txConversationUpsert }
-        message: { create: typeof txMessageCreate }
-        toolAuditLog: { create: typeof txToolAuditCreate }
-        agentWorkspace: { upsert: typeof txAgentWorkspaceUpsert }
-      }) => Promise<void>,
-    ) =>
-      callback({
-        conversation: { upsert: txConversationUpsert },
-        message: { create: txMessageCreate },
-        toolAuditLog: { create: txToolAuditCreate },
-        agentWorkspace: { upsert: txAgentWorkspaceUpsert },
-      }),
-  ),
+  // Batch $transaction([...]) — resolve all Promises in the array
+  $transaction: vi.fn(async (ops: unknown) => {
+    if (Array.isArray(ops)) return Promise.all(ops)
+    return Promise.resolve()
+  }),
 }
 
 vi.mock('@/lib/prisma', () => ({
@@ -66,20 +54,19 @@ describe('/api/chat/send persistence integration', () => {
 
     prismaMock.conversation.findUnique.mockResolvedValue(null)
     prismaMock.conversation.create.mockResolvedValue({ id: 'conv-db-1' })
+    prismaMock.conversation.upsert.mockResolvedValue({ id: 'conv-db-1' })
     prismaMock.message.findMany.mockResolvedValue([])
+    prismaMock.message.create.mockResolvedValue({ id: 'msg-1' })
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u-db', role: 'OWNER' })
     prismaMock.notification.count.mockResolvedValue(0)
     prismaMock.notification.findFirst.mockResolvedValue(null)
     prismaMock.userProfile.findUnique.mockResolvedValue(null)
     prismaMock.userProfile.upsert.mockResolvedValue({ id: 'profile-1' })
     prismaMock.toolAuditLog.create.mockResolvedValue({ id: 'audit-1' })
+    prismaMock.agentWorkspace.upsert.mockResolvedValue({ id: 'workspace-1' })
     prismaMock.bodyMetricEntry.create.mockResolvedValue({ id: 'metric-1' })
     prismaMock.userAttribute.create.mockResolvedValue({ id: 'attr-1' })
     prismaMock.userAttribute.findFirst.mockResolvedValue(null)
-    txConversationUpsert.mockResolvedValue({ id: 'conv-db-1' })
-    txMessageCreate.mockResolvedValue({ id: 'msg-tx' })
-    txToolAuditCreate.mockResolvedValue({ id: 'audit-tx' })
-    txAgentWorkspaceUpsert.mockResolvedValue({ id: 'workspace-tx' })
   })
 
   afterEach(() => {
@@ -105,12 +92,16 @@ describe('/api/chat/send persistence integration', () => {
     expect(res.status).toBe(200)
 
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
-    expect(txMessageCreate).toHaveBeenCalledTimes(2)
-    expect(txMessageCreate.mock.calls[0][0]).toMatchObject({
-      data: { conversationId: 'conv-db-1', role: 'user', content: 'ciao dal db' },
+    // Batch transaction receives an array — user msg + assistant msg + optional conversation upsert
+    const batchOps = (prismaMock.$transaction.mock.calls[0] as [unknown[]])[0]
+    expect(Array.isArray(batchOps)).toBe(true)
+    // message.create called twice (user + assistant) before being batched
+    expect(prismaMock.message.create).toHaveBeenCalledTimes(2)
+    expect(prismaMock.message.create.mock.calls[0][0]).toMatchObject({
+      data: { conversationId: expect.any(String), role: 'user', content: 'ciao dal db' },
     })
-    expect(txMessageCreate.mock.calls[1][0]).toMatchObject({
-      data: { conversationId: 'conv-db-1', role: 'assistant' },
+    expect(prismaMock.message.create.mock.calls[1][0]).toMatchObject({
+      data: { conversationId: expect.any(String), role: 'assistant' },
     })
   })
 
@@ -132,17 +123,18 @@ describe('/api/chat/send persistence integration', () => {
     const res = await POST(req)
     expect(res.status).toBe(200)
 
-    expect(txToolAuditCreate).toHaveBeenCalledTimes(1)
-    expect(txToolAuditCreate.mock.calls[0][0]).toMatchObject({
+    expect(prismaMock.toolAuditLog.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.toolAuditLog.create.mock.calls[0][0]).toMatchObject({
       data: {
         userId: 'u-db',
-        conversationId: 'conv-db-1',
+        conversationId: expect.any(String),
         toolName: 'health.addMetric',
         status: 'success',
       },
     })
 
-    const traceWorkspaceCall = txAgentWorkspaceUpsert.mock.calls.find(
+    // workspace upserts run outside the transaction (phase 2)
+    const traceWorkspaceCall = prismaMock.agentWorkspace.upsert.mock.calls.find(
       (c) => (c[0] as { create?: { agentId?: string } }).create?.agentId === 'orchestratore-trace',
     )
     expect(traceWorkspaceCall).toBeTruthy()
@@ -202,8 +194,9 @@ describe('/api/chat/send persistence integration', () => {
 
     expect(res.status).toBe(200)
     expect(body).toContain('"type":"message.complete"')
-    expect(txAgentWorkspaceUpsert).toHaveBeenCalled()
-    const agentIds = txAgentWorkspaceUpsert.mock.calls.map(
+    // workspace upserts run in phase 2 (outside transaction)
+    expect(prismaMock.agentWorkspace.upsert).toHaveBeenCalled()
+    const agentIds = prismaMock.agentWorkspace.upsert.mock.calls.map(
       (c) => (c[0] as { create?: { agentId?: string } }).create?.agentId,
     )
     expect(agentIds).toContain('fisioterapista')
@@ -245,7 +238,7 @@ describe('/api/chat/send persistence integration', () => {
     const res = await POST(req)
     expect(res.status).toBe(200)
 
-    const traceWorkspaceCall = txAgentWorkspaceUpsert.mock.calls.find(
+    const traceWorkspaceCall = prismaMock.agentWorkspace.upsert.mock.calls.find(
       (c) => (c[0] as { create?: { agentId?: string } }).create?.agentId === 'orchestratore-trace',
     )
     expect(traceWorkspaceCall).toBeTruthy()

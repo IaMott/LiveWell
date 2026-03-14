@@ -390,9 +390,11 @@ export async function POST(request: Request): Promise<Response> {
                 }),
               ),
             )
-            if (i < thinkingEvents.length - 1) {
-              await new Promise((resolve) => setTimeout(resolve, 240))
-            }
+            // 240ms between agents, 700ms after the last one so the user can
+            // read the thinking animation before the message delta starts.
+            await new Promise((resolve) =>
+              setTimeout(resolve, i < thinkingEvents.length - 1 ? 240 : 700),
+            )
           }
         }
 

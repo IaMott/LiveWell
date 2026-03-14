@@ -105,25 +105,21 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       round2Proposals,
       toolExecutionTrace,
     }) => {
-      await prisma.$transaction(async (tx) => {
-        // Ensure conversation exists and bump updatedAt so it surfaces at the top of the list.
-        // Using upsert so that if resolveConversationId failed (cold-start / race condition)
-        // we still create the record rather than throwing "Record not found".
-        await tx.conversation.upsert({
+      // ── Phase 1: Critical — conversation + messages ──────────────────────
+      // Use batch $transaction([]) instead of interactive callback form.
+      // Batch transactions work with Neon connection pooler (PgBouncer in
+      // transaction mode), whereas interactive $transaction(async tx => {})
+      // uses session-level advisory locks that PgBouncer does not support.
+      await prisma.$transaction([
+        prisma.conversation.upsert({
           where: { id: conversationId },
-          create: {
-            id: conversationId,
-            userId,
-            title: userMessage.slice(0, 80),
-          },
-          update: { updatedAt: new Date() },
-        })
-
-        await tx.message.create({
+          create: { id: conversationId, userId, title: userMessage.slice(0, 80) },
+          update: {},
+        }),
+        prisma.message.create({
           data: { conversationId, role: 'user', content: userMessage },
-        })
-
-        await tx.message.create({
+        }),
+        prisma.message.create({
           data: {
             conversationId,
             role: 'assistant',
@@ -131,10 +127,9 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
             ...(domain ? { domain } : {}),
             ...(specialistName ? { specialistName } : {}),
           },
-        })
-
-        for (const event of auditEvents) {
-          await tx.toolAuditLog.create({
+        }),
+        ...auditEvents.map((event) =>
+          prisma.toolAuditLog.create({
             data: {
               userId: event.actorUserId,
               conversationId: event.conversationId,
@@ -146,26 +141,28 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
               requestId: event.requestId,
               errorCode: event.errorCode ?? null,
             },
-          })
-        }
+          }),
+        ),
+      ])
 
-        const byAgent = new Map<string, { round1?: AgentProposal; round2?: AgentProposal }>()
-        for (const p of round1Proposals ?? []) {
-          const cur = byAgent.get(p.agentId) ?? {}
-          cur.round1 = p
-          byAgent.set(p.agentId, cur)
-        }
-        for (const p of round2Proposals ?? []) {
-          const cur = byAgent.get(p.agentId) ?? {}
-          cur.round2 = p
-          byAgent.set(p.agentId, cur)
-        }
+      // ── Phase 2: Best-effort — agent workspace upserts ───────────────────
+      // These are non-critical; failures are tolerated so messages are always saved.
+      const byAgent = new Map<string, { round1?: AgentProposal; round2?: AgentProposal }>()
+      for (const p of round1Proposals ?? []) {
+        const cur = byAgent.get(p.agentId) ?? {}
+        cur.round1 = p
+        byAgent.set(p.agentId, cur)
+      }
+      for (const p of round2Proposals ?? []) {
+        const cur = byAgent.get(p.agentId) ?? {}
+        cur.round2 = p
+        byAgent.set(p.agentId, cur)
+      }
 
-        for (const [agentId, rounds] of byAgent.entries()) {
-          await tx.agentWorkspace.upsert({
-            where: {
-              conversationId_agentId: { conversationId, agentId },
-            },
+      for (const [agentId, rounds] of byAgent.entries()) {
+        try {
+          await prisma.agentWorkspace.upsert({
+            where: { conversationId_agentId: { conversationId, agentId } },
             create: {
               userId,
               conversationId,
@@ -186,10 +183,14 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
                 : undefined,
             },
           })
+        } catch {
+          // non-critical: workspace upsert failure does not block message persistence
         }
+      }
 
-        if (toolExecutionTrace && toolExecutionTrace.length > 0) {
-          await tx.agentWorkspace.upsert({
+      if (toolExecutionTrace && toolExecutionTrace.length > 0) {
+        try {
+          await prisma.agentWorkspace.upsert({
             where: {
               conversationId_agentId: { conversationId, agentId: 'orchestratore-trace' },
             },
@@ -209,8 +210,10 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
               } as unknown as Prisma.InputJsonValue,
             },
           })
+        } catch {
+          // non-critical
         }
-      })
+      }
     },
     buildContextPack: async ({ userId, conversationId, role }) => {
       try {

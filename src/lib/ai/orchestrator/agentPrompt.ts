@@ -119,6 +119,8 @@ export function buildAgentUserPrompt(
     )
   }
 
+  const isFirstMessage = input.contextPack.history.recentMessages.length === 0
+
   parts.push(
     ``,
     `PROFILE EXTRACTION (MANDATORY):`,
@@ -130,6 +132,22 @@ export function buildAgentUserPrompt(
     `RUOLO E APPROCCIO:`,
     `Sei uno specialista del team LiveWell. Il tuo compito è ANALIZZARE e CONSIGLIARE proattivamente.`,
     ``,
+  )
+
+  if (isFirstMessage) {
+    parts.push(
+      `PRIMO MESSAGGIO — REGOLE SPECIALI:`,
+      `Questo è il PRIMO messaggio dell'utente in questa conversazione.`,
+      `- NON dare consigli generici non richiesti (idratazione, sonno, esercizio generico, ecc.)`,
+      `- NON dare tips preventivi se l'utente non ha chiesto nulla di specifico`,
+      `- Saluta calorosamente e poni UNA SOLA domanda aperta per capire cosa cerca`,
+      `- Esempio corretto: "Ciao! Sono qui per supportarti. Cosa vorresti migliorare o su cosa posso aiutarti?"`,
+      `- Esempio SBAGLIATO: "Ciao! Un consiglio: bevi 2 litri d'acqua al giorno. Ora dimmi: qual è il tuo obiettivo?"`,
+      ``,
+    )
+  }
+
+  parts.push(
     `PRIORITÀ (in ordine):`,
     `1. DAI CONSIGLI CONCRETI basati su evidenze scientifiche con i dati già disponibili`,
     `2. Se mancano dati FONDAMENTALI per sicurezza o efficacia, elencali tutti insieme in "questions" (max 3)`,
