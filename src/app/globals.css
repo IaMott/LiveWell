@@ -1,20 +1,20 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
-  --color-bg: #F2F2F7;
-  --color-surface: #FFFFFF;
-  --color-text-primary: #1C1C1E;
-  --color-text-secondary: #8E8E93;
-  --color-separator: #E5E5EA;
-  --color-accent: #007AFF;
+  --color-bg: #f2f2f7;
+  --color-surface: #ffffff;
+  --color-text-primary: #1c1c1e;
+  --color-text-secondary: #8e8e93;
+  --color-separator: #e5e5ea;
+  --color-accent: #007aff;
 
-  --color-nutrition: #AF52DE;
-  --color-training: #007AFF;
-  --color-health: #34C759;
-  --color-mindfulness: #5AC8FA;
-  --color-inspiration: #FF9F0A;
-  --color-general: #8E8E93;
-  --color-coordination: #8E8E93;
+  --color-nutrition: #af52de;
+  --color-training: #007aff;
+  --color-health: #34c759;
+  --color-mindfulness: #5ac8fa;
+  --color-inspiration: #ff9f0a;
+  --color-general: #8e8e93;
+  --color-coordination: #8e8e93;
 }
 
 *,
@@ -38,45 +38,71 @@ body {
 }
 
 /* ── Dark mode ───────────────────────────────────────────────────────────────── */
-[data-theme="dark"] {
+[data-theme='dark'] {
   --color-bg: #000000;
-  --color-surface: #1C1C1E;
-  --color-text-primary: #FFFFFF;
-  --color-text-secondary: #8E8E93;
-  --color-separator: #38383A;
+  --color-surface: #1c1c1e;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #8e8e93;
+  --color-separator: #38383a;
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-theme="system"] {
+  [data-theme='system'] {
     --color-bg: #000000;
-    --color-surface: #1C1C1E;
-    --color-text-primary: #FFFFFF;
-    --color-text-secondary: #8E8E93;
-    --color-separator: #38383A;
+    --color-surface: #1c1c1e;
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #8e8e93;
+    --color-separator: #38383a;
   }
 }
 
 /* ── Message animations ──────────────────────────────────────────────────────── */
 @keyframes lw-msg-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes lw-bounce {
-  0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; }
-  40%           { transform: scale(1.2); opacity: 1; }
+  0%,
+  80%,
+  100% {
+    transform: scale(0.7);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
 }
 
 @keyframes lw-pulse-ring {
-  0%   { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); }
-  70%  { box-shadow: 0 0 0 8px rgba(255, 59, 48, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(255, 59, 48, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
+  }
 }
 
 @keyframes lw-icon-pop {
-  0%   { transform: scale(1); }
-  40%  { transform: scale(1.25); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* ── Domain icon active glow ─────────────────────────────────────────────────── */

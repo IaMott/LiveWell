@@ -172,7 +172,9 @@ describe('HistoryPageContent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Elimina conversazione' }))
 
     await waitFor(() => {
-      expect(screen.getByText('Impossibile eliminare la conversazione. Riprova.')).toBeInTheDocument()
+      expect(
+        screen.getByText('Impossibile eliminare la conversazione. Riprova.'),
+      ).toBeInTheDocument()
     })
     expect(screen.getByText('Chat 1')).toBeInTheDocument()
   })
@@ -192,14 +194,19 @@ describe('HistoryPageContent', () => {
     fireEvent.click(screen.getByRole('button', { name: /Elimina tutto lo storico/i }))
 
     await waitFor(() => {
-      expect(screen.getByText('Impossibile eliminare lo storico conversazioni. Riprova.')).toBeInTheDocument()
+      expect(
+        screen.getByText('Impossibile eliminare lo storico conversazioni. Riprova.'),
+      ).toBeInTheDocument()
     })
     expect(screen.getByText('Chat 1')).toBeInTheDocument()
   })
 
   it('blocca delete singola durante delete totale in corso', async () => {
     let resolveDeleteAll: (() => void) | null = null
-    const deleteAllPromise = new Promise<{ ok: boolean; json: () => Promise<{ deletedCount: number }> }>((resolve) => {
+    const deleteAllPromise = new Promise<{
+      ok: boolean
+      json: () => Promise<{ deletedCount: number }>
+    }>((resolve) => {
       resolveDeleteAll = () =>
         resolve({
           ok: true,
@@ -217,7 +224,9 @@ describe('HistoryPageContent', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Elimina tutto lo storico/i }))
 
-    const singleDeleteButton = screen.getByRole('button', { name: 'Elimina conversazione' }) as HTMLButtonElement
+    const singleDeleteButton = screen.getByRole('button', {
+      name: 'Elimina conversazione',
+    }) as HTMLButtonElement
     expect(singleDeleteButton.disabled).toBe(true)
 
     resolveDeleteAll?.()

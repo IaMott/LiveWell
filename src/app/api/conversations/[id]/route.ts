@@ -10,7 +10,10 @@ export async function GET(
   const userId = await getAuthUserId(request)
   if (!userId) return errorResponse(401, 'UNAUTHORIZED', 'Authentication required')
 
-  const rate = checkRateLimit({ key: `conversation-get:${userId}:${getClientIp(request)}`, max: 60 })
+  const rate = checkRateLimit({
+    key: `conversation-get:${userId}:${getClientIp(request)}`,
+    max: 60,
+  })
   if (!rate.ok) return errorResponse(429, 'RATE_LIMITED', 'Too many requests')
 
   const { id } = await params
@@ -28,7 +31,8 @@ export async function GET(
     },
   })
 
-  if (!conv || conv.userId !== userId) return errorResponse(404, 'NOT_FOUND', 'Conversation not found')
+  if (!conv || conv.userId !== userId)
+    return errorResponse(404, 'NOT_FOUND', 'Conversation not found')
 
   return Response.json({
     id: conv.id,

@@ -38,7 +38,10 @@ export default function RegisterPage() {
       <h1 style={titleStyle}>LiveWell</h1>
       <p style={subtitleStyle}>Crea il tuo profilo</p>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      <form
+        onSubmit={handleSubmit}
+        style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
+      >
         <input
           type="text"
           placeholder="Nome (opzionale)"

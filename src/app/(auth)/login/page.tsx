@@ -35,7 +35,10 @@ export default function LoginPage() {
       <h1 style={titleStyle}>LiveWell</h1>
       <p style={subtitleStyle}>Accedi al tuo profilo</p>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      <form
+        onSubmit={handleSubmit}
+        style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
+      >
         <input
           type="email"
           placeholder="Email"

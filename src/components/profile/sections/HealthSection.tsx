@@ -33,7 +33,11 @@ export function HealthSection({ data }: Props) {
       await fetch('/api/profile/body-metric', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ metricType: 'weight', value: Number(weightForm.value), unit: weightForm.unit }),
+        body: JSON.stringify({
+          metricType: 'weight',
+          value: Number(weightForm.value),
+          unit: weightForm.unit,
+        }),
       })
       setAddingWeight(false)
       setWeightForm({ value: '', unit: 'kg' })
@@ -81,14 +85,32 @@ export function HealthSection({ data }: Props) {
             </span>
           </p>
           {lastWeight && (
-            <p style={{ margin: 0, fontSize: '0.6875rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
-              {new Date(lastWeight.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
+            <p
+              style={{
+                margin: 0,
+                fontSize: '0.6875rem',
+                color: 'var(--color-text-secondary, #8E8E93)',
+              }}
+            >
+              {new Date(lastWeight.date).toLocaleDateString('it-IT', {
+                day: 'numeric',
+                month: 'short',
+              })}
             </p>
           )}
           <button
             type="button"
             onClick={() => setAddingWeight(true)}
-            style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#34C759', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600 }}
+            style={{
+              marginTop: '0.5rem',
+              fontSize: '0.75rem',
+              color: '#34C759',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              fontWeight: 600,
+            }}
           >
             + Aggiorna
           </button>
@@ -102,12 +124,24 @@ export function HealthSection({ data }: Props) {
               <p style={{ ...vitalValueStyle, color: '#5AC8FA' }}>
                 {(lastWeight.value / Math.pow(Number(profile.height) / 100, 2)).toFixed(1)}
               </p>
-              <p style={{ margin: 0, fontSize: '0.6875rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '0.6875rem',
+                  color: 'var(--color-text-secondary, #8E8E93)',
+                }}
+              >
                 {getBmiLabel(lastWeight.value / Math.pow(Number(profile.height) / 100, 2))}
               </p>
             </>
           ) : (
-            <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: '0.875rem',
+                color: 'var(--color-text-secondary, #8E8E93)',
+              }}
+            >
               Completa profilo
             </p>
           )}
@@ -116,7 +150,14 @@ export function HealthSection({ data }: Props) {
 
       {/* Weight entry form */}
       {addingWeight && (
-        <div style={{ backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem', padding: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #fff)',
+            borderRadius: '1rem',
+            padding: '1rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}
+        >
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <input
               type="number"
@@ -124,34 +165,79 @@ export function HealthSection({ data }: Props) {
               value={weightForm.value}
               onChange={(e) => setWeightForm((f) => ({ ...f, value: e.target.value }))}
               style={{ ...inputStyle, flex: 2 }}
-              min={30} max={300} step={0.1}
+              min={30}
+              max={300}
+              step={0.1}
             />
-            <select value={weightForm.unit} onChange={(e) => setWeightForm((f) => ({ ...f, unit: e.target.value }))} style={{ ...inputStyle, flex: 1 }}>
+            <select
+              value={weightForm.unit}
+              onChange={(e) => setWeightForm((f) => ({ ...f, unit: e.target.value }))}
+              style={{ ...inputStyle, flex: 1 }}
+            >
               <option value="kg">kg</option>
               <option value="lbs">lbs</option>
             </select>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button type="button" onClick={() => setAddingWeight(false)} style={{ ...btnStyle, backgroundColor: 'var(--color-bg, #F2F2F7)', color: 'var(--color-text-primary, #1C1C1E)', flex: 1 }}>Annulla</button>
-            <button type="button" onClick={saveWeight} disabled={weightSaving || !weightForm.value} style={{ ...btnStyle, backgroundColor: '#34C759', color: '#fff', flex: 2 }}>{weightSaving ? 'Salvataggio…' : 'Salva peso'}</button>
+            <button
+              type="button"
+              onClick={() => setAddingWeight(false)}
+              style={{
+                ...btnStyle,
+                backgroundColor: 'var(--color-bg, #F2F2F7)',
+                color: 'var(--color-text-primary, #1C1C1E)',
+                flex: 1,
+              }}
+            >
+              Annulla
+            </button>
+            <button
+              type="button"
+              onClick={saveWeight}
+              disabled={weightSaving || !weightForm.value}
+              style={{ ...btnStyle, backgroundColor: '#34C759', color: '#fff', flex: 2 }}
+            >
+              {weightSaving ? 'Salvataggio…' : 'Salva peso'}
+            </button>
           </div>
         </div>
       )}
 
       {/* Health profile */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '0.25rem',
+        }}
+      >
         <h3 style={{ ...sectionHeaderStyle, margin: 0 }}>Profilo Clinico</h3>
         <button
           type="button"
           onClick={() => setEditing((v) => !v)}
-          style={{ fontSize: '0.8125rem', color: 'var(--color-accent, #007AFF)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+          style={{
+            fontSize: '0.8125rem',
+            color: 'var(--color-accent, #007AFF)',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: 600,
+          }}
         >
           {editing ? 'Annulla' : 'Modifica'}
         </button>
       </div>
 
       {!editing ? (
-        <div style={{ backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem', padding: '0 1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #fff)',
+            borderRadius: '1rem',
+            padding: '0 1rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}
+        >
           {[
             { label: 'Patologie', value: healthProfile?.conditions as string | null },
             { label: 'Farmaci', value: healthProfile?.medications as string | null },
@@ -159,10 +245,28 @@ export function HealthSection({ data }: Props) {
             { label: 'Fumo', value: healthProfile?.smokingStatus as string | null },
           ].map(({ label, value }, i) => (
             <div key={label}>
-              {i > 0 && <div style={{ height: '1px', backgroundColor: 'var(--color-separator, #E5E5EA)' }} />}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0' }}>
-                <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary, #8E8E93)' }}>{label}</span>
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary, #1C1C1E)', maxWidth: '55%', textAlign: 'right' }}>
+              {i > 0 && (
+                <div
+                  style={{ height: '1px', backgroundColor: 'var(--color-separator, #E5E5EA)' }}
+                />
+              )}
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0' }}
+              >
+                <span
+                  style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary, #8E8E93)' }}
+                >
+                  {label}
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    color: 'var(--color-text-primary, #1C1C1E)',
+                    maxWidth: '55%',
+                    textAlign: 'right',
+                  }}
+                >
                   {value || '—'}
                 </span>
               </div>
@@ -170,7 +274,17 @@ export function HealthSection({ data }: Props) {
           ))}
         </div>
       ) : (
-        <div style={{ backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem', padding: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #fff)',
+            borderRadius: '1rem',
+            padding: '1rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.625rem',
+          }}
+        >
           {[
             { key: 'conditions' as const, label: 'Patologie o condizioni croniche' },
             { key: 'medications' as const, label: 'Farmaci assunti' },
@@ -178,12 +292,20 @@ export function HealthSection({ data }: Props) {
           ].map(({ key, label }) => (
             <div key={key}>
               <label style={labelStyle}>{label}</label>
-              <input value={form[key]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} style={inputStyle} />
+              <input
+                value={form[key]}
+                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                style={inputStyle}
+              />
             </div>
           ))}
           <div>
             <label style={labelStyle}>Fumo</label>
-            <select value={form.smokingStatus} onChange={(e) => setForm((f) => ({ ...f, smokingStatus: e.target.value }))} style={inputStyle}>
+            <select
+              value={form.smokingStatus}
+              onChange={(e) => setForm((f) => ({ ...f, smokingStatus: e.target.value }))}
+              style={inputStyle}
+            >
               <option value="">Seleziona</option>
               <option value="non_fumatore">Non fumatore</option>
               <option value="ex_fumatore">Ex fumatore</option>
@@ -191,19 +313,59 @@ export function HealthSection({ data }: Props) {
             </select>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button type="button" onClick={() => setEditing(false)} style={{ ...btnStyle, backgroundColor: 'var(--color-bg, #F2F2F7)', color: 'var(--color-text-primary, #1C1C1E)', flex: 1 }}>Annulla</button>
-            <button type="button" onClick={saveProfile} disabled={saving} style={{ ...btnStyle, backgroundColor: '#34C759', color: '#fff', flex: 2 }}>{saving ? 'Salvataggio…' : 'Salva'}</button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              style={{
+                ...btnStyle,
+                backgroundColor: 'var(--color-bg, #F2F2F7)',
+                color: 'var(--color-text-primary, #1C1C1E)',
+                flex: 1,
+              }}
+            >
+              Annulla
+            </button>
+            <button
+              type="button"
+              onClick={saveProfile}
+              disabled={saving}
+              style={{ ...btnStyle, backgroundColor: '#34C759', color: '#fff', flex: 2 }}
+            >
+              {saving ? 'Salvataggio…' : 'Salva'}
+            </button>
           </div>
         </div>
       )}
 
       {/* Tip */}
-      <div style={{ backgroundColor: 'rgba(52,199,89,0.1)', borderRadius: '1rem', padding: '0.875rem 1rem' }}>
-        <p style={{ margin: 0, fontSize: '0.8125rem', color: '#34C759', fontWeight: 600, marginBottom: '0.25rem' }}>
+      <div
+        style={{
+          backgroundColor: 'rgba(52,199,89,0.1)',
+          borderRadius: '1rem',
+          padding: '0.875rem 1rem',
+        }}
+      >
+        <p
+          style={{
+            margin: 0,
+            fontSize: '0.8125rem',
+            color: '#34C759',
+            fontWeight: 600,
+            marginBottom: '0.25rem',
+          }}
+        >
           💡 Suggerimento
         </p>
-        <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--color-text-secondary, #8E8E93)', lineHeight: 1.4 }}>
-          Parla con il team nella chat per ricevere analisi personalizzate dei tuoi parametri di salute.
+        <p
+          style={{
+            margin: 0,
+            fontSize: '0.8125rem',
+            color: 'var(--color-text-secondary, #8E8E93)',
+            lineHeight: 1.4,
+          }}
+        >
+          Parla con il team nella chat per ricevere analisi personalizzate dei tuoi parametri di
+          salute.
         </p>
       </div>
     </div>
@@ -219,17 +381,55 @@ function getBmiLabel(bmi: number): string {
 
 const sectionHeaderStyle: React.CSSProperties = {
   margin: '0.25rem 0 0',
-  fontSize: '0.8125rem', fontWeight: 600,
+  fontSize: '0.8125rem',
+  fontWeight: 600,
   color: 'var(--color-text-secondary, #8E8E93)',
-  textTransform: 'uppercase', letterSpacing: '0.05em',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
 }
 const vitalCardStyle = (color: string): React.CSSProperties => ({
-  backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem',
-  padding: '0.875rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+  backgroundColor: 'var(--color-surface, #fff)',
+  borderRadius: '1rem',
+  padding: '0.875rem',
+  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
   borderTop: `3px solid ${color}`,
 })
-const vitalLabelStyle: React.CSSProperties = { margin: '0 0 0.25rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary, #8E8E93)', textTransform: 'uppercase', letterSpacing: '0.04em' }
-const vitalValueStyle: React.CSSProperties = { margin: '0 0 0.125rem', fontSize: '1.5rem', fontWeight: 700 }
-const inputStyle: React.CSSProperties = { width: '100%', padding: '0.5rem 0.75rem', borderRadius: '0.625rem', border: '1px solid var(--color-separator, #E5E5EA)', backgroundColor: 'var(--color-bg, #F2F2F7)', fontSize: '0.9375rem', color: 'var(--color-text-primary, #1C1C1E)', outline: 'none', boxSizing: 'border-box' }
-const btnStyle: React.CSSProperties = { padding: '0.75rem', borderRadius: '0.75rem', border: 'none', fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer' }
-const labelStyle: React.CSSProperties = { display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary, #8E8E93)', marginBottom: '0.25rem' }
+const vitalLabelStyle: React.CSSProperties = {
+  margin: '0 0 0.25rem',
+  fontSize: '0.75rem',
+  fontWeight: 600,
+  color: 'var(--color-text-secondary, #8E8E93)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+}
+const vitalValueStyle: React.CSSProperties = {
+  margin: '0 0 0.125rem',
+  fontSize: '1.5rem',
+  fontWeight: 700,
+}
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '0.5rem 0.75rem',
+  borderRadius: '0.625rem',
+  border: '1px solid var(--color-separator, #E5E5EA)',
+  backgroundColor: 'var(--color-bg, #F2F2F7)',
+  fontSize: '0.9375rem',
+  color: 'var(--color-text-primary, #1C1C1E)',
+  outline: 'none',
+  boxSizing: 'border-box',
+}
+const btnStyle: React.CSSProperties = {
+  padding: '0.75rem',
+  borderRadius: '0.75rem',
+  border: 'none',
+  fontSize: '0.9375rem',
+  fontWeight: 600,
+  cursor: 'pointer',
+}
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: '0.75rem',
+  fontWeight: 600,
+  color: 'var(--color-text-secondary, #8E8E93)',
+  marginBottom: '0.25rem',
+}

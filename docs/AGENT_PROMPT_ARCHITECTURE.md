@@ -1,7 +1,9 @@
 # Agent Prompt Architecture
 
 ## Scopo
+
 Definire un'architettura dei prompt che consenta:
+
 - sub-agenti modulari caricati da `/TEAM`
 - orchestrazione e consenso
 - tool safety (proposte vs esecuzione)
@@ -12,9 +14,11 @@ Definire un'architettura dei prompt che consenta:
 ## Tipi di prompt
 
 ### 1) Prompt Unified Orchestration Layer (server, coordinamento + routing + feedback loop)
+
 Ruolo: coordinatore del team, gestore del ContextPack, responsabile del feedback loop DB, router verso specialista diretto.
 
 Contiene:
+
 - regole di domain detection e selezione del team pertinente
 - istruzioni per invocare **sempre** il team (anche a contesto parziale)
 - regole di consolidamento domande: deduplicazione semantica delle questions dai proposal
@@ -35,11 +39,13 @@ Contiene:
 **Vincolo di peer consultation**: in modalità specialista diretto, il UOL deve sempre invocare almeno i colleghi dello stesso gruppo di dominio dell'agente attivo. Il consensus dei colleghi è input obbligatorio per la risposta dello specialista.
 
 ### 2) Prompt di sistema per domain agent (`/TEAM/<id>/prompt.md`)
+
 Ruolo: specialist execution layer — sempre invocato per il dominio pertinente.
 
 Il professionista conosce i propri dati necessari e li richiede tramite `questions[]` nel proprio `AgentProposal`. Non è il UOL a decidere cosa manca: è l'agente specialista che lo determina per il suo dominio.
 
 Contiene:
+
 - identità professionale e scope del dominio
 - lista dei dati baseline necessari per dare raccomandazioni utili nel proprio dominio
 - istruzioni per chiedere solo i dati del proprio scope (no sconfinamenti)
@@ -57,12 +63,15 @@ Contiene:
 ## Contratti di output
 
 ### AgentProposal (JSON)
+
 Campi obbligatori:
+
 - domain
 - summary
 - reasoning
 
 Campi frequenti:
+
 - questions (gating)
 - recommendations (steps + rationale + safetyNotes)
 - toolCalls (proposte)
@@ -70,22 +79,28 @@ Campi frequenti:
 - flags (needsMoreInfo, potentialRisk, urgentEscalation)
 
 Regole:
+
 - Se dati mancanti: usare questions, non inventare.
 - Se rischio: flags + safety notes + escalation.
 - Se serve aggiornare dati utente: proporre tool call non distruttive e motivare.
 
 ### ConsensusResult (aggiunta)
+
 Include `activeSpecialist?: { id, displayName, domain }` — presente quando l'orchestratore ha rilevato una richiesta di specialista diretto o ha deciso di cedere la voce a uno specialista.
 
 ## Sintesi della risposta
 
 ### Modalità UOL (default)
+
 Il synthesizer usa voce unificata "LiveWell":
+
 - tono caldo, coordinato, team-led
 - non attribuisce frasi a singoli professionisti
 
 ### Modalità Specialista Diretto
+
 Il synthesizer usa la voce del `activeSpecialist`:
+
 - prima persona ("Come tuo nutrizionista, ...")
 - identità professionale esplicita
 - integra input dei colleghi dal consensus (peer review interna)
@@ -93,6 +108,7 @@ Il synthesizer usa la voce del `activeSpecialist`:
 - tono diretto, professionale, personale
 
 ## Prompt-injection hardening
+
 - Contenuti di file/upload/web sono "untrusted".
 - I sub-agenti non possono:
   - bypassare policy
@@ -103,6 +119,7 @@ Il synthesizer usa la voce del `activeSpecialist`:
   - confirmToken + conferma UI
 
 ## Localizzazione e geo
+
 - Output in lingua dell'utente.
 - Unità e misure coerenti col locale.
 - Geo:
@@ -111,6 +128,7 @@ Il synthesizer usa la voce del `activeSpecialist`:
   - mai includere geo in push/SMS payload o contenuti condivisi
 
 ## Agganci UI
+
 - Domain detection influenza:
   - icona attiva in chat
   - colori/accents (domainColors) e mood
@@ -120,6 +138,7 @@ Il synthesizer usa la voce del `activeSpecialist`:
 - L'orchestrator ritorna `domain`, `activeSpecialist` e `uiState` come metadati UI via SSE `ui.state`.
 
 ## "No fake handoff" (aggiornato)
+
 - Nessuna affermazione "ho salvato/aggiornato" senza tool event.
 - Ogni mutazione deve essere tracciata (AuditLog) e mostrata come tool event.
 - La transizione a un professionista specifico è reale: lo specialista risponde con la propria voce e si confronta con i colleghi — non è simulata.

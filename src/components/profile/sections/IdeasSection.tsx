@@ -21,7 +21,7 @@ const IDEA_CATEGORIES = [
     emoji: '🎨',
     color: '#AF52DE',
     items: [
-      'Dedicati a un\'attività artistica',
+      "Dedicati a un'attività artistica",
       'Pittura, Scrittura',
       'Musica, ecc.',
       '@ 20 min. (25 cal-equiv.)',
@@ -58,11 +58,27 @@ export function IdeasSection({ data }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--color-text-primary, #1C1C1E)' }}>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: '1rem',
+            fontWeight: 700,
+            color: 'var(--color-text-primary, #1C1C1E)',
+          }}
+        >
           Idee e Ispirazioni
         </h2>
         {artifacts.length > 0 && (
-          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#FF9F0A', backgroundColor: 'rgba(255,159,10,0.1)', borderRadius: '999px', padding: '0.2rem 0.625rem' }}>
+          <span
+            style={{
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              color: '#FF9F0A',
+              backgroundColor: 'rgba(255,159,10,0.1)',
+              borderRadius: '999px',
+              padding: '0.2rem 0.625rem',
+            }}
+          >
             {artifacts.length} Nuovi
           </span>
         )}
@@ -76,22 +92,68 @@ export function IdeasSection({ data }: Props) {
             <div
               key={a.id}
               style={{
-                backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem',
-                padding: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                backgroundColor: 'var(--color-surface, #fff)',
+                borderRadius: '1rem',
+                padding: '1rem',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                 borderLeft: '3px solid #FF9F0A',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.375rem' }}>
-                <p style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-text-primary, #1C1C1E)', flex: 1 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  marginBottom: '0.375rem',
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '0.9375rem',
+                    fontWeight: 600,
+                    color: 'var(--color-text-primary, #1C1C1E)',
+                    flex: 1,
+                  }}
+                >
                   {a.title}
                 </p>
-                <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary, #8E8E93)', flexShrink: 0, marginLeft: '0.5rem' }}>
-                  {new Date(a.createdAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
+                <span
+                  style={{
+                    fontSize: '0.6875rem',
+                    color: 'var(--color-text-secondary, #8E8E93)',
+                    flexShrink: 0,
+                    marginLeft: '0.5rem',
+                  }}
+                >
+                  {new Date(a.createdAt).toLocaleDateString('it-IT', {
+                    day: 'numeric',
+                    month: 'short',
+                  })}
                 </span>
               </div>
-              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--color-text-secondary, #8E8E93)' }}>{a.type}</p>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '0.8125rem',
+                  color: 'var(--color-text-secondary, #8E8E93)',
+                }}
+              >
+                {a.type}
+              </p>
               {a.contentMarkdown && (
-                <p style={{ margin: '0.375rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-primary, #1C1C1E)', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
+                <p
+                  style={{
+                    margin: '0.375rem 0 0',
+                    fontSize: '0.8125rem',
+                    color: 'var(--color-text-primary, #1C1C1E)',
+                    lineHeight: 1.4,
+                    overflow: 'hidden',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical' as const,
+                  }}
+                >
                   {a.contentMarkdown.replace(/[#*`]/g, '').slice(0, 120)}
                 </p>
               )}
@@ -107,18 +169,41 @@ export function IdeasSection({ data }: Props) {
           <div
             key={title}
             style={{
-              backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem',
-              padding: '0.875rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+              backgroundColor: 'var(--color-surface, #fff)',
+              borderRadius: '1rem',
+              padding: '0.875rem',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
               borderTop: `3px solid ${color}`,
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-              <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-primary, #1C1C1E)', lineHeight: 1.3 }}>{title}</span>
-              <span style={{ fontSize: '1rem', flexShrink: 0, marginLeft: '0.25rem' }}>{emoji}</span>
+            <div
+              style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}
+            >
+              <span
+                style={{
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  color: 'var(--color-text-primary, #1C1C1E)',
+                  lineHeight: 1.3,
+                }}
+              >
+                {title}
+              </span>
+              <span style={{ fontSize: '1rem', flexShrink: 0, marginLeft: '0.25rem' }}>
+                {emoji}
+              </span>
             </div>
             <ul style={{ margin: 0, padding: '0 0 0 1rem', listStyle: 'disc' }}>
               {items.slice(0, 3).map((item, i) => (
-                <li key={i} style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary, #8E8E93)', marginBottom: '0.125rem', lineHeight: 1.4 }}>
+                <li
+                  key={i}
+                  style={{
+                    fontSize: '0.6875rem',
+                    color: 'var(--color-text-secondary, #8E8E93)',
+                    marginBottom: '0.125rem',
+                    lineHeight: 1.4,
+                  }}
+                >
                   {item}
                 </li>
               ))}
@@ -128,11 +213,27 @@ export function IdeasSection({ data }: Props) {
       </div>
 
       {/* Chat CTA */}
-      <div style={{ backgroundColor: 'rgba(255,159,10,0.08)', borderRadius: '1rem', padding: '1rem' }}>
-        <p style={{ margin: '0 0 0.375rem', fontSize: '0.9375rem', fontWeight: 700, color: 'var(--color-text-primary, #1C1C1E)' }}>
+      <div
+        style={{ backgroundColor: 'rgba(255,159,10,0.08)', borderRadius: '1rem', padding: '1rem' }}
+      >
+        <p
+          style={{
+            margin: '0 0 0.375rem',
+            fontSize: '0.9375rem',
+            fontWeight: 700,
+            color: 'var(--color-text-primary, #1C1C1E)',
+          }}
+        >
           💬 Chiedi al team
         </p>
-        <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--color-text-secondary, #8E8E93)', lineHeight: 1.4 }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: '0.8125rem',
+            color: 'var(--color-text-secondary, #8E8E93)',
+            lineHeight: 1.4,
+          }}
+        >
           Scrivi nella chat per ricevere idee personalizzate basate sui tuoi obiettivi e interessi.
         </p>
       </div>
@@ -143,8 +244,27 @@ export function IdeasSection({ data }: Props) {
           { label: 'Raccomandazioni', value: String(artifacts.length), color: '#FF9F0A' },
           { label: 'Categorie', value: '4', color: '#AF52DE' },
         ].map(({ label, value, color }) => (
-          <div key={label} style={{ backgroundColor: 'var(--color-surface, #fff)', borderRadius: '1rem', padding: '0.875rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-            <p style={{ margin: '0 0 0.2rem', fontSize: '0.6875rem', fontWeight: 600, color: 'var(--color-text-secondary, #8E8E93)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
+          <div
+            key={label}
+            style={{
+              backgroundColor: 'var(--color-surface, #fff)',
+              borderRadius: '1rem',
+              padding: '0.875rem',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+            }}
+          >
+            <p
+              style={{
+                margin: '0 0 0.2rem',
+                fontSize: '0.6875rem',
+                fontWeight: 600,
+                color: 'var(--color-text-secondary, #8E8E93)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              {label}
+            </p>
             <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color }}>{value}</p>
           </div>
         ))}
@@ -154,7 +274,10 @@ export function IdeasSection({ data }: Props) {
 }
 
 const sectionHeaderStyle: React.CSSProperties = {
-  margin: '0.25rem 0 0', fontSize: '0.8125rem', fontWeight: 600,
+  margin: '0.25rem 0 0',
+  fontSize: '0.8125rem',
+  fontWeight: 600,
   color: 'var(--color-text-secondary, #8E8E93)',
-  textTransform: 'uppercase', letterSpacing: '0.05em',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
 }

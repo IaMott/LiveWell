@@ -20,7 +20,14 @@ type Props = {
   onExport: (id: string) => void
 }
 
-export function ConversationHistory({ open, currentId, onClose, onSelect, onNew, onExport }: Props) {
+export function ConversationHistory({
+  open,
+  currentId,
+  onClose,
+  onSelect,
+  onNew,
+  onExport,
+}: Props) {
   const [convs, setConvs] = useState<ConvPreview[]>([])
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -119,7 +126,10 @@ export function ConversationHistory({ open, currentId, onClose, onSelect, onNew,
             </h2>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button
-                onClick={() => { onNew(); onClose() }}
+                onClick={() => {
+                  onNew()
+                  onClose()
+                }}
                 aria-label="Nuova conversazione"
                 style={{
                   width: '2rem',
@@ -191,7 +201,10 @@ export function ConversationHistory({ open, currentId, onClose, onSelect, onNew,
             convs.map((c) => (
               <button
                 key={c.id}
-                onClick={() => { onSelect(c.id); onClose() }}
+                onClick={() => {
+                  onSelect(c.id)
+                  onClose()
+                }}
                 style={{
                   width: '100%',
                   display: 'flex',
@@ -279,7 +292,8 @@ export function ConversationHistory({ open, currentId, onClose, onSelect, onNew,
                     padding: '0.25rem',
                     background: 'transparent',
                     border: 'none',
-                    color: exporting === c.id ? 'var(--color-text-secondary)' : 'var(--color-accent)',
+                    color:
+                      exporting === c.id ? 'var(--color-text-secondary)' : 'var(--color-accent)',
                     cursor: 'pointer',
                     flexShrink: 0,
                     display: 'flex',

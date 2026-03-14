@@ -158,5 +158,7 @@ writeFileSync(scriptPath, pythonScript)
 try {
   execFileSync('python3', [scriptPath], { stdio: 'inherit', timeout: 600000 })
 } finally {
-  try { unlinkSync(scriptPath) } catch {}
+  try {
+    unlinkSync(scriptPath)
+  } catch {}
 }

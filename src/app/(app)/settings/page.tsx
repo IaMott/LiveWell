@@ -12,9 +12,5 @@ export default async function SettingsPage() {
     select: { name: true, email: true },
   })
 
-  return (
-    <SettingsSection
-      user={{ email: user?.email ?? '', name: user?.name ?? null }}
-    />
-  )
+  return <SettingsSection user={{ email: user?.email ?? '', name: user?.name ?? null }} />
 }

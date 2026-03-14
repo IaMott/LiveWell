@@ -7,7 +7,10 @@ export async function GET(request: Request): Promise<Response> {
   const userId = await getAuthUserId(request)
   if (!userId) return errorResponse(401, 'UNAUTHORIZED', 'Authentication required')
 
-  const rate = checkRateLimit({ key: `conversations-list:${userId}:${getClientIp(request)}`, max: 60 })
+  const rate = checkRateLimit({
+    key: `conversations-list:${userId}:${getClientIp(request)}`,
+    max: 60,
+  })
   if (!rate.ok) return errorResponse(429, 'RATE_LIMITED', 'Too many requests')
 
   try {
@@ -83,7 +86,8 @@ export async function DELETE(request: Request): Promise<Response> {
   if (!id?.trim()) return errorResponse(400, 'BAD_REQUEST', 'Missing conversation id')
 
   const conv = await prisma.conversation.findUnique({ where: { id }, select: { userId: true } })
-  if (!conv || conv.userId !== userId) return errorResponse(404, 'NOT_FOUND', 'Conversation not found')
+  if (!conv || conv.userId !== userId)
+    return errorResponse(404, 'NOT_FOUND', 'Conversation not found')
 
   await prisma.conversation.delete({ where: { id } })
   return Response.json({ ok: true })

@@ -26,9 +26,7 @@ interface Props {
 // "gemini-live-2.5-flash-preview" exists in SDK types but is NOT supported
 // for bidiGenerateContent with ephemeral tokens (tested 2026-03-10).
 
-const LIVE_MODEL_FALLBACKS = [
-  'gemini-2.5-flash-native-audio-preview-12-2025',
-]
+const LIVE_MODEL_FALLBACKS = ['gemini-2.5-flash-native-audio-preview-12-2025']
 
 // ── Audio / encoding helpers ──────────────────────────────────────────────────
 
@@ -92,7 +90,17 @@ function IconPhoneEnd() {
 
 function IconVideo() {
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="22"
+      height="22"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <polygon points="23 7 16 12 23 17 23 7" />
       <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
     </svg>
@@ -101,7 +109,17 @@ function IconVideo() {
 
 function IconVideoOff() {
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="22"
+      height="22"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <line x1="1" y1="1" x2="23" y2="23" />
       <path d="M15 9.5L23 7v10l-8-2.5" />
       <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
@@ -111,7 +129,17 @@ function IconVideoOff() {
 
 function IconSwitchCamera() {
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M20 7h-3.5l-1.5-2H9L7.5 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" />
       <path d="M9 13l2-2 2 2" />
       <path d="M13 11l2 2-2 2" />
@@ -178,7 +206,11 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
   const stopPlayback = useCallback(() => {
     outputSourcesRef.current.forEach((src) => {
-      try { src.stop() } catch { /* already stopped */ }
+      try {
+        src.stop()
+      } catch {
+        /* already stopped */
+      }
     })
     outputSourcesRef.current.clear()
     outputNextPlayRef.current = 0
@@ -212,7 +244,10 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
     src.onended = () => {
       outputSourcesRef.current.delete(src)
-      if (outputSourcesRef.current.size === 0 && outputNextPlayRef.current <= ctx.currentTime + 0.1) {
+      if (
+        outputSourcesRef.current.size === 0 &&
+        outputNextPlayRef.current <= ctx.currentTime + 0.1
+      ) {
         setIsAiSpeaking(false)
       }
     }
@@ -296,7 +331,11 @@ export function LiveModal({ onClose, onTranscription }: Props) {
     videoStreamRef.current?.getTracks().forEach((t) => t.stop())
     videoStreamRef.current = null
 
-    try { sessionRef.current?.close() } catch { /* ignore */ }
+    try {
+      sessionRef.current?.close()
+    } catch {
+      /* ignore */
+    }
     sessionRef.current = null
   }, [stopPlayback])
 
@@ -341,7 +380,9 @@ export function LiveModal({ onClose, onTranscription }: Props) {
           const devices = await navigator.mediaDevices.enumerateDevices()
           const cameras = devices.filter((d) => d.kind === 'videoinput')
           if (mounted) setVideoDevices(cameras)
-        } catch { /* ignore — camera list not critical */ }
+        } catch {
+          /* ignore — camera list not critical */
+        }
 
         // 3. Output audio context (24 kHz — Gemini output sample rate)
         const outCtx = new AudioContext({ sampleRate: 24000 })
@@ -477,55 +518,61 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
   // ── Start video stream with a specific device ─────────────────────────────
 
-  const startVideoStream = useCallback(async (deviceId?: string, facingMode?: 'environment' | 'user') => {
-    const effectiveFacing = facingMode ?? facingModeRef.current
-    const constraints: MediaStreamConstraints = deviceId
-      ? { video: { deviceId: { exact: deviceId } } }
-      : { video: { facingMode: effectiveFacing } }
+  const startVideoStream = useCallback(
+    async (deviceId?: string, facingMode?: 'environment' | 'user') => {
+      const effectiveFacing = facingMode ?? facingModeRef.current
+      const constraints: MediaStreamConstraints = deviceId
+        ? { video: { deviceId: { exact: deviceId } } }
+        : { video: { facingMode: effectiveFacing } }
 
-    let stream: MediaStream
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(constraints)
-    } catch {
-      // Fallback: any camera
-      stream = await navigator.mediaDevices.getUserMedia({ video: true })
-    }
+      let stream: MediaStream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints)
+      } catch {
+        // Fallback: any camera
+        stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      }
 
-    // Refresh camera device list after permission
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices()
-      const cameras = devices.filter((d) => d.kind === 'videoinput')
-      setVideoDevices(cameras)
-    } catch { /* ignore */ }
+      // Refresh camera device list after permission
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        const cameras = devices.filter((d) => d.kind === 'videoinput')
+        setVideoDevices(cameras)
+      } catch {
+        /* ignore */
+      }
 
-    videoStreamRef.current = stream
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream
-      videoRef.current.play().catch(() => {})
-    }
-    setVideoEnabled(true)
+      videoStreamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play().catch(() => {})
+      }
+      setVideoEnabled(true)
 
-    // Send a video frame to Gemini every 1.1 seconds
-    videoTimerRef.current = window.setInterval(() => {
-      const session = sessionRef.current
-      if (!sessionReadyRef.current || !session || !videoRef.current || !videoStreamRef.current) return
-      if (videoRef.current.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return
+      // Send a video frame to Gemini every 1.1 seconds
+      videoTimerRef.current = window.setInterval(() => {
+        const session = sessionRef.current
+        if (!sessionReadyRef.current || !session || !videoRef.current || !videoStreamRef.current)
+          return
+        if (videoRef.current.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return
 
-      const canvas = document.createElement('canvas')
-      canvas.width = 320
-      canvas.height = 180
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-      ctx.drawImage(videoRef.current, 0, 0, 320, 180)
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.55)
-      session.sendRealtimeInput({
-        video: {
-          mimeType: 'image/jpeg',
-          data: dataUrl.split(',')[1],
-        },
-      })
-    }, 1100)
-  }, [])
+        const canvas = document.createElement('canvas')
+        canvas.width = 320
+        canvas.height = 180
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        ctx.drawImage(videoRef.current, 0, 0, 320, 180)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.55)
+        session.sendRealtimeInput({
+          video: {
+            mimeType: 'image/jpeg',
+            data: dataUrl.split(',')[1],
+          },
+        })
+      }, 1100)
+    },
+    [],
+  )
 
   // ── Video toggle ──────────────────────────────────────────────────────────
 
@@ -587,15 +634,9 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
   // ── UI helpers ────────────────────────────────────────────────────────────
 
-  const barColor =
-    phase !== 'live'
-      ? 'rgba(255,255,255,0.2)'
-      : isAiSpeaking
-        ? '#007AFF'
-        : '#FF3B30'
+  const barColor = phase !== 'live' ? 'rgba(255,255,255,0.2)' : isAiSpeaking ? '#007AFF' : '#FF3B30'
 
-  const displayStatus =
-    phase === 'live' && isAiSpeaking ? "L'assistente sta parlando…" : statusText
+  const displayStatus = phase === 'live' && isAiSpeaking ? "L'assistente sta parlando…" : statusText
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -715,7 +756,10 @@ export function LiveModal({ onClose, onTranscription }: Props) {
             type="button"
             onClick={() => void toggleVideo()}
             aria-label={videoEnabled ? 'Disabilita video' : 'Abilita video'}
-            style={circleBtn(videoEnabled ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.12)', '3rem')}
+            style={circleBtn(
+              videoEnabled ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.12)',
+              '3rem',
+            )}
           >
             {videoEnabled ? <IconVideo /> : <IconVideoOff />}
           </button>

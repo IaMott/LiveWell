@@ -1,6 +1,7 @@
 # LiveWell — Architecture
 
 ## Stack
+
 - Next.js (App Router) + TypeScript
 - UI: TailwindCSS + shadcn/ui (Radix) + custom SVG icons
 - State: TanStack Query (data fetching), Zustand opzionale
@@ -14,10 +15,11 @@
 - PDF export: server-side generator
 
 ## Struttura cartelle (macro)
+
 - /src/app
   - /(app)/page.tsx (chat)
-  - /(app)/profile/* (dashboard domini e rendicontazione)
-  - /api/* (route handlers)
+  - /(app)/profile/\* (dashboard domini e rendicontazione)
+  - /api/\* (route handlers)
 - /src/components
   - /app (shell/chat/profile/settings)
   - /ui (design system)
@@ -42,6 +44,7 @@
 Esiste un unico **Unified Orchestration Layer** (UOL) che coordina il team, gestisce il routing e garantisce il feedback loop DB.
 
 Responsabilità esclusive:
+
 1. Costruire il ContextPack (DB + messaggi + tracker + geo opt-in).
 2. Rilevare il dominio rilevante (5 aree: Nutrition, Training, Health, Mindfulness, Inspiration).
 3. Selezionare e invocare **sempre** il team di agenti pertinente — anche a contesto parziale.
@@ -81,14 +84,16 @@ User Request
 ```
 
 **Feedback loop continuo (invariante):**
+
 - Ogni risposta dell'utente aggiorna il profilo DB prima del turno successivo.
 - Il ContextPack si arricchisce progressivamente: gli agenti approfondiscono ad ogni turno.
 - Le domande ridondanti vengono eliminate dal UOL: conosce cosa è già stato raccolto.
 - Il team lavora in parallelo su più fronti: la convergenza garantisce qualità e copertura.
 
 ## HTTP flow (dettaglio)
-1) Client -> POST `/api/chat/send`
-2) Server:
+
+1. Client -> POST `/api/chat/send`
+2. Server:
    - salva messaggio utente (DB)
    - costruisce ContextPack (DB + messaggi + tracker + optional geo)
    - domain detection
@@ -96,9 +101,10 @@ User Request
    - consensus: merge proposals, deduplicazione semantica domande, conflict detection
    - se domande: presenta all'utente + propone `user.updateProfile` per le risposte
    - se raccomandazioni: esegue tool (RBAC/audit/confirm) + stream SSE
-3) Server salva messaggio assistant (DB) con metadata (domain, mood, artifacts)
+3. Server salva messaggio assistant (DB) con metadata (domain, mood, artifacts)
 
 ## Tool execution model (server)
+
 - LLM non vede DB, filesystem, env vars.
 - LLM può solo proporre tool calls (nome + args).
 - Server:
@@ -109,12 +115,14 @@ User Request
   - tool event visibile in chat
 
 ## Storage file
+
 - Upload via route `/api/files/upload`
 - Supabase Storage + FileAsset in DB
 - Extracted text/metadata server-side
 - Orchestrator riceve riferimenti + testo estratto (no binari enormi)
 
 ## Realtime + Live
+
 - Supabase Realtime:
   - channel `conversation:{id}` scambio SDP/ICE per WebRTC
 - Live pipeline:
@@ -122,6 +130,7 @@ User Request
   - video: snapshot a intervalli -> analisi asincrona
 
 ## Geolocation (privacy-first)
+
 - Client:
   - toggle in settings
   - navigator.geolocation permission request
@@ -133,11 +142,13 @@ User Request
 - ContextPack include geo **solo** se enabled.
 
 Invarianti:
+
 - No precise location by default
 - No geo in push/SMS payloads
 - No geo in share links
 
 ## Responsive
+
 - Layout usa `100dvh` + safe-area inset
 - Chat:
   - top bar fixed
@@ -149,12 +160,14 @@ Invarianti:
   - nessun clipping grafici
 
 ## Security
+
 - Rate limiting su: `/api/chat/send`, upload, tool endpoints, share, export, geo endpoints
 - Input validation (zod)
 - Anti prompt-injection: file/web text non attiva tool distruttivi
 - Share links: token non indovinabile, revoca + scadenza
 
 ## Observability
+
 - Logging JSON server-side
 - Error boundary UI
 - Sentry opzionale

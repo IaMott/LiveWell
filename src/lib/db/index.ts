@@ -60,10 +60,7 @@ export async function getUserById(userId: string) {
 // Profile
 // ─────────────────────────────────────────
 
-export async function updateUserProfile(
-  userId: string,
-  data: Record<string, unknown>,
-) {
+export async function updateUserProfile(userId: string, data: Record<string, unknown>) {
   return prisma.userProfile.upsert({
     where: { userId },
     create: { userId, ...(data as object) },
@@ -90,10 +87,7 @@ export async function createMessage(input: {
   return prisma.message.create({ data: input })
 }
 
-export async function getRecentConversationMessages(
-  conversationId: string,
-  limit = 20,
-) {
+export async function getRecentConversationMessages(conversationId: string, limit = 20) {
   const rows = await prisma.message.findMany({
     where: { conversationId },
     orderBy: { createdAt: 'desc' },
@@ -195,7 +189,14 @@ export async function writeAuditLog(input: AuditLogInput): Promise<void> {
 export async function getGeoPreference(userId: string) {
   return prisma.geoPreference.findUnique({
     where: { userId },
-    select: { enabled: true, country: true, region: true, city: true, timezone: true, accuracy: true },
+    select: {
+      enabled: true,
+      country: true,
+      region: true,
+      city: true,
+      timezone: true,
+      accuracy: true,
+    },
   })
 }
 
@@ -218,14 +219,8 @@ export async function upsertCoarseLocation(
   userId: string,
   location: CoarseLocationInput,
 ): Promise<void> {
-  const latCoarse =
-    location.lat !== undefined
-      ? Math.round(location.lat * 100) / 100
-      : undefined
-  const lonCoarse =
-    location.lon !== undefined
-      ? Math.round(location.lon * 100) / 100
-      : undefined
+  const latCoarse = location.lat !== undefined ? Math.round(location.lat * 100) / 100 : undefined
+  const lonCoarse = location.lon !== undefined ? Math.round(location.lon * 100) / 100 : undefined
 
   const data = {
     country: location.country ?? null,

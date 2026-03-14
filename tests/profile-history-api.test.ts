@@ -23,9 +23,7 @@ describe('/api/profile/history', () => {
   it('restituisce 401 se utente non autenticato', async () => {
     vi.mocked(auth).mockResolvedValue(null as never)
 
-    const response = await getProfileHistory(
-      new Request('http://localhost/api/profile/history'),
-    )
+    const response = await getProfileHistory(new Request('http://localhost/api/profile/history'))
     const body = await response.json()
 
     expect(response.status).toBe(401)
@@ -92,9 +90,7 @@ describe('/api/profile/history', () => {
     expect(body.timeline).toHaveLength(2)
     expect(body.timeline[0].section).toBe('nutrition')
     expect(body.timeline[1].section).toBe('health')
-    expect(body.attachmentsBySection.nutrition).toEqual([
-      { fileName: 'meal.jpg', type: 'image' },
-    ])
+    expect(body.attachmentsBySection.nutrition).toEqual([{ fileName: 'meal.jpg', type: 'image' }])
   })
 
   it('filtra per sezione richiesta', async () => {

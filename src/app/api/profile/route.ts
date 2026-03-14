@@ -12,44 +12,36 @@ export async function GET(request: Request): Promise<Response> {
 
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
-  const [
-    user,
-    profile,
-    workoutStats,
-    moodStats,
-    mealCount,
-    lastWeight,
-    artifacts,
-    convCount,
-  ] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { name: true, email: true },
-    }),
-    prisma.userProfile.findUnique({ where: { userId } }),
-    prisma.workoutSession.aggregate({
-      where: { userId, date: { gte: since7d } },
-      _count: { id: true },
-      _sum: { durationMin: true },
-    }),
-    prisma.mindfulnessEntry.aggregate({
-      where: { userId, createdAt: { gte: since7d } },
-      _avg: { mood: true, stress: true },
-    }),
-    prisma.meal.count({ where: { createdByUserId: userId, date: { gte: since7d } } }),
-    prisma.bodyMetricEntry.findFirst({
-      where: { userId, metricType: 'weight' },
-      orderBy: { recordedAt: 'desc' },
-      select: { value: true, unit: true, recordedAt: true },
-    }),
-    prisma.recommendationArtifact.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: { id: true, type: true, title: true, contentMarkdown: true, createdAt: true },
-    }),
-    prisma.conversation.count({ where: { userId } }),
-  ])
+  const [user, profile, workoutStats, moodStats, mealCount, lastWeight, artifacts, convCount] =
+    await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, email: true },
+      }),
+      prisma.userProfile.findUnique({ where: { userId } }),
+      prisma.workoutSession.aggregate({
+        where: { userId, date: { gte: since7d } },
+        _count: { id: true },
+        _sum: { durationMin: true },
+      }),
+      prisma.mindfulnessEntry.aggregate({
+        where: { userId, createdAt: { gte: since7d } },
+        _avg: { mood: true, stress: true },
+      }),
+      prisma.meal.count({ where: { createdByUserId: userId, date: { gte: since7d } } }),
+      prisma.bodyMetricEntry.findFirst({
+        where: { userId, metricType: 'weight' },
+        orderBy: { recordedAt: 'desc' },
+        select: { value: true, unit: true, recordedAt: true },
+      }),
+      prisma.recommendationArtifact.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: { id: true, type: true, title: true, contentMarkdown: true, createdAt: true },
+      }),
+      prisma.conversation.count({ where: { userId } }),
+    ])
 
   return Response.json({
     user: { name: user?.name ?? null, email: user?.email ?? '' },
@@ -92,7 +84,15 @@ export async function GET(request: Request): Promise<Response> {
   })
 }
 
-const VALID_SECTIONS = ['personal', 'nutrition', 'training', 'health', 'mindfulness', 'goals', 'settings'] as const
+const VALID_SECTIONS = [
+  'personal',
+  'nutrition',
+  'training',
+  'health',
+  'mindfulness',
+  'goals',
+  'settings',
+] as const
 type Section = (typeof VALID_SECTIONS)[number]
 
 export async function PUT(request: Request): Promise<Response> {
@@ -128,7 +128,12 @@ export async function PUT(request: Request): Promise<Response> {
 
     await prisma.$transaction([
       ...(name !== undefined
-        ? [prisma.user.update({ where: { id: userId }, data: { name: String(name).slice(0, 100) } })]
+        ? [
+            prisma.user.update({
+              where: { id: userId },
+              data: { name: String(name).slice(0, 100) },
+            }),
+          ]
         : []),
       prisma.userProfile.upsert({
         where: { userId },

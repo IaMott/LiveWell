@@ -79,7 +79,8 @@ describe('syncProfileFromConversation', () => {
           health: (typedArgs.update.health as Record<string, unknown>) ?? state.health,
           nutrition: (typedArgs.update.nutrition as Record<string, unknown>) ?? state.nutrition,
           training: (typedArgs.update.training as Record<string, unknown>) ?? state.training,
-          mindfulness: (typedArgs.update.mindfulness as Record<string, unknown>) ?? state.mindfulness,
+          mindfulness:
+            (typedArgs.update.mindfulness as Record<string, unknown>) ?? state.mindfulness,
           goals: (typedArgs.update.goals as Record<string, unknown>) ?? state.goals,
           settings: (typedArgs.update.settings as Record<string, unknown>) ?? state.settings,
         }
@@ -143,9 +144,7 @@ describe('syncProfileFromConversation', () => {
 
     expect(audit).toHaveLength(1)
     expect(attachments).toHaveLength(2)
-    expect(
-      attachments.map((item) => `${item.type}|${item.url}|${item.fileName}`),
-    ).toEqual([
+    expect(attachments.map((item) => `${item.type}|${item.url}|${item.fileName}`)).toEqual([
       'image|https://cdn.local/progress.jpg|progress.jpg',
       'audio|https://cdn.local/note.webm|note.webm',
     ])
@@ -165,7 +164,10 @@ describe('syncProfileFromConversation', () => {
         sesso: 'uomo',
       },
       specialistTurns: [
-        { specialistId: 'personal_trainer' as const, content: 'Incrementa progressivamente i carichi.' },
+        {
+          specialistId: 'personal_trainer' as const,
+          content: 'Incrementa progressivamente i carichi.',
+        },
       ],
     }
 
@@ -183,9 +185,7 @@ describe('syncProfileFromConversation', () => {
     expect(trainingHistory.map((h) => h.syncId)).toEqual(['sync-002', 'sync-003'])
 
     const settings = (state?.settings ?? {}) as Record<string, unknown>
-    const ledger = Array.isArray(settings.aiSyncLedger)
-      ? (settings.aiSyncLedger as string[])
-      : []
+    const ledger = Array.isArray(settings.aiSyncLedger) ? (settings.aiSyncLedger as string[]) : []
     expect(ledger).toEqual(['sync-002', 'sync-003'])
   })
 })

@@ -19,9 +19,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const durationMin = Math.max(1, Math.min(600, Number(body.durationMin ?? 30)))
   const perceivedEffort =
-    body.perceivedEffort != null
-      ? Math.max(1, Math.min(10, Number(body.perceivedEffort)))
-      : null
+    body.perceivedEffort != null ? Math.max(1, Math.min(10, Number(body.perceivedEffort))) : null
   const notes = body.notes ? String(body.notes).slice(0, 500) : null
   const date = body.date ? new Date(body.date) : new Date()
 

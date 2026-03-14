@@ -12,7 +12,10 @@ export function SettingsApplier() {
   useEffect(() => {
     function apply() {
       try {
-        const saved = JSON.parse(localStorage.getItem('lw_settings') ?? '{}') as Record<string, unknown>
+        const saved = JSON.parse(localStorage.getItem('lw_settings') ?? '{}') as Record<
+          string,
+          unknown
+        >
 
         // Theme
         const theme = (saved.theme as string) ?? 'system'

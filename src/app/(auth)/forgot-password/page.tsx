@@ -35,18 +35,34 @@ export default function ForgotPasswordPage() {
 
       {done ? (
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: '0.9375rem', color: 'var(--color-text-primary, #1C1C1E)', marginBottom: '1rem' }}>
-            Se l&apos;email è registrata riceverai le istruzioni entro pochi minuti.
-            Controlla anche la cartella spam.
+          <p
+            style={{
+              fontSize: '0.9375rem',
+              color: 'var(--color-text-primary, #1C1C1E)',
+              marginBottom: '1rem',
+            }}
+          >
+            Se l&apos;email è registrata riceverai le istruzioni entro pochi minuti. Controlla anche
+            la cartella spam.
           </p>
           <Link href="/login" style={{ ...linkStyle, fontSize: '0.9375rem' }}>
             ← Torna al login
           </Link>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary, #8E8E93)', marginBottom: '0.25rem' }}>
-            Inserisci l&apos;email del tuo account e ti invieremo un link per reimpostare la password.
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
+        >
+          <p
+            style={{
+              fontSize: '0.875rem',
+              color: 'var(--color-text-secondary, #8E8E93)',
+              marginBottom: '0.25rem',
+            }}
+          >
+            Inserisci l&apos;email del tuo account e ti invieremo un link per reimpostare la
+            password.
           </p>
           <input
             type="email"

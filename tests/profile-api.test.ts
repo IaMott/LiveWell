@@ -10,7 +10,9 @@ vi.mock('@/lib/auth', () => ({
 
 vi.mock('@/lib/rate-limit', () => ({
   rateLimit: vi.fn(() => ({ success: true, resetAt: Date.now() })),
-  rateLimitResponse: vi.fn(() => new Response(JSON.stringify({ error: 'Rate limit' }), { status: 429 })),
+  rateLimitResponse: vi.fn(
+    () => new Response(JSON.stringify({ error: 'Rate limit' }), { status: 429 }),
+  ),
 }))
 
 vi.mock('@/lib/prisma', () => ({

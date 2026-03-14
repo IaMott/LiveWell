@@ -30,16 +30,16 @@ Per regole architetturali, handoff reale multi-agent e anti-regressione usa come
 
 ## Stack tecnico
 
-| Componente | Tecnologia |
-|---|---|
-| **Framework** | Next.js 16.1.6 App Router, TypeScript strict |
-| **UI** | Tailwind CSS v4, shadcn/ui, Radix, lucide-react |
-| **Database** | PostgreSQL (Neon) + Prisma 5 |
-| **Auth** | NextAuth v5 (JWT, Credentials provider) |
-| **AI** | Google Gemini 2.5 Flash (`@google/genai`) |
-| **Deploy** | Vercel (auto-deploy da GitHub) |
-| **Test** | Vitest + Testing Library |
-| **Lint** | ESLint + Prettier + Husky pre-commit |
+| Componente    | Tecnologia                                      |
+| ------------- | ----------------------------------------------- |
+| **Framework** | Next.js 16.1.6 App Router, TypeScript strict    |
+| **UI**        | Tailwind CSS v4, shadcn/ui, Radix, lucide-react |
+| **Database**  | PostgreSQL (Neon) + Prisma 5                    |
+| **Auth**      | NextAuth v5 (JWT, Credentials provider)         |
+| **AI**        | Google Gemini 2.5 Flash (`@google/genai`)       |
+| **Deploy**    | Vercel (auto-deploy da GitHub)                  |
+| **Test**      | Vitest + Testing Library                        |
+| **Lint**      | ESLint + Prettier + Husky pre-commit            |
 
 ---
 
@@ -118,16 +118,16 @@ Visita [http://localhost:3000](http://localhost:3000).
 
 ## Variabili d'ambiente
 
-| Variabile | Obbligatoria | Descrizione |
-|---|---|---|
-| `DATABASE_URL` | Si | Connection string PostgreSQL |
-| `NEXTAUTH_SECRET` | Si | Secret per JWT (min 32 caratteri) |
-| `AUTH_TRUST_HOST` | Si | Impostare a `true` |
-| `GEMINI_API_KEY` | Si | Chiave API da [Google AI Studio](https://aistudio.google.com/) |
-| `AI_PROVIDER` | No | `gemini` (default) o `mock` per sviluppo senza API key |
-| `AI_MODEL` | No | Modello Gemini (default: `gemini-2.5-flash`) |
-| `NEXT_PUBLIC_APP_URL` | No | URL base app (default: `http://localhost:3000`) |
-| `NEXT_PUBLIC_APP_NAME` | No | Nome app (default: `LiveWell`) |
+| Variabile              | Obbligatoria | Descrizione                                                    |
+| ---------------------- | ------------ | -------------------------------------------------------------- |
+| `DATABASE_URL`         | Si           | Connection string PostgreSQL                                   |
+| `NEXTAUTH_SECRET`      | Si           | Secret per JWT (min 32 caratteri)                              |
+| `AUTH_TRUST_HOST`      | Si           | Impostare a `true`                                             |
+| `GEMINI_API_KEY`       | Si           | Chiave API da [Google AI Studio](https://aistudio.google.com/) |
+| `AI_PROVIDER`          | No           | `gemini` (default) o `mock` per sviluppo senza API key         |
+| `AI_MODEL`             | No           | Modello Gemini (default: `gemini-2.5-flash`)                   |
+| `NEXT_PUBLIC_APP_URL`  | No           | URL base app (default: `http://localhost:3000`)                |
+| `NEXT_PUBLIC_APP_NAME` | No           | Nome app (default: `LiveWell`)                                 |
 
 > **Nota:** Se `GEMINI_API_KEY` non e impostata, l'app usa automaticamente un mock provider che simula le risposte AI.
 
@@ -135,17 +135,17 @@ Visita [http://localhost:3000](http://localhost:3000).
 
 ## Script
 
-| Comando | Descrizione |
-|---|---|
-| `npm run dev` | Server dev con hot reload (Turbopack) |
-| `npm run build` | Build production (prisma generate + next build) |
-| `npm run start` | Avvia server production |
-| `npm run lint` | ESLint |
-| `npm run format` | Prettier |
-| `npm test` | Test Vitest |
-| `npm run typecheck` | TypeScript check |
-| `npm run db:push` | Sincronizza schema Prisma con DB |
-| `npm run db:migrate` | Crea migration Prisma |
+| Comando              | Descrizione                                     |
+| -------------------- | ----------------------------------------------- |
+| `npm run dev`        | Server dev con hot reload (Turbopack)           |
+| `npm run build`      | Build production (prisma generate + next build) |
+| `npm run start`      | Avvia server production                         |
+| `npm run lint`       | ESLint                                          |
+| `npm run format`     | Prettier                                        |
+| `npm test`           | Test Vitest                                     |
+| `npm run typecheck`  | TypeScript check                                |
+| `npm run db:push`    | Sincronizza schema Prisma con DB                |
+| `npm run db:migrate` | Crea migration Prisma                           |
 
 ---
 
@@ -153,71 +153,71 @@ Visita [http://localhost:3000](http://localhost:3000).
 
 ### Autenticazione
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| POST | `/api/auth/register` | Registrazione (email, password, name) |
-| GET | `/api/auth/me` | Dati utente autenticato |
-| * | `/api/auth/[...nextauth]` | NextAuth endpoints (login, session, csrf) |
+| Metodo | Endpoint                  | Descrizione                               |
+| ------ | ------------------------- | ----------------------------------------- |
+| POST   | `/api/auth/register`      | Registrazione (email, password, name)     |
+| GET    | `/api/auth/me`            | Dati utente autenticato                   |
+| \*     | `/api/auth/[...nextauth]` | NextAuth endpoints (login, session, csrf) |
 
 ### Chat
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| POST | `/api/chat` | Invia messaggio, ricevi risposta SSE streaming |
+| Metodo | Endpoint    | Descrizione                                    |
+| ------ | ----------- | ---------------------------------------------- |
+| POST   | `/api/chat` | Invia messaggio, ricevi risposta SSE streaming |
 
 **SSE Events:** `meta`, `routing`, `agent_turn`, `agent_delta`, `agent_done`, `delta`, `done`
 
 ### Conversazioni
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| GET | `/api/conversations` | Lista conversazioni con anteprima |
-| GET | `/api/conversations/[id]` | Dettaglio con messaggi |
-| GET | `/api/conversations/[id]/export` | Download testo (.txt) |
-| POST | `/api/conversations/[id]/share` | Crea link condivisibile |
-| DELETE | `/api/conversations/[id]/share` | Revoca condivisione |
+| Metodo | Endpoint                         | Descrizione                       |
+| ------ | -------------------------------- | --------------------------------- |
+| GET    | `/api/conversations`             | Lista conversazioni con anteprima |
+| GET    | `/api/conversations/[id]`        | Dettaglio con messaggi            |
+| GET    | `/api/conversations/[id]/export` | Download testo (.txt)             |
+| POST   | `/api/conversations/[id]/share`  | Crea link condivisibile           |
+| DELETE | `/api/conversations/[id]/share`  | Revoca condivisione               |
 
 ### Condivisione pubblica
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| GET | `/api/share/[token]` | Dati conversazione (no auth, scade dopo 30 giorni) |
+| Metodo | Endpoint             | Descrizione                                        |
+| ------ | -------------------- | -------------------------------------------------- |
+| GET    | `/api/share/[token]` | Dati conversazione (no auth, scade dopo 30 giorni) |
 
 ### File
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| POST | `/api/upload` | Upload file (max 10 MB) |
-| POST | `/api/transcribe` | Trascrizione audio (Gemini) |
+| Metodo | Endpoint          | Descrizione                 |
+| ------ | ----------------- | --------------------------- |
+| POST   | `/api/upload`     | Upload file (max 10 MB)     |
+| POST   | `/api/transcribe` | Trascrizione audio (Gemini) |
 
 ### Profilo
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| GET | `/api/profile` | Profilo utente completo |
-| PUT | `/api/profile` | Aggiorna sezione profilo |
+| Metodo | Endpoint       | Descrizione              |
+| ------ | -------------- | ------------------------ |
+| GET    | `/api/profile` | Profilo utente completo  |
+| PUT    | `/api/profile` | Aggiorna sezione profilo |
 
 ### Notifiche
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| GET | `/api/notifications` | Lista (opzionale `?unread=true`) |
-| PATCH | `/api/notifications/[id]` | Segna come letta |
-| DELETE | `/api/notifications/[id]` | Elimina |
-| POST | `/api/notifications/read-all` | Segna tutte come lette |
+| Metodo | Endpoint                      | Descrizione                      |
+| ------ | ----------------------------- | -------------------------------- |
+| GET    | `/api/notifications`          | Lista (opzionale `?unread=true`) |
+| PATCH  | `/api/notifications/[id]`     | Segna come letta                 |
+| DELETE | `/api/notifications/[id]`     | Elimina                          |
+| POST   | `/api/notifications/read-all` | Segna tutte come lette           |
 
 ---
 
 ## Rate Limiting
 
-| Endpoint | Limite | Per |
-|---|---|---|
-| `/api/chat` | 30/min | utente |
-| `/api/upload` | 15/min | utente |
-| `/api/auth/register` | 5/min | IP |
-| `/api/share/[token]` | 60/min | IP |
+| Endpoint                        | Limite | Per    |
+| ------------------------------- | ------ | ------ |
+| `/api/chat`                     | 30/min | utente |
+| `/api/upload`                   | 15/min | utente |
+| `/api/auth/register`            | 5/min  | IP     |
+| `/api/share/[token]`            | 60/min | IP     |
 | `/api/conversations/[id]/share` | 10/min | utente |
-| `/api/profile` PUT | 20/min | utente |
+| `/api/profile` PUT              | 20/min | utente |
 
 ---
 
@@ -320,4 +320,4 @@ LiveWell **non sostituisce professionisti medici**. Per emergenze o segnali di r
 
 ---
 
-*Built with Next.js, Gemini AI, and Vercel.*
+_Built with Next.js, Gemini AI, and Vercel._

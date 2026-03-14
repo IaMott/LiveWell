@@ -6,15 +6,8 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'node',
-    include: [
-      'tests/smoke.test.ts',
-      'tests/api/**/*.test.ts',
-      'tests/security/**/*.test.ts',
-    ],
-    exclude: [
-      'bkp/**',
-      'tests/**/* 2.*',
-    ],
+    include: ['tests/smoke.test.ts', 'tests/api/**/*.test.ts', 'tests/security/**/*.test.ts'],
+    exclude: ['bkp/**', 'tests/**/* 2.*'],
     pool: 'forks',
     maxWorkers: 1,
     testTimeout: 15000,

@@ -54,7 +54,13 @@ function ResetPasswordForm() {
   if (done) {
     return (
       <div style={{ textAlign: 'center' }}>
-        <p style={{ fontSize: '0.9375rem', color: 'var(--color-text-primary, #1C1C1E)', marginBottom: '1rem' }}>
+        <p
+          style={{
+            fontSize: '0.9375rem',
+            color: 'var(--color-text-primary, #1C1C1E)',
+            marginBottom: '1rem',
+          }}
+        >
           Password aggiornata con successo.
         </p>
         <Link href="/login" style={{ ...linkStyle, fontSize: '0.9375rem' }}>
@@ -65,7 +71,10 @@ function ResetPasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+    <form
+      onSubmit={handleSubmit}
+      style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
+    >
       <input
         type="password"
         placeholder="Nuova password (min. 8 caratteri)"
