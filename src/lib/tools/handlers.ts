@@ -446,14 +446,139 @@ const geoClearLocation: Handler = async (args, ctx) => {
   return { cleared: true }
 }
 
-// share.createLink is destructive + owner-mode: keep stub pending real share token logic
-const shareCreateLink: Handler = async (args) => {
-  const a = args as { resourceType: string; resourceId: string }
-  return { shareUrl: `https://livewell.local/share/${a.resourceType}/${a.resourceId}` }
+// share.createLink — real implementation using UserAttribute for token persistence
+const shareCreateLink: Handler = async (args, ctx) => {
+  const { randomBytes } = await import('node:crypto')
+  const a = args as { resourceType: string; resourceId: string; expiresAt?: string }
+  const token = randomBytes(16).toString('hex')
+  const expiresAt = a.expiresAt ? new Date(a.expiresAt) : null
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://livewell.mottisi.com'
+  const shareUrl = `${baseUrl}/share/${token}`
+
+  await prisma.userAttribute.create({
+    data: {
+      userId: ctx.actor.userId,
+      domain: 'general',
+      key: 'share_token',
+      value: JSON.stringify({
+        token,
+        resourceType: a.resourceType,
+        resourceId: a.resourceId,
+        expiresAt: expiresAt?.toISOString() ?? null,
+        shareUrl,
+        createdAt: new Date().toISOString(),
+      }),
+      source: 'agent',
+    },
+  })
+
+  return { shareUrl, token, expiresAt: expiresAt?.toISOString() ?? null }
 }
 
-// export.pdf is a future feature step
-const exportPdf: Handler = async () => ({ url: 'https://livewell.local/export/mock.pdf' })
+// export.pdf — returns content ready for client-side PDF generation
+const exportPdf: Handler = async (args, ctx) => {
+  const a = args as { resourceType: string; resourceId: string }
+  const artifact = await prisma.recommendationArtifact.findFirst({
+    where: { id: a.resourceId, userId: ctx.actor.userId },
+  })
+
+  if (!artifact) {
+    return {
+      exportFormat: 'error',
+      resourceType: a.resourceType,
+      resourceId: a.resourceId,
+      content: null,
+      message: 'Risorsa non trovata. Verifica che la raccomandazione esista.',
+    }
+  }
+
+  return {
+    exportFormat: 'markdown',
+    resourceType: artifact.type,
+    title: artifact.title,
+    content: artifact.contentMarkdown,
+    createdAt: artifact.createdAt.toISOString(),
+    message: 'Contenuto pronto. Usa il campo "content" per generare il PDF.',
+  }
+}
+
+// appointment.schedule — crea un appuntamento
+const appointmentSchedule: Handler = async (args, ctx) => {
+  const a = args as {
+    title: string
+    scheduledAt: string
+    durationMin?: number
+    specialist?: string
+    location?: string
+    description?: string
+    notes?: string
+  }
+  const appointment = await prisma.appointment.create({
+    data: {
+      userId: ctx.actor.userId,
+      title: a.title,
+      scheduledAt: new Date(a.scheduledAt),
+      durationMin: a.durationMin,
+      specialist: a.specialist,
+      location: a.location,
+      description: a.description,
+      notes: a.notes,
+    },
+  })
+  return {
+    appointmentId: appointment.id,
+    title: appointment.title,
+    scheduledAt: appointment.scheduledAt.toISOString(),
+    status: appointment.status,
+  }
+}
+
+// appointment.cancel — cancella un appuntamento esistente
+const appointmentCancel: Handler = async (args, ctx) => {
+  const a = args as { appointmentId: string; reason?: string }
+  const existing = await prisma.appointment.findFirst({
+    where: { id: a.appointmentId, userId: ctx.actor.userId },
+  })
+  if (!existing) throw new Error('Appuntamento non trovato o non autorizzato')
+  if (existing.status === 'cancelled') return { cancelled: false, message: 'Già cancellato' }
+
+  await prisma.appointment.update({
+    where: { id: a.appointmentId },
+    data: {
+      status: 'cancelled',
+      cancelledAt: new Date(),
+      notes: a.reason ? `Motivo cancellazione: ${a.reason}` : existing.notes,
+    },
+  })
+  return { cancelled: true, appointmentId: a.appointmentId }
+}
+
+// reminder.create — crea un promemoria
+const reminderCreate: Handler = async (args, ctx) => {
+  const a = args as {
+    title: string
+    message: string
+    remindAt: string
+    appointmentId?: string
+    repeat?: string
+  }
+  const reminder = await prisma.reminder.create({
+    data: {
+      userId: ctx.actor.userId,
+      title: a.title,
+      message: a.message,
+      remindAt: new Date(a.remindAt),
+      appointmentId: a.appointmentId ?? null,
+      repeat: a.repeat ?? 'none',
+    },
+  })
+  return {
+    reminderId: reminder.id,
+    title: reminder.title,
+    remindAt: reminder.remindAt.toISOString(),
+    repeat: reminder.repeat,
+  }
+}
 
 // ─────────────────────────────────────────
 // Exports
@@ -476,6 +601,9 @@ export const realToolHandlers: HandlerMap = {
   'geo.setPreference': geoSetPreference,
   'geo.updateCoarseLocation': geoUpdateCoarseLocation,
   'geo.clearLocation': geoClearLocation,
+  'appointment.schedule': appointmentSchedule,
+  'appointment.cancel': appointmentCancel,
+  'reminder.create': reminderCreate,
 }
 
 export const stubToolHandlers: HandlerMap = {
@@ -492,13 +620,37 @@ export const stubToolHandlers: HandlerMap = {
   'notifications.createInApp': async () => ({ saved: true }),
   'share.createLink': async (args) => {
     const a = args as { resourceType: string; resourceId: string }
-    return { shareUrl: `https://livewell.local/share/${a.resourceType}/${a.resourceId}` }
+    const token = `stub-${Math.random().toString(36).slice(2)}`
+    return { shareUrl: `https://livewell.local/share/${token}`, token, expiresAt: null }
   },
-  'export.pdf': async () => ({ url: 'https://livewell.local/export/mock.pdf' }),
+  'export.pdf': async () => ({
+    exportFormat: 'markdown',
+    resourceType: 'nutrition',
+    title: 'Stub Export',
+    content: '# Stub content',
+    message: 'Stub export',
+  }),
   'geo.setPreference': async (args) => {
     const a = args as { enabled: boolean }
     return { saved: true, enabled: a.enabled }
   },
   'geo.updateCoarseLocation': async () => ({ saved: true }),
   'geo.clearLocation': async () => ({ cleared: true }),
+  'appointment.schedule': async (args) => {
+    const a = args as { title: string; scheduledAt: string }
+    return {
+      appointmentId: 'stub-appt-id',
+      title: a.title,
+      scheduledAt: a.scheduledAt,
+      status: 'pending',
+    }
+  },
+  'appointment.cancel': async (args) => {
+    const a = args as { appointmentId: string }
+    return { cancelled: true, appointmentId: a.appointmentId }
+  },
+  'reminder.create': async (args) => {
+    const a = args as { title: string; remindAt: string }
+    return { reminderId: 'stub-reminder-id', title: a.title, remindAt: a.remindAt, repeat: 'none' }
+  },
 }

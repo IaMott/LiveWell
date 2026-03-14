@@ -1,6 +1,7 @@
 import { AgentInput, AgentProfile, AgentProposal, Domain } from '../types'
 import { buildAgentUserPrompt } from './agentPrompt'
 import { normalizeAgentProposal } from './proposalNormalization'
+import { budgetContextPackForAgent } from '../contextBudget'
 
 export type LlmClient = {
   complete: (args: {
@@ -23,7 +24,15 @@ export type ExecuteAgentParams = {
 export async function executeAgent(params: ExecuteAgentParams): Promise<AgentProposal> {
   const { llm, agent, input, domainHint, peerInsights } = params
 
-  const userPrompt = buildAgentUserPrompt(input, agent.id, peerInsights)
+  // Apply token budget: each agent receives only context relevant to its domain.
+  // This reduces token waste and prevents cross-domain data leakage.
+  const agentDomain = agent.domainTags[0] ?? domainHint
+  const budgetedInput: AgentInput = {
+    ...input,
+    contextPack: budgetContextPackForAgent(input.contextPack, agentDomain),
+  }
+
+  const userPrompt = buildAgentUserPrompt(budgetedInput, agent.id, peerInsights)
   const res = await llm.complete({
     system: agent.systemPrompt,
     user: userPrompt,

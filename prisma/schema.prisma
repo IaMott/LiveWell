@@ -31,6 +31,8 @@ model User {
   geoPreference           GeoPreference?
   userAttributes          UserAttribute[]
   agentWorkspaces         AgentWorkspace[]
+  appointments            Appointment[]
+  reminders               Reminder[]
 
   @@map("users")
 }
@@ -353,4 +355,75 @@ model ApiErrorEvent {
   @@index([statusCode, createdAt])
   @@index([userId, createdAt])
   @@map("api_error_events")
+}
+
+// ─────────────────────────────────────────
+// Appointments & Reminders
+// ─────────────────────────────────────────
+
+model Appointment {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  scheduledAt DateTime  @map("scheduled_at")
+  durationMin Int?      @map("duration_min")
+  specialist  String?   // e.g. "dietista", "medico-dello-sport"
+  location    String?
+  notes       String?
+  status      String    @default("pending") // 'pending' | 'confirmed' | 'cancelled' | 'completed'
+  cancelledAt DateTime? @map("cancelled_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  reminders   Reminder[]
+
+  @@index([userId, scheduledAt])
+  @@index([userId, status])
+  @@map("appointments")
+}
+
+model Reminder {
+  id            String       @id @default(cuid())
+  userId        String       @map("user_id")
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointmentId String?      @map("appointment_id")
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  title         String
+  message       String
+  remindAt      DateTime     @map("remind_at")
+  repeat        String?      @default("none") // 'none' | 'daily' | 'weekly' | 'monthly'
+  sent          Boolean      @default(false)
+  sentAt        DateTime?    @map("sent_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  @@index([userId, remindAt])
+  @@index([sent, remindAt])
+  @@map("reminders")
+}
+
+// ─────────────────────────────────────────
+// Agent Performance Tracking
+// ─────────────────────────────────────────
+
+model AgentPerformanceLog {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  conversationId String   @map("conversation_id")
+  agentId        String   @map("agent_id")
+  requestId      String   @map("request_id")
+  round          Int      // 1 o 2
+  domain         String
+  confidence     Float    // 0.0 - 1.0 (da AgentProposal.confidence)
+  proposalHash   String   @map("proposal_hash")
+  durationMs     Int?     @map("duration_ms")
+  userFeedback   Int?     @map("user_feedback") // 1-5 opzionale, aggiornato post-turn
+  wasSelected    Boolean  @map("was_selected")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([agentId, createdAt])
+  @@index([userId, createdAt])
+  @@index([conversationId])
+  @@map("agent_performance_logs")
 }

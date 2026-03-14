@@ -19,7 +19,7 @@ env:
 
 jobs:
   quality:
-    name: Lint + Test + Build
+    name: Lint + Format + Test + Typecheck + Build
     runs-on: ubuntu-latest
 
     steps:
@@ -41,8 +41,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Format check
+        run: npm run format:check
+
       - name: Test
         run: npm test
 
-      - name: Build (includes typecheck)
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
         run: npm run build

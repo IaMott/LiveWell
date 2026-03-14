@@ -17,6 +17,9 @@ export const ALLOWED_TOOL_NAMES = [
   'geo.setPreference',
   'geo.updateCoarseLocation',
   'geo.clearLocation',
+  'appointment.schedule',
+  'appointment.cancel',
+  'reminder.create',
 ] as const
 
 export type ToolName = (typeof ALLOWED_TOOL_NAMES)[number]
@@ -139,12 +142,41 @@ const geoUpdateCoarseLocationSchema = z.object({
 
 const geoClearLocationSchema = z.object({})
 
+const appointmentScheduleSchema = z.object({
+  title: baseString.max(200),
+  scheduledAt: z.string().datetime(),
+  durationMin: z.number().int().min(5).max(480).optional(),
+  specialist: z.string().max(64).optional(),
+  location: z.string().max(200).optional(),
+  description: z.string().max(1000).optional(),
+  notes: z.string().max(500).optional(),
+})
+
+const appointmentCancelSchema = z.object({
+  appointmentId: baseString.max(128),
+  reason: z.string().max(500).optional(),
+})
+
+const reminderCreateSchema = z.object({
+  title: baseString.max(200),
+  message: z.string().trim().min(1).max(1000),
+  remindAt: z.string().datetime(),
+  appointmentId: z.string().max(128).optional(),
+  repeat: z.enum(['none', 'daily', 'weekly', 'monthly']).optional(),
+})
+
 export type ToolDefinition = {
   name: ToolName
   schema: z.ZodTypeAny
   mutation: boolean
   destructive: boolean
   requiresOwnerMode: boolean
+  /** Semantic versioning — bump minor for backward-compatible additions, major for breaking changes */
+  version: string
+  deprecated?: boolean
+  deprecationMessage?: string
+  /** ISO date string when this tool was introduced */
+  since?: string
 }
 
 const definitions: Record<ToolName, ToolDefinition> = {
@@ -154,6 +186,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'user.setAttribute': {
     name: 'user.setAttribute',
@@ -161,6 +195,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'health.addMetric': {
     name: 'health.addMetric',
@@ -168,6 +204,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'nutrition.logMeal': {
     name: 'nutrition.logMeal',
@@ -175,6 +213,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'nutrition.createFoodItem': {
     name: 'nutrition.createFoodItem',
@@ -182,6 +222,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'nutrition.recipes.createRecipe': {
     name: 'nutrition.recipes.createRecipe',
@@ -189,6 +231,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'training.createWorkoutPlan': {
     name: 'training.createWorkoutPlan',
@@ -196,6 +240,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'training.logWorkoutSession': {
     name: 'training.logWorkoutSession',
@@ -203,6 +249,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'mindfulness.createEntry': {
     name: 'mindfulness.createEntry',
@@ -210,6 +258,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'artifacts.saveRecommendation': {
     name: 'artifacts.saveRecommendation',
@@ -217,6 +267,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'notifications.createInApp': {
     name: 'notifications.createInApp',
@@ -224,6 +276,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'share.createLink': {
     name: 'share.createLink',
@@ -231,6 +285,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: true,
     requiresOwnerMode: true,
+    version: '1.1.0',
+    since: '2025-01-01',
   },
   'export.pdf': {
     name: 'export.pdf',
@@ -238,6 +294,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: false,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.1.0',
+    since: '2025-01-01',
   },
   'geo.setPreference': {
     name: 'geo.setPreference',
@@ -245,6 +303,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'geo.updateCoarseLocation': {
     name: 'geo.updateCoarseLocation',
@@ -252,6 +312,8 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
   },
   'geo.clearLocation': {
     name: 'geo.clearLocation',
@@ -259,6 +321,35 @@ const definitions: Record<ToolName, ToolDefinition> = {
     mutation: true,
     destructive: false,
     requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2025-01-01',
+  },
+  'appointment.schedule': {
+    name: 'appointment.schedule',
+    schema: appointmentScheduleSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2026-03-14',
+  },
+  'appointment.cancel': {
+    name: 'appointment.cancel',
+    schema: appointmentCancelSchema,
+    mutation: true,
+    destructive: true,
+    requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2026-03-14',
+  },
+  'reminder.create': {
+    name: 'reminder.create',
+    schema: reminderCreateSchema,
+    mutation: true,
+    destructive: false,
+    requiresOwnerMode: false,
+    version: '1.0.0',
+    since: '2026-03-14',
   },
 }
 
@@ -270,3 +361,18 @@ export function getToolDefinition(name: string): ToolDefinition | null {
   if (!isAllowedToolName(name)) return null
   return definitions[name]
 }
+
+export function getToolVersion(name: string): string | null {
+  return getToolDefinition(name)?.version ?? null
+}
+
+export function isToolDeprecated(name: string): boolean {
+  return getToolDefinition(name)?.deprecated ?? false
+}
+
+/** Returns all active (non-deprecated) tool definitions */
+export function getActiveToolDefinitions(): ToolDefinition[] {
+  return Object.values(definitions).filter((d) => !d.deprecated)
+}
+
+export { appointmentScheduleSchema, appointmentCancelSchema, reminderCreateSchema }

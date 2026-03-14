@@ -1,19 +1,6 @@
+import { defaultRateLimitStore } from './rateLimitStore'
+
 const WINDOW_MS_DEFAULT = 60_000
-
-type RateLimitEntry = {
-  count: number
-  resetAt: number
-}
-
-const rateLimitStore = new Map<string, RateLimitEntry>()
-
-function cleanupRateLimitStore(now: number): void {
-  for (const [key, value] of rateLimitStore.entries()) {
-    if (value.resetAt <= now) {
-      rateLimitStore.delete(key)
-    }
-  }
-}
 
 export function getUserIdFromRequest(request: Request): string | null {
   const userId = request.headers.get('x-user-id')?.trim() ?? ''
@@ -39,28 +26,17 @@ export function checkRateLimit(options: {
   | { ok: false; retryAfterSec: number; resetAt: number } {
   const now = options.now ?? Date.now()
   const windowMs = options.windowMs ?? WINDOW_MS_DEFAULT
-  cleanupRateLimitStore(now)
 
-  const existing = rateLimitStore.get(options.key)
-  if (!existing || existing.resetAt <= now) {
-    const resetAt = now + windowMs
-    rateLimitStore.set(options.key, { count: 1, resetAt })
-    return { ok: true, remaining: Math.max(0, options.max - 1), resetAt }
+  const { count, resetAt } = defaultRateLimitStore.increment(options.key, windowMs, now)
+
+  if (count > options.max) {
+    const retryAfterSec = Math.max(1, Math.ceil((resetAt - now) / 1000))
+    return { ok: false, retryAfterSec, resetAt }
   }
 
-  if (existing.count >= options.max) {
-    const retryAfterSec = Math.max(1, Math.ceil((existing.resetAt - now) / 1000))
-    return { ok: false, retryAfterSec, resetAt: existing.resetAt }
-  }
-
-  existing.count += 1
-  return {
-    ok: true,
-    remaining: Math.max(0, options.max - existing.count),
-    resetAt: existing.resetAt,
-  }
+  return { ok: true, remaining: Math.max(0, options.max - count), resetAt }
 }
 
 export function resetRateLimitStoreForTests(): void {
-  rateLimitStore.clear()
+  defaultRateLimitStore.reset()
 }
