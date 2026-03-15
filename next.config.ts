@@ -7,8 +7,8 @@ const cspDirectives = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self'",
-  // Allow connections to Gemini and Anthropic APIs
-  "connect-src 'self' https://generativelanguage.googleapis.com https://api.anthropic.com",
+  // Allow connections to Gemini (REST + WebSocket for Live API) and Anthropic APIs
+  "connect-src 'self' https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com https://api.anthropic.com",
   "media-src 'self' blob:",
   "object-src 'none'",
   "frame-ancestors 'self'",
