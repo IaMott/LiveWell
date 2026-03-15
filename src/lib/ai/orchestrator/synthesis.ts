@@ -87,71 +87,265 @@ function detectCrossDomainSpecialist(
 }
 
 /**
- * Builds professional output instructions for specialists who have enough data
- * and the user is explicitly requesting a complete plan/document.
+ * Per-agent professional output format mandates.
+ * Keys are substrings of agent IDs (lowercase). Matched by first hit.
+ * Add new entries here to support new agents — no other code changes needed.
+ */
+const AGENT_OUTPUT_TEMPLATES: Array<{ match: string[]; instructions: string[] }> = [
+  {
+    match: ['dietista', 'nutrizionista'],
+    instructions: [
+      `PIANO NUTRIZIONALE COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Calcolo fabbisogno calorico (BMR Harris-Benedict, TDEE basato sull'attività dichiarata)`,
+      `2. Distribuzione macro-nutrienti (% proteine/carboidrati/grassi)`,
+      `3. Menu dettagliato per ALMENO 2 settimane (idealmente 4), giorno per giorno:`,
+      `   COLAZIONE / SPUNTINO / PRANZO / MERENDA / CENA — con grammature precise (es. "80g avena") e kcal per pasto`,
+      `   TOTALE GIORNALIERO: kcal + g proteine/carboidrati/grassi`,
+      `4. Per ≥5 piatti della settimana: ricetta con ingredienti e procedimento`,
+      `5. Note su condizioni dichiarate (allergie, patologie, farmaci)`,
+      `Se mancano dati: usa assunzioni ragionevoli dichiarandole esplicitamente.`,
+    ],
+  },
+  {
+    match: ['chef'],
+    instructions: [
+      `MENU/RICETTE COMPLETE — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Menu completo per il periodo richiesto (es. settimanale/mensile/evento)`,
+      `2. Per ogni ricetta: ingredienti con grammature precise, procedimento passo-passo, tempi di preparazione e cottura`,
+      `3. Varianti per esigenze alimentari dichiarate (allergie, intolleranze, preferenze)`,
+      `4. Lista della spesa consolidata`,
+      `5. Consigli di conservazione e preparazione anticipata`,
+    ],
+  },
+  {
+    match: ['persona-trainer', 'personal', 'chinesologo'],
+    instructions: [
+      `PIANO DI ALLENAMENTO COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Valutazione del livello attuale e obiettivi specifici`,
+      `2. Struttura settimanale (giorni, gruppi muscolari, riposi strategici)`,
+      `3. Piano per ALMENO 4-6 settimane con progressione:`,
+      `   Per ogni giornata: esercizi con serie × ripetizioni × carico consigliato, recupero, note tecniche`,
+      `   Riscaldamento e defaticamento per ogni sessione`,
+      `4. Schema di progressione del carico settimana per settimana`,
+      `5. Consigli nutrizione peri-workout se pertinente`,
+    ],
+  },
+  {
+    match: ['medico-dello-sport'],
+    instructions: [
+      `PIANO SPORT-MEDICINA COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Valutazione idoneità sportiva e rischi rilevati`,
+      `2. Periodizzazione del carico sportivo (mesocicli/macrocicli) con intensità e volumi`,
+      `3. Protocollo di prevenzione infortuni specifico per la disciplina`,
+      `4. Indicazioni su recupero, monitoraggio parametri fisiologici e test prestazionali`,
+      `5. Piano di rientro post-infortunio se applicabile`,
+      `6. Consigli nutrizionali sport-specifici`,
+    ],
+  },
+  {
+    match: ['fisioterapista'],
+    instructions: [
+      `PIANO RIABILITATIVO COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Assessment funzionale: ROM, forza, dolore (scala NRS), limitazioni`,
+      `2. Diagnosi funzionale e obiettivi riabilitativi a breve/medio termine`,
+      `3. Programma settimanale per ALMENO 4-8 settimane:`,
+      `   Per ogni sessione: esercizi specifici con serie × reps × carico, tempo di tenuta, note esecutive`,
+      `   Progressione graduale con criteri di avanzamento`,
+      `4. Esercizi domiciliari quotidiani (con istruzioni chiare)`,
+      `5. Criteri di stop/rivalutazione e segnali d'allarme`,
+    ],
+  },
+  {
+    match: ['fisiatra'],
+    instructions: [
+      `PIANO FISIATRICO COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Inquadramento diagnostico e valutazione disabilità/funzionalità`,
+      `2. Obiettivi riabilitativi misurabili (FIM, Barthel o equivalenti)`,
+      `3. Piano riabilitativo multidisciplinare per ALMENO 4-12 settimane:`,
+      `   Fisioterapia, terapia occupazionale, logopedia se indicati — frequenza e obiettivi per ciascuno`,
+      `4. Ausili/ortesi consigliati con indicazioni d'uso`,
+      `5. Piano di follow-up e criteri di dimissione`,
+    ],
+  },
+  {
+    match: ['sleep-coach', 'sleep'],
+    instructions: [
+      `PROTOCOLLO SONNO COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Assessment del sonno: qualità attuale, latenza, risvegli, orari, igiene`,
+      `2. Diagnosi funzionale (insonnia, ritardo di fase, ecc.) e fattori mantenenti`,
+      `3. Programma strutturato per 4-6 settimane:`,
+      `   Settimana per settimana: tecnica principale (CBT-I, stimulus control, restrizione, ecc.) con istruzioni precise`,
+      `   Routine serale raccomandata (orari, attività da fare/evitare)`,
+      `4. Diario del sonno da compilare (modello fornito)`,
+      `5. Criteri di successo e quando escalare a medico/polisomnografia`,
+    ],
+  },
+  {
+    match: ['psicologo'],
+    instructions: [
+      `PERCORSO PSICOLOGICO COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Assessment iniziale: punti di forza, aree di lavoro, formulazione del caso`,
+      `2. Obiettivi terapeutici specifici e misurabili (SMART)`,
+      `3. Programma per ALMENO 4-8 settimane:`,
+      `   Per ogni settimana: tema, tecnica specifica (CBT, ACT, DBT skills, ecc.), esercizi pratici, compiti`,
+      `4. Strumenti di monitoraggio (PHQ-9, GAD-7, diario pensieri, ecc.)`,
+      `5. Piano di gestione crisi e criteri di escalation`,
+    ],
+  },
+  {
+    match: ['mental', 'coach-relazionale'],
+    instructions: [
+      `PERCORSO MENTAL COACHING COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Assessment: valori, risorse, obiettivi di vita/performance, blocchi identificati`,
+      `2. Obiettivi di coaching specifici e misurabili`,
+      `3. Programma per ALMENO 4-8 settimane:`,
+      `   Per ogni settimana: focus, esercizio/pratica principale, riflessione guidata, azione concreta`,
+      `4. Tecniche di mindfulness/regolazione emotiva con istruzioni d'uso`,
+      `5. Metriche di progresso soggettive e oggettive`,
+    ],
+  },
+  {
+    match: ['mmg', 'medico di medicina', 'medicina generale'],
+    instructions: [
+      `PIANO DI GESTIONE CLINICA COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Sintesi diagnostica: problemi attivi, diagnosi differenziali con probabilità`,
+      `2. Piano diagnostico: esami richiesti con razionale e urgenza`,
+      `3. Piano terapeutico:`,
+      `   Farmaci (nome, dosaggio, posologia, durata, monitoraggio) con razionale EBM`,
+      `   Misure non farmacologiche (dieta, attività fisica, igiene)`,
+      `4. Safety-netting: segnali d'allarme che richiedono PS/rivalutazione urgente`,
+      `5. Follow-up programmato con criteri di escalation specialistica`,
+    ],
+  },
+  {
+    match: ['cardiologo'],
+    instructions: [
+      `PIANO CARDIOLOGICO COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Valutazione del rischio cardiovascolare (score, fattori di rischio)`,
+      `2. Diagnosi funzionale e piano diagnostico (ECG, ecocardiogramma, holter, ecc.)`,
+      `3. Piano terapeutico farmacologico e non farmacologico con target (PA, LDL, FC)`,
+      `4. Stile di vita: attività fisica raccomandata (intensità, durata, frequenza), dieta cardiovascolare`,
+      `5. Piano di monitoraggio e criteri di ricovero/urgenza`,
+    ],
+  },
+  {
+    match: ['endocrinologo'],
+    instructions: [
+      `PIANO ENDOCRINOLOGICO COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Inquadramento: diagnosi, esami ormonali/metabolici rilevanti e target`,
+      `2. Piano farmacologico se indicato (nome, dosaggio, timing, monitoraggio)`,
+      `3. Piano nutrizionale specifico per la patologia endocrina (es. dieta per tiroidea, IR, ecc.)`,
+      `4. Attività fisica raccomandata in relazione alla condizione`,
+      `5. Calendario di follow-up con esami programmati e criteri di revisione terapia`,
+    ],
+  },
+  {
+    match: ['gastroenterologo'],
+    instructions: [
+      `PIANO GASTROENTEROLOGICO COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Diagnosi funzionale e piano diagnostico (gastroscopia, colonscopia, breath test, ecc.)`,
+      `2. Piano terapeutico farmacologico (PPI, probiotici, antispastici, ecc.) con posologia e durata`,
+      `3. Piano dietetico specifico per la patologia (dieta FODMAP, senza glutine, ecc.) con esempi pratici`,
+      `4. Modifiche stile di vita (pasti, alcol, fumo, stress)`,
+      `5. Segnali d'allarme e criteri di rivalutazione urgente`,
+    ],
+  },
+  {
+    match: ['dermatologo'],
+    instructions: [
+      `PIANO DERMATOLOGICO COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento professionale che include:`,
+      `1. Diagnosi differenziale con probabilità e piano diagnostico (biopsia, patch test, ecc.)`,
+      `2. Piano terapeutico topico e/o sistemico (nome farmaco, concentrazione, applicazione, durata)`,
+      `3. Routine skincare raccomandata (mattina e sera, prodotti e frequenza)`,
+      `4. Trigger da evitare e modifiche comportamentali`,
+      `5. Follow-up con criteri di escalation (dermatologo, fotoprotocollo, biologici)`,
+    ],
+  },
+  {
+    match: ['analista-contesto', 'analista contesto'],
+    instructions: [
+      `ANALISI DEL CONTESTO COMPLETA — FORMATO OBBLIGATORIO:`,
+      `Produce un documento strutturato che include:`,
+      `1. Mappa della situazione attuale: risorse, vincoli, opportunità, minacce (SWOT)`,
+      `2. Analisi delle priorità con matrice impatto/urgenza`,
+      `3. Scenari alternativi (almeno 3) con pro/contro e probabilità stimata`,
+      `4. Piano d'azione raccomandato con milestone, responsabilità e KPI`,
+      `5. Risk register: rischi principali, probabilità, impatto, mitigazioni`,
+    ],
+  },
+  {
+    match: ['financial-planner', 'financial planner', 'commercialista'],
+    instructions: [
+      `PIANO FINANZIARIO COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento strutturato che include:`,
+      `1. Snapshot finanziario attuale: entrate, uscite, patrimonio, debiti`,
+      `2. Obiettivi finanziari a breve/medio/lungo termine con cifre target`,
+      `3. Piano di budget mensile dettagliato (categoria per categoria)`,
+      `4. Strategia di risparmio/investimento con allocazione % e strumenti consigliati`,
+      `5. Piano fiscale: ottimizzazione deduzioni/detrazioni applicabili al caso specifico`,
+    ],
+  },
+  {
+    match: ['career-coach', 'career coach', 'executive-coach', 'executive coach', 'life-organizer'],
+    instructions: [
+      `PIANO DI SVILUPPO PERSONALE/PROFESSIONALE COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Produce un documento strutturato che include:`,
+      `1. Assessment: competenze attuali, gap, valori, motivazioni`,
+      `2. Obiettivi SMART a 3, 6 e 12 mesi`,
+      `3. Piano d'azione settimanale/mensile:`,
+      `   Azioni concrete, risorse necessarie, milestone, metriche di successo`,
+      `4. Sviluppo competenze: corsi, libri, esperienze, networking (specifici e prioritizzati)`,
+      `5. Gestione ostacoli e piano B per i rischi principali`,
+    ],
+  },
+  {
+    match: ['consulente-legale', 'consulente legale'],
+    instructions: [
+      `ANALISI LEGALE COMPLETA — FORMATO OBBLIGATORIO:`,
+      `Produce un documento strutturato che include:`,
+      `1. Inquadramento della fattispecie: norme applicabili, giurisprudenza rilevante`,
+      `2. Analisi dei rischi legali e valutazione delle opzioni disponibili`,
+      `3. Percorso raccomandato: azioni, documenti necessari, tempistiche`,
+      `4. Costi stimati (consulenze, spese legali, tasse)`,
+      `5. Disclaimer: questo è un orientamento informativo — per atti formali rivolgersi a un avvocato/notaio`,
+    ],
+  },
+]
+
+const DEFAULT_OUTPUT_INSTRUCTIONS = [
+  `OUTPUT PROFESSIONALE COMPLETO:`,
+  `Quando l'utente chiede un piano o documento, produce un output professionale dettagliato,`,
+  `strutturato, con dati specifici (numeri, date, quantità) — non linee guida generiche.`,
+  `Se mancano dati, usa assunzioni ragionevoli dichiarandole esplicitamente.`,
+]
+
+/**
+ * Returns domain-specific format mandates for a given specialist.
+ * Scalable: add entries to AGENT_OUTPUT_TEMPLATES to support new agents.
  */
 function buildProfessionalOutputInstructions(specialistId: string): string {
   const id = specialistId.toLowerCase()
-
-  if (id.includes('dietista') || id.includes('nutrizionista')) {
-    return [
-      ``,
-      `PIANO NUTRIZIONALE COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Quando l'utente chiede il piano, produce un documento professionale che include:`,
-      `1. Calcolo del fabbisogno calorico giornaliero (BMR con formula Harris-Benedict, TDEE basato sull'attività dichiarata)`,
-      `2. Distribuzione macro-nutrienti (% proteine/carboidrati/grassi)`,
-      `3. Menu dettagliato per ALMENO 2 settimane (idealmente 4), giorno per giorno:`,
-      `   - COLAZIONE: alimenti con grammature precise (es. "80g avena, 150ml latte parzialmente scremato, 1 banana media 120g") + kcal`,
-      `   - SPUNTINO MATTINO: alimenti + kcal`,
-      `   - PRANZO: piatto principale con grammature + kcal`,
-      `   - MERENDA: alimenti + kcal`,
-      `   - CENA: primo/secondo/contorno con grammature + kcal`,
-      `   - TOTALE GIORNALIERO: kcal + g proteine/carboidrati/grassi`,
-      `4. Per almeno 5 piatti della settimana: ricetta pratica con ingredienti e procedimento`,
-      `5. Note specifiche per condizioni dichiarate (es. gastrite, allergie)`,
-      `Se mancano alcuni dati, fai le assunzioni appropriate dichiarandole esplicitamente.`,
-      `NON dare solo linee guida generali quando l'utente chiede esplicitamente un piano.`,
-    ].join('\n')
-  }
-
-  if (id.includes('trainer') || id.includes('personal') || id.includes('chinesologo')) {
-    return [
-      ``,
-      `PIANO DI ALLENAMENTO COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Quando l'utente chiede il piano, produce un documento professionale che include:`,
-      `1. Valutazione del livello attuale e obiettivi specifici`,
-      `2. Struttura settimanale (quanti giorni, quali gruppi muscolari, riposi strategici)`,
-      `3. Piano dettagliato per ALMENO 4-6 settimane, con progressione:`,
-      `   - Per ogni giornata di allenamento: esercizi specifici con serie x ripetizioni x carico consigliato, tempo di recupero`,
-      `   - Riscaldamento e defaticamento`,
-      `   - Note tecniche per l'esecuzione corretta`,
-      `4. Progressione del carico settimana per settimana`,
-      `5. Consigli su nutrizione peri-workout se pertinente`,
-      `NON dare solo concetti generici quando l'utente chiede un piano completo.`,
-    ].join('\n')
-  }
-
-  if (id.includes('psicologo') || id.includes('mental') || id.includes('coach')) {
-    return [
-      ``,
-      `PERCORSO PSICOLOGICO/MINDFULNESS COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Quando l'utente chiede il piano, produce un documento professionale che include:`,
-      `1. Assessment iniziale: punti di forza e aree di lavoro`,
-      `2. Obiettivi terapeutici specifici e misurabili`,
-      `3. Programma strutturato per ALMENO 4-8 settimane:`,
-      `   - Sessioni settimanali con temi, esercizi pratici e durata`,
-      `   - Tecniche specifiche (CBT, mindfulness, journaling, ecc.) con istruzioni d'uso`,
-      `   - Compiti tra le sessioni`,
-      `4. Metriche di progresso`,
-      `5. Strategie di crisis management se pertinenti`,
-    ].join('\n')
-  }
-
+  const template = AGENT_OUTPUT_TEMPLATES.find((t) => t.match.some((m) => id.includes(m)))
+  const lines = template ? template.instructions : DEFAULT_OUTPUT_INSTRUCTIONS
   return [
     ``,
-    `OUTPUT PROFESSIONALE COMPLETO:`,
-    `Quando l'utente chiede un piano o documento, produce un output professionale dettagliato,`,
-    `strutturato, con dati specifici (numeri, date, quantità) — non linee guida generiche.`,
+    `REGOLE OUTPUT — OBBLIGATORIE QUANDO L'UTENTE CHIEDE UN PIANO/DOCUMENTO:`,
+    ...lines,
+    `NON dare solo linee guida generali. Se mancano dati, assumi valori ragionevoli dichiarandoli.`,
   ].join('\n')
 }
 
