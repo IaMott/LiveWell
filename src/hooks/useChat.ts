@@ -51,9 +51,26 @@ export function useChat() {
       if (savedSpecialistName) setActiveSpecialistName(savedSpecialistName)
     }
 
+    // Prefer localStorage (keeps current session on same device), but fall back
+    // to the most recent server-side conversation so cross-device sync works.
     const savedId = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
     if (savedId) {
       void loadConversation(savedId)
+    } else {
+      // New device or cleared storage — load the most recent conversation from DB
+      void (async () => {
+        try {
+          const res = await fetch('/api/conversations')
+          if (!res.ok) return
+          const data = (await res.json()) as { conversations: Array<{ id: string }> }
+          const latest = data.conversations?.[0]
+          if (latest?.id) {
+            void loadConversation(latest.id)
+          }
+        } catch {
+          // best-effort: if server fetch fails, start with empty state
+        }
+      })()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

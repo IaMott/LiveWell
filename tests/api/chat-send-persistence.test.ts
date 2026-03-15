@@ -36,7 +36,7 @@ const prismaMock = {
     findFirst: vi.fn(),
     create: vi.fn(),
   },
-  // Batch $transaction([...]) — resolve all Promises in the array
+  // $transaction kept for fallback-test compatibility (tests mock rejection)
   $transaction: vi.fn(async (ops: unknown) => {
     if (Array.isArray(ops)) return Promise.all(ops)
     return Promise.resolve()
@@ -91,11 +91,8 @@ describe('/api/chat/send persistence integration', () => {
     const res = await POST(req)
     expect(res.status).toBe(200)
 
-    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
-    // Batch transaction receives an array — user msg + assistant msg + optional conversation upsert
-    const batchOps = (prismaMock.$transaction.mock.calls[0] as [unknown[]])[0]
-    expect(Array.isArray(batchOps)).toBe(true)
-    // message.create called twice (user + assistant) before being batched
+    // Sequential saves — no $transaction, each op is a direct prisma call
+    expect(prismaMock.conversation.upsert).toHaveBeenCalledTimes(1)
     expect(prismaMock.message.create).toHaveBeenCalledTimes(2)
     expect(prismaMock.message.create.mock.calls[0][0]).toMatchObject({
       data: { conversationId: expect.any(String), role: 'user', content: 'ciao dal db' },
@@ -154,8 +151,8 @@ describe('/api/chat/send persistence integration', () => {
     })
   })
 
-  it('falls back to streaming response when transaction persistence fails', async () => {
-    prismaMock.$transaction.mockRejectedValueOnce(new Error('db transaction failed'))
+  it('falls back to streaming response when persistence fails (conversation upsert error)', async () => {
+    prismaMock.conversation.upsert.mockRejectedValueOnce(new Error('db upsert failed'))
     vi.resetModules()
     const { POST } = await import('@/app/api/chat/send/route')
 
@@ -173,7 +170,8 @@ describe('/api/chat/send persistence integration', () => {
 
     expect(res.status).toBe(200)
     expect(body).toContain('"type":"message.complete"')
-    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    // conversation upsert was attempted
+    expect(prismaMock.conversation.upsert).toHaveBeenCalledTimes(1)
   })
 
   it('smoke: /api/chat/send back-pain request persists AgentWorkspace proposals', async () => {

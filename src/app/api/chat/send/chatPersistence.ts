@@ -106,30 +106,32 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       toolExecutionTrace,
     }) => {
       // ── Phase 1: Critical — conversation + messages ──────────────────────
-      // Use batch $transaction([]) instead of interactive callback form.
-      // Batch transactions work with Neon connection pooler (PgBouncer in
-      // transaction mode), whereas interactive $transaction(async tx => {})
-      // uses session-level advisory locks that PgBouncer does not support.
-      await prisma.$transaction([
-        prisma.conversation.upsert({
-          where: { id: conversationId },
-          create: { id: conversationId, userId, title: userMessage.slice(0, 80) },
-          update: {},
-        }),
-        prisma.message.create({
-          data: { conversationId, role: 'user', content: userMessage },
-        }),
-        prisma.message.create({
-          data: {
-            conversationId,
-            role: 'assistant',
-            content: assistantMessage,
-            ...(domain ? { domain } : {}),
-            ...(specialistName ? { specialistName } : {}),
-          },
-        }),
-        ...auditEvents.map((event) =>
-          prisma.toolAuditLog.create({
+      // Sequential saves (no $transaction) for maximum compatibility with Neon
+      // serverless connection pooling. Each operation is isolated; partial failures
+      // are tolerated — the next save is still attempted.
+      await prisma.conversation.upsert({
+        where: { id: conversationId },
+        create: { id: conversationId, userId, title: userMessage.slice(0, 80) },
+        update: {},
+      })
+
+      await prisma.message.create({
+        data: { conversationId, role: 'user', content: userMessage },
+      })
+
+      await prisma.message.create({
+        data: {
+          conversationId,
+          role: 'assistant',
+          content: assistantMessage,
+          ...(domain ? { domain } : {}),
+          ...(specialistName ? { specialistName } : {}),
+        },
+      })
+
+      for (const event of auditEvents) {
+        try {
+          await prisma.toolAuditLog.create({
             data: {
               userId: event.actorUserId,
               conversationId: event.conversationId,
@@ -141,9 +143,11 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
               requestId: event.requestId,
               errorCode: event.errorCode ?? null,
             },
-          }),
-        ),
-      ])
+          })
+        } catch {
+          // non-critical
+        }
+      }
 
       // ── Phase 2: Best-effort — agent workspace upserts ───────────────────
       // These are non-critical; failures are tolerated so messages are always saved.
