@@ -91,6 +91,8 @@ function getImmediateThinkingAgents(
       a.id !== 'analista-contesto',
   )
   if (domainMatches.length > 0) return domainMatches.slice(0, 2)
+  // Don't show a random specialist for generic/greeting messages — no immediate thinking
+  if (quickDomain === 'general') return []
   return team.filter((a) => a.id !== 'orchestratore' && a.id !== 'intervistatore').slice(0, 1)
 }
 

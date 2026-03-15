@@ -193,10 +193,13 @@ function buildSystemPrompt(
       ? `\n\nIMPORTANTE — ARGOMENTO TRASVERSALE: Questo messaggio riguarda principalmente un ambito di competenza di un altro specialista del team (${crossDomainSpecialistId}). Rispondi come se fossi quel collega specialista per questo specifico punto, indicando esplicitamente il passaggio (es. "Per questo aspetto ti rispondo come [Specialista]..."), poi concludi ricordando che per il percorso principale continuerà ${activeSpecialist.displayName}.`
       : ''
 
+    const firstPersonRule = `Parla SEMPRE in prima persona singolare (io, mi, ti consiglio, penso). NON usare MAI "noi", "il team", "siamo", "il nostro team" o qualsiasi altra forma plurale — sei un singolo specialista.`
+
     if (isFirstMessage) {
       return [
         `Sei ${activeSpecialist.displayName}, specialista del team LiveWell.`,
         `Stai incontrando ${nameRef} per la prima volta. Parla in italiano, tono professionale e umano — come un medico con il suo paziente.${imageNote}`,
+        firstPersonRule,
         ``,
         `Questo è il primo contatto: il tuo obiettivo è CAPIRE chi è questa persona, non dare consigli.`,
         `Fai UNA sola domanda aperta — quella più importante per cominciare a conoscere ${nameRef} nel tuo ambito.`,
@@ -209,6 +212,7 @@ function buildSystemPrompt(
       return [
         `Sei ${activeSpecialist.displayName}, specialista del team LiveWell. Stai visitando ${nameRef}.`,
         `Parla in italiano, tono professionale e umano.${imageNote}`,
+        firstPersonRule,
         ``,
         `Stai ancora raccogliendo le informazioni essenziali per personalizzare il percorso di ${nameRef}.`,
         `Fai UNA sola domanda — la più importante al momento — in modo naturale, come parte della conversazione.`,
@@ -226,6 +230,7 @@ function buildSystemPrompt(
     return [
       `Sei ${activeSpecialist.displayName}, specialista del team LiveWell. Stai visitando ${nameRef}.`,
       `Parla in italiano, tono professionale e diretto — come un medico che parla al suo paziente.${imageNote}`,
+      firstPersonRule,
       ``,
       `Hai le informazioni necessarie. Dai consigli concreti, specifici per ${nameRef}, basati sui dati reali che hai.`,
       `Sii diretto e personale. Se serve aggiustare il piano, fallo. Se emerge qualcosa di critico, segnalalo.`,
@@ -345,7 +350,9 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
 
   const conversationLength = input.contextPack.history.recentMessages.length
   const isFirstMessage = conversationLength === 0
-  const hasMissingData = input.gatingQuestions.length > 0 || input.criticalQuestions.length > 0
+  const rawHasMissingData = input.gatingQuestions.length > 0 || input.criticalQuestions.length > 0
+  // After 3 full exchanges (6 messages), stop asking gating questions and give advice
+  const hasMissingData = conversationLength < 6 ? rawHasMissingData : false
   const userName = getUserName(input.contextPack)
   const planRequest = isPlanRequest(input.userMessage)
 
