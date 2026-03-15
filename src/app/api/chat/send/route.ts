@@ -8,7 +8,7 @@ import { orchestrate } from '@/lib/ai/orchestrator/orchestrator'
 import { detectDomainFromText } from '@/lib/ai/domain/domainDetection'
 import { createLlmWithFallback } from '@/lib/ai/llmFactory'
 import { loadTeam } from '@/lib/ai/team/loader'
-import type { AgentInput, ToolCall, ToolResult } from '@/lib/ai/types'
+import type { AgentInput, AgentProfile, Domain, ToolCall, ToolResult } from '@/lib/ai/types'
 import { ALLOWED_TOOL_NAMES, isAllowedToolName } from '@/lib/tools/toolRegistry'
 import { createToolExecutor, type MutationAuditEvent } from '@/lib/tools/toolExecutor'
 import { realToolHandlers, stubToolHandlers } from '@/lib/tools/handlers'
@@ -68,6 +68,30 @@ function buildToolExecutor(
 ) {
   const handlers = useRealHandlers ? realToolHandlers : stubToolHandlers
   return createToolExecutor({ handlers, writeAuditLog })
+}
+
+/**
+ * Returns up to 2 agents to show in the immediate thinking animation,
+ * before orchestrate() completes. Uses quick domain detection.
+ */
+function getImmediateThinkingAgents(
+  team: AgentProfile[],
+  quickDomain: Domain,
+  activeSpecialistId?: string,
+): Array<{ displayName: string; domainTags: Domain[] }> {
+  if (activeSpecialistId) {
+    const active = team.find((a) => a.id === activeSpecialistId)
+    if (active) return [active]
+  }
+  const domainMatches = team.filter(
+    (a) =>
+      a.domainTags.includes(quickDomain) &&
+      a.id !== 'orchestratore' &&
+      a.id !== 'intervistatore' &&
+      a.id !== 'analista-contesto',
+  )
+  if (domainMatches.length > 0) return domainMatches.slice(0, 2)
+  return team.filter((a) => a.id !== 'orchestratore' && a.id !== 'intervistatore').slice(0, 1)
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -172,7 +196,6 @@ export async function POST(request: Request): Promise<Response> {
     })
   }
   if (modResult.action === 'block' && modResult.emergencyMessage) {
-    // Stream the emergency message directly as SSE using the existing event types
     const emergencyId = crypto.randomUUID()
     const enc = new TextEncoder()
     const body = new ReadableStream<Uint8Array>({
@@ -222,165 +245,203 @@ export async function POST(request: Request): Promise<Response> {
     requestedToolCalls.length > 0
       ? buildDeterministicLlm(requestedToolCalls)
       : createLlmWithFallback()
-  let consensus
-  try {
-    consensus = await orchestrate(
-      {
-        llm,
-        team,
-        orchestratorToolsAllowed: [...ALLOWED_TOOL_NAMES],
-      },
-      agentInput,
-    )
-  } catch (error) {
-    console.error('[chat/send] orchestrate failed, using safe fallback', error)
-    await logChatFallbackEvent({
-      phase: 'ORCHESTRATE_SAFE_RESPONSE',
-      requestId,
-      userId,
-      message: 'orchestrate failure fallback',
-      error,
-    })
-    const fallbackDomain = detectDomainFromText(parsedBody.message)
-    const fallbackText = buildSafeFallbackResponse(parsedBody.message, contextPack, fallbackDomain)
-    consensus = {
-      domain: fallbackDomain,
-      finalMessageMarkdown: fallbackText,
-      toolCallsToExecute: [],
-      ui: {
-        domainIcon: fallbackDomain,
-        moodScore: contextPack.ui.moodScore,
-        sectionScores: contextPack.ui.sectionScores,
-      },
-      safety: { escalation: 'none' as const },
-      debug: { selectedAgents: [], conflicts: [] },
-    }
-  }
 
-  const pendingAuditEvents: MutationAuditEvent[] = []
-  const executor = buildToolExecutor(async (event) => {
-    pendingAuditEvents.push(event)
-  }, isDbPersistenceEnabled())
-
-  const toolCallsToExecute =
-    consensus.toolCallsToExecute.length > 0 ? consensus.toolCallsToExecute : requestedToolCalls
-  const isDirectToolDirective =
-    consensus.toolCallsToExecute.length === 0 && requestedToolCalls.length > 0
-  const capabilityAgentId =
-    consensus.activeSpecialist?.id ?? consensus.debug?.selectedAgents?.[0] ?? 'orchestratore'
-  const capabilityTools = (team.find((a) => a.id === capabilityAgentId)?.toolsAllowed ?? []).filter(
-    isAllowedToolName,
-  )
-
-  const toolResults: ToolResult[] = []
-  for (const call of toolCallsToExecute) {
-    try {
-      const result = await executor.executeToolCall(call, {
-        requestId: agentInput.requestId,
-        conversationId: agentInput.conversationId,
-        actor: {
-          userId,
-          role,
-          ownerModeEnabled,
-        },
-        agent: isDirectToolDirective
-          ? undefined
-          : {
-              id: capabilityAgentId,
-              toolsAllowed: capabilityTools,
-            },
-        source: 'assistant',
-        confirmedByUser: parsedBody.confirmedByUser ?? false,
-        confirmToken: parsedBody.confirmToken,
-      })
-      toolResults.push(result)
-    } catch (error) {
-      console.error('[chat/send] tool execution failed, continuing stream', error)
-      await logChatFallbackEvent({
-        phase: 'TOOL_EXECUTION',
-        requestId,
-        userId,
-        message: 'tool execution failed, tool result downgraded to INTERNAL_ERROR',
-        error,
-        metadata: { toolCallId: call.id, toolName: call.name },
-      })
-      toolResults.push({
-        toolCallId: call.id,
-        ok: false,
-        error: { code: 'INTERNAL_ERROR', message: 'Tool execution failed' },
-      })
-    }
-  }
-
-  const toolExecutionTrace = toolCallsToExecute.map((call) => {
-    const result = toolResults.find((r) => r.toolCallId === call.id)
-    return {
-      toolCallId: call.id,
-      name: call.name,
-      ok: result?.ok ?? false,
-      code: result?.error?.code,
-      message: result?.error?.message,
-    }
-  })
-  const blockedToolExecutionTrace = (consensus.debug?.blockedToolCalls ?? []).map((call) => ({
-    toolCallId: call.id,
-    name: call.name,
-    ok: false,
-    code: 'RETRY_GUARD_BLOCKED',
-    message: 'Blocked by non-retriable tool retry guard',
-  }))
-  const persistedToolExecutionTrace = [...toolExecutionTrace, ...blockedToolExecutionTrace]
-
-  const responseText = consensus.finalMessageMarkdown
-  const activeDomain = consensus.activeSpecialist?.domain ?? consensus.ui.domainIcon
-  const specialistName = consensus.activeSpecialist?.displayName
-  const activeSpecialistId = consensus.activeSpecialist?.id
-  const specialistDomains = consensus.activeSpecialist?.domains
-
-  try {
-    await persistence.persistChatTurn({
-      userId,
-      conversationId,
-      userMessage: parsedBody.message,
-      assistantMessage: responseText,
-      domain: activeDomain,
-      specialistName,
-      auditEvents: pendingAuditEvents,
-      round1Proposals: consensus.debug?.round1Proposals,
-      round2Proposals: consensus.debug?.round2Proposals,
-      toolExecutionTrace: persistedToolExecutionTrace,
-    })
-  } catch (error) {
-    console.error('[chat/send] persistChatTurn failed, continuing in fallback mode', error)
-    await logChatFallbackEvent({
-      phase: 'PERSIST_CHAT_TURN',
-      requestId,
-      userId,
-      message: 'persistChatTurn failed, response still streamed',
-      error,
-      metadata: { conversationId },
-    })
-  }
-
-  const chunks = responseText.match(/.{1,32}/g) ?? [responseText]
-  const cpUserName = (contextPack.user?.profile as Record<string, unknown> | undefined)?.name as
-    | string
-    | undefined
-  const thinkingEvents = buildThinkingEvents(
-    {
-      debug: {
-        round1Proposals: consensus.debug?.round1Proposals,
-        selectedAgents: consensus.debug?.selectedAgents,
-      },
-    },
+  // Quick domain for immediate thinking events (no LLM needed)
+  const quickDomain = detectDomainFromText(parsedBody.message)
+  const immediateAgents = getImmediateThinkingAgents(
     team,
-    parsedBody.message,
-    cpUserName ?? null,
+    quickDomain,
+    parsedBody.activeSpecialistId,
   )
+  const msgPreviewImmediate = parsedBody.message.slice(0, 48).trim()
+
   const encoder = new TextEncoder()
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
+        // ── Step 1: Immediate thinking events (before orchestrate) ─────────
+        // Emitted right away so the user sees animation from the very start
+        for (let i = 0; i < immediateAgents.length; i++) {
+          const agent = immediateAgents[i]
+          controller.enqueue(
+            encoder.encode(
+              toSse({
+                type: 'agent.thinking',
+                specialistName: agent.displayName,
+                title: `"${msgPreviewImmediate}${parsedBody.message.length > 48 ? '…' : ''}"`,
+                domain: agent.domainTags[0] as Domain | undefined,
+                thought: 'Analisi del messaggio in corso',
+              }),
+            ),
+          )
+          // Short delay between immediate events
+          await new Promise((r) => setTimeout(r, 280))
+        }
+
+        // ── Step 2: Orchestrate (main AI work) ────────────────────────────
+        let consensus
+        try {
+          consensus = await orchestrate(
+            {
+              llm,
+              team,
+              orchestratorToolsAllowed: [...ALLOWED_TOOL_NAMES],
+            },
+            agentInput,
+          )
+        } catch (error) {
+          console.error('[chat/send] orchestrate failed, using safe fallback', error)
+          await logChatFallbackEvent({
+            phase: 'ORCHESTRATE_SAFE_RESPONSE',
+            requestId,
+            userId,
+            message: 'orchestrate failure fallback',
+            error,
+          })
+          const fallbackDomain = detectDomainFromText(parsedBody.message)
+          const fallbackText = buildSafeFallbackResponse(
+            parsedBody.message,
+            contextPack,
+            fallbackDomain,
+          )
+          consensus = {
+            domain: fallbackDomain,
+            finalMessageMarkdown: fallbackText,
+            toolCallsToExecute: [],
+            ui: {
+              domainIcon: fallbackDomain,
+              moodScore: contextPack.ui.moodScore,
+              sectionScores: contextPack.ui.sectionScores,
+            },
+            safety: { escalation: 'none' as const },
+            debug: { selectedAgents: [], conflicts: [] },
+          }
+        }
+
+        // ── Step 3: Tool execution ─────────────────────────────────────────
+        const pendingAuditEvents: MutationAuditEvent[] = []
+        const executor = buildToolExecutor(async (event) => {
+          pendingAuditEvents.push(event)
+        }, isDbPersistenceEnabled())
+
+        const toolCallsToExecute =
+          consensus.toolCallsToExecute.length > 0
+            ? consensus.toolCallsToExecute
+            : requestedToolCalls
+        const isDirectToolDirective =
+          consensus.toolCallsToExecute.length === 0 && requestedToolCalls.length > 0
+        const capabilityAgentId =
+          consensus.activeSpecialist?.id ?? consensus.debug?.selectedAgents?.[0] ?? 'orchestratore'
+        const capabilityTools = (
+          team.find((a) => a.id === capabilityAgentId)?.toolsAllowed ?? []
+        ).filter(isAllowedToolName)
+
+        const toolResults: ToolResult[] = []
+        for (const call of toolCallsToExecute) {
+          try {
+            const result = await executor.executeToolCall(call, {
+              requestId: agentInput.requestId,
+              conversationId: agentInput.conversationId,
+              actor: {
+                userId,
+                role,
+                ownerModeEnabled,
+              },
+              agent: isDirectToolDirective
+                ? undefined
+                : {
+                    id: capabilityAgentId,
+                    toolsAllowed: capabilityTools,
+                  },
+              source: 'assistant',
+              confirmedByUser: parsedBody.confirmedByUser ?? false,
+              confirmToken: parsedBody.confirmToken,
+            })
+            toolResults.push(result)
+          } catch (error) {
+            console.error('[chat/send] tool execution failed, continuing stream', error)
+            await logChatFallbackEvent({
+              phase: 'TOOL_EXECUTION',
+              requestId,
+              userId,
+              message: 'tool execution failed, tool result downgraded to INTERNAL_ERROR',
+              error,
+              metadata: { toolCallId: call.id, toolName: call.name },
+            })
+            toolResults.push({
+              toolCallId: call.id,
+              ok: false,
+              error: { code: 'INTERNAL_ERROR', message: 'Tool execution failed' },
+            })
+          }
+        }
+
+        // ── Step 4: Persist ────────────────────────────────────────────────
+        const toolExecutionTrace = toolCallsToExecute.map((call) => {
+          const result = toolResults.find((r) => r.toolCallId === call.id)
+          return {
+            toolCallId: call.id,
+            name: call.name,
+            ok: result?.ok ?? false,
+            code: result?.error?.code,
+            message: result?.error?.message,
+          }
+        })
+        const blockedToolExecutionTrace = (consensus.debug?.blockedToolCalls ?? []).map((call) => ({
+          toolCallId: call.id,
+          name: call.name,
+          ok: false,
+          code: 'RETRY_GUARD_BLOCKED',
+          message: 'Blocked by non-retriable tool retry guard',
+        }))
+        const persistedToolExecutionTrace = [...toolExecutionTrace, ...blockedToolExecutionTrace]
+
+        const responseText = consensus.finalMessageMarkdown
+        const activeDomain = consensus.activeSpecialist?.domain ?? consensus.ui.domainIcon
+        const specialistName = consensus.activeSpecialist?.displayName
+        const activeSpecialistId = consensus.activeSpecialist?.id
+        const specialistDomains = consensus.activeSpecialist?.domains
+
+        try {
+          await persistence.persistChatTurn({
+            userId,
+            conversationId,
+            userMessage: parsedBody.message,
+            assistantMessage: responseText,
+            domain: activeDomain,
+            specialistName,
+            auditEvents: pendingAuditEvents,
+            round1Proposals: consensus.debug?.round1Proposals,
+            round2Proposals: consensus.debug?.round2Proposals,
+            toolExecutionTrace: persistedToolExecutionTrace,
+          })
+        } catch (error) {
+          console.error('[chat/send] persistChatTurn failed, continuing in fallback mode', error)
+          await logChatFallbackEvent({
+            phase: 'PERSIST_CHAT_TURN',
+            requestId,
+            userId,
+            message: 'persistChatTurn failed, response still streamed',
+            error,
+            metadata: { conversationId },
+          })
+        }
+
+        // ── Step 5: Real thinking events (proposal-based, fast) ───────────
+        const cpUserName = (contextPack.user?.profile as Record<string, unknown> | undefined)
+          ?.name as string | undefined
+        const thinkingEvents = buildThinkingEvents(
+          {
+            debug: {
+              round1Proposals: consensus.debug?.round1Proposals,
+              selectedAgents: consensus.debug?.selectedAgents,
+            },
+          },
+          team,
+          parsedBody.message,
+          cpUserName ?? null,
+        )
+
         if (thinkingEvents.length > 0) {
           for (let i = 0; i < thinkingEvents.length; i += 1) {
             const ev = thinkingEvents[i]
@@ -395,20 +456,22 @@ export async function POST(request: Request): Promise<Response> {
                 }),
               ),
             )
-            // 240ms between agents, 700ms after the last one so the user can
-            // read the thinking animation before the message delta starts.
+            // Brief pause between real steps, longer before first response chunk
             await new Promise((resolve) =>
-              setTimeout(resolve, i < thinkingEvents.length - 1 ? 240 : 700),
+              setTimeout(resolve, i < thinkingEvents.length - 1 ? 180 : 500),
             )
           }
         }
 
+        // ── Step 6: Stream response ────────────────────────────────────────
+        const chunks = responseText.match(/.{1,32}/g) ?? [responseText]
         for (let i = 0; i < chunks.length; i += 1) {
           controller.enqueue(
             encoder.encode(toSse({ type: 'message.delta', id: assistantId, delta: chunks[i] })),
           )
         }
 
+        // ── Step 7: ui.state, tool results, complete ───────────────────────
         controller.enqueue(
           encoder.encode(
             toSse({

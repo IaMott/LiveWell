@@ -42,6 +42,7 @@ async function fetchProfileData(userId: string) {
     recentWorkouts,
     recentMeals,
     recentMindfulness,
+    dynamicAttribs,
   ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -88,11 +89,74 @@ async function fetchProfileData(userId: string) {
       take: 7,
       select: { id: true, mood: true, stress: true, content: true, createdAt: true },
     }),
+    // Dynamic attributes captured by agents via chat (fallback when UserProfile is null)
+    prisma.userAttribute.findMany({
+      where: {
+        userId,
+        domain: { in: ['health', 'personal', 'nutrition'] },
+        key: {
+          in: [
+            'weight',
+            'height',
+            'gender',
+            'birthDate',
+            'age',
+            'allergy',
+            'conditions',
+            'medications',
+          ],
+        },
+      },
+      orderBy: { recordedAt: 'desc' },
+      select: { domain: true, key: true, value: true, unit: true, recordedAt: true },
+    }),
   ])
+
+  // Build a merged profile: UserProfile takes precedence, dynamic attrs fill gaps
+  function getAttrValue(key: string): unknown {
+    return dynamicAttribs.find((a) => a.key === key || a.key.toLowerCase() === key.toLowerCase())
+      ?.value
+  }
+
+  const mergedWeight =
+    profile?.weight ??
+    (typeof getAttrValue('weight') === 'number' ? (getAttrValue('weight') as number) : null)
+  const mergedHeight =
+    profile?.height ??
+    (typeof getAttrValue('height') === 'number' ? (getAttrValue('height') as number) : null)
+  const mergedGender =
+    profile?.gender ??
+    (typeof getAttrValue('gender') === 'string' ? (getAttrValue('gender') as string) : null)
+
+  // Birth date: from profile or derived from age attribute
+  let mergedBirthDate: Date | null = profile?.birthDate ?? null
+  if (!mergedBirthDate) {
+    const ageVal = getAttrValue('age')
+    const birthDateVal = getAttrValue('birthDate')
+    if (birthDateVal && typeof birthDateVal === 'string') {
+      const d = new Date(birthDateVal)
+      if (!isNaN(d.getTime())) mergedBirthDate = d
+    } else if (typeof ageVal === 'number' && ageVal > 0) {
+      const birthYear = new Date().getFullYear() - Math.round(ageVal)
+      mergedBirthDate = new Date(`${birthYear}-01-01`)
+    }
+  }
+
+  // Build merged profile object for display (null when nothing known)
+  const displayProfile =
+    mergedWeight || mergedHeight || mergedGender || mergedBirthDate
+      ? {
+          ...(profile ?? {}),
+          weight: mergedWeight,
+          height: mergedHeight,
+          gender: mergedGender,
+          birthDate: mergedBirthDate,
+        }
+      : profile
 
   return {
     user: { name: user?.name ?? null, email: user?.email ?? '' },
-    profile,
+    profile: displayProfile as typeof profile,
     stats: {
       workoutSessions7d: workoutStats._count.id,
       totalWorkoutMin7d: workoutStats._sum.durationMin ?? 0,

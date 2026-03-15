@@ -12,6 +12,13 @@ const DOMAIN_COLORS: Record<Domain, string> = {
   coordination: '#8E8E93',
 }
 
+/** Convert a hex color to rgba with the given alpha */
+function hexToRgba(hex: string, alpha: number): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  if (!result) return `rgba(142, 142, 147, ${alpha})`
+  return `rgba(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}, ${alpha})`
+}
+
 const DOMAIN_LABELS: Partial<Record<Domain, string>> = {
   nutrition: 'Nutrizionista',
   training: 'Personal Trainer',
@@ -70,28 +77,19 @@ export function MessageBubble({ message, conversationId }: Props) {
           width: '100%',
         }}
       >
-        {!isUser && domainColor && (
-          <div
-            style={{
-              width: '3px',
-              borderRadius: '2px',
-              backgroundColor: domainColor,
-              marginRight: '0.5rem',
-              flexShrink: 0,
-              alignSelf: 'stretch',
-              minHeight: '1.5rem',
-            }}
-          />
-        )}
         <div
           style={{
             maxWidth: '72%',
-            backgroundColor: 'var(--color-surface)',
+            backgroundColor:
+              !isUser && domainColor ? hexToRgba(domainColor, 0.14) : 'var(--color-surface)',
             borderRadius: isUser
               ? '1.25rem 1.25rem 0.375rem 1.25rem'
               : '1.25rem 1.25rem 1.25rem 0.375rem',
             padding: '0.625rem 0.875rem',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+            boxShadow:
+              !isUser && domainColor
+                ? `0 1px 3px rgba(0,0,0,0.08), inset 0 0 0 1px ${hexToRgba(domainColor, 0.18)}`
+                : '0 1px 2px rgba(0,0,0,0.06)',
           }}
         >
           {message.streaming && !message.content ? (

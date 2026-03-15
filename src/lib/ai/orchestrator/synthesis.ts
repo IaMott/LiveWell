@@ -42,10 +42,117 @@ function buildRecentHistory(contextPack: ContextPack): string {
 }
 
 function getUserName(contextPack: ContextPack): string | null {
-  // Try to extract name from profile or conversation history
   const profile = contextPack.user?.profile as Record<string, unknown> | undefined
   if (profile?.name && typeof profile.name === 'string') return profile.name
   return null
+}
+
+/**
+ * Returns true when the user is explicitly requesting a concrete plan/output,
+ * not just asking a question or giving information.
+ */
+function isPlanRequest(userMessage: string): boolean {
+  const lower = userMessage.toLowerCase()
+  return (
+    /\b(dammi|dai|crea|genera|prepara|elabora|scrivi|fai|producimi|voglio|ho bisogno di|puoi darmi|fornisci)\b.{0,30}\b(piano|programma|schema|dieta|menu|protocollo|percorso|calendario|settimane|mese|giornate)\b/i.test(
+      lower,
+    ) ||
+    /\b(piano|programma|dieta|menu|protocollo)\b.{0,20}\b(nutrizionale|alimentare|di allenamento|fitness|psicologico|terapeutico|di recupero|dettagliato|completo)\b/i.test(
+      lower,
+    ) ||
+    /\bcosa aspettiamo\b|\bprocediamo\b|\biniziamo\b|\bok,?\s*(dai|forza|andiamo)\b/i.test(lower)
+  )
+}
+
+/**
+ * Returns the most appropriate cross-domain specialist name if the proposals
+ * indicate the current message is clearly outside the active specialist's domain.
+ */
+function detectCrossDomainSpecialist(
+  proposals: AgentProposal[],
+  activeSpecialist: ActiveSpecialist,
+): string | null {
+  // If there's a proposal from a different domain with high confidence, delegate
+  const topAlternative = proposals
+    .filter(
+      (p) =>
+        p.domain !== activeSpecialist.domain &&
+        (p.confidence ?? 0) >= 0.6 &&
+        p.summary &&
+        !p.summary.toLowerCase().includes('[unavailable]'),
+    )
+    .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]
+
+  return topAlternative?.agentId ?? null
+}
+
+/**
+ * Builds professional output instructions for specialists who have enough data
+ * and the user is explicitly requesting a complete plan/document.
+ */
+function buildProfessionalOutputInstructions(specialistId: string): string {
+  const id = specialistId.toLowerCase()
+
+  if (id.includes('dietista') || id.includes('nutrizionista')) {
+    return [
+      ``,
+      `PIANO NUTRIZIONALE COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Quando l'utente chiede il piano, produce un documento professionale che include:`,
+      `1. Calcolo del fabbisogno calorico giornaliero (BMR con formula Harris-Benedict, TDEE basato sull'attività dichiarata)`,
+      `2. Distribuzione macro-nutrienti (% proteine/carboidrati/grassi)`,
+      `3. Menu dettagliato per ALMENO 2 settimane (idealmente 4), giorno per giorno:`,
+      `   - COLAZIONE: alimenti con grammature precise (es. "80g avena, 150ml latte parzialmente scremato, 1 banana media 120g") + kcal`,
+      `   - SPUNTINO MATTINO: alimenti + kcal`,
+      `   - PRANZO: piatto principale con grammature + kcal`,
+      `   - MERENDA: alimenti + kcal`,
+      `   - CENA: primo/secondo/contorno con grammature + kcal`,
+      `   - TOTALE GIORNALIERO: kcal + g proteine/carboidrati/grassi`,
+      `4. Per almeno 5 piatti della settimana: ricetta pratica con ingredienti e procedimento`,
+      `5. Note specifiche per condizioni dichiarate (es. gastrite, allergie)`,
+      `Se mancano alcuni dati, fai le assunzioni appropriate dichiarandole esplicitamente.`,
+      `NON dare solo linee guida generali quando l'utente chiede esplicitamente un piano.`,
+    ].join('\n')
+  }
+
+  if (id.includes('trainer') || id.includes('personal') || id.includes('chinesologo')) {
+    return [
+      ``,
+      `PIANO DI ALLENAMENTO COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Quando l'utente chiede il piano, produce un documento professionale che include:`,
+      `1. Valutazione del livello attuale e obiettivi specifici`,
+      `2. Struttura settimanale (quanti giorni, quali gruppi muscolari, riposi strategici)`,
+      `3. Piano dettagliato per ALMENO 4-6 settimane, con progressione:`,
+      `   - Per ogni giornata di allenamento: esercizi specifici con serie x ripetizioni x carico consigliato, tempo di recupero`,
+      `   - Riscaldamento e defaticamento`,
+      `   - Note tecniche per l'esecuzione corretta`,
+      `4. Progressione del carico settimana per settimana`,
+      `5. Consigli su nutrizione peri-workout se pertinente`,
+      `NON dare solo concetti generici quando l'utente chiede un piano completo.`,
+    ].join('\n')
+  }
+
+  if (id.includes('psicologo') || id.includes('mental') || id.includes('coach')) {
+    return [
+      ``,
+      `PERCORSO PSICOLOGICO/MINDFULNESS COMPLETO — FORMATO OBBLIGATORIO:`,
+      `Quando l'utente chiede il piano, produce un documento professionale che include:`,
+      `1. Assessment iniziale: punti di forza e aree di lavoro`,
+      `2. Obiettivi terapeutici specifici e misurabili`,
+      `3. Programma strutturato per ALMENO 4-8 settimane:`,
+      `   - Sessioni settimanali con temi, esercizi pratici e durata`,
+      `   - Tecniche specifiche (CBT, mindfulness, journaling, ecc.) con istruzioni d'uso`,
+      `   - Compiti tra le sessioni`,
+      `4. Metriche di progresso`,
+      `5. Strategie di crisis management se pertinenti`,
+    ].join('\n')
+  }
+
+  return [
+    ``,
+    `OUTPUT PROFESSIONALE COMPLETO:`,
+    `Quando l'utente chiede un piano o documento, produce un output professionale dettagliato,`,
+    `strutturato, con dati specifici (numeri, date, quantità) — non linee guida generiche.`,
+  ].join('\n')
 }
 
 /**
@@ -66,6 +173,8 @@ function buildSystemPrompt(
   hasMissingData: boolean,
   userName: string | null,
   hasImages: boolean,
+  userMessage: string,
+  proposals: AgentProposal[],
 ): string {
   const nameRef = userName ? `${userName}` : "l'utente"
 
@@ -73,7 +182,17 @@ function buildSystemPrompt(
     ? `\nHai ricevuto un'immagine allegata da ${nameRef}. Analizzala e integra le informazioni visive nella tua risposta.`
     : ''
 
+  const planRequest = isPlanRequest(userMessage)
+  // When user explicitly asks for a plan, override hasMissingData so we don't block output
+  const effectivelyHasMissingData = hasMissingData && !planRequest
+
   if (activeSpecialist) {
+    // Check if the current message is better handled by a different specialist
+    const crossDomainSpecialistId = detectCrossDomainSpecialist(proposals, activeSpecialist)
+    const crossDomainNote = crossDomainSpecialistId
+      ? `\n\nIMPORTANTE — ARGOMENTO TRASVERSALE: Questo messaggio riguarda principalmente un ambito di competenza di un altro specialista del team (${crossDomainSpecialistId}). Rispondi come se fossi quel collega specialista per questo specifico punto, indicando esplicitamente il passaggio (es. "Per questo aspetto ti rispondo come [Specialista]..."), poi concludi ricordando che per il percorso principale continuerà ${activeSpecialist.displayName}.`
+      : ''
+
     if (isFirstMessage) {
       return [
         `Sei ${activeSpecialist.displayName}, specialista del team LiveWell.`,
@@ -82,10 +201,11 @@ function buildSystemPrompt(
         `Questo è il primo contatto: il tuo obiettivo è CAPIRE chi è questa persona, non dare consigli.`,
         `Fai UNA sola domanda aperta — quella più importante per cominciare a conoscere ${nameRef} nel tuo ambito.`,
         `Niente consigli generici. Niente liste. Una frase di accoglienza, poi la tua domanda.`,
+        crossDomainNote,
       ].join('\n')
     }
 
-    if (hasMissingData) {
+    if (effectivelyHasMissingData) {
       return [
         `Sei ${activeSpecialist.displayName}, specialista del team LiveWell. Stai visitando ${nameRef}.`,
         `Parla in italiano, tono professionale e umano.${imageNote}`,
@@ -94,8 +214,14 @@ function buildSystemPrompt(
         `Fai UNA sola domanda — la più importante al momento — in modo naturale, come parte della conversazione.`,
         `NON dare consigli finché non hai i dati fondamentali. NON fare liste di domande.`,
         `Rimani nel tuo ambito specifico; per altri aspetti rimanda ai colleghi del team.`,
+        crossDomainNote,
       ].join('\n')
     }
+
+    // Has data OR explicit plan request
+    const professionalOutputNote = planRequest
+      ? buildProfessionalOutputInstructions(activeSpecialist.id)
+      : ''
 
     return [
       `Sei ${activeSpecialist.displayName}, specialista del team LiveWell. Stai visitando ${nameRef}.`,
@@ -105,6 +231,8 @@ function buildSystemPrompt(
       `Sii diretto e personale. Se serve aggiustare il piano, fallo. Se emerge qualcosa di critico, segnalalo.`,
       `Solo se manca UN dato davvero critico per la sicurezza, fai una sola domanda alla fine.`,
       `Rimani nel tuo ambito; per altri aspetti rimanda ai colleghi del team.`,
+      professionalOutputNote,
+      crossDomainNote,
     ].join('\n')
   }
 
@@ -122,7 +250,7 @@ function buildSystemPrompt(
     ].join('\n')
   }
 
-  if (hasMissingData) {
+  if (effectivelyHasMissingData) {
     return [
       `Sei il team LiveWell — specialisti del benessere che seguono ${nameRef}.`,
       `Parla in italiano, tono caldo e professionale.${imageNote}`,
@@ -155,6 +283,7 @@ function buildUserPrompt(params: {
   /** The single most important missing datum — if any */
   topMissingQuestion: string | null
   hasImages: boolean
+  planRequest: boolean
 }): string {
   const {
     userMessage,
@@ -163,6 +292,7 @@ function buildUserPrompt(params: {
     recentHistory,
     topMissingQuestion,
     hasImages,
+    planRequest,
   } = params
 
   return [
@@ -172,12 +302,16 @@ function buildUserPrompt(params: {
     `ANALISI DEL TEAM SPECIALISTICO:`,
     summaries || '(primo contatto — nessun dato sul profilo ancora)',
     topRecommendations ? `\nRACCOMANDAZIONI EMERSE:\n${topRecommendations}` : '',
-    topMissingQuestion ? `\nINFORMAZIONE CHIAVE DA RACCOGLIERE ORA:\n${topMissingQuestion}` : '',
+    topMissingQuestion && !planRequest
+      ? `\nINFORMAZIONE CHIAVE DA RACCOGLIERE ORA:\n${topMissingQuestion}`
+      : '',
     ``,
     `Scrivi la risposta in italiano, rivolta direttamente all'utente.`,
-    topMissingQuestion
-      ? `Fai UNA sola domanda — quella indicata sopra — in modo naturale. Non dare consigli in questo messaggio.`
-      : `Dai una risposta diretta, concreta e personalizzata basandoti sui dati disponibili.`,
+    planRequest
+      ? `L'utente chiede esplicitamente un piano/output definitivo. Produci un documento professionale COMPLETO con dati specifici (grammature, kcal, esercizi, serie, ripetizioni, ecc.). NON chiedere altre informazioni — usa i dati disponibili e specifica le assunzioni fatte.`
+      : topMissingQuestion
+        ? `Fai UNA sola domanda — quella indicata sopra — in modo naturale. Non dare consigli in questo messaggio.`
+        : `Dai una risposta diretta, concreta e personalizzata basandoti sui dati disponibili.`,
   ]
     .filter(Boolean)
     .join('\n')
@@ -213,9 +347,12 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
   const isFirstMessage = conversationLength === 0
   const hasMissingData = input.gatingQuestions.length > 0 || input.criticalQuestions.length > 0
   const userName = getUserName(input.contextPack)
+  const planRequest = isPlanRequest(input.userMessage)
 
-  // Only the single most important missing question
-  const topMissingQuestion = input.gatingQuestions[0] ?? input.criticalQuestions[0] ?? null
+  // Only the single most important missing question (suppressed when plan is requested)
+  const topMissingQuestion = !planRequest
+    ? (input.gatingQuestions[0] ?? input.criticalQuestions[0] ?? null)
+    : null
 
   const imageData =
     input.imageData ?? (input.contextPack.files ? extractImageData(input.contextPack) : [])
@@ -227,14 +364,17 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
     hasMissingData,
     userName,
     hasImages,
+    input.userMessage,
+    input.proposals,
   )
   const user = buildUserPrompt({
     userMessage: input.userMessage,
     summaries,
     topRecommendations,
     recentHistory,
-    topMissingQuestion: hasMissingData ? topMissingQuestion : null,
+    topMissingQuestion: !planRequest && hasMissingData ? topMissingQuestion : null,
     hasImages,
+    planRequest,
   })
 
   try {

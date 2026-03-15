@@ -209,7 +209,8 @@ const userSetAttribute: Handler = async (args, ctx) => {
   })
 
   // Keep current profile snapshot aligned for UI readers using legacy fields.
-  if (normalizedDomain === 'personal') {
+  // Handles both 'personal' domain (direct) and 'health' domain (anthropometric data).
+  if (normalizedDomain === 'personal' || normalizedDomain === 'health') {
     const profileKey = normalizedKey.toLowerCase()
     const profileUpdate: Record<string, unknown> = {}
 
@@ -236,6 +237,16 @@ const userSetAttribute: Handler = async (args, ctx) => {
     if (profileKey === 'gender' || profileKey === 'sex' || profileKey === 'sesso') {
       if (typeof a.value === 'string' && a.value.trim() !== '') {
         profileUpdate.gender = a.value.trim().slice(0, 20)
+      }
+    }
+
+    // Age captured as a number (e.g. from "ho 34 anni") → derive birthDate approximation
+    if (profileKey === 'age' || profileKey === 'eta' || profileKey === 'età') {
+      const ageNum = coerceNumber(a.value)
+      if (ageNum != null && ageNum > 0 && ageNum < 130) {
+        // Approximate birthDate as Jan 1 of the birth year
+        const birthYear = new Date().getFullYear() - Math.round(ageNum)
+        profileUpdate.birthDate = new Date(`${birthYear}-01-01`)
       }
     }
 
