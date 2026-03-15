@@ -4,6 +4,7 @@ import { errorResponse } from '@/lib/security/errorSchema'
 
 const MAX_FILES = 5
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB per file
+const MAX_IMAGE_SIZE_BYTES = 4 * 1024 * 1024 // 4 MB for inline base64 (stays within Neon text limits)
 const MAX_TEXT_LENGTH = 60_000 // chars stored in extractedText
 
 const ALLOWED_MIME_PREFIXES = [
@@ -44,9 +45,25 @@ export async function POST(request: Request): Promise<Response> {
     const mimeType = file.type || 'application/octet-stream'
     if (!isMimeAllowed(mimeType)) continue
 
-    // Extract text content for text-based files
+    // Extract content based on file type
     let extractedText: string | null = null
-    if (mimeType.startsWith('text/') || file.name.endsWith('.md') || file.name.endsWith('.txt')) {
+
+    if (mimeType.startsWith('image/')) {
+      // Store as inline base64 so Gemini can analyse it (max 4 MB)
+      if (file.size <= MAX_IMAGE_SIZE_BYTES) {
+        try {
+          const bytes = await file.arrayBuffer()
+          const base64 = Buffer.from(bytes).toString('base64')
+          extractedText = `data:${mimeType};base64,${base64}`
+        } catch {
+          // skip — will be stored as metadata-only
+        }
+      }
+    } else if (
+      mimeType.startsWith('text/') ||
+      file.name.endsWith('.md') ||
+      file.name.endsWith('.txt')
+    ) {
       try {
         const raw = await file.text()
         extractedText =

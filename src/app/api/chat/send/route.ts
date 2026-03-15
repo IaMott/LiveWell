@@ -363,6 +363,9 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const chunks = responseText.match(/.{1,32}/g) ?? [responseText]
+  const cpUserName = (contextPack.user?.profile as Record<string, unknown> | undefined)?.name as
+    | string
+    | undefined
   const thinkingEvents = buildThinkingEvents(
     {
       debug: {
@@ -371,6 +374,8 @@ export async function POST(request: Request): Promise<Response> {
       },
     },
     team,
+    parsedBody.message,
+    cpUserName ?? null,
   )
   const encoder = new TextEncoder()
   const stream = new ReadableStream<Uint8Array>({

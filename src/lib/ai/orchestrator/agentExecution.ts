@@ -10,6 +10,8 @@ export type LlmClient = {
     jsonSchema?: unknown
     stream?: boolean
     format?: 'json' | 'text'
+    /** Inline images to pass as multimodal parts (synthesis call only) */
+    imageData?: Array<{ mimeType: string; data: string }>
   }) => Promise<{ text: string }>
 }
 

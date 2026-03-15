@@ -3,14 +3,25 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import type { Domain } from '@/lib/ai/types'
 
+export type ThinkingStep = {
+  specialistName: string
+  title: string
+  thought?: string
+}
+
 export type ChatMessage = {
   id: string
   role: 'user' | 'assistant'
   content: string
   domain?: Domain
   specialistName?: string
+  /** Accumulated step-by-step reasoning shown during streaming */
+  thinkingSteps?: ThinkingStep[]
+  /** @deprecated use thinkingSteps */
   thinkingSpecialistName?: string
+  /** @deprecated use thinkingSteps */
   thinkingTitle?: string
+  /** @deprecated use thinkingSteps */
   thinkingThought?: string
   streaming?: boolean
 }
@@ -272,6 +283,7 @@ export function useChat() {
                           ...m,
                           content: String(event.content ?? m.content),
                           streaming: false,
+                          thinkingSteps: undefined,
                           thinkingSpecialistName: undefined,
                           thinkingTitle: undefined,
                           thinkingThought: undefined,
@@ -301,24 +313,32 @@ export function useChat() {
                   prev.map((m) => (m.id === assistantId ? { ...m, domain, specialistName } : m)),
                 )
               } else if (event.type === 'agent.thinking') {
-                const thinkingSpecialistName = String(event.specialistName ?? '')
-                const thinkingTitle = String(event.title ?? '')
-                const thinkingThought = event.thought != null ? String(event.thought) : undefined
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantId
-                      ? {
-                          ...m,
-                          specialistName: thinkingSpecialistName || m.specialistName,
-                          content: m.content,
-                          streaming: true,
-                          thinkingSpecialistName: thinkingSpecialistName || undefined,
-                          thinkingTitle: thinkingTitle || undefined,
-                          thinkingThought: thinkingThought || undefined,
-                        }
-                      : m,
-                  ),
-                )
+                const stepName = String(event.specialistName ?? '').trim()
+                const stepTitle = String(event.title ?? '').trim()
+                const stepThought =
+                  event.thought != null ? String(event.thought).trim() || undefined : undefined
+                if (stepName || stepTitle) {
+                  const newStep: ThinkingStep = {
+                    specialistName: stepName || 'Team',
+                    title: stepTitle || 'Elaborazione in corso',
+                    thought: stepThought,
+                  }
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantId
+                        ? {
+                            ...m,
+                            streaming: true,
+                            thinkingSteps: [...(m.thinkingSteps ?? []), newStep],
+                            // keep legacy fields for back-compat
+                            thinkingSpecialistName: stepName || undefined,
+                            thinkingTitle: stepTitle || undefined,
+                            thinkingThought: stepThought,
+                          }
+                        : m,
+                    ),
+                  )
+                }
               }
             } catch {
               // ignore malformed SSE lines

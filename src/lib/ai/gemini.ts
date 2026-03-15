@@ -71,12 +71,26 @@ export function createGeminiClient(): LlmClient {
   const ai = new GoogleGenAI({ apiKey })
 
   return {
-    async complete({ system, user, format = 'json' }) {
+    async complete({ system, user, format = 'json', imageData }) {
       const systemInstruction = format === 'json' ? system + JSON_OUTPUT_INSTRUCTION : system
+
+      // Build multimodal contents when images are provided
+      type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } }
+
+      let contents: string | Array<{ parts: GeminiPart[] }>
+      if (imageData && imageData.length > 0) {
+        const parts: GeminiPart[] = [{ text: user }]
+        for (const img of imageData) {
+          parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } })
+        }
+        contents = [{ parts }]
+      } else {
+        contents = user
+      }
 
       const response = await ai.models.generateContent({
         model,
-        contents: user,
+        contents,
         config: {
           systemInstruction,
           temperature: format === 'json' ? 0.7 : 0.85,

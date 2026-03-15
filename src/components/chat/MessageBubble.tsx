@@ -1,4 +1,4 @@
-import type { ChatMessage } from '@/hooks/useChat'
+import type { ChatMessage, ThinkingStep } from '@/hooks/useChat'
 import type { Domain } from '@/lib/ai/types'
 
 const DOMAIN_COLORS: Record<Domain, string> = {
@@ -34,13 +34,22 @@ export function MessageBubble({ message, streamingSpecialistName }: Props) {
         ? DOMAIN_LABELS[message.domain]
         : null
 
-  // Name to show in ThinkingDots: prefer message-level name (from ui.state), fallback to streaming context
-  const thinkingName =
-    message.thinkingSpecialistName ??
-    message.specialistName ??
-    (message.streaming ? streamingSpecialistName : undefined)
-  const thinkingTitle = message.thinkingTitle
-  const thinkingThought = message.thinkingThought
+  // Thinking steps: prefer accumulated array, fallback to legacy single-step fields
+  const thinkingSteps: ThinkingStep[] =
+    message.thinkingSteps ??
+    (message.thinkingSpecialistName || message.thinkingTitle
+      ? [
+          {
+            specialistName:
+              message.thinkingSpecialistName ??
+              message.specialistName ??
+              streamingSpecialistName ??
+              'Team',
+            title: message.thinkingTitle ?? 'Elaborazione in corso',
+            thought: message.thinkingThought,
+          },
+        ]
+      : [])
 
   return (
     <div
@@ -100,11 +109,7 @@ export function MessageBubble({ message, streamingSpecialistName }: Props) {
           }}
         >
           {message.streaming && !message.content ? (
-            <ThinkingDots
-              specialistName={thinkingName}
-              title={thinkingTitle}
-              thought={thinkingThought}
-            />
+            <ThinkingDots steps={thinkingSteps} />
           ) : (
             <MarkdownContent content={message.content} streaming={message.streaming} />
           )}
@@ -258,20 +263,111 @@ function renderInline(text: string): React.ReactNode {
   return parts.length === 1 ? parts[0] : parts
 }
 
-function ThinkingDots({
-  specialistName,
-  title,
-  thought,
-}: {
-  specialistName?: string
-  title?: string
-  thought?: string
-}) {
+/**
+ * ThinkingDots — shows accumulated reasoning steps while the AI is thinking.
+ *
+ * Format (as requested):
+ *   • Previous steps: faded out (opacity 0.3), no dots
+ *   • Latest step: full opacity, with bouncing dots to the left
+ *   • Each step: [SpecialistName] → [title]
+ *                  [thought (italic, smaller)]
+ */
+function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
+  // Show up to last 4 steps; latest is highlighted
+  const visible = steps.slice(-4)
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', padding: '2px 0' }}>
-      {/* Row 1: bouncing dots + specialist name + title */}
-      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '3px 0' }}>
+      {visible.map((step, i) => {
+        const isLatest = i === visible.length - 1
+        return (
+          <div
+            key={`${i}-${step.specialistName}-${step.title}`}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2px',
+              opacity: isLatest ? 1 : 0.28,
+              animation: isLatest ? 'lw-step-in 0.3s ease forwards' : undefined,
+            }}
+          >
+            {/* Row: [dots if latest] [Name → title] */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {/* Bouncing dots only on latest step */}
+              {isLatest && (
+                <div style={{ display: 'flex', gap: '3px', alignItems: 'center', flexShrink: 0 }}>
+                  {[0, 1, 2].map((j) => (
+                    <span
+                      key={j}
+                      style={{
+                        width: '5px',
+                        height: '5px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--color-text-secondary)',
+                        animation: `lw-bounce 1.4s ease-in-out ${j * 0.2}s infinite`,
+                        display: 'inline-block',
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+              {/* Name → title */}
+              <span
+                style={{
+                  fontSize: '0.6875rem',
+                  color: 'var(--color-text-secondary)',
+                  letterSpacing: '0.02em',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  maxWidth: '300px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  marginLeft: isLatest ? 0 : '17px', // align with dots offset
+                }}
+              >
+                <span
+                  style={{
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    fontSize: '0.625rem',
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  {step.specialistName}
+                </span>
+                <span style={{ opacity: 0.5, fontWeight: 400 }}>→</span>
+                <span style={{ fontWeight: 400 }}>{step.title}</span>
+              </span>
+            </div>
+            {/* Thought — italic, only for latest */}
+            {isLatest && step.thought && (
+              <span
+                style={{
+                  marginLeft: '17px',
+                  fontSize: '0.6rem',
+                  color: 'var(--color-text-secondary)',
+                  fontStyle: 'italic',
+                  opacity: 0,
+                  animation: 'lw-thought-in 0.4s ease 0.2s forwards',
+                  maxWidth: '280px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: 'block',
+                }}
+              >
+                {step.thought}
+              </span>
+            )}
+          </div>
+        )
+      })}
+
+      {/* Fallback: plain dots when no steps yet */}
+      {visible.length === 0 && (
+        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', padding: '4px 0' }}>
           {[0, 1, 2].map((i) => (
             <span
               key={i}
@@ -286,68 +382,20 @@ function ThinkingDots({
             />
           ))}
         </div>
-        {(specialistName || title) && (
-          <span
-            key={`${specialistName ?? 'team'}:${title ?? ''}`}
-            style={{
-              marginLeft: '8px',
-              fontSize: '0.6875rem',
-              color: 'var(--color-text-secondary)',
-              letterSpacing: '0.03em',
-              animation: 'lw-name-in 0.35s ease forwards',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              maxWidth: '320px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {specialistName ? (
-              <span style={{ fontWeight: 600, textTransform: 'uppercase' }}>{specialistName}</span>
-            ) : (
-              <span style={{ fontWeight: 600, textTransform: 'uppercase' }}>TEAM</span>
-            )}
-            <span style={{ opacity: 0.5 }}>→</span>
-            <span>{title ?? 'elaborazione in corso'}</span>
-          </span>
-        )}
-      </div>
-      {/* Row 2: thought preview — fades in below agent name */}
-      {thought && (
-        <span
-          key={thought}
-          style={{
-            marginLeft: '2px',
-            fontSize: '0.625rem',
-            color: 'var(--color-text-secondary)',
-            opacity: 0,
-            fontStyle: 'italic',
-            letterSpacing: '0.02em',
-            animation: 'lw-thought-in 0.4s ease 0.15s forwards',
-            maxWidth: '280px',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            display: 'block',
-          }}
-        >
-          {thought}
-        </span>
       )}
+
       <style>{`
         @keyframes lw-bounce {
           0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
           30% { transform: translateY(-5px); opacity: 1; }
         }
-        @keyframes lw-name-in {
-          from { opacity: 0; transform: translateY(-4px); }
-          to { opacity: 0.55; transform: translateY(0); }
+        @keyframes lw-step-in {
+          from { opacity: 0; transform: translateY(3px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         @keyframes lw-thought-in {
-          from { opacity: 0; transform: translateY(-3px); }
-          to { opacity: 0.65; transform: translateY(0); }
+          from { opacity: 0; }
+          to { opacity: 0.65; }
         }
       `}</style>
     </div>

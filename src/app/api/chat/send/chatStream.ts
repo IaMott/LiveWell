@@ -35,107 +35,121 @@ export function toSse(event: ChatStreamEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`
 }
 
-/** Short thought previews per domain — shown next to agent name during SSE streaming */
-const THINKING_THOUGHTS: Record<string, string[]> = {
-  nutrition: [
-    'Analizzando il profilo nutrizionale…',
-    'Calcolando il fabbisogno energetico…',
-    'Verificando macro e micronutrienti…',
-  ],
-  nutrizione: [
-    'Analizzando il profilo nutrizionale…',
-    'Calcolando il fabbisogno energetico…',
-    'Verificando macro e micronutrienti…',
-  ],
-  training: [
-    'Valutando capacità fisica e obiettivi…',
-    'Elaborando piano di progressione…',
-    'Controllando carico e recupero…',
-  ],
-  allenamento: [
-    'Valutando capacità fisica e obiettivi…',
-    'Elaborando piano di progressione…',
-    'Controllando carico e recupero…',
-  ],
-  health: [
-    'Analizzando parametri vitali…',
-    'Verificando indicatori di rischio…',
-    'Confrontando con range clinici…',
-  ],
-  'salute-biologica': [
-    'Analizzando parametri vitali…',
-    'Verificando indicatori di rischio…',
-    'Confrontando con range clinici…',
-  ],
-  mindfulness: [
-    'Valutando livello di stress…',
-    'Analizzando qualità del sonno…',
-    'Elaborando strategie di recupero…',
-  ],
-  inspiration: [
-    'Analizzando contesto e obiettivi…',
-    'Valutando opzioni strategiche…',
-    'Elaborando piano di azione\u2026',
-  ],
-  idee: ['Analizzando contesto e obiettivi…', 'Valutando opzioni strategiche…'],
-  coordination: ['Coordinando risposte del team…', 'Valutando contesto complessivo…'],
-  general: ['Elaborazione in corso…', 'Analizzando il messaggio…'],
-}
-
-function getThought(domain: string | undefined, index: number): string {
-  const key = domain ?? 'general'
-  const thoughts = THINKING_THOUGHTS[key] ?? THINKING_THOUGHTS.general
-  return thoughts[index % thoughts.length] ?? 'Elaborazione in corso…'
-}
-
+/**
+ * Generates step-by-step thinking events from actual agent proposal data.
+ *
+ * Format (design spec):
+ *   Nutrizionista → [user] vuole dimagrire
+ *   Nutrizionista → verifico i dati disponibili nel profilo
+ *   Nutrizionista → devo raccogliere: peso, altezza
+ *   Personal Trainer → mi confronto con il Nutrizionista
+ *   Team → sintesi e risposta finale
+ */
 export function buildThinkingEvents(
   consensus: {
-    debug?: { round1Proposals?: AgentProposal[]; selectedAgents?: string[] }
+    debug?: {
+      round1Proposals?: AgentProposal[]
+      selectedAgents?: string[]
+    }
   },
   team: Array<{ id: string; displayName: string; domainTags: Domain[] }>,
+  userMessage?: string,
+  userName?: string | null,
 ): Array<{ specialistName: string; title: string; domain?: Domain; thought?: string }> {
-  const normalizeTitle = (value: string | undefined): string => {
-    if (!value) return 'Analisi del caso in corso'
-    const lower = value.toLowerCase()
-    const summaryIdx = lower.lastIndexOf('summary')
-    const preferred =
-      summaryIdx >= 0
-        ? value
-            .slice(summaryIdx)
-            .replace(/^[^:]*:\s*/i, '')
-            .trim()
-        : value
-    const stripped = preferred
-      .replace(/\bdomain\s*:\s*[^\n,]+/gi, ' ')
-      .replace(/\bsummary\s*:/gi, ' ')
-      .replace(/[{}[\]"]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-    if (!stripped) return 'Analisi del caso in corso'
-    return stripped.slice(0, 72)
-  }
+  const name = userName ?? "l'utente"
+  const msgPreview = userMessage ? userMessage.slice(0, 42).trim() : ''
 
   const round1 = consensus.debug?.round1Proposals ?? []
-  if (round1.length > 0) {
-    return round1.slice(0, 3).map((p, i) => {
+  const selectedIds = consensus.debug?.selectedAgents ?? []
+
+  const proposals = round1.filter((p) => p.confidence !== 0).slice(0, 3)
+
+  if (proposals.length > 0) {
+    const steps: Array<{
+      specialistName: string
+      title: string
+      domain?: Domain
+      thought?: string
+    }> = []
+
+    for (const p of proposals) {
       const agent = team.find((a) => a.id === p.agentId)
+      const agentName = agent?.displayName ?? p.agentId
+      const domain = p.domain
+
+      // Step A: interpreting the user message
+      if (msgPreview) {
+        steps.push({
+          specialistName: agentName,
+          title: `${name}: "${msgPreview}${msgPreview.length >= 42 ? '…' : ''}"`,
+          domain,
+          thought: 'Analisi della richiesta',
+        })
+      }
+
+      // Step B: what the agent found / needs
+      const hasQuestions = p.questions && p.questions.length > 0
+      const hasSummary = p.summary && !p.summary.toLowerCase().includes('[unavailable]')
+
+      if (hasQuestions && p.questions) {
+        const q = p.questions[0].slice(0, 58)
+        steps.push({
+          specialistName: agentName,
+          title: `da raccogliere: ${q}${p.questions[0].length > 58 ? '…' : ''}`,
+          domain,
+          thought: 'Profilo incompleto — identifico i dati mancanti',
+        })
+      } else if (hasSummary && p.summary) {
+        const preview = p.summary.slice(0, 62).replace(/\n/g, ' ')
+        steps.push({
+          specialistName: agentName,
+          title: preview + (p.summary.length > 62 ? '…' : ''),
+          domain,
+          thought: 'Elaboro la risposta con i dati disponibili',
+        })
+      } else {
+        steps.push({
+          specialistName: agentName,
+          title: 'valuto il profilo e il contesto',
+          domain,
+          thought: 'Verifico le informazioni nel profilo',
+        })
+      }
+
+      if (steps.length >= 5) break
+    }
+
+    // Cross-agent consultation step (when >1 specialist)
+    if (proposals.length > 1 && steps.length < 5) {
+      const primary = team.find((a) => a.id === proposals[0].agentId)
+      const secondary = team.find((a) => a.id === proposals[1].agentId)
+      if (primary && secondary) {
+        steps.push({
+          specialistName: secondary.displayName,
+          title: `mi confronto con ${primary.displayName}`,
+          domain: proposals[1].domain,
+          thought: 'Scambio di informazioni tra specialisti del team',
+        })
+      }
+    }
+
+    return steps.slice(0, 5)
+  }
+
+  // Fallback: selected agent IDs without proposal data
+  if (selectedIds.length > 0) {
+    return selectedIds.slice(0, 3).map((agentId) => {
+      const agent = team.find((a) => a.id === agentId)
       return {
-        specialistName: agent?.displayName ?? p.agentId,
-        title: normalizeTitle(p.summary),
-        domain: p.domain,
-        thought: getThought(p.domain, i),
+        specialistName: agent?.displayName ?? agentId,
+        title: msgPreview
+          ? `analisi: "${msgPreview}${msgPreview.length >= 42 ? '…' : ''}"`
+          : 'Valutazione specialistica in corso',
+        domain: agent?.domainTags?.[0],
+        thought: 'Elaborazione in corso',
       }
     })
   }
 
-  const selected = consensus.debug?.selectedAgents ?? []
-  return selected.slice(0, 3).map((agentId, i) => {
-    const agent = team.find((a) => a.id === agentId)
-    return {
-      specialistName: agent?.displayName ?? agentId,
-      title: 'Valutazione specialistica in corso',
-      domain: agent?.domainTags?.[0],
-      thought: getThought(agent?.domainTags?.[0], i),
-    }
-  })
+  return []
 }
