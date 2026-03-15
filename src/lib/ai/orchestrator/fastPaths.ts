@@ -5,8 +5,44 @@ import {
   isAgeQuestion,
   readPersonalSnapshot,
 } from './inputInference'
+import { detectDomainFromText } from '../domain/domainDetection'
 
 export type FastPathResult = { handled: true; result: ConsensusResult } | { handled: false }
+
+/** Pure greeting patterns — no topic or domain signal */
+const GREETING_PATTERNS = [
+  /^(ciao|salve|buongiorno|buonasera|buonanotte|hey|hello|hi|hola|salut)[!.,\s]*$/i,
+  /^(ciao\s+a\s+tutti|ciao\s+raga|ciao\s+a\s+te)[!.,\s]*$/i,
+]
+
+function isGenericGreeting(message: string): boolean {
+  const trimmed = message.trim()
+  return GREETING_PATTERNS.some((pattern) => pattern.test(trimmed))
+}
+
+/**
+ * Fast-path for pure greetings / domain-less short messages.
+ * When there's no domain signal, skip the entire agent pipeline
+ * so no specialist gets injected into synthesis.
+ * Returns { handled: false } so the orchestrator still runs synthesis,
+ * but marks proposals as empty to avoid agent contamination.
+ *
+ * NOTE: This fast-path does NOT return a final ConsensusResult — it signals
+ * the orchestrator to skip agent rounds and go straight to synthesis with
+ * empty proposals. We do this by returning handled:false + setting a flag
+ * via a separate exported function checked in orchestrator.ts.
+ */
+export function isGenericMessage(input: AgentInput): boolean {
+  const trimmed = input.message.trim()
+  // Greeting
+  if (isGenericGreeting(trimmed)) return true
+  // Very short (≤4 words), no domain keywords, no history
+  const wordCount = trimmed.split(/\s+/).length
+  const hasNoHistory = input.contextPack.history.recentMessages.length === 0
+  const detectedDomain = detectDomainFromText(trimmed)
+  if (wordCount <= 4 && hasNoHistory && detectedDomain === 'general') return true
+  return false
+}
 
 export function tryAgeQuestionFastPath(input: AgentInput): FastPathResult {
   if (!isAgeQuestion(input.message)) return { handled: false }

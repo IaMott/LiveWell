@@ -5,7 +5,7 @@ import { executeAgentRounds } from './agentRoundExecution'
 import { executeConsensusFlow } from './consensusFlow'
 import { adaptConsensusOutcome } from './consensusOutcome'
 import { buildDomainDetectedTraceEvent } from './decisionTrace'
-import { tryAgeQuestionFastPath } from './fastPaths'
+import { tryAgeQuestionFastPath, isGenericMessage } from './fastPaths'
 import { applyInterviewFlow } from './interviewFlow'
 import { resolveRoutingContext } from './routing'
 import { synthesizeRawResponse } from './synthesis'
@@ -56,12 +56,18 @@ export async function orchestrate(
   })
   decisionTrace.push(...routingDecisionTrace)
 
-  const { round1Proposals, round2Proposals } = await executeAgentRounds({
-    llm: deps.llm,
-    selectedAgents,
-    input,
-    domainHint,
-  })
+  // Skip agent rounds for generic messages (greetings, short no-context messages)
+  // to prevent any specialist from contaminating the synthesis response.
+  const skipAgents = !activeSpecialist && isGenericMessage(input)
+
+  const { round1Proposals, round2Proposals } = skipAgents
+    ? { round1Proposals: [], round2Proposals: [] }
+    : await executeAgentRounds({
+        llm: deps.llm,
+        selectedAgents,
+        input,
+        domainHint,
+      })
 
   const { consensus } = executeConsensusFlow({
     team: deps.team,
