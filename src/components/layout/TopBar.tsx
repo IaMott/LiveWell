@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { UserAvatar } from '@/components/profile/UserAvatar'
+import { NotificationBell } from './NotificationBell'
 
 // design/icons/setting.svg inlined
 function IconSettings() {
@@ -63,15 +64,18 @@ export function TopBar({ userInitials = 'ME', userName, userImage }: Props) {
         <IconSettings />
       </Link>
 
-      {/* Right side: avatar → /profile */}
-      <UserAvatar
-        name={userName}
-        imageUrl={userImage}
-        initialsOverride={userInitials}
-        href="/profile"
-        size={40}
-        ariaLabel="Vai al profilo"
-      />
+      {/* Right side: notifications + avatar → /profile */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+        <NotificationBell />
+        <UserAvatar
+          name={userName}
+          imageUrl={userImage}
+          initialsOverride={userInitials}
+          href="/profile"
+          size={40}
+          ariaLabel="Vai al profilo"
+        />
+      </div>
     </header>
   )
 }

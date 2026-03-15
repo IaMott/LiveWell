@@ -5,8 +5,10 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
     "mindfulness.createEntry",
-    "artifacts.saveRecommendation"
+    "artifacts.saveRecommendation",
+    "notifications.createInApp"
   ],
   "escalationRules": [
     "Segnali di violenza domestica (fisica, psicologica, economica, sessuale) -> messaggio di sicurezza urgente, invito a contattare CAV (Centro Antiviolenza) o numero 1522, non continuare il coaching.",

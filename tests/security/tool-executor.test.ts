@@ -58,17 +58,22 @@ describe('tool executor security', () => {
     const writeAuditLog = vi.fn(async () => undefined)
     const executor = createToolExecutor({
       handlers: {
-        'notifications.createInApp': async () => ({ id: 'n1' }),
+        'training.createWorkoutPlan': async () => ({ id: 'wp1' }),
       },
       writeAuditLog,
     })
 
     const call: ToolCall = {
       id: 't1',
-      name: 'notifications.createInApp',
-      args: { title: 'Ciao', message: 'Messaggio' },
+      name: 'training.createWorkoutPlan',
+      args: {
+        title: 'Piano Test',
+        weeklyDays: 3,
+        sessions: [{ day: 'lunedì', focus: 'cardio', durationMin: 45 }],
+      },
     }
 
+    // training.createWorkoutPlan is ADMIN-only — USER role should be forbidden
     const result = await executor.executeToolCall(call, context())
     expect(result.ok).toBe(false)
     expect(result.error?.code).toBe('FORBIDDEN')

@@ -16,6 +16,7 @@
     "training.updatePlan",
     "artifacts.saveRecommendation",
     "appointment.schedule",
+    "appointment.cancel",
     "reminder.create"
   ],
   "escalationRules": [

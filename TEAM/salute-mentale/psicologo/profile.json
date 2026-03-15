@@ -5,8 +5,10 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
     "mindfulness.createEntry",
-    "artifacts.saveRecommendation"
+    "artifacts.saveRecommendation",
+    "notifications.createInApp"
   ],
   "escalationRules": [
     "Ideazione suicidaria o rischio immediato di autolesionismo -> messaggio di crisi, incoraggiare contatto con servizi di emergenza/numero locale e supporto professionale.",

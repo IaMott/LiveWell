@@ -1,5 +1,6 @@
 import type { ChatMessage, ThinkingStep } from '@/hooks/useChat'
 import type { Domain } from '@/lib/ai/types'
+import { FeedbackWidget } from './FeedbackWidget'
 
 const DOMAIN_COLORS: Record<Domain, string> = {
   nutrition: '#AF52DE',
@@ -21,10 +22,10 @@ const DOMAIN_LABELS: Partial<Record<Domain, string>> = {
 
 type Props = {
   message: ChatMessage
-  streamingSpecialistName?: string
+  conversationId?: string
 }
 
-export function MessageBubble({ message, streamingSpecialistName }: Props) {
+export function MessageBubble({ message, conversationId }: Props) {
   const isUser = message.role === 'user'
   const domainColor = message.domain ? DOMAIN_COLORS[message.domain] : undefined
   const specialistLabel =
@@ -34,22 +35,7 @@ export function MessageBubble({ message, streamingSpecialistName }: Props) {
         ? DOMAIN_LABELS[message.domain]
         : null
 
-  // Thinking steps: prefer accumulated array, fallback to legacy single-step fields
-  const thinkingSteps: ThinkingStep[] =
-    message.thinkingSteps ??
-    (message.thinkingSpecialistName || message.thinkingTitle
-      ? [
-          {
-            specialistName:
-              message.thinkingSpecialistName ??
-              message.specialistName ??
-              streamingSpecialistName ??
-              'Team',
-            title: message.thinkingTitle ?? 'Elaborazione in corso',
-            thought: message.thinkingThought,
-          },
-        ]
-      : [])
+  const thinkingSteps: ThinkingStep[] = message.thinkingSteps ?? []
 
   return (
     <div
@@ -115,6 +101,11 @@ export function MessageBubble({ message, streamingSpecialistName }: Props) {
           )}
         </div>
       </div>
+
+      {/* Feedback widget — only for completed assistant messages */}
+      {!isUser && !message.streaming && message.content && conversationId && (
+        <FeedbackWidget conversationId={conversationId} requestId={message.id} />
+      )}
     </div>
   )
 }

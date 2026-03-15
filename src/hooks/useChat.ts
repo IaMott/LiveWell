@@ -17,12 +17,6 @@ export type ChatMessage = {
   specialistName?: string
   /** Accumulated step-by-step reasoning shown during streaming */
   thinkingSteps?: ThinkingStep[]
-  /** @deprecated use thinkingSteps */
-  thinkingSpecialistName?: string
-  /** @deprecated use thinkingSteps */
-  thinkingTitle?: string
-  /** @deprecated use thinkingSteps */
-  thinkingThought?: string
   streaming?: boolean
 }
 
@@ -284,9 +278,6 @@ export function useChat() {
                           content: String(event.content ?? m.content),
                           streaming: false,
                           thinkingSteps: undefined,
-                          thinkingSpecialistName: undefined,
-                          thinkingTitle: undefined,
-                          thinkingThought: undefined,
                         }
                       : m,
                   ),
@@ -330,10 +321,6 @@ export function useChat() {
                             ...m,
                             streaming: true,
                             thinkingSteps: [...(m.thinkingSteps ?? []), newStep],
-                            // keep legacy fields for back-compat
-                            thinkingSpecialistName: stepName || undefined,
-                            thinkingTitle: stepTitle || undefined,
-                            thinkingThought: stepThought,
                           }
                         : m,
                     ),

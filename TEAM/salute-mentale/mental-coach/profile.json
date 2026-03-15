@@ -5,10 +5,12 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
+    "user.setAttribute",
     "mindfulness.createEntry",
     "training.createWorkoutPlan",
     "training.logWorkoutSession",
-    "artifacts.saveRecommendation"
+    "artifacts.saveRecommendation",
+    "notifications.createInApp"
   ],
   "escalationRules": [
     "Dolore acuto, infortunio, sintomi cardiaci durante esercizio -> stop e valutazione medica.",

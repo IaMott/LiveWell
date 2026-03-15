@@ -30,9 +30,11 @@ const USER_ALLOWED_TOOLS = new Set<ToolName>([
   'training.updatePlan',
   'mindfulness.createEntry',
   'artifacts.saveRecommendation',
+  'notifications.createInApp',
   'share.createLink',
   'export.pdf',
   'appointment.schedule',
+  'appointment.cancel',
   'reminder.create',
 ])
 

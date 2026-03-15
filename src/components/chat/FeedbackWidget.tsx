@@ -15,14 +15,13 @@ import { useState } from 'react'
 type Props = {
   conversationId: string
   requestId: string
-  className?: string
 }
 
-type State = 'idle' | 'hovering' | 'loading' | 'done' | 'error'
+type State = 'idle' | 'loading' | 'done' | 'error'
 
 const STAR_LABELS = ['Pessimo', 'Scarso', 'Nella media', 'Buono', 'Ottimo']
 
-export function FeedbackWidget({ conversationId, requestId, className = '' }: Props) {
+export function FeedbackWidget({ conversationId, requestId }: Props) {
   const [hovered, setHovered] = useState(0)
   const [selected, setSelected] = useState(0)
   const [state, setState] = useState<State>('idle')
@@ -48,8 +47,18 @@ export function FeedbackWidget({ conversationId, requestId, className = '' }: Pr
 
   if (state === 'done') {
     return (
-      <div className={`flex items-center gap-1.5 text-xs text-gray-400 ${className}`}>
-        <span className="text-green-500">✓</span>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.375rem',
+          fontSize: '0.75rem',
+          color: 'var(--color-text-secondary)',
+          marginTop: '0.375rem',
+          marginLeft: '0.375rem',
+        }}
+      >
+        <span style={{ color: '#34C759' }}>✓</span>
         Grazie per il feedback!
       </div>
     )
@@ -57,30 +66,61 @@ export function FeedbackWidget({ conversationId, requestId, className = '' }: Pr
 
   if (state === 'error') {
     return (
-      <div className={`text-xs text-red-400 ${className}`}>Errore nell&apos;invio. Riprova.</div>
+      <div
+        style={{
+          fontSize: '0.75rem',
+          color: '#FF3B30',
+          marginTop: '0.375rem',
+          marginLeft: '0.375rem',
+        }}
+      >
+        Errore nell&apos;invio. Riprova.
+      </div>
     )
   }
 
   const activeRating = hovered || selected
-  const label = activeRating > 0 ? STAR_LABELS[activeRating - 1] : 'Valuta questa risposta'
+  const label = activeRating > 0 ? STAR_LABELS[activeRating - 1] : 'Valuta'
 
   return (
     <div
-      className={`flex items-center gap-2 ${className}`}
       role="group"
       aria-label="Valuta risposta"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.375rem',
+        marginTop: '0.375rem',
+        marginLeft: '0.375rem',
+      }}
     >
-      <span className="text-xs text-gray-400">{label}</span>
-      <div className="flex items-center gap-0.5">
+      <span
+        style={{
+          fontSize: '0.6875rem',
+          color: 'var(--color-text-secondary)',
+          opacity: 0.6,
+          minWidth: '4.5rem',
+        }}
+      >
+        {label}
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1px' }}>
         {[1, 2, 3, 4, 5].map((star) => (
           <button
             key={star}
             type="button"
             disabled={state === 'loading'}
-            aria-label={`${STAR_LABELS[star - 1]}`}
-            className={`text-base transition-transform hover:scale-110 disabled:cursor-not-allowed ${
-              star <= activeRating ? 'text-yellow-400' : 'text-gray-300'
-            }`}
+            aria-label={STAR_LABELS[star - 1]}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: state === 'loading' ? 'not-allowed' : 'pointer',
+              fontSize: '0.875rem',
+              color: star <= activeRating ? '#FF9F0A' : 'var(--color-separator)',
+              padding: '2px',
+              transition: 'transform 0.1s ease, color 0.1s ease',
+              lineHeight: 1,
+            }}
             onMouseEnter={() => setHovered(star)}
             onMouseLeave={() => setHovered(0)}
             onClick={() => submitRating(star)}
@@ -89,7 +129,17 @@ export function FeedbackWidget({ conversationId, requestId, className = '' }: Pr
           </button>
         ))}
       </div>
-      {state === 'loading' && <span className="text-xs text-gray-300 animate-pulse">…</span>}
+      {state === 'loading' && (
+        <span
+          style={{
+            fontSize: '0.75rem',
+            color: 'var(--color-text-secondary)',
+            opacity: 0.5,
+          }}
+        >
+          …
+        </span>
+      )}
     </div>
   )
 }
