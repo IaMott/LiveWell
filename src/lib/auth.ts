@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
+import { randomBytes } from 'crypto'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { authConfig } from './auth.config'
@@ -50,12 +51,55 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
  * for unit test compatibility.
  * In production: reads from NextAuth JWT session (cookie-based).
  */
+/**
+ * Returns the authenticated userId for a route handler.
+ *
+ * In test environment (NODE_ENV=test): reads from x-user-id header
+ * for unit test compatibility.
+ * In production: reads from NextAuth JWT session (cookie-based).
+ *
+ * Auto-repair: if the JWT user ID is not found in DB (e.g. after a DB
+ * migration that wiped user records), the function recreates the user
+ * row from session data so FK constraints don't block chat persistence.
+ */
 export async function getAuthUserId(request?: Request): Promise<string | null> {
   if (process.env.NODE_ENV === 'test' && request) {
     return request.headers.get('x-user-id')?.trim() || null
   }
   const session = await auth()
-  return session?.user?.id ?? null
+  const userId = session?.user?.id ?? null
+  if (!userId) return null
+
+  // Fast-path: check DB record exists, auto-recreate if missing
+  try {
+    const exists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
+    if (!exists) {
+      const email = session?.user?.email
+      if (email) {
+        // Check if another record already holds this email (DB was reset with new IDs)
+        const byEmail = await prisma.user.findUnique({ where: { email }, select: { id: true } })
+        if (byEmail) {
+          // Different DB id — return the current DB id so FK constraints work
+          return byEmail.id
+        }
+        // Recreate user preserving the JWT id so the session stays valid
+        await prisma.user.create({
+          data: {
+            id: userId,
+            email,
+            name: session?.user?.name ?? null,
+            // Random hash — user logs in via existing JWT; can reset password later
+            passwordHash: await bcrypt.hash(randomBytes(24).toString('hex'), 10),
+            role: (session?.user?.role as 'USER' | 'ADMIN' | 'OWNER') ?? 'USER',
+          },
+        })
+      }
+    }
+  } catch {
+    // Non-fatal: worst case the FK will fail on the next write (same as before)
+  }
+
+  return userId
 }
 
 /**
