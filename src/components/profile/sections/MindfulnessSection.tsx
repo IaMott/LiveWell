@@ -7,45 +7,6 @@ import type React from 'react'
 
 type Props = { data: ProfileData }
 
-const EXERCISES = [
-  {
-    key: 'respiro',
-    label: 'Pausa Respiro',
-    emoji: '🌬️',
-    duration: '5 min',
-    kcal: '5 cal-equiv.',
-    color: '#5AC8FA',
-    desc: 'Focalizzati sul respiro. Respira lentamente — ripeti 5 cicli.',
-  },
-  {
-    key: 'camminata',
-    label: 'Camminata Consapevole',
-    emoji: '🚶',
-    duration: '10 min',
-    kcal: '30 cal-equiv.',
-    color: '#34C759',
-    desc: 'Senti ogni passo mentre cammini. Disabilita le notifiche.',
-  },
-  {
-    key: 'gratitudine',
-    label: 'Esercizio di Gratitudine',
-    emoji: '🙏',
-    duration: '3 min',
-    kcal: '5 cal-equiv.',
-    color: '#FF9F0A',
-    desc: 'Scrivi 3 cose per cui sei grato oggi. Anche piccole cose contano.',
-  },
-  {
-    key: 'visualizzazione',
-    label: 'Visualizzazione',
-    emoji: '✨',
-    duration: '7 min',
-    kcal: '8 cal-equiv.',
-    color: '#AF52DE',
-    desc: 'Immagina un luogo sereno. Usa tutti i sensi. Rilassa le spalle.',
-  },
-]
-
 function MoodBar({
   label,
   value,
@@ -90,8 +51,147 @@ function MoodBar({
   )
 }
 
+function DualLineChart({
+  entries,
+}: {
+  entries: { mood: number | null; stress: number | null; createdAt: Date }[]
+}) {
+  const filtered = entries.filter((e) => e.mood != null || e.stress != null).slice(-7)
+  if (filtered.length < 2) return null
+
+  const W = 200
+  const H = 50
+  const n = filtered.length
+
+  const moodPoints = filtered
+    .map((e, i) => {
+      if (e.mood == null) return null
+      const x = (i / (n - 1)) * W
+      const y = H - (e.mood / 10) * (H - 4) - 2
+      return `${x},${y}`
+    })
+    .filter(Boolean) as string[]
+
+  const stressPoints = filtered
+    .map((e, i) => {
+      if (e.stress == null) return null
+      const x = (i / (n - 1)) * W
+      const y = H - (e.stress / 10) * (H - 4) - 2
+      return `${x},${y}`
+    })
+    .filter(Boolean) as string[]
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.375rem' }}>
+        <span
+          style={{
+            fontSize: '0.625rem',
+            color: '#5AC8FA',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+          }}
+        >
+          <span
+            style={{
+              display: 'inline-block',
+              width: '12px',
+              height: '2px',
+              backgroundColor: '#5AC8FA',
+              borderRadius: '1px',
+            }}
+          />
+          Umore
+        </span>
+        <span
+          style={{
+            fontSize: '0.625rem',
+            color: '#AF52DE',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+          }}
+        >
+          <span
+            style={{
+              display: 'inline-block',
+              width: '12px',
+              height: '2px',
+              backgroundColor: '#AF52DE',
+              borderRadius: '1px',
+            }}
+          />
+          Stress
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: '50px', overflow: 'visible' }}>
+        {moodPoints.length >= 2 && (
+          <polyline
+            points={moodPoints.join(' ')}
+            fill="none"
+            stroke="#5AC8FA"
+            strokeWidth="2"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        )}
+        {stressPoints.length >= 2 && (
+          <polyline
+            points={stressPoints.join(' ')}
+            fill="none"
+            stroke="#AF52DE"
+            strokeWidth="2"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            strokeDasharray="4 2"
+          />
+        )}
+        {filtered.map((e, i) => {
+          const x = (i / (n - 1)) * W
+          return (
+            <g key={i}>
+              {e.mood != null && (
+                <circle cx={x} cy={H - (e.mood / 10) * (H - 4) - 2} r="2.5" fill="#5AC8FA" />
+              )}
+              {e.stress != null && (
+                <circle cx={x} cy={H - (e.stress / 10) * (H - 4) - 2} r="2.5" fill="#AF52DE" />
+              )}
+            </g>
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
+
+function AttrRow({ label, value, unit }: { label: string; value: unknown; unit?: string | null }) {
+  const display = value == null || value === '' ? '—' : String(value)
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.625rem 0' }}>
+      <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
+        {label}
+      </span>
+      <span
+        style={{
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          color: 'var(--color-text-primary, #1C1C1E)',
+          maxWidth: '60%',
+          textAlign: 'right',
+        }}
+      >
+        {display}
+        {unit && display !== '—' ? ` ${unit}` : ''}
+      </span>
+    </div>
+  )
+}
+
 export function MindfulnessSection({ data }: Props) {
-  const { stats, recentMindfulness } = data
+  const { stats, recentMindfulness, attributesByDomain } = data
   const router = useRouter()
   const [adding, setAdding] = useState(false)
   const [addSaving, setAddSaving] = useState(false)
@@ -99,6 +199,25 @@ export function MindfulnessSection({ data }: Props) {
 
   const avgMood = stats.avgMood7d
   const avgStress = stats.avgStress7d
+
+  const mindAttrs = attributesByDomain?.['mindfulness'] ?? {}
+  const mentalAttrs = attributesByDomain?.['mental'] ?? {}
+
+  // Merge both domains for display
+  const allMindAttrs = { ...mentalAttrs, ...mindAttrs }
+
+  // Dati Raccolti items
+  const mindCartella = [
+    { label: 'Ore di sonno', key: 'sleep_hours', unit: 'h' },
+    { label: 'Latenza addormentamento', key: 'sleep_latency', unit: 'min' },
+    { label: 'Risvegli notturni', key: 'night_wakings' },
+    { label: 'Qualità del sonno', key: 'sleep_quality' },
+    { label: 'Livello di stress', key: 'stress_level' },
+    { label: 'Contesto relazionale', key: 'relational_context' },
+    { label: 'Contesto lavorativo', key: 'work_context' },
+    { label: 'Intensità distress', key: 'distress_intensity' },
+  ]
+  const hasMindData = mindCartella.some((item) => allMindAttrs[item.key]?.value != null)
 
   async function addEntry() {
     setAddSaving(true)
@@ -132,7 +251,7 @@ export function MindfulnessSection({ data }: Props) {
             color: 'var(--color-text-primary, #1C1C1E)',
           }}
         >
-          Consigli per il Giorno
+          Benessere Mentale
         </h2>
         <span
           style={{
@@ -146,56 +265,6 @@ export function MindfulnessSection({ data }: Props) {
         >
           {recentMindfulness.length > 0 ? `${recentMindfulness.length} sessioni` : 'Inizia oggi'}
         </span>
-      </div>
-
-      {/* Exercise cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
-        {EXERCISES.map(({ key, label, emoji, duration, kcal, color, desc }) => (
-          <div
-            key={key}
-            style={{
-              backgroundColor: 'var(--color-surface, #fff)',
-              borderRadius: '1rem',
-              padding: '0.875rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-              borderTop: `3px solid ${color}`,
-            }}
-          >
-            <div
-              style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.375rem' }}
-            >
-              <span
-                style={{
-                  fontSize: '0.8125rem',
-                  fontWeight: 600,
-                  color: 'var(--color-text-primary, #1C1C1E)',
-                  lineHeight: 1.3,
-                }}
-              >
-                {label}
-              </span>
-              <span style={{ fontSize: '1rem', flexShrink: 0 }}>{emoji}</span>
-            </div>
-            <p
-              style={{
-                margin: '0 0 0.5rem',
-                fontSize: '0.6875rem',
-                color: 'var(--color-text-secondary, #8E8E93)',
-                lineHeight: 1.4,
-              }}
-            >
-              {desc}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '0.6875rem', color, fontWeight: 600 }}>{duration}</span>
-              <span
-                style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary, #8E8E93)' }}
-              >
-                {kcal}
-              </span>
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* Mood stats */}
@@ -228,6 +297,93 @@ export function MindfulnessSection({ data }: Props) {
               color="#AF52DE"
             />
           </div>
+        </div>
+      )}
+
+      {/* Dual trend chart */}
+      {recentMindfulness.length >= 2 && (
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #fff)',
+            borderRadius: '1rem',
+            padding: '1rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}
+        >
+          <p
+            style={{
+              margin: '0 0 0.625rem',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              color: 'var(--color-text-secondary, #8E8E93)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Trend umore e stress
+          </p>
+          <DualLineChart entries={recentMindfulness} />
+        </div>
+      )}
+
+      {/* Dati Raccolti (agent-collected) */}
+      <h3 style={sectionHeaderStyle}>Dati Raccolti</h3>
+      {hasMindData ? (
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #fff)',
+            borderRadius: '1rem',
+            padding: '0 1rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}
+        >
+          {mindCartella.map(({ label, key, unit }, i) => (
+            <div
+              key={key}
+              style={{
+                borderBottom:
+                  i < mindCartella.length - 1
+                    ? '1px solid var(--color-separator, #E5E5EA)'
+                    : 'none',
+              }}
+            >
+              <AttrRow
+                label={label}
+                value={allMindAttrs[key]?.value}
+                unit={unit ?? (allMindAttrs[key]?.unit as string | null | undefined)}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div
+          style={{
+            backgroundColor: 'rgba(90,200,250,0.06)',
+            borderRadius: '1rem',
+            padding: '1rem',
+          }}
+        >
+          <p
+            style={{
+              margin: '0 0 0.25rem',
+              fontSize: '0.9375rem',
+              fontWeight: 600,
+              color: 'var(--color-text-primary, #1C1C1E)',
+            }}
+          >
+            💬 Parla con lo psicologo
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.8125rem',
+              color: 'var(--color-text-secondary, #8E8E93)',
+              lineHeight: 1.4,
+            }}
+          >
+            Inizia una chat per raccogliere i tuoi dati: qualità del sonno, livello di stress,
+            contesto emotivo e molto altro.
+          </p>
         </div>
       )}
 

@@ -102,15 +102,55 @@ function MacroRing({
   )
 }
 
+function AttrRow({
+  label,
+  value,
+  unit,
+  alert,
+}: {
+  label: string
+  value: unknown
+  unit?: string | null
+  alert?: boolean
+}) {
+  const display = value == null || value === '' ? '—' : String(value)
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.625rem 0' }}>
+      <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
+        {label}
+      </span>
+      <span
+        style={{
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          color: alert && display !== '—' ? '#FF9F0A' : 'var(--color-text-primary, #1C1C1E)',
+          maxWidth: '60%',
+          textAlign: 'right',
+        }}
+      >
+        {display}
+        {unit && display !== '—' ? ` ${unit}` : ''}
+      </span>
+    </div>
+  )
+}
+
 export function NutritionSection({ data }: Props) {
-  const { stats, recentMeals, profile } = data
+  const { stats, recentMeals, profile, attributesByDomain } = data
   const router = useRouter()
   const [adding, setAdding] = useState(false)
   const [addSaving, setAddSaving] = useState(false)
   const [addForm, setAddForm] = useState({ mealType: 'pranzo', notes: '' })
 
+  const nutAttrs = attributesByDomain?.['nutrition'] ?? {}
   const nutritionProfile = profile?.nutrition as Record<string, unknown> | null
-  const dailyKcal = nutritionProfile?.dailyKcal != null ? Number(nutritionProfile.dailyKcal) : 2000
+
+  // Daily kcal: prefer agent-collected attr, then profile, then 0
+  const attrKcal = nutAttrs['daily_kcal']?.value
+  const dailyKcal =
+    (typeof attrKcal === 'number' ? attrKcal : null) ??
+    (nutritionProfile?.dailyKcal != null ? Number(nutritionProfile.dailyKcal) : null)
+  const kcalGoal = dailyKcal ?? 2000
 
   // Group recent meals by type
   const mealsByType = MEAL_TYPES.map(({ key, label, emoji, color }) => {
@@ -121,11 +161,12 @@ export function NutritionSection({ data }: Props) {
     return { key, label, emoji, color, meals, count: meals.length }
   })
 
-  // Estimated macros (demo values when no real data)
-  const kcalLogged = stats.mealsLogged7d > 0 ? Math.round(dailyKcal * 0.72) : 0
+  // Macros (estimated from kcal goal when meals logged)
+  const kcalLogged = stats.mealsLogged7d > 0 ? Math.round(kcalGoal * 0.72) : 0
   const proteinG = kcalLogged > 0 ? Math.round((kcalLogged * 0.22) / 4) : 0
   const carbsG = kcalLogged > 0 ? Math.round((kcalLogged * 0.48) / 4) : 0
   const fatG = kcalLogged > 0 ? Math.round((kcalLogged * 0.3) / 9) : 0
+  const hasAnyMacroData = stats.mealsLogged7d > 0 || dailyKcal != null
 
   async function addMeal() {
     if (!addForm.notes.trim()) return
@@ -144,9 +185,21 @@ export function NutritionSection({ data }: Props) {
     }
   }
 
+  // Cartella nutrizionale items
+  const nutCartella = [
+    { label: 'Obiettivo', key: 'goal', alert: false },
+    { label: 'Calorie giornaliere', key: 'daily_kcal', unit: 'kcal' },
+    { label: 'Allergie / Intolleranze', key: 'allergy', alert: true },
+    { label: 'Restrizioni dietetiche', key: 'dietary_restrictions' },
+    { label: 'Schema pasti', key: 'meal_pattern' },
+    { label: 'Budget spesa', key: 'budget_food' },
+    { label: 'Tempo cottura', key: 'cooking_time' },
+  ]
+  const hasNutData = nutCartella.some((item) => nutAttrs[item.key]?.value != null)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      {/* Macro tracker header */}
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2
           style={{
@@ -168,7 +221,9 @@ export function NutritionSection({ data }: Props) {
             padding: '0.2rem 0.625rem',
           }}
         >
-          {stats.mealsLogged7d > 0 ? `${Math.round((kcalLogged / dailyKcal) * 100)}%` : '0%'}
+          {stats.mealsLogged7d > 0 && dailyKcal
+            ? `${Math.round((kcalLogged / kcalGoal) * 100)}%`
+            : `${stats.mealsLogged7d} pasti`}
         </span>
       </div>
 
@@ -186,7 +241,11 @@ export function NutritionSection({ data }: Props) {
             }}
           >
             <div
-              style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.375rem' }}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: '0.375rem',
+              }}
             >
               <span
                 style={{
@@ -241,52 +300,127 @@ export function NutritionSection({ data }: Props) {
         ))}
       </div>
 
-      {/* Macro rings */}
-      <div
-        style={{
-          backgroundColor: 'var(--color-surface, #fff)',
-          borderRadius: '1rem',
-          padding: '1rem',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        }}
-      >
-        <p
+      {/* Macro rings — only when we have data */}
+      {hasAnyMacroData && (
+        <div
           style={{
-            margin: '0 0 0.875rem',
-            fontSize: '0.8125rem',
-            fontWeight: 600,
-            color: 'var(--color-text-secondary, #8E8E93)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
+            backgroundColor: 'var(--color-surface, #fff)',
+            borderRadius: '1rem',
+            padding: '1rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
           }}
         >
-          Oggi
-        </p>
-        <div style={{ display: 'flex', justifyContent: 'space-around' }}>
-          <MacroRing value={kcalLogged} max={dailyKcal} color="#FF9F0A" label="Kcal" unit="kcal" />
-          <MacroRing
-            value={proteinG}
-            max={Math.round((dailyKcal * 0.25) / 4)}
-            color="#007AFF"
-            label="Proteine"
-            unit="g"
-          />
-          <MacroRing
-            value={carbsG}
-            max={Math.round((dailyKcal * 0.5) / 4)}
-            color="#34C759"
-            label="Carbo"
-            unit="g"
-          />
-          <MacroRing
-            value={fatG}
-            max={Math.round((dailyKcal * 0.25) / 9)}
-            color="#AF52DE"
-            label="Grassi"
-            unit="g"
-          />
+          <p
+            style={{
+              margin: '0 0 0.875rem',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              color: 'var(--color-text-secondary, #8E8E93)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            {stats.mealsLogged7d > 0 ? 'Stima giornaliera' : 'Obiettivi nutrizionali'}
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+            <MacroRing value={kcalLogged} max={kcalGoal} color="#FF9F0A" label="Kcal" unit="kcal" />
+            <MacroRing
+              value={proteinG}
+              max={Math.round((kcalGoal * 0.25) / 4)}
+              color="#007AFF"
+              label="Proteine"
+              unit="g"
+            />
+            <MacroRing
+              value={carbsG}
+              max={Math.round((kcalGoal * 0.5) / 4)}
+              color="#34C759"
+              label="Carbo"
+              unit="g"
+            />
+            <MacroRing
+              value={fatG}
+              max={Math.round((kcalGoal * 0.25) / 9)}
+              color="#AF52DE"
+              label="Grassi"
+              unit="g"
+            />
+          </div>
+          {stats.mealsLogged7d === 0 && (
+            <p
+              style={{
+                margin: '0.75rem 0 0',
+                fontSize: '0.75rem',
+                color: 'var(--color-text-secondary, #8E8E93)',
+                textAlign: 'center',
+              }}
+            >
+              Registra i pasti per vedere i progressi
+            </p>
+          )}
         </div>
-      </div>
+      )}
+
+      {/* Cartella Nutrizionale */}
+      <h3 style={sectionHeaderStyle}>Cartella Nutrizionale</h3>
+      {hasNutData ? (
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #fff)',
+            borderRadius: '1rem',
+            padding: '0 1rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}
+        >
+          {nutCartella.map(({ label, key, alert, unit }, i) => {
+            const attr = nutAttrs[key]
+            const attrUnit = unit ?? (attr?.unit as string | null | undefined) ?? null
+            return (
+              <div
+                key={key}
+                style={{
+                  borderBottom:
+                    i < nutCartella.length - 1
+                      ? '1px solid var(--color-separator, #E5E5EA)'
+                      : 'none',
+                }}
+              >
+                <AttrRow label={label} value={attr?.value} unit={attrUnit} alert={alert} />
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div
+          style={{
+            backgroundColor: 'rgba(175,82,222,0.06)',
+            borderRadius: '1rem',
+            padding: '1rem',
+          }}
+        >
+          <p
+            style={{
+              margin: '0 0 0.25rem',
+              fontSize: '0.9375rem',
+              fontWeight: 600,
+              color: 'var(--color-text-primary, #1C1C1E)',
+            }}
+          >
+            💬 Parla con il nutrizionista
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.8125rem',
+              color: 'var(--color-text-secondary, #8E8E93)',
+              lineHeight: 1.4,
+            }}
+          >
+            Inizia una chat per raccogliere la tua cartella nutrizionale: allergie, obiettivi,
+            restrizioni e piano alimentare personalizzato.
+          </p>
+        </div>
+      )}
 
       {/* Add meal */}
       {!adding ? (
@@ -361,7 +495,11 @@ export function NutritionSection({ data }: Props) {
       {/* Weekly summary */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
         <StatMini label="Pasti (7gg)" value={String(stats.mealsLogged7d)} color="#AF52DE" />
-        <StatMini label="Obiettivo kcal" value={`${dailyKcal} kcal`} color="#FF9F0A" />
+        <StatMini
+          label="Obiettivo kcal"
+          value={dailyKcal ? `${dailyKcal} kcal` : '—'}
+          color="#FF9F0A"
+        />
       </div>
     </div>
   )
@@ -392,6 +530,15 @@ function StatMini({ label, value, color }: { label: string; value: string; color
       <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color }}>{value}</p>
     </div>
   )
+}
+
+const sectionHeaderStyle: React.CSSProperties = {
+  margin: '0.25rem 0 0',
+  fontSize: '0.8125rem',
+  fontWeight: 600,
+  color: 'var(--color-text-secondary, #8E8E93)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
 }
 
 const inputStyle: React.CSSProperties = {

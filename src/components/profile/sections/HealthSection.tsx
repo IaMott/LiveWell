@@ -7,8 +7,97 @@ import type React from 'react'
 
 type Props = { data: ProfileData }
 
+function SparklineChart({
+  points,
+  color,
+}: {
+  points: { value: number; recordedAt: Date }[]
+  color: string
+}) {
+  if (points.length < 2) return null
+  const W = 200
+  const H = 40
+  const values = points.map((p) => p.value)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const range = max - min || 1
+
+  const coords = points.map((p, i) => {
+    const x = (i / (points.length - 1)) * W
+    const y = H - ((p.value - min) / range) * (H - 4) - 2
+    return `${x},${y}`
+  })
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: '40px', overflow: 'visible' }}>
+        <polyline
+          points={coords.join(' ')}
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        {points.map((p, i) => {
+          const x = (i / (points.length - 1)) * W
+          const y = H - ((p.value - min) / range) * (H - 4) - 2
+          return <circle key={i} cx={x} cy={y} r="2.5" fill={color} />
+        })}
+      </svg>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginTop: '0.25rem',
+        }}
+      >
+        <span style={{ fontSize: '0.625rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
+          min {min}
+        </span>
+        <span style={{ fontSize: '0.625rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
+          max {max}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function AttrRow({
+  label,
+  value,
+  unit,
+  alert,
+}: {
+  label: string
+  value: unknown
+  unit?: string | null
+  alert?: boolean
+}) {
+  const display = value == null || value === '' ? '—' : String(value)
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.625rem 0' }}>
+      <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
+        {label}
+      </span>
+      <span
+        style={{
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          color: alert && display !== '—' ? '#FF3B30' : 'var(--color-text-primary, #1C1C1E)',
+          maxWidth: '60%',
+          textAlign: 'right',
+        }}
+      >
+        {display}
+        {unit && display !== '—' ? ` ${unit}` : ''}
+      </span>
+    </div>
+  )
+}
+
 export function HealthSection({ data }: Props) {
-  const { profile, stats } = data
+  const { profile, stats, attributesByDomain, bodyMetrics30d } = data
   const router = useRouter()
   const [addingWeight, setAddingWeight] = useState(false)
   const [weightSaving, setWeightSaving] = useState(false)
@@ -17,6 +106,9 @@ export function HealthSection({ data }: Props) {
   const [saving, setSaving] = useState(false)
 
   const healthProfile = profile?.health as Record<string, unknown> | null
+  const healthAttrs = attributesByDomain?.['health'] ?? {}
+  const personalAttrs = attributesByDomain?.['personal'] ?? {}
+
   const [form, setForm] = useState({
     conditions: healthProfile?.conditions != null ? String(healthProfile.conditions) : '',
     medications: healthProfile?.medications != null ? String(healthProfile.medications) : '',
@@ -25,6 +117,11 @@ export function HealthSection({ data }: Props) {
   })
 
   const lastWeight = stats.lastWeightEntry
+
+  // Resolve height from profile or personal attrs
+  const heightFromAttrs = personalAttrs['height']?.value
+  const mergedHeight =
+    profile?.height ?? (typeof heightFromAttrs === 'number' ? heightFromAttrs : null)
 
   async function saveWeight() {
     if (!weightForm.value) return
@@ -69,6 +166,20 @@ export function HealthSection({ data }: Props) {
       setSaving(false)
     }
   }
+
+  // Cartella clinica (agent-collected health attributes)
+  const clinicaCartella = [
+    { label: 'Pressione arteriosa', key: 'blood_pressure', alert: false },
+    { label: 'Condizioni / Patologie', key: 'conditions', alert: true },
+    { label: 'Farmaci assunti', key: 'medications', alert: false },
+    { label: 'Sintomi segnalati', key: 'symptoms', alert: true },
+    { label: 'Allergie / Intolleranze', key: 'allergy', alert: true },
+    { label: 'Diagnosi', key: 'diagnosis', alert: false },
+    { label: 'Stile di vita', key: 'lifestyle', alert: false },
+    { label: 'Esami recenti', key: 'recent_exams', alert: false },
+    { label: 'Esami ormonali', key: 'hormonal_exams', alert: false },
+  ]
+  const hasClinicaData = clinicaCartella.some((item) => healthAttrs[item.key]?.value != null)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -119,10 +230,10 @@ export function HealthSection({ data }: Props) {
         {/* BMI card */}
         <div style={vitalCardStyle('#5AC8FA')}>
           <p style={vitalLabelStyle}>BMI</p>
-          {profile?.height && lastWeight ? (
+          {mergedHeight && lastWeight ? (
             <>
               <p style={{ ...vitalValueStyle, color: '#5AC8FA' }}>
-                {(lastWeight.value / Math.pow(Number(profile.height) / 100, 2)).toFixed(1)}
+                {(lastWeight.value / Math.pow(Number(mergedHeight) / 100, 2)).toFixed(1)}
               </p>
               <p
                 style={{
@@ -131,22 +242,53 @@ export function HealthSection({ data }: Props) {
                   color: 'var(--color-text-secondary, #8E8E93)',
                 }}
               >
-                {getBmiLabel(lastWeight.value / Math.pow(Number(profile.height) / 100, 2))}
+                {getBmiLabel(lastWeight.value / Math.pow(Number(mergedHeight) / 100, 2))}
               </p>
             </>
           ) : (
             <p
               style={{
                 margin: 0,
-                fontSize: '0.875rem',
+                fontSize: '0.8125rem',
                 color: 'var(--color-text-secondary, #8E8E93)',
+                lineHeight: 1.4,
               }}
             >
-              Completa profilo
+              {!mergedHeight && !lastWeight
+                ? 'Inserisci peso e altezza'
+                : !mergedHeight
+                  ? 'Inserisci altezza'
+                  : 'Inserisci peso'}
             </p>
           )}
         </div>
       </div>
+
+      {/* Weight sparkline chart */}
+      {bodyMetrics30d && bodyMetrics30d.length >= 2 && (
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #fff)',
+            borderRadius: '1rem',
+            padding: '1rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}
+        >
+          <p
+            style={{
+              margin: '0 0 0.625rem',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              color: 'var(--color-text-secondary, #8E8E93)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Andamento peso — 30 giorni
+          </p>
+          <SparklineChart points={bodyMetrics30d} color="#34C759" />
+        </div>
+      )}
 
       {/* Weight entry form */}
       {addingWeight && (
@@ -203,7 +345,7 @@ export function HealthSection({ data }: Props) {
         </div>
       )}
 
-      {/* Health profile */}
+      {/* Cartella Clinica (agent-collected) */}
       <div
         style={{
           display: 'flex',
@@ -212,7 +354,78 @@ export function HealthSection({ data }: Props) {
           marginTop: '0.25rem',
         }}
       >
-        <h3 style={{ ...sectionHeaderStyle, margin: 0 }}>Profilo Clinico</h3>
+        <h3 style={{ ...sectionHeaderStyle, margin: 0 }}>Cartella Clinica</h3>
+      </div>
+
+      {hasClinicaData ? (
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #fff)',
+            borderRadius: '1rem',
+            padding: '0 1rem',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}
+        >
+          {clinicaCartella.map(({ label, key, alert }, i) => (
+            <div
+              key={key}
+              style={{
+                borderBottom:
+                  i < clinicaCartella.length - 1
+                    ? '1px solid var(--color-separator, #E5E5EA)'
+                    : 'none',
+              }}
+            >
+              <AttrRow
+                label={label}
+                value={healthAttrs[key]?.value}
+                unit={healthAttrs[key]?.unit as string | null | undefined}
+                alert={alert}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div
+          style={{
+            backgroundColor: 'rgba(52,199,89,0.06)',
+            borderRadius: '1rem',
+            padding: '1rem',
+          }}
+        >
+          <p
+            style={{
+              margin: '0 0 0.25rem',
+              fontSize: '0.9375rem',
+              fontWeight: 600,
+              color: 'var(--color-text-primary, #1C1C1E)',
+            }}
+          >
+            💬 Parla con il medico
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.8125rem',
+              color: 'var(--color-text-secondary, #8E8E93)',
+              lineHeight: 1.4,
+            }}
+          >
+            Inizia una chat per costruire la tua cartella clinica: patologie, farmaci, allergie,
+            esami e stile di vita.
+          </p>
+        </div>
+      )}
+
+      {/* Manual health profile edit */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <h3 style={{ ...sectionHeaderStyle, margin: 0 }}>Profilo Clinico Manuale</h3>
         <button
           type="button"
           onClick={() => setEditing((v) => !v)}
@@ -336,38 +549,6 @@ export function HealthSection({ data }: Props) {
           </div>
         </div>
       )}
-
-      {/* Tip */}
-      <div
-        style={{
-          backgroundColor: 'rgba(52,199,89,0.1)',
-          borderRadius: '1rem',
-          padding: '0.875rem 1rem',
-        }}
-      >
-        <p
-          style={{
-            margin: 0,
-            fontSize: '0.8125rem',
-            color: '#34C759',
-            fontWeight: 600,
-            marginBottom: '0.25rem',
-          }}
-        >
-          💡 Suggerimento
-        </p>
-        <p
-          style={{
-            margin: 0,
-            fontSize: '0.8125rem',
-            color: 'var(--color-text-secondary, #8E8E93)',
-            lineHeight: 1.4,
-          }}
-        >
-          Parla con il team nella chat per ricevere analisi personalizzate dei tuoi parametri di
-          salute.
-        </p>
-      </div>
     </div>
   )
 }

@@ -2,57 +2,109 @@
 
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
 import type React from 'react'
+import { useState } from 'react'
 
 type Props = { data: ProfileData }
 
-const IDEA_CATEGORIES = [
-  {
-    title: 'Idee e Ispirazioni Settimanali',
-    emoji: '💡',
-    color: '#FF9F0A',
-    items: [
-      'Prepara un pasto sano e nutriente',
-      'Nuove tecniche di cottura',
-      '+ 10 min. (15 cal-equiv.)',
-    ],
-  },
-  {
-    title: 'Hobby Creativo',
-    emoji: '🎨',
-    color: '#AF52DE',
-    items: [
-      "Dedicati a un'attività artistica",
-      'Pittura, Scrittura',
-      'Musica, ecc.',
-      '@ 20 min. (25 cal-equiv.)',
-    ],
-  },
-  {
-    title: 'Connessione Locale',
-    emoji: '🤝',
-    color: '#34C759',
-    items: [
-      'Partecipa a un evento in città',
-      'Mercatini',
-      'Attività locali',
-      '@ 30 min. (40 cal-equiv.)',
-    ],
-  },
-  {
-    title: 'Esplora la Natura',
-    emoji: '🌿',
-    color: '#5AC8FA',
-    items: [
-      'Scopri sentieri vicino a te',
-      'Parchi urbani',
-      'Riserve naturali',
-      '@ 45 min. (145 cal-equiv.)',
-    ],
-  },
-]
+const ARTIFACT_TYPE_COLORS: Record<string, string> = {
+  workout_plan: '#007AFF',
+  meal_plan: '#34C759',
+  recommendation: '#FF9F0A',
+  article: '#5AC8FA',
+  tip: '#AF52DE',
+  report: '#FF3B30',
+}
+
+function getArtifactColor(type: string): string {
+  return ARTIFACT_TYPE_COLORS[type] ?? '#FF9F0A'
+}
+
+function AttrRow({ label, value, unit }: { label: string; value: unknown; unit?: string | null }) {
+  const display = value == null || value === '' ? '—' : String(value)
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.625rem 0' }}>
+      <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
+        {label}
+      </span>
+      <span
+        style={{
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          color: 'var(--color-text-primary, #1C1C1E)',
+          maxWidth: '60%',
+          textAlign: 'right',
+        }}
+      >
+        {display}
+        {unit && display !== '—' ? ` ${unit}` : ''}
+      </span>
+    </div>
+  )
+}
 
 export function IdeasSection({ data }: Props) {
-  const { artifacts } = data
+  const { allArtifacts, attributesByDomain } = data
+  const [activeFilter, setActiveFilter] = useState<string>('all')
+
+  // Use allArtifacts (up to 20) for full display
+  const artifacts = allArtifacts ?? []
+
+  // Unique artifact types for filter tabs
+  const types = Array.from(new Set(artifacts.map((a) => a.type).filter(Boolean)))
+
+  const filtered =
+    activeFilter === 'all' ? artifacts : artifacts.filter((a) => a.type === activeFilter)
+
+  // Cartella Professionale from career, financial, life-organizer, commercialista domains
+  const careerAttrs = attributesByDomain?.['career'] ?? {}
+  const financialAttrs = attributesByDomain?.['financial'] ?? {}
+  const lifeAttrs = attributesByDomain?.['life-organizer'] ?? {}
+  const commAttrs = attributesByDomain?.['commercialista'] ?? {}
+
+  const professionalSections = [
+    {
+      title: 'Carriera',
+      emoji: '💼',
+      color: '#007AFF',
+      items: [
+        { label: 'Ruolo attuale', key: 'current_role', attrs: careerAttrs },
+        { label: 'Obiettivo professionale', key: 'professional_goal', attrs: careerAttrs },
+        { label: 'Settore', key: 'industry', attrs: careerAttrs },
+      ],
+    },
+    {
+      title: 'Finanze',
+      emoji: '💰',
+      color: '#34C759',
+      items: [
+        { label: 'Obiettivo finanziario', key: 'financial_goal', attrs: financialAttrs },
+        { label: 'Tolleranza al rischio', key: 'risk_tolerance', attrs: financialAttrs },
+        { label: 'Budget mensile', key: 'monthly_budget', attrs: financialAttrs },
+      ],
+    },
+    {
+      title: 'Organizzazione',
+      emoji: '📋',
+      color: '#FF9F0A',
+      items: [
+        { label: 'Obiettivo organizzativo', key: 'organizational_goal', attrs: lifeAttrs },
+        { label: 'Priorità', key: 'priority', attrs: lifeAttrs },
+      ],
+    },
+    {
+      title: 'Fiscale',
+      emoji: '📊',
+      color: '#AF52DE',
+      items: [
+        { label: 'Tipo attività', key: 'activity_type', attrs: commAttrs },
+        { label: 'Regime fiscale', key: 'tax_regime', attrs: commAttrs },
+      ],
+    },
+  ]
+
+  const hasProfessionalData = professionalSections.some((section) =>
+    section.items.some((item) => item.attrs[item.key]?.value != null),
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -66,7 +118,7 @@ export function IdeasSection({ data }: Props) {
             color: 'var(--color-text-primary, #1C1C1E)',
           }}
         >
-          Idee e Ispirazioni
+          Raccomandazioni
         </h2>
         {artifacts.length > 0 && (
           <span
@@ -79,138 +131,258 @@ export function IdeasSection({ data }: Props) {
               padding: '0.2rem 0.625rem',
             }}
           >
-            {artifacts.length} Nuovi
+            {artifacts.length} totali
           </span>
         )}
       </div>
 
-      {/* AI Artifacts from team */}
-      {artifacts.length > 0 && (
-        <>
-          <h3 style={sectionHeaderStyle}>Dal team LiveWell</h3>
-          {artifacts.slice(0, 3).map((a) => (
-            <div
-              key={a.id}
+      {/* Filter tabs */}
+      {types.length > 1 && (
+        <div
+          style={{
+            display: 'flex',
+            gap: '0.375rem',
+            flexWrap: 'wrap',
+          }}
+        >
+          <button
+            onClick={() => setActiveFilter('all')}
+            style={{
+              padding: '0.25rem 0.625rem',
+              borderRadius: '999px',
+              border: 'none',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              backgroundColor: activeFilter === 'all' ? '#FF9F0A' : 'var(--color-surface, #fff)',
+              color: activeFilter === 'all' ? '#fff' : 'var(--color-text-secondary, #8E8E93)',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+            }}
+          >
+            Tutti
+          </button>
+          {types.map((t) => (
+            <button
+              key={t}
+              onClick={() => setActiveFilter(t)}
               style={{
-                backgroundColor: 'var(--color-surface, #fff)',
-                borderRadius: '1rem',
-                padding: '1rem',
+                padding: '0.25rem 0.625rem',
+                borderRadius: '999px',
+                border: 'none',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                backgroundColor:
+                  activeFilter === t ? getArtifactColor(t) : 'var(--color-surface, #fff)',
+                color: activeFilter === t ? '#fff' : 'var(--color-text-secondary, #8E8E93)',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                borderLeft: '3px solid #FF9F0A',
               }}
             >
+              {t.replace(/_/g, ' ')}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Artifacts list */}
+      {filtered.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+          {filtered.map((a) => {
+            const color = getArtifactColor(a.type)
+            return (
               <div
+                key={a.id}
                 style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  marginBottom: '0.375rem',
+                  backgroundColor: 'var(--color-surface, #fff)',
+                  borderRadius: '1rem',
+                  padding: '1rem',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  borderLeft: `3px solid ${color}`,
                 }}
               >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    marginBottom: '0.375rem',
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '0.9375rem',
+                      fontWeight: 600,
+                      color: 'var(--color-text-primary, #1C1C1E)',
+                      flex: 1,
+                    }}
+                  >
+                    {a.title}
+                  </p>
+                  <span
+                    style={{
+                      fontSize: '0.6875rem',
+                      color: 'var(--color-text-secondary, #8E8E93)',
+                      flexShrink: 0,
+                      marginLeft: '0.5rem',
+                    }}
+                  >
+                    {new Date(a.createdAt).toLocaleDateString('it-IT', {
+                      day: 'numeric',
+                      month: 'short',
+                    })}
+                  </span>
+                </div>
                 <p
                   style={{
                     margin: 0,
-                    fontSize: '0.9375rem',
-                    fontWeight: 600,
-                    color: 'var(--color-text-primary, #1C1C1E)',
-                    flex: 1,
-                  }}
-                >
-                  {a.title}
-                </p>
-                <span
-                  style={{
-                    fontSize: '0.6875rem',
-                    color: 'var(--color-text-secondary, #8E8E93)',
-                    flexShrink: 0,
-                    marginLeft: '0.5rem',
-                  }}
-                >
-                  {new Date(a.createdAt).toLocaleDateString('it-IT', {
-                    day: 'numeric',
-                    month: 'short',
-                  })}
-                </span>
-              </div>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: '0.8125rem',
-                  color: 'var(--color-text-secondary, #8E8E93)',
-                }}
-              >
-                {a.type}
-              </p>
-              {a.contentMarkdown && (
-                <p
-                  style={{
-                    margin: '0.375rem 0 0',
                     fontSize: '0.8125rem',
-                    color: 'var(--color-text-primary, #1C1C1E)',
-                    lineHeight: 1.4,
-                    overflow: 'hidden',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical' as const,
+                    color,
+                    fontWeight: 500,
                   }}
                 >
-                  {a.contentMarkdown.replace(/[#*`]/g, '').slice(0, 120)}
+                  {a.type.replace(/_/g, ' ')}
                 </p>
-              )}
-            </div>
-          ))}
-        </>
-      )}
-
-      {/* Idea categories grid */}
-      <h3 style={sectionHeaderStyle}>Suggerimenti settimanali</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
-        {IDEA_CATEGORIES.map(({ title, emoji, color, items }) => (
-          <div
-            key={title}
+                {a.contentMarkdown && (
+                  <p
+                    style={{
+                      margin: '0.375rem 0 0',
+                      fontSize: '0.8125rem',
+                      color: 'var(--color-text-secondary, #8E8E93)',
+                      lineHeight: 1.4,
+                      overflow: 'hidden',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical' as const,
+                    }}
+                  >
+                    {a.contentMarkdown.replace(/[#*`]/g, '').slice(0, 140)}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div
+          style={{
+            backgroundColor: 'rgba(255,159,10,0.06)',
+            borderRadius: '1rem',
+            padding: '1.25rem 1rem',
+            textAlign: 'center',
+          }}
+        >
+          <p
             style={{
-              backgroundColor: 'var(--color-surface, #fff)',
-              borderRadius: '1rem',
-              padding: '0.875rem',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-              borderTop: `3px solid ${color}`,
+              margin: '0 0 0.375rem',
+              fontSize: '1.75rem',
             }}
           >
-            <div
-              style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}
-            >
-              <span
+            💡
+          </p>
+          <p
+            style={{
+              margin: '0 0 0.375rem',
+              fontSize: '0.9375rem',
+              fontWeight: 700,
+              color: 'var(--color-text-primary, #1C1C1E)',
+            }}
+          >
+            Nessuna raccomandazione ancora
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.8125rem',
+              color: 'var(--color-text-secondary, #8E8E93)',
+              lineHeight: 1.4,
+            }}
+          >
+            Inizia una chat con il team per ricevere piani, idee e raccomandazioni personalizzate
+            basate sui tuoi obiettivi.
+          </p>
+        </div>
+      )}
+
+      {/* Cartella Professionale */}
+      <h3 style={sectionHeaderStyle}>Cartella Professionale</h3>
+      {hasProfessionalData ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+          {professionalSections.map(({ title, emoji, color, items }) => {
+            const hasData = items.some((item) => item.attrs[item.key]?.value != null)
+            if (!hasData) return null
+            return (
+              <div
+                key={title}
                 style={{
-                  fontSize: '0.8125rem',
-                  fontWeight: 600,
-                  color: 'var(--color-text-primary, #1C1C1E)',
-                  lineHeight: 1.3,
+                  backgroundColor: 'var(--color-surface, #fff)',
+                  borderRadius: '1rem',
+                  padding: '0.875rem 1rem',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  borderTop: `3px solid ${color}`,
                 }}
               >
-                {title}
-              </span>
-              <span style={{ fontSize: '1rem', flexShrink: 0, marginLeft: '0.25rem' }}>
-                {emoji}
-              </span>
-            </div>
-            <ul style={{ margin: 0, padding: '0 0 0 1rem', listStyle: 'disc' }}>
-              {items.slice(0, 3).map((item, i) => (
-                <li
-                  key={i}
+                <p
                   style={{
-                    fontSize: '0.6875rem',
-                    color: 'var(--color-text-secondary, #8E8E93)',
-                    marginBottom: '0.125rem',
-                    lineHeight: 1.4,
+                    margin: '0 0 0.5rem',
+                    fontSize: '0.875rem',
+                    fontWeight: 700,
+                    color: 'var(--color-text-primary, #1C1C1E)',
                   }}
                 >
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+                  {emoji} {title}
+                </p>
+                <div style={{ padding: '0' }}>
+                  {items.map(({ label, key, attrs }, i) => (
+                    <div
+                      key={key}
+                      style={{
+                        borderTop: i > 0 ? '1px solid var(--color-separator, #E5E5EA)' : 'none',
+                      }}
+                    >
+                      <AttrRow
+                        label={label}
+                        value={attrs[key]?.value}
+                        unit={attrs[key]?.unit as string | null | undefined}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div
+          style={{
+            backgroundColor: 'rgba(255,159,10,0.06)',
+            borderRadius: '1rem',
+            padding: '1rem',
+          }}
+        >
+          <p
+            style={{
+              margin: '0 0 0.25rem',
+              fontSize: '0.9375rem',
+              fontWeight: 600,
+              color: 'var(--color-text-primary, #1C1C1E)',
+            }}
+          >
+            💬 Parla con i consulenti
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.8125rem',
+              color: 'var(--color-text-secondary, #8E8E93)',
+              lineHeight: 1.4,
+            }}
+          >
+            Il team include career coach, financial planner e commercialista. Inizia una chat per
+            costruire la tua cartella professionale.
+          </p>
+        </div>
+      )}
 
       {/* Chat CTA */}
       <div
@@ -224,7 +396,7 @@ export function IdeasSection({ data }: Props) {
             color: 'var(--color-text-primary, #1C1C1E)',
           }}
         >
-          💬 Chiedi al team
+          💬 Richiedi nuove idee
         </p>
         <p
           style={{
@@ -242,7 +414,7 @@ export function IdeasSection({ data }: Props) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
         {[
           { label: 'Raccomandazioni', value: String(artifacts.length), color: '#FF9F0A' },
-          { label: 'Categorie', value: '4', color: '#AF52DE' },
+          { label: 'Tipi', value: String(types.length || 0), color: '#AF52DE' },
         ].map(({ label, value, color }) => (
           <div
             key={label}

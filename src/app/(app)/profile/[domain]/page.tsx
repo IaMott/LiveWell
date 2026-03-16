@@ -27,8 +27,31 @@ const VALID_DOMAINS = [
 
 type Domain = (typeof VALID_DOMAINS)[number]
 
+type AttrRow = {
+  domain: string
+  key: string
+  value: unknown
+  unit: string | null
+  recordedAt: Date
+}
+
+function groupAttributesByDomain(
+  attrs: AttrRow[],
+): Record<string, Record<string, { value: unknown; unit: string | null }>> {
+  const result: Record<string, Record<string, { value: unknown; unit: string | null }>> = {}
+  for (const attr of attrs) {
+    if (!result[attr.domain]) result[attr.domain] = {}
+    if (!result[attr.domain][attr.key]) {
+      // First occurrence wins (already ordered by recordedAt desc)
+      result[attr.domain][attr.key] = { value: attr.value, unit: attr.unit }
+    }
+  }
+  return result
+}
+
 async function fetchProfileData(userId: string) {
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 
   const [
     user,
@@ -43,6 +66,10 @@ async function fetchProfileData(userId: string) {
     recentMeals,
     recentMindfulness,
     dynamicAttribs,
+    bodyMetrics30d,
+    allAttributes,
+    workoutPlan,
+    allArtifacts,
   ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -110,6 +137,35 @@ async function fetchProfileData(userId: string) {
       orderBy: { recordedAt: 'desc' },
       select: { domain: true, key: true, value: true, unit: true, recordedAt: true },
     }),
+    // Body metrics history (last 30 days, weight only)
+    prisma.bodyMetricEntry.findMany({
+      where: { userId, metricType: 'weight', recordedAt: { gte: since30d } },
+      orderBy: { recordedAt: 'asc' },
+      select: { value: true, unit: true, recordedAt: true },
+    }),
+    // All user attributes from all domains
+    prisma.userAttribute.findMany({
+      where: {
+        userId,
+        OR: [{ validUntil: null }, { validUntil: { gt: new Date() } }],
+      },
+      orderBy: { recordedAt: 'desc' },
+      take: 500,
+      select: { domain: true, key: true, value: true, unit: true, recordedAt: true },
+    }),
+    // Latest workout plan
+    prisma.workoutPlan.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, title: true, weeklyDays: true, sessions: true, createdAt: true },
+    }),
+    // All recommendation artifacts (up to 20)
+    prisma.recommendationArtifact.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: { id: true, type: true, title: true, contentMarkdown: true, createdAt: true },
+    }),
   ])
 
   // Build a merged profile: UserProfile takes precedence, dynamic attrs fill gaps
@@ -175,6 +231,11 @@ async function fetchProfileData(userId: string) {
       items: m.items as Record<string, unknown>[],
     })),
     recentMindfulness,
+    bodyMetrics30d,
+    allAttributes,
+    attributesByDomain: groupAttributesByDomain(allAttributes),
+    workoutPlan,
+    allArtifacts,
   }
 }
 
