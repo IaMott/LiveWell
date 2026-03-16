@@ -1,4 +1,195 @@
-import { AgentInput } from '../types'
+import { AgentInput, ContextPack } from '../types'
+
+// ---------------------------------------------------------------------------
+// 1A — AGENT_INTAKE_KEYS: per-agent required / optional attribute map
+// ---------------------------------------------------------------------------
+
+const AGENT_INTAKE_KEYS: Record<string, { required: string[]; optional: string[] }> = {
+  dietista: {
+    required: ['weight', 'height', 'goal', 'allergy', 'meal_pattern'],
+    optional: ['budget_food', 'cooking_time'],
+  },
+  chef: {
+    required: ['goal', 'cooking_experience', 'dietary_restrictions', 'cooking_time'],
+    optional: ['equipment'],
+  },
+  endocrinologo: {
+    required: ['weight', 'symptoms', 'sleep_hours', 'medications', 'hormonal_exams'],
+    optional: ['recent_weight_change'],
+  },
+  'persona-trainer': {
+    required: ['fitness_level', 'training_frequency_per_week', 'injury', 'goal'],
+    optional: ['equipment'],
+  },
+  chinesologo: {
+    required: ['fitness_level', 'goal', 'injury', 'sport'],
+    optional: ['body_awareness'],
+  },
+  fisioterapista: {
+    required: [
+      'pain_location',
+      'pain_cause',
+      'symptom_duration',
+      'pain_intensity',
+      'functional_impact',
+    ],
+    optional: ['previous_treatments'],
+  },
+  fisiatra: {
+    required: ['diagnosis', 'functional_status', 'pain_location', 'pain_intensity'],
+    optional: ['rehab_goal'],
+  },
+  'medico-dello-sport': {
+    required: ['sport', 'training_frequency_per_week', 'injury', 'goal'],
+    optional: ['supplements'],
+  },
+  'coach-del-sonno': {
+    required: ['sleep_hours', 'sleep_latency', 'night_wakings', 'sleep_quality'],
+    optional: ['evening_routine'],
+  },
+  mmg: {
+    required: ['complaint', 'symptoms', 'blood_pressure', 'medications', 'lifestyle'],
+    optional: ['recent_exams'],
+  },
+  cardiologo: {
+    required: ['symptoms', 'blood_pressure', 'family_history', 'medications', 'physical_activity'],
+    optional: ['ecg_result', 'cholesterol'],
+  },
+  dermatologo: {
+    required: ['lesion_type', 'lesion_location', 'symptom_duration', 'triggers'],
+    optional: ['current_treatment'],
+  },
+  gastroenterologo: {
+    required: ['digestive_symptoms', 'symptom_frequency', 'food_triggers', 'medications'],
+    optional: ['recent_exams'],
+  },
+  psicologo: {
+    required: [
+      'complaint',
+      'relational_context',
+      'work_context',
+      'symptom_duration',
+      'distress_intensity',
+    ],
+    optional: ['symptoms'],
+  },
+  'mental-coach': {
+    required: ['mental_performance_goal', 'difficulty_area', 'context'],
+    optional: ['mental_resources'],
+  },
+  'relationship-coach': {
+    required: ['relationship_type', 'main_problem', 'problem_duration'],
+    optional: ['previous_attempts'],
+  },
+  'analista-contesto': {
+    required: ['analysis_domain', 'decision_goal', 'urgency'],
+    optional: ['available_data'],
+  },
+  'career-coach': {
+    required: ['current_role', 'professional_goal', 'main_obstacle', 'timeline'],
+    optional: [],
+  },
+  'executive-coach': {
+    required: ['leadership_role', 'team_context', 'main_challenge', 'professional_goal'],
+    optional: [],
+  },
+  commercialista: {
+    required: ['activity_type', 'tax_regime', 'fiscal_situation', 'upcoming_deadlines'],
+    optional: [],
+  },
+  'consulente-legale': {
+    required: ['legal_issue_type', 'case_status', 'objective', 'urgency'],
+    optional: ['documentation'],
+  },
+  'financial-planner': {
+    required: ['income_range', 'expenses', 'savings', 'financial_goal', 'risk_tolerance'],
+    optional: ['debts'],
+  },
+  'life-organizer': {
+    required: ['difficulty_area', 'organizational_goal', 'constraints'],
+    optional: ['current_tools'],
+  },
+}
+
+// ---------------------------------------------------------------------------
+// Helper: get a flat map of all attribute keys → value string
+// ---------------------------------------------------------------------------
+
+function flatAttributeMap(
+  attrs: Record<string, Record<string, { value: unknown; unit?: string }>> | undefined,
+): Map<string, string> {
+  const map = new Map<string, string>()
+  if (!attrs) return map
+  for (const domainValues of Object.values(attrs)) {
+    if (!domainValues || typeof domainValues !== 'object') continue
+    for (const [k, v] of Object.entries(
+      domainValues as Record<string, { value: unknown; unit?: string }>,
+    )) {
+      if (v?.value != null) {
+        const display = typeof v.value === 'object' ? JSON.stringify(v.value) : String(v.value)
+        map.set(k, display + (v.unit ? ` ${v.unit}` : ''))
+      }
+    }
+  }
+  return map
+}
+
+// ---------------------------------------------------------------------------
+// 1A — buildIntakeSection: shows ✓/✗ per required key for this agent
+// ---------------------------------------------------------------------------
+
+function buildIntakeSection(agentId: string, input: AgentInput): string[] {
+  const intakeKeys = AGENT_INTAKE_KEYS[agentId]
+  if (!intakeKeys) {
+    // Fallback: dump all attributes (current behavior)
+    return formatUserAttributes(input)
+  }
+
+  const attrMap = flatAttributeMap(
+    input.contextPack.user.attributes as
+      | Record<string, Record<string, { value: unknown; unit?: string }>>
+      | undefined,
+  )
+
+  const lines: string[] = ['INTAKE SPECIALISTICO MINIMO (dati necessari per il tuo dominio):']
+
+  for (const key of intakeKeys.required) {
+    const val = attrMap.get(key)
+    if (val) {
+      lines.push(`✓ ${key}: ${val}`)
+    } else {
+      lines.push(`✗ ${key} — non ancora raccolto`)
+    }
+  }
+
+  // Extra attributes outside the required set
+  const shownKeys = new Set([...intakeKeys.required, ...intakeKeys.optional])
+  const extras: string[] = []
+  const attrs = input.contextPack.user.attributes ?? {}
+  for (const [domain, domainValues] of Object.entries(
+    attrs as Record<string, Record<string, { value: unknown; unit?: string }>>,
+  )) {
+    if (!domainValues || typeof domainValues !== 'object') continue
+    const domainEntries = Object.entries(domainValues)
+      .filter(([k, v]) => !shownKeys.has(k) && v?.value != null)
+      .map(([k, v]) => {
+        const display = typeof v.value === 'object' ? JSON.stringify(v.value) : String(v.value)
+        return `${k}: ${display}${v.unit ? ` ${v.unit}` : ''}`
+      })
+    if (domainEntries.length > 0) {
+      extras.push(`[${domain}] ${domainEntries.slice(0, 6).join(' | ')}`)
+    }
+  }
+  if (extras.length > 0) {
+    lines.push('', 'ALTRI ATTRIBUTI DISPONIBILI:', ...extras)
+  }
+
+  return lines
+}
+
+// ---------------------------------------------------------------------------
+// Original formatUserAttributes (used as fallback in buildIntakeSection)
+// ---------------------------------------------------------------------------
 
 export function formatUserAttributes(input: AgentInput): string[] {
   const attrs = input.contextPack.user.attributes
@@ -19,6 +210,149 @@ export function formatUserAttributes(input: AgentInput): string[] {
   }
   return lines
 }
+
+// ---------------------------------------------------------------------------
+// 1B — detectSessionMode: first_session vs follow_up
+// ---------------------------------------------------------------------------
+
+function detectSessionMode(
+  agentId: string,
+  contextPack: ContextPack,
+): 'first_session' | 'follow_up' {
+  const hasWorkspace = contextPack.history.agentWorkspaces?.some((w) => w.agentId === agentId)
+  return hasWorkspace ? 'follow_up' : 'first_session'
+}
+
+function buildSessionModeBlock(mode: 'first_session' | 'follow_up'): string[] {
+  if (mode === 'first_session') {
+    return [
+      'SESSION MODE: PRIMA SESSIONE',
+      '→ Raccogli i dati mancanti (vedi INTAKE SPECIALISTICO), poni UNA domanda aperta.',
+    ]
+  }
+  return [
+    'SESSION MODE: FOLLOW-UP',
+    "→ L'utente ha già lavorato con te. Usa il framework di follow-up:",
+    '  apertura → dati oggettivi → aderenza → analisi 4 aree → cambiamenti percepiti → revisione obiettivi',
+  ]
+}
+
+// ---------------------------------------------------------------------------
+// 1C — buildWeeklyTrendSummary: computes trends from contextPack.trackers
+// ---------------------------------------------------------------------------
+
+function buildWeeklyTrendSummary(contextPack: ContextPack): string[] {
+  const trackers = contextPack.trackers
+  if (!trackers) return []
+
+  const lines: string[] = []
+
+  // --- Weight trend from health tracker ---
+  const healthTracker = trackers.health as
+    | { bodyMetrics?: Array<{ weight?: number; recordedAt?: string }> }
+    | undefined
+  const bodyMetrics = healthTracker?.bodyMetrics
+  if (Array.isArray(bodyMetrics) && bodyMetrics.length >= 2) {
+    const sorted = [...bodyMetrics]
+      .filter((e) => e.weight != null)
+      .sort((a, b) => {
+        const ta = a.recordedAt ? new Date(a.recordedAt).getTime() : 0
+        const tb = b.recordedAt ? new Date(b.recordedAt).getTime() : 0
+        return ta - tb
+      })
+    if (sorted.length >= 2) {
+      const first = sorted[0].weight!
+      const last = sorted[sorted.length - 1].weight!
+      const delta = last - first
+      const arrow = delta < -0.05 ? '▼' : delta > 0.05 ? '▲' : '='
+      lines.push(
+        `Peso: ${first.toFixed(1)} → ${last.toFixed(1)} kg (${arrow} ${Math.abs(delta).toFixed(1)} kg)`,
+      )
+    }
+  }
+
+  // --- Training sessions from training tracker ---
+  const trainingTracker = trackers.training as
+    | { sessions?: Array<{ durationMin?: number; recordedAt?: string }> }
+    | undefined
+  const sessions = trainingTracker?.sessions
+  if (Array.isArray(sessions) && sessions.length > 0) {
+    const avgDuration = sessions.reduce((sum, s) => sum + (s.durationMin ?? 0), 0) / sessions.length
+    lines.push(
+      `Allenamenti: ${sessions.length} session${sessions.length === 1 ? 'e' : 'i'} (media ${Math.round(avgDuration)} min)`,
+    )
+  }
+
+  // --- Average calories from nutrition tracker ---
+  const nutritionTracker = trackers.nutrition as
+    | { meals?: Array<{ calories?: number; recordedAt?: string }> }
+    | undefined
+  const meals = nutritionTracker?.meals
+  if (Array.isArray(meals) && meals.length > 0) {
+    // Group by day and average
+    const byDay: Record<string, number[]> = {}
+    for (const meal of meals) {
+      if (meal.calories == null) continue
+      const day = meal.recordedAt ? meal.recordedAt.slice(0, 10) : 'unknown'
+      byDay[day] = byDay[day] ?? []
+      byDay[day].push(meal.calories)
+    }
+    const days = Object.values(byDay)
+    if (days.length > 0) {
+      const dailyTotals = days.map((cals) => cals.reduce((a, b) => a + b, 0))
+      const avg = dailyTotals.reduce((a, b) => a + b, 0) / dailyTotals.length
+      lines.push(`Calorie: media ${Math.round(avg)} kcal/giorno`)
+    }
+  }
+
+  // --- Mindfulness sessions from mindfulness tracker ---
+  const mindfulnessTracker = trackers.mindfulness as
+    | { sessions?: Array<{ moodScore?: number; recordedAt?: string }> }
+    | undefined
+  const mindSessions = mindfulnessTracker?.sessions
+  if (Array.isArray(mindSessions) && mindSessions.length > 0) {
+    const withMood = mindSessions.filter((s) => s.moodScore != null)
+    const avgMood =
+      withMood.length > 0
+        ? withMood.reduce((sum, s) => sum + s.moodScore!, 0) / withMood.length
+        : null
+    lines.push(
+      `Mindfulness: ${mindSessions.length} session${mindSessions.length === 1 ? 'e' : 'i'}` +
+        (avgMood != null ? ` (mood medio: ${avgMood.toFixed(1)}/10)` : ''),
+    )
+  }
+
+  if (lines.length === 0) return []
+
+  return ['TREND SETTIMANALE (ultimi 7 giorni):', ...lines]
+}
+
+// ---------------------------------------------------------------------------
+// 1D — buildCrossSessionContext: continuity from previous conversations
+// ---------------------------------------------------------------------------
+
+function buildCrossSessionContext(contextPack: ContextPack): string[] {
+  const msgs = contextPack.history.crossConversationMessages
+  if (!msgs || msgs.length === 0) return []
+
+  // Pick up to 2 assistant messages from previous sessions
+  const assistantMsgs = msgs.filter((m) => m.role === 'assistant').slice(0, 2)
+  if (assistantMsgs.length === 0) return []
+
+  const lines: string[] = ['CONTESTO SESSIONI PRECEDENTI:']
+  for (const msg of assistantMsgs) {
+    const date = msg.createdAt
+      ? new Date(msg.createdAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
+      : '?'
+    const snippet = msg.content.length > 300 ? msg.content.slice(0, 297) + '…' : msg.content
+    lines.push(`[${date}] "${snippet}"`)
+  }
+  return lines
+}
+
+// ---------------------------------------------------------------------------
+// Existing helpers (unchanged)
+// ---------------------------------------------------------------------------
 
 function formatProfileSummary(input: AgentInput): string | null {
   if (!input.contextPack.user.profile || Object.keys(input.contextPack.user.profile).length === 0) {
@@ -45,6 +379,10 @@ function extractPreviousTeamQuestions(input: AgentInput): string[] {
     .slice(0, 6)
 }
 
+// ---------------------------------------------------------------------------
+// Main export — integrates all improvements
+// ---------------------------------------------------------------------------
+
 export function buildAgentUserPrompt(
   input: AgentInput,
   agentId: string,
@@ -68,9 +406,26 @@ export function buildAgentUserPrompt(
     parts.push(`- userProfile: ${profileSummary}`)
   }
 
-  const attributeLines = formatUserAttributes(input)
-  if (attributeLines.length > 0) {
-    parts.push(``, `USER ATTRIBUTES (fonte principale dinamica):`, ...attributeLines)
+  // 1A — Intake section (filtered per agent, or full dump as fallback)
+  const intakeLines = buildIntakeSection(agentId, input)
+  if (intakeLines.length > 0) {
+    parts.push(``, ...intakeLines)
+  }
+
+  // 1B — Session mode
+  const sessionMode = detectSessionMode(agentId, input.contextPack)
+  parts.push(``, ...buildSessionModeBlock(sessionMode))
+
+  // 1C — Weekly trend summary
+  const trendLines = buildWeeklyTrendSummary(input.contextPack)
+  if (trendLines.length > 0) {
+    parts.push(``, ...trendLines)
+  }
+
+  // 1D — Cross-session context
+  const crossLines = buildCrossSessionContext(input.contextPack)
+  if (crossLines.length > 0) {
+    parts.push(``, ...crossLines)
   }
 
   const ownWorkspace = input.contextPack.history.agentWorkspaces?.find((w) => w.agentId === agentId)

@@ -2,6 +2,77 @@ import { applyQuestionPolicy, isGenericQuestion } from '../policy/questionPolicy
 import { ActiveSpecialist, AgentProposal, ContextPack, Domain } from '../types'
 import { isAgeQuestion, readPersonalSnapshot } from './inputInference'
 
+// ---------------------------------------------------------------------------
+// 2A — L1 Baseline questions (who is the user)
+// ---------------------------------------------------------------------------
+
+function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string): string[] {
+  const personal = readPersonalSnapshot(contextPack)
+  const attrs = contextPack.user.attributes ?? {}
+  const lower = userMessage.toLowerCase()
+
+  // Skip if message already contains specific data (e.g. numbers, symptoms)
+  const hasSpecificData =
+    /\d/.test(lower) ||
+    lower.includes('ho ') ||
+    lower.includes('sono ') ||
+    lower.includes('soffro') ||
+    lower.includes('dolore') ||
+    lower.includes('sintomo') ||
+    lower.includes('peso') ||
+    lower.includes('alleno')
+  if (hasSpecificData) return []
+
+  // Skip if we already know age/birthdate
+  if (personal.birthDate) return []
+
+  // Check declared goal in general attributes
+  const generalAttrs = attrs['general'] as Record<string, { value?: unknown }> | undefined
+  const hasDeclaredGoal = Boolean(generalAttrs?.['declared_goal']?.value != null)
+
+  // Max 1 question per turn
+  if (!personal.birthDate && !hasDeclaredGoal) {
+    return [
+      'Per conoscerti meglio: quanti anni hai e come descriveresti la tua situazione attuale?',
+    ]
+  }
+  if (!hasDeclaredGoal) {
+    return ['Qual è la cosa più importante che vorresti migliorare o raggiungere?']
+  }
+  return []
+}
+
+// ---------------------------------------------------------------------------
+// 2A — L2 Triage questions (what is the main problem)
+// ---------------------------------------------------------------------------
+
+function buildL2TriageQuestions(contextPack: ContextPack, userMessage: string): string[] {
+  const attrs = contextPack.user.attributes ?? {}
+  const lower = userMessage.toLowerCase()
+
+  // Skip if message already contains specific symptom/domain data
+  const hasSpecificContext =
+    /\d/.test(lower) ||
+    lower.includes('dolore') ||
+    lower.includes('sintomo') ||
+    lower.includes('problema') ||
+    lower.includes('sento') ||
+    lower.includes('mangio') ||
+    lower.includes('alleno') ||
+    lower.includes('soffro') ||
+    lower.includes('ho la')
+  if (hasSpecificContext) return []
+
+  // Check if main_complaint already known
+  const generalAttrs = attrs['general'] as Record<string, { value?: unknown }> | undefined
+  const hasMainComplaint = Boolean(generalAttrs?.['main_complaint']?.value != null)
+
+  if (!hasMainComplaint) {
+    return ['Qual è il problema principale che senti oggi o su cosa vorresti lavorare?']
+  }
+  return []
+}
+
 export type InterviewFlowInput = {
   domain: Domain
   contextPack: ContextPack
@@ -110,12 +181,25 @@ function buildInterviewQueue(
   userMessage: string,
   activeSpecialist?: ActiveSpecialist,
 ): { askNow: string[]; pendingNext: string[] } {
+  // Allow more questions upfront only in locked-specialist mode when profile is empty + no queued questions.
+  // In team-led mode (no activeSpecialist) stay conservative at 1 to avoid flooding the user.
+  const attrs = contextPack.user.attributes ?? {}
+  const domainAttrs =
+    ((attrs as Record<string, unknown>)[domain] as Record<string, unknown> | undefined) ?? {}
   const fromWorkspace = getPendingQuestionsFromWorkspace(contextPack, domain, activeSpecialist)
-  const fromPlan = buildQuestionPlan(domain, contextPack, userMessage)
+  const isFirstInteractionInDomain =
+    Object.keys(domainAttrs).length === 0 && fromWorkspace.length === 0 && activeSpecialist != null
+  const maxAskNow = isFirstInteractionInDomain ? 3 : 1
+
+  // 2A — PRIORITY QUEUE: L1 → workspace pending → L2 → L3 domain-specific
+  // L1 baseline (only if first conversation and profile empty)
+  const isFirstConversation = contextPack.history.recentMessages.length === 0
+  const l1Questions = isFirstConversation ? buildL1BaselineQuestions(contextPack, userMessage) : []
+
+  // Workspace pending questions (from previous turns)
   const workspaceQueue = fromWorkspace
     .map((question) => question.trim())
     .filter((question) => question.length > 0 && !isGenericQuestion(question))
-
   const seenWorkspace = new Set<string>()
   const orderedWorkspace = workspaceQueue.filter((question) => {
     const key = question.toLowerCase()
@@ -124,27 +208,42 @@ function buildInterviewQueue(
     return true
   })
 
-  // Allow more questions upfront only in locked-specialist mode when profile is empty + no queued questions.
-  // In team-led mode (no activeSpecialist) stay conservative at 1 to avoid flooding the user.
-  const attrs = contextPack.user.attributes ?? {}
-  const domainAttrs =
-    ((attrs as Record<string, unknown>)[domain] as Record<string, unknown> | undefined) ?? {}
-  const isFirstInteractionInDomain =
-    Object.keys(domainAttrs).length === 0 && fromWorkspace.length === 0 && activeSpecialist != null
-  const maxAskNow = isFirstInteractionInDomain ? 3 : 1
+  // L2 triage (only if L1 not triggered and no workspace questions pending)
+  const l2Questions =
+    l1Questions.length === 0 && orderedWorkspace.length === 0
+      ? buildL2TriageQuestions(contextPack, userMessage)
+      : []
+
+  // L3 domain-specific
+  const fromPlan = buildQuestionPlan(domain, contextPack, userMessage)
+  const seenAll = new Set<string>([
+    ...l1Questions.map((q) => q.toLowerCase()),
+    ...orderedWorkspace.map((q) => q.toLowerCase()),
+    ...l2Questions.map((q) => q.toLowerCase()),
+  ])
 
   const policy = applyQuestionPolicy(
     fromPlan
-      .filter((question) => !seenWorkspace.has(question.trim().toLowerCase()))
+      .filter((question) => !seenAll.has(question.trim().toLowerCase()))
       .map((question) => ({ question, priority: 10 })),
     {
       domain,
-      maxQuestions: Math.max(0, maxAskNow - orderedWorkspace.length),
+      maxQuestions: Math.max(
+        0,
+        maxAskNow - l1Questions.length - orderedWorkspace.length - l2Questions.length,
+      ),
       dedupeStrategy: 'exact',
     },
   )
 
-  const orderedQuestions = [...orderedWorkspace, ...policy.orderedQuestions]
+  // Merge in priority order: L1 → workspace → L2 → L3
+  const orderedQuestions = [
+    ...l1Questions,
+    ...orderedWorkspace,
+    ...l2Questions,
+    ...policy.orderedQuestions,
+  ]
+
   if (orderedQuestions.length === 0) return { askNow: [], pendingNext: [] }
 
   return {
