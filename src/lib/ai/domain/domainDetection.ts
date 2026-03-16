@@ -75,7 +75,7 @@ const KEYWORDS: Record<Domain, string[]> = {
     'career',
     'obiettivo professionale',
   ],
-  coordination: ['coordina', 'coordinamento', 'team', 'orchestratore', 'specialista'],
+  coordination: ['coordina', 'coordinamento'],
   general: [],
 }
 

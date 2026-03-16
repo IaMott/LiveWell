@@ -443,6 +443,7 @@ function buildSystemPrompt(
 
   // Team mode — anti-pattern block applies to all variants
   const teamAntiPattern = `NON iniziare MAI con: "Il team LiveWell", "Siamo il team LiveWell", "Caro utente", "Gentile utente", "Il team LiveWell ti ringrazia", "Il team LiveWell comprende". Varia sempre l'apertura — rispondi come persone reali, non come un'istituzione formale.`
+  const activeSpecialistNote = buildActiveSpecialistNote(proposals)
 
   if (isFirstMessage) {
     return [
@@ -450,6 +451,7 @@ function buildSystemPrompt(
       `Parla in italiano, tono caldo e diretto — come persone reali, non come un chatbot aziendale.${imageNote}`,
       `Rispondi a nome del gruppo usando "noi". NON presentarti come singolo specialista.`,
       teamAntiPattern,
+      activeSpecialistNote,
       ``,
       `Primo contatto: il tuo obiettivo è CONOSCERE ${nameRef}, non darle consigli.`,
       `Fai UNA sola domanda aperta — quella che ti permette di capire cosa sta cercando.`,
@@ -461,8 +463,9 @@ function buildSystemPrompt(
     return [
       `Sei un gruppo di specialisti del benessere che segue ${nameRef}.`,
       `Parla in italiano, tono caldo e diretto.${imageNote}`,
-      `Rispondi a nome del gruppo usando "noi". NON identificarti come singolo specialista.`,
+      `Rispondi a nome del gruppo usando "noi". Se l'utente chiede esplicitamente chi sta analizzando il suo caso, cita i nomi degli specialisti attivi.`,
       teamAntiPattern,
+      activeSpecialistNote,
       ``,
       `Stai raccogliendo le informazioni per costruire un percorso personalizzato per ${nameRef}.`,
       `Fai UNA sola domanda — la più importante ora — in modo naturale e conversazionale.`,
@@ -474,8 +477,9 @@ function buildSystemPrompt(
   return [
     `Sei un gruppo di specialisti del benessere che segue ${nameRef}.`,
     `Parla in italiano, tono diretto e professionale.${imageNote}`,
-    `Rispondi a nome del gruppo usando "noi". NON identificarti come singolo specialista.`,
+    `Rispondi a nome del gruppo usando "noi". Se l'utente chiede esplicitamente chi sta analizzando il suo caso, cita i nomi degli specialisti attivi.`,
     teamAntiPattern,
+    activeSpecialistNote,
     ``,
     `Hai informazioni sufficienti su ${nameRef}. Fornisci analisi e consigli concreti, personali, basati sui dati reali.`,
     `Sii diretto. Se ${nameRef} ha bisogno di qualcosa di specifico, affrontalo.`,
@@ -522,6 +526,26 @@ function buildUserPrompt(params: {
   ]
     .filter(Boolean)
     .join('\n')
+}
+
+/**
+ * Builds a human-readable list of active specialists from proposals.
+ * Used to let the synthesis model answer "which specialist analyzed my case".
+ */
+function buildActiveSpecialistNote(proposals: AgentProposal[]): string {
+  const active = proposals
+    .filter((p) => (p.confidence ?? 0) > 0 && !p.summary.toLowerCase().includes('[unavailable]'))
+    .map((p) => p.agentId)
+  if (active.length === 0) return ''
+  const formatted = active
+    .map((id) =>
+      id
+        .split('-')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' '),
+    )
+    .join(', ')
+  return `\nSPECIALISTI ATTIVI IN QUESTA CONVERSAZIONE: ${formatted}. Se l'utente chiede esplicitamente chi ha analizzato il suo caso o chi sta rispondendo, cita questi specialisti per nome.`
 }
 
 function buildFallbackText(proposals: AgentProposal[]): string {

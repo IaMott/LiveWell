@@ -94,7 +94,7 @@ export function createGeminiClient(): LlmClient {
         config: {
           systemInstruction,
           temperature: format === 'json' ? 0.7 : 0.85,
-          maxOutputTokens: 2048,
+          maxOutputTokens: format === 'json' ? 2048 : 8192,
         },
       })
 

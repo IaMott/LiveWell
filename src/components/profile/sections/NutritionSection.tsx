@@ -155,12 +155,13 @@ export function NutritionSection({ data }: Props) {
     return { key, label, emoji, color, meals, count: meals.length }
   })
 
-  // Macros (estimated from kcal goal when meals logged)
-  const kcalLogged = stats.mealsLogged7d > 0 ? Math.round(kcalGoal * 0.72) : 0
-  const proteinG = kcalLogged > 0 ? Math.round((kcalLogged * 0.22) / 4) : 0
-  const carbsG = kcalLogged > 0 ? Math.round((kcalLogged * 0.48) / 4) : 0
-  const fatG = kcalLogged > 0 ? Math.round((kcalLogged * 0.3) / 9) : 0
-  const hasAnyMacroData = stats.mealsLogged7d > 0 || dailyKcal != null
+  // Real macro attributes (collected via chat — no estimated percentages)
+  const proteinG = nutAttrs['protein_g']?.value as number | null | undefined
+  const carbsG = nutAttrs['carbs_g']?.value as number | null | undefined
+  const fatG = nutAttrs['fat_g']?.value as number | null | undefined
+  const hasMacroAttrs = proteinG != null || carbsG != null || fatG != null
+  // Show the kcal section only when we have a real kcal goal or real macro attrs
+  const hasAnyMacroData = dailyKcal != null || hasMacroAttrs
 
   // Cartella nutrizionale items
   const nutCartella = [
@@ -295,33 +296,43 @@ export function NutritionSection({ data }: Props) {
               letterSpacing: '0.05em',
             }}
           >
-            {stats.mealsLogged7d > 0 ? 'Stima giornaliera' : 'Obiettivi nutrizionali'}
+            {hasMacroAttrs ? 'Macronutrienti raccolti' : 'Riepilogo nutrizionale'}
           </p>
           <div style={{ display: 'flex', justifyContent: 'space-around' }}>
-            <MacroRing value={kcalLogged} max={kcalGoal} color="#FF9F0A" label="Kcal" unit="kcal" />
             <MacroRing
-              value={proteinG}
-              max={Math.round((kcalGoal * 0.25) / 4)}
-              color="#007AFF"
-              label="Proteine"
-              unit="g"
+              value={stats.mealsLogged7d}
+              max={Math.max(stats.mealsLogged7d, 1)}
+              color="#FF9F0A"
+              label={dailyKcal ? `${dailyKcal} kcal/die` : 'Pasti 7gg'}
+              unit={dailyKcal ? 'kcal' : 'pasti'}
             />
-            <MacroRing
-              value={carbsG}
-              max={Math.round((kcalGoal * 0.5) / 4)}
-              color="#34C759"
-              label="Carbo"
-              unit="g"
-            />
-            <MacroRing
-              value={fatG}
-              max={Math.round((kcalGoal * 0.25) / 9)}
-              color="#AF52DE"
-              label="Grassi"
-              unit="g"
-            />
+            {hasMacroAttrs && (
+              <>
+                <MacroRing
+                  value={proteinG ?? 0}
+                  max={Math.max(proteinG ?? 0, 1)}
+                  color="#007AFF"
+                  label="Proteine"
+                  unit="g"
+                />
+                <MacroRing
+                  value={carbsG ?? 0}
+                  max={Math.max(carbsG ?? 0, 1)}
+                  color="#34C759"
+                  label="Carbo"
+                  unit="g"
+                />
+                <MacroRing
+                  value={fatG ?? 0}
+                  max={Math.max(fatG ?? 0, 1)}
+                  color="#AF52DE"
+                  label="Grassi"
+                  unit="g"
+                />
+              </>
+            )}
           </div>
-          {stats.mealsLogged7d === 0 && (
+          {!hasMacroAttrs && (
             <p
               style={{
                 margin: '0.75rem 0 0',
@@ -330,7 +341,7 @@ export function NutritionSection({ data }: Props) {
                 textAlign: 'center',
               }}
             >
-              I pasti vengono registrati automaticamente tramite chat
+              I macronutrienti vengono raccolti automaticamente via chat
             </p>
           )}
         </div>
