@@ -511,9 +511,7 @@ function buildUserPrompt(params: {
     `ANALISI DEL TEAM SPECIALISTICO:`,
     summaries || '(primo contatto — nessun dato sul profilo ancora)',
     topRecommendations ? `\nRACCOMANDAZIONI EMERSE:\n${topRecommendations}` : '',
-    topMissingQuestion && !planRequest
-      ? `\nINFORMAZIONE CHIAVE DA RACCOGLIERE ORA:\n${topMissingQuestion}`
-      : '',
+    topMissingQuestion ? `\nINFORMAZIONE CHIAVE DA RACCOGLIERE ORA:\n${topMissingQuestion}` : '',
     ``,
     `Scrivi la risposta in italiano, rivolta direttamente all'utente.`,
     planRequest
@@ -560,10 +558,9 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
   const userName = getUserName(input.contextPack)
   const planRequest = isPlanRequest(input.userMessage)
 
-  // Only the single most important missing question (suppressed when plan is requested)
-  const topMissingQuestion = !planRequest
-    ? (input.gatingQuestions[0] ?? input.criticalQuestions[0] ?? null)
-    : null
+  // The single most important missing question — always computed, always shown in prompt as context.
+  // For plan requests the LLM instruction says "NON chiedere"; the question appears as context only.
+  const topMissingQuestion = input.gatingQuestions[0] ?? input.criticalQuestions[0] ?? null
 
   const imageData =
     input.imageData ?? (input.contextPack.files ? extractImageData(input.contextPack) : [])
@@ -583,7 +580,7 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
     summaries,
     topRecommendations,
     recentHistory,
-    topMissingQuestion: !planRequest && hasMissingData ? topMissingQuestion : null,
+    topMissingQuestion: hasMissingData ? topMissingQuestion : null,
     hasImages,
     planRequest,
   })

@@ -13,11 +13,27 @@ import { hardenFinalAnswer } from './finalAnswer'
 import { planToolCalls } from './toolCallPlan'
 import { getServerEnv } from '@/lib/validators/env'
 
+/** Hard deadline for the entire orchestration pipeline (agents + synthesis). */
+export const ORCHESTRATION_BUDGET_MS = 30_000
+
+/** Rejects with a timeout error after `ms` milliseconds. */
+function withGlobalTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  const deadline = new Promise<never>((_, reject) =>
+    setTimeout(
+      () => reject(new Error(`[orchestrator] ${label} exceeded global budget of ${ms}ms`)),
+      ms,
+    ),
+  )
+  return Promise.race([promise, deadline])
+}
+
 export type OrchestratorDeps = {
   llm: LlmClient
   team: AgentProfile[]
   orchestratorToolsAllowed: string[]
   retryGuardWindowMs?: number
+  /** Override global orchestration budget in ms (default: ORCHESTRATION_BUDGET_MS). */
+  globalTimeoutMs?: number
 }
 
 function getRetryGuardWindowMs(): number {
@@ -59,15 +75,20 @@ export async function orchestrate(
   // Skip agent rounds for generic messages (greetings, short no-context messages)
   // to prevent any specialist from contaminating the synthesis response.
   const skipAgents = !activeSpecialist && isGenericMessage(input)
+  const globalTimeoutMs = deps.globalTimeoutMs ?? ORCHESTRATION_BUDGET_MS
 
   const { round1Proposals, round2Proposals } = skipAgents
     ? { round1Proposals: [], round2Proposals: [] }
-    : await executeAgentRounds({
-        llm: deps.llm,
-        selectedAgents,
-        input,
-        domainHint,
-      })
+    : await withGlobalTimeout(
+        executeAgentRounds({
+          llm: deps.llm,
+          selectedAgents,
+          input,
+          domainHint,
+        }),
+        globalTimeoutMs,
+        'executeAgentRounds',
+      )
 
   const { consensus } = executeConsensusFlow({
     team: deps.team,

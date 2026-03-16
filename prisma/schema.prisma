@@ -147,6 +147,7 @@ model Message {
   createdAt      DateTime     @default(now()) @map("created_at")
 
   @@index([conversationId, deletedAt])
+  @@index([conversationId, createdAt])
   @@map("messages")
 }
 
@@ -218,6 +219,7 @@ model BodyMetricEntry {
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([userId, recordedAt])
+  @@index([userId, metricType, recordedAt])
   @@map("body_metric_entries")
 }
 

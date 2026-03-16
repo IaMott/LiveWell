@@ -272,9 +272,17 @@ export function buildAgentUserPrompt(
     parts.push(`- userProfile: ${profileSummary}`)
   }
 
-  // 1A — Intake section (filtered per agent, or full dump as fallback)
+  // 1A — User attributes: full domain-grouped dump (source of truth for the LLM)
+  const userAttrLines = formatUserAttributes(input)
+  if (userAttrLines.length > 0) {
+    parts.push(``, `USER ATTRIBUTES (fonte principale dinamica):`, ...userAttrLines)
+  }
+
+  // 1A2 — Intake section: structured ✓/✗ checklist for known agents
   const intakeLines = buildIntakeSection(agentId, input)
-  if (intakeLines.length > 0) {
+  // For known agents buildIntakeSection returns the INTAKE SPECIALISTICO block;
+  // for unknown agents it returns formatUserAttributes (already included above — skip).
+  if (intakeLines.length > 0 && AGENT_INTAKE_KEYS[agentId]) {
     parts.push(``, ...intakeLines)
   }
 

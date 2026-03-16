@@ -48,9 +48,9 @@ type KnownAttributeFieldHint = {
 
 const BLOCKED_TEMPLATE_PATTERNS: RegExp[] = [
   /quale area vuoi prioritizzare adesso/i,
-  /qual[’']?e la tua altezza in cm/i,
-  /qual[’']?e il tuo peso attuale in kg/i,
-  /c[’']?e qualcos[’']?altro/i,
+  /qual[‘’’]?\s*[eè] la tua altezza in cm/i,
+  /qual[‘’’]?\s*[eè] il tuo peso attuale in kg/i,
+  /c[‘’’]?\s*[eè] qualcos[‘’’]?altro/i,
   /cosa vuoi fare/i,
 ]
 
@@ -137,7 +137,7 @@ function areQuestionsEquivalent(
 
   const intersection = [...leftTokens].filter((token) => rightTokens.has(token)).length
   const union = new Set([...leftTokens, ...rightTokens]).size
-  return union > 0 && intersection / union > 0.4
+  return union > 0 && intersection / union > 0.65
 }
 
 export function isGenericQuestion(question: string): boolean {

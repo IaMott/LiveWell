@@ -90,6 +90,9 @@ describe('/api/chat/send persistence integration', () => {
 
     const res = await POST(req)
     expect(res.status).toBe(200)
+    // Consume the stream so the ReadableStream start() async body completes
+    // and all persistence calls (inside the stream) have been awaited.
+    await res.text()
 
     // Sequential saves — no $transaction, each op is a direct prisma call
     expect(prismaMock.conversation.upsert).toHaveBeenCalledTimes(1)
@@ -119,6 +122,8 @@ describe('/api/chat/send persistence integration', () => {
 
     const res = await POST(req)
     expect(res.status).toBe(200)
+    // Consume stream so all async persistence calls inside ReadableStream.start() complete
+    await res.text()
 
     expect(prismaMock.toolAuditLog.create).toHaveBeenCalledTimes(1)
     expect(prismaMock.toolAuditLog.create.mock.calls[0][0]).toMatchObject({
@@ -235,6 +240,8 @@ describe('/api/chat/send persistence integration', () => {
 
     const res = await POST(req)
     expect(res.status).toBe(200)
+    // Consume stream so all async persistence calls inside ReadableStream.start() complete
+    await res.text()
 
     const traceWorkspaceCall = prismaMock.agentWorkspace.upsert.mock.calls.find(
       (c) => (c[0] as { create?: { agentId?: string } }).create?.agentId === 'orchestratore-trace',

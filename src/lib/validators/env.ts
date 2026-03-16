@@ -6,6 +6,11 @@ const serverEnvSchema = z.object({
   NEXTAUTH_SECRET: z.string().min(1).optional(),
   AI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
   LIVE_MODEL: z.string().min(1).default('gemini-2.5-flash-native-audio-preview-12-2025'),
+  ORCH_MAX_AGENTS: z.preprocess((value) => {
+    if (value == null || value === '') return undefined
+    const num = Number(value)
+    return Number.isFinite(num) ? num : value
+  }, z.number().int().min(1).max(10).optional()),
   ORCH_RETRY_GUARD_WINDOW_MS: z.preprocess(
     (value) => {
       if (value == null || value === '') return undefined

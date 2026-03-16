@@ -201,12 +201,10 @@ function buildInterviewQueue(
     Object.keys(domainAttrs).length === 0 && fromWorkspace.length === 0 && activeSpecialist != null
   const maxAskNow = isFirstInteractionInDomain ? 3 : 1
 
-  // 2A — PRIORITY QUEUE: L1 → workspace pending → L2 → L3 domain-specific
-  // L1 baseline (only if first conversation and profile empty)
-  const isFirstConversation = contextPack.history.recentMessages.length === 0
-  const l1Questions = isFirstConversation ? buildL1BaselineQuestions(contextPack, userMessage) : []
-
-  // Workspace pending questions (from previous turns)
+  // 2A — PRIORITY QUEUE: workspace pending → L1 → L2 → L3 domain-specific
+  // Workspace pending questions are computed first because they take absolute priority
+  // over L1 baseline: if questions were queued in a previous turn, ask those before
+  // asking the age question again (the age may have already been collected).
   const workspaceQueue = fromWorkspace
     .map((question) => question.trim())
     .filter((question) => question.length > 0 && !isGenericQuestion(question))
@@ -218,9 +216,19 @@ function buildInterviewQueue(
     return true
   })
 
-  // L2 triage (only if L1 not triggered and no workspace questions pending)
+  // L1 baseline (only if first conversation AND no pending workspace questions AND no active specialist)
+  // In locked-specialist mode the specialist's own intake questions handle baseline collection;
+  // asking the generic age question on top would consume one of the 3 upfront slots.
+  const isFirstConversation = contextPack.history.recentMessages.length === 0
+  const l1Questions =
+    isFirstConversation && orderedWorkspace.length === 0 && !activeSpecialist
+      ? buildL1BaselineQuestions(contextPack, userMessage)
+      : []
+
+  // L2 triage (only in team mode — not in locked-specialist mode)
+  // Specialist mode uses its own intake questions; L2 would compete for slots.
   const l2Questions =
-    l1Questions.length === 0 && orderedWorkspace.length === 0
+    l1Questions.length === 0 && orderedWorkspace.length === 0 && !activeSpecialist
       ? buildL2TriageQuestions(contextPack, userMessage)
       : []
 

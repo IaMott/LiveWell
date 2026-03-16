@@ -76,7 +76,10 @@ export function tryAgeQuestionFastPath(input: AgentInput): FastPathResult {
       activeSpecialist: input.activeSpecialistId
         ? {
             id: input.activeSpecialistId,
-            displayName: input.activeSpecialistId,
+            displayName: input.activeSpecialistId
+              .split('-')
+              .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+              .join(' '),
             domain: 'general',
           }
         : undefined,

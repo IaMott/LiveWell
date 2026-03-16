@@ -289,6 +289,11 @@ const FIELD_QUESTIONS: Record<string, string> = {
 
 // Agent-specific question overrides for fields shared across specialists
 const AGENT_FIELD_OVERRIDES: Record<string, Record<string, string>> = {
+  dietista: {
+    goal: 'Qual è il tuo obiettivo nutrizionale principale nelle prossime settimane?',
+    allergy: 'Hai allergie o intolleranze alimentari da registrare?',
+    meal_pattern: 'Come si distribuiscono i tuoi pasti nella giornata?',
+  },
   endocrinologo: {
     goal: 'Qual è il tuo obiettivo principale rispetto alla salute ormonale o metabolica?',
     symptoms:

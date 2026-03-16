@@ -11,7 +11,7 @@
 
 import type { AgentProposal } from '../types'
 
-const MIN_CONFIDENCE_FOR_TOOLS = 0.3
+const MIN_CONFIDENCE_FOR_TOOLS = 0.5
 const MIN_CONFIDENCE_FOR_RECOMMENDATIONS = 0.25
 
 /** Peso non-lineare: amplifica la differenza tra 0.9 e 0.5 */
