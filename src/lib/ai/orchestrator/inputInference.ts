@@ -116,6 +116,15 @@ export function readPersonalSnapshot(contextPack: ContextPack): PersonalSnapshot
   const birthFromAttr = personal.birthDate?.value
   if (typeof birthFromAttr === 'string' && birthFromAttr) out.birthDate = birthFromAttr
 
+  // Derive birthDate from stored age attribute when no explicit date is known
+  if (!out.birthDate) {
+    const ageFromAttr = personal.age?.value
+    if (typeof ageFromAttr === 'number' && ageFromAttr >= 10 && ageFromAttr <= 110) {
+      const birthYear = new Date().getFullYear() - Math.round(ageFromAttr)
+      out.birthDate = `${birthYear}-01-01`
+    }
+  }
+
   const genderFromProfile = profile.gender
   if (typeof genderFromProfile === 'string' && genderFromProfile) out.gender = genderFromProfile
   const genderFromAttr = personal.gender?.value
@@ -167,6 +176,48 @@ export function inferAttributeToolCallsFromMessage(
           notes: 'Estratto automaticamente da messaggio naturale utente',
         },
       })
+    }
+  }
+
+  // Age — "ho 35 anni", "ne ho 35", "35 anni" (standalone phrase)
+  // Excludes duration phrases like "da 20 anni soffro di X", "20 anni fa", "per 3 anni"
+  const ageIsDurationContext = /\b(?:fa|or\s+sono|prima|dopo|da\s+\d|per\s+\d)\b/.test(lower)
+  let ageExtracted = false
+  if (!ageIsDurationContext) {
+    const agePatterns = [
+      /\bho\s+(\d{1,3})\s+anni\b/i,
+      /\bne\s+ho\s+(\d{1,3})\b/i,
+      /\bcompi(?:o|rò)?\s+(\d{1,3})\s+anni\b/i,
+    ]
+    for (const re of agePatterns) {
+      const m = lower.match(re)
+      if (m?.[1]) {
+        const age = Number(m[1])
+        if (age >= 10 && age <= 110) {
+          calls.push({
+            id: crypto.randomUUID(),
+            name: 'user.setAttribute',
+            args: { domain: 'personal', key: 'age', value: age, unit: 'years' },
+          })
+          ageExtracted = true
+          break
+        }
+      }
+    }
+  }
+  // Bare number response (e.g. "35") — only if no other age was extracted and message is very short
+  // This catches direct answers to "Quanti anni hai?"
+  if (!ageExtracted && !hasBirthSignal) {
+    const bareAge = lower.trim().match(/^(\d{1,3})$/)
+    if (bareAge?.[1]) {
+      const age = Number(bareAge[1])
+      if (age >= 10 && age <= 110) {
+        calls.push({
+          id: crypto.randomUUID(),
+          name: 'user.setAttribute',
+          args: { domain: 'personal', key: 'age', value: age, unit: 'years' },
+        })
+      }
     }
   }
 
@@ -362,6 +413,29 @@ export function inferAttributeToolCallsFromMessage(
       name: 'user.setAttribute',
       args: { domain: 'personal', key: 'smokingStatus', value: 'smoker' },
     })
+  }
+
+  // Gender — "sono un uomo", "sono una donna", "sono maschio", "sono femmina", "uomo", "donna"
+  if (!calls.some((c) => (c.args as Record<string, unknown>)['key'] === 'gender')) {
+    if (
+      /\b(?:sono\s+(?:un\s+)?uomo|sono\s+maschio|sesso\s+maschile|genere\s+maschile)\b/.test(lower)
+    ) {
+      calls.push({
+        id: crypto.randomUUID(),
+        name: 'user.setAttribute',
+        args: { domain: 'personal', key: 'gender', value: 'male' },
+      })
+    } else if (
+      /\b(?:sono\s+(?:una\s+)?donna|sono\s+femmina|sesso\s+femminile|genere\s+femminile)\b/.test(
+        lower,
+      )
+    ) {
+      calls.push({
+        id: crypto.randomUUID(),
+        name: 'user.setAttribute',
+        args: { domain: 'personal', key: 'gender', value: 'female' },
+      })
+    }
   }
 
   // Diet type

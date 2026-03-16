@@ -219,7 +219,14 @@ function buildInterviewQueue(
   // L1 baseline (only if first conversation AND no pending workspace questions AND no active specialist)
   // In locked-specialist mode the specialist's own intake questions handle baseline collection;
   // asking the generic age question on top would consume one of the 3 upfront slots.
-  const isFirstConversation = contextPack.history.recentMessages.length === 0
+  //
+  // "First conversation" means: no messages in the current conversation yet AND no prior
+  // cross-conversation messages exist (i.e. the user has truly never spoken to the system).
+  // This prevents re-asking baseline questions (age, goal) on every new conversation.
+  const hasPriorMessages =
+    contextPack.history.recentMessages.length > 0 ||
+    (contextPack.history.crossConversationMessages?.length ?? 0) > 0
+  const isFirstConversation = !hasPriorMessages
   const l1Questions =
     isFirstConversation && orderedWorkspace.length === 0 && !activeSpecialist
       ? buildL1BaselineQuestions(contextPack, userMessage)

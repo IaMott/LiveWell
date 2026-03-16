@@ -354,7 +354,11 @@ export function buildAgentUserPrompt(
     )
   }
 
-  const isFirstMessage = input.contextPack.history.recentMessages.length === 0
+  // True only when user has genuinely never spoken to the system before
+  // (no messages in current conversation AND no messages in prior conversations)
+  const isFirstMessage =
+    input.contextPack.history.recentMessages.length === 0 &&
+    (input.contextPack.history.crossConversationMessages?.length ?? 0) === 0
 
   parts.push(
     ``,
@@ -391,6 +395,14 @@ export function buildAgentUserPrompt(
   }
 
   parts.push(
+    `GOAL & COMPLAINT CAPTURE (obbligatorio):`,
+    `- Se l'utente risponde a "Qual è la cosa più importante che vorresti migliorare?",`,
+    `  salva: user.setAttribute domain:"general" key:"declared_goal" value:<risposta utente>.`,
+    `- Se l'utente descrive un problema principale o sintomo, salva:`,
+    `  user.setAttribute domain:"general" key:"main_complaint" value:<descrizione>.`,
+    `- Se l'utente dichiara la propria età (es. "ho 35 anni", "35 anni"), salva:`,
+    `  user.setAttribute domain:"personal" key:"age" value:<numero>.`,
+    ``,
     `PRIORITÀ (in ordine):`,
     `1. DAI CONSIGLI CONCRETI basati su evidenze scientifiche con i dati già disponibili`,
     `2. Se mancano dati FONDAMENTALI per sicurezza o efficacia, elencali tutti insieme in "questions" (max 3)`,

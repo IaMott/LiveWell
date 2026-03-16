@@ -575,7 +575,11 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
   const recentHistory = buildRecentHistory(input.contextPack)
 
   const conversationLength = input.contextPack.history.recentMessages.length
-  const isFirstMessage = conversationLength === 0
+  // True only when the user has genuinely never spoken to the system:
+  // no messages in the current conversation AND no messages in prior conversations.
+  const isFirstMessage =
+    conversationLength === 0 &&
+    (input.contextPack.history.crossConversationMessages?.length ?? 0) === 0
   const rawHasMissingData = input.gatingQuestions.length > 0 || input.criticalQuestions.length > 0
   // After 3 full exchanges (6 messages), stop asking gating questions and give advice
   const hasMissingData = conversationLength < 6 ? rawHasMissingData : false
