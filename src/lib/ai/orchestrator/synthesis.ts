@@ -201,7 +201,7 @@ const AGENT_OUTPUT_TEMPLATES: Array<{ match: string[]; instructions: string[] }>
     ],
   },
   {
-    match: ['mental', 'coach-relazionale'],
+    match: ['mental', 'coach-relazionale', 'relationship-coach', 'relationship coach'],
     instructions: [
       `PERCORSO MENTAL COACHING COMPLETO — FORMATO OBBLIGATORIO:`,
       `Produce un documento professionale che include:`,
