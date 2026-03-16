@@ -24,22 +24,20 @@ function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string)
     lower.includes('alleno')
   if (hasSpecificData) return []
 
-  // Skip if we already know age/birthdate
-  if (personal.birthDate) return []
-
   // Check declared goal in general attributes
   const generalAttrs = attrs['general'] as Record<string, { value?: unknown }> | undefined
   const hasDeclaredGoal = Boolean(generalAttrs?.['declared_goal']?.value != null)
 
-  // Max 1 question per turn
-  if (!personal.birthDate && !hasDeclaredGoal) {
-    return [
-      'Per conoscerti meglio: quanti anni hai e come descriveresti la tua situazione attuale?',
-    ]
+  // Step 1 — collect age first (prerequisite for all agents)
+  if (!personal.birthDate) {
+    return ['Quanti anni hai?']
   }
+
+  // Step 2 — once age is known, collect the primary goal
   if (!hasDeclaredGoal) {
     return ['Qual è la cosa più importante che vorresti migliorare o raggiungere?']
   }
+
   return []
 }
 
