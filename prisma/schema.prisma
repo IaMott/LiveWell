@@ -103,8 +103,6 @@ model Conversation {
   title      String?
   userId     String    @map("user_id")
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  shareToken String?   @unique @map("share_token")
-  sharedAt   DateTime? @map("shared_at")
   deletedAt  DateTime? @map("deleted_at") // soft-delete: null = active
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")

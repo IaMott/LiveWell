@@ -100,11 +100,12 @@ export function invalidateContextPack(userId: string, conversationId: string): v
   contextPackCache.delete(buildContextCacheKey(userId, conversationId))
 }
 
-export function clearContextCache(): void {
+/** @internal — use only in tests or cache invalidation utilities */
+function clearContextCache(): void {
   contextPackCache.clear()
 }
 
-/** Exposed for tests only */
-export function getContextCacheSize(): number {
+/** @internal — use only in tests */
+function getContextCacheSize(): number {
   return contextPackCache.size
 }
