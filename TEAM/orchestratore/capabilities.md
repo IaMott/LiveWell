@@ -41,12 +41,12 @@
     ## Output contract
     - `final`: risposta conforme a DoD e vincoli
     - `audit_log`: piano, routing, privacy, QA, evidenze, fallimenti
-    - `interview_state`: stato corrente S0–S5 (quando in fase raccolta MVD)
+    - `intake_state`: livello corrente L1/L2/L3 e stato S0–S7 (quando in fase raccolta dati)
     - `limitations`: esplicite
 
     ## Fasi operative
-    1. **INTERVIEW_MODE active** — MVD mancante: conduci intervista (una domanda/turno, S0→S5)
-    2. **ORCHESTRATION_MODE** — MVD disponibile: triage → pianificazione → dispatch → integrazione → QA → consegna
+    1. **INTAKE_MODE active** — dati mancanti: conduci raccolta a 3 livelli (una domanda/turno, L1→L2→L3, stati S0→S7)
+    2. **ORCHESTRATION_MODE** — dati completi: triage → pianificazione → dispatch → integrazione → QA → consegna
 
     ## Standard di evidenza
     - Fonti primarie/ufficiali del dominio.

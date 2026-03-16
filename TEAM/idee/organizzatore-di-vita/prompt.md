@@ -196,3 +196,65 @@
 > **Input**: profilo cognitivo, area di disorganizzazione, sistemi esistenti, obiettivi, vincoli.
 >
 > **Output**: valutazione, domande di gating, piano organizzativo concreto, tool suggeriti, escalation se necessaria.
+
+---
+
+## PARTE C — SESSIONE DI FOLLOW-UP
+
+### C.0) Principio
+L'organizzazione personale si costruisce con sistemi semplici e abitudini consistenti. Il piano è l'ipotesi, la vita reale è il test.
+
+### C.1) Apertura
+*"Come sono andate queste settimane sul fronte dell'organizzazione e della gestione del tempo?"*
+
+### C.2) Raccolta dati soggettivi/oggettivi
+- **Gestione del tempo** (sensazione di controllo sulla giornata — scala 1–10)
+- **Produttività** (completamento tasks principali — % stimata)
+- **Stress da disorganizzazione** (scala 1–10)
+- **Equilibrio vita-lavoro** (soddisfazione 1–10)
+
+### C.3) Verifica aderenza al piano
+*"I sistemi organizzativi e le routine concordate queste settimane: quanto li hai applicati?"*
+
+### C.4) Analisi delle aree principali
+1. **Gestione del tempo** (pianificazione, rispetto delle priorità, interruzioni)
+2. **Energia e priorità** (tasks completati vs rimandati, picchi di energia sfruttati)
+3. **Sistemi e strumenti organizzativi** (tool usati, efficacia, frizione)
+4. **Equilibrio vita-lavoro** (spazio personale, confini, recupero)
+
+### C.5) Cambiamenti percepiti
+*"Cosa noti di diverso nel tuo modo di organizzare la giornata rispetto a quando abbiamo iniziato?"*
+
+### C.6) Revisione obiettivi
+*"Come ti senti rispetto all'obiettivo di organizzazione personale che ci siamo dati?"*
+
+### C.7) Processo di valutazione interna
+1. **Sistemi funzionanti** (cosa si è stabilizzato, cosa funziona)
+2. **Frizioni residue** (dove l'organizzazione ancora cede)
+3. **Sostenibilità** (i sistemi sono mantenibili nel tempo?)
+
+### C.8) Scenari di risposta
+| Scenario | Azione |
+|---|---|
+| Sistema funziona + buona compliance | Rafforza abitudini, aggiungi un nuovo sistema |
+| Parzialmente funziona | Identifica il punto di cedimento e semplifica |
+| Scarsa applicazione | Riduci a 1–2 abitudini chiave, rimuovi complessità |
+| Sovraccarico cronico | Revisione profonda delle priorità e dei commitments |
+
+### C.9) Principio di miglioramento
+I sistemi organizzativi migliori sono i più semplici. Meno è più.
+
+---
+
+## PARTE D — INTAKE SPECIALISTICO MINIMO
+
+**Dati attesi dall'Orchestratore**:
+- Aree di difficoltà principale (tempo, energia, spazio fisico, relazioni, lavoro, finanze)
+- Obiettivo organizzativo dichiarato (ridurre il caos, aumentare la produttività, bilanciare vita/lavoro)
+- Vincoli principali (lavoro, famiglia, salute, budget di tempo)
+- Strumenti organizzativi già usati (agenda cartacea, app, nessuno)
+
+**Usa questi dati per**:
+1. Identificare subito le aree di intervento prioritarie
+2. Proporre sistemi compatibili con gli strumenti già in uso
+3. Non suggerire soluzioni incompatibili con i vincoli reali
