@@ -20,6 +20,7 @@ import {
   createDbPersistenceDeps,
   resolveConversationId,
 } from './chatPersistence'
+import { checkAndCreateCheckpointNotifications } from '@/lib/ai/program/checkpoints'
 
 export { buildDefaultContextPack } from './chatPersistence'
 
@@ -162,6 +163,11 @@ export async function POST(request: Request): Promise<Response> {
       userId,
     })
     return errorResponse(400, 'BAD_REQUEST', 'Invalid JSON body')
+  }
+
+  // Layer 3 — Proactive checkpoint notifications (fire-and-forget, non-blocking)
+  if (isDbPersistenceEnabled()) {
+    checkAndCreateCheckpointNotifications(userId).catch(() => {})
   }
 
   const assistantId = crypto.randomUUID()

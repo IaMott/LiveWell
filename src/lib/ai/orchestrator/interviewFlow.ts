@@ -1,6 +1,7 @@
 import { applyQuestionPolicy, isGenericQuestion } from '../policy/questionPolicy'
 import { ActiveSpecialist, AgentProposal, ContextPack, Domain } from '../types'
 import { isAgeQuestion, readPersonalSnapshot } from './inputInference'
+import { getMissingRequiredFields, getQuestionForField } from './intakeQuestions'
 
 // ---------------------------------------------------------------------------
 // 2A — L1 Baseline questions (who is the user)
@@ -80,12 +81,21 @@ export type InterviewFlowInput = {
   consensusGatingQuestions: string[]
   round2Proposals: AgentProposal[]
   activeSpecialist?: ActiveSpecialist
+  /** IDs of all specialists in the current team — used for peer routing */
+  teamAgentIds?: string[]
 }
 
 export type InterviewFlowResult = {
   finalInterviewQuestions: string[]
   round2WithQueue: AgentProposal[]
   round2ForPersistence: AgentProposal[]
+  /**
+   * Peer specialists that should receive pending questions on their next turn.
+   * These fields are owned by a peer (e.g. sleep_hours → coach-del-sonno) and
+   * are already stored as pendingQuestions in their stub AgentProposal inside
+   * round2ForPersistence.
+   */
+  peerRequests: Array<{ agentId: string; questions: string[] }>
 }
 
 function buildQuestionPlan(
@@ -180,6 +190,8 @@ function buildInterviewQueue(
   contextPack: ContextPack,
   userMessage: string,
   activeSpecialist?: ActiveSpecialist,
+  /** Pre-computed questions for the specialist's own missing required fields */
+  specialistOwnFieldQuestions?: string[],
 ): { askNow: string[]; pendingNext: string[] } {
   // Allow more questions upfront only in locked-specialist mode when profile is empty + no queued questions.
   // In team-led mode (no activeSpecialist) stay conservative at 1 to avoid flooding the user.
@@ -214,8 +226,16 @@ function buildInterviewQueue(
       ? buildL2TriageQuestions(contextPack, userMessage)
       : []
 
-  // L3 domain-specific
+  // L3 domain-specific: specialist completeness-gate questions first, then generic plan
+  const ownFieldQs = specialistOwnFieldQuestions ?? []
   const fromPlan = buildQuestionPlan(domain, contextPack, userMessage)
+  // Merge: missing required-field questions take precedence over generic plan questions
+  const ownFieldSet = new Set(ownFieldQs.map((q) => q.trim().toLowerCase()))
+  const combinedL3 = [
+    ...ownFieldQs,
+    ...fromPlan.filter((q) => !ownFieldSet.has(q.trim().toLowerCase())),
+  ]
+
   const seenAll = new Set<string>([
     ...l1Questions.map((q) => q.toLowerCase()),
     ...orderedWorkspace.map((q) => q.toLowerCase()),
@@ -223,7 +243,7 @@ function buildInterviewQueue(
   ])
 
   const policy = applyQuestionPolicy(
-    fromPlan
+    combinedL3
       .filter((question) => !seenAll.has(question.trim().toLowerCase()))
       .map((question) => ({ question, priority: 10 })),
     {
@@ -281,9 +301,34 @@ export function applyInterviewFlow(input: InterviewFlowInput): InterviewFlowResu
     consensusGatingQuestions,
     round2Proposals,
     activeSpecialist,
+    teamAgentIds,
   } = input
 
-  const queue = buildInterviewQueue(domain, contextPack, userMessage, activeSpecialist)
+  // ---------------------------------------------------------------------------
+  // Layer 1 — Completeness gate: compute missing required fields for the active
+  // specialist, split into own-fields (ask directly) and peer-fields (route).
+  // ---------------------------------------------------------------------------
+  let specialistOwnFieldQuestions: string[] = []
+  let peerRequests: Array<{ agentId: string; questions: string[] }> = []
+
+  if (activeSpecialist) {
+    const missing = getMissingRequiredFields(activeSpecialist.id, contextPack, teamAgentIds)
+    specialistOwnFieldQuestions = missing.ownFields.map((f) =>
+      getQuestionForField(activeSpecialist.id, f),
+    )
+    peerRequests = missing.peerFields.map(({ agentId, fields }) => ({
+      agentId,
+      questions: fields.map((f) => getQuestionForField(agentId, f)),
+    }))
+  }
+
+  const queue = buildInterviewQueue(
+    domain,
+    contextPack,
+    userMessage,
+    activeSpecialist,
+    specialistOwnFieldQuestions,
+  )
   const interviewCriticalQuestions = buildCriticalQuestions(
     domain,
     contextPack,
@@ -308,7 +353,7 @@ export function applyInterviewFlow(input: InterviewFlowInput): InterviewFlowResu
   })
 
   const hasQueueOwner = round2WithQueue.some((proposal) => Array.isArray(proposal.pendingQuestions))
-  const round2ForPersistence =
+  const baseRound2ForPersistence =
     !hasQueueOwner && queue.pendingNext.length > 0
       ? [
           ...round2WithQueue,
@@ -327,9 +372,30 @@ export function applyInterviewFlow(input: InterviewFlowInput): InterviewFlowResu
         ]
       : round2WithQueue
 
+  // Append stub proposals for peer specialists so their pendingQuestions are
+  // persisted and picked up when those specialists respond in a future turn.
+  const existingAgentIds = new Set(baseRound2ForPersistence.map((p) => p.agentId))
+  const peerStubProposals: AgentProposal[] = peerRequests
+    .filter(({ agentId }) => !existingAgentIds.has(agentId) && agentId !== 'orchestratore')
+    .map(({ agentId, questions }) => ({
+      agentId,
+      domain,
+      summary: `Raccolta dati specialistica per ${agentId}`,
+      reasoning: `Campi mancanti da raccogliere: ${questions.length}`,
+      questions: [],
+      recommendations: [],
+      toolCalls: [],
+      confidence: 1,
+      pendingDomain: domain,
+      pendingQuestions: questions,
+    }))
+
+  const round2ForPersistence = [...baseRound2ForPersistence, ...peerStubProposals]
+
   return {
     finalInterviewQuestions,
     round2WithQueue,
     round2ForPersistence,
+    peerRequests,
   }
 }

@@ -1,138 +1,6 @@
 import { AgentInput, ContextPack } from '../types'
-
-// ---------------------------------------------------------------------------
-// 1A — AGENT_INTAKE_KEYS: per-agent required / optional attribute map
-// ---------------------------------------------------------------------------
-
-const AGENT_INTAKE_KEYS: Record<string, { required: string[]; optional: string[] }> = {
-  dietista: {
-    required: ['weight', 'height', 'goal', 'allergy', 'meal_pattern'],
-    optional: ['budget_food', 'cooking_time'],
-  },
-  chef: {
-    required: ['goal', 'cooking_experience', 'dietary_restrictions', 'cooking_time'],
-    optional: ['equipment'],
-  },
-  endocrinologo: {
-    required: ['weight', 'symptoms', 'sleep_hours', 'medications', 'hormonal_exams'],
-    optional: ['recent_weight_change'],
-  },
-  'persona-trainer': {
-    required: ['fitness_level', 'training_frequency_per_week', 'injury', 'goal'],
-    optional: ['equipment'],
-  },
-  chinesologo: {
-    required: ['fitness_level', 'goal', 'injury', 'sport'],
-    optional: ['body_awareness'],
-  },
-  fisioterapista: {
-    required: [
-      'pain_location',
-      'pain_cause',
-      'symptom_duration',
-      'pain_intensity',
-      'functional_impact',
-    ],
-    optional: ['previous_treatments'],
-  },
-  fisiatra: {
-    required: ['diagnosis', 'functional_status', 'pain_location', 'pain_intensity'],
-    optional: ['rehab_goal'],
-  },
-  'medico-dello-sport': {
-    required: ['sport', 'training_frequency_per_week', 'injury', 'goal'],
-    optional: ['supplements'],
-  },
-  'coach-del-sonno': {
-    required: ['sleep_hours', 'sleep_latency', 'night_wakings', 'sleep_quality'],
-    optional: ['evening_routine'],
-  },
-  mmg: {
-    required: ['complaint', 'symptoms', 'blood_pressure', 'medications', 'lifestyle'],
-    optional: ['recent_exams'],
-  },
-  cardiologo: {
-    required: ['symptoms', 'blood_pressure', 'family_history', 'medications', 'physical_activity'],
-    optional: ['ecg_result', 'cholesterol'],
-  },
-  dermatologo: {
-    required: ['lesion_type', 'lesion_location', 'symptom_duration', 'triggers'],
-    optional: ['current_treatment'],
-  },
-  gastroenterologo: {
-    required: ['digestive_symptoms', 'symptom_frequency', 'food_triggers', 'medications'],
-    optional: ['recent_exams'],
-  },
-  psicologo: {
-    required: [
-      'complaint',
-      'relational_context',
-      'work_context',
-      'symptom_duration',
-      'distress_intensity',
-    ],
-    optional: ['symptoms'],
-  },
-  'mental-coach': {
-    required: ['mental_performance_goal', 'difficulty_area', 'context'],
-    optional: ['mental_resources'],
-  },
-  'relationship-coach': {
-    required: ['relationship_type', 'main_problem', 'problem_duration'],
-    optional: ['previous_attempts'],
-  },
-  'analista-contesto': {
-    required: ['analysis_domain', 'decision_goal', 'urgency'],
-    optional: ['available_data'],
-  },
-  'career-coach': {
-    required: ['current_role', 'professional_goal', 'main_obstacle', 'timeline'],
-    optional: [],
-  },
-  'executive-coach': {
-    required: ['leadership_role', 'team_context', 'main_challenge', 'professional_goal'],
-    optional: [],
-  },
-  commercialista: {
-    required: ['activity_type', 'tax_regime', 'fiscal_situation', 'upcoming_deadlines'],
-    optional: [],
-  },
-  'consulente-legale': {
-    required: ['legal_issue_type', 'case_status', 'objective', 'urgency'],
-    optional: ['documentation'],
-  },
-  'financial-planner': {
-    required: ['income_range', 'expenses', 'savings', 'financial_goal', 'risk_tolerance'],
-    optional: ['debts'],
-  },
-  'life-organizer': {
-    required: ['difficulty_area', 'organizational_goal', 'constraints'],
-    optional: ['current_tools'],
-  },
-}
-
-// ---------------------------------------------------------------------------
-// Helper: get a flat map of all attribute keys → value string
-// ---------------------------------------------------------------------------
-
-function flatAttributeMap(
-  attrs: Record<string, Record<string, { value: unknown; unit?: string }>> | undefined,
-): Map<string, string> {
-  const map = new Map<string, string>()
-  if (!attrs) return map
-  for (const domainValues of Object.values(attrs)) {
-    if (!domainValues || typeof domainValues !== 'object') continue
-    for (const [k, v] of Object.entries(
-      domainValues as Record<string, { value: unknown; unit?: string }>,
-    )) {
-      if (v?.value != null) {
-        const display = typeof v.value === 'object' ? JSON.stringify(v.value) : String(v.value)
-        map.set(k, display + (v.unit ? ` ${v.unit}` : ''))
-      }
-    }
-  }
-  return map
-}
+import { AGENT_INTAKE_KEYS, flatAttributeMap } from './intakeQuestions'
+import { buildProgramStatusBlock } from './agentProgramTracker'
 
 // ---------------------------------------------------------------------------
 // 1A — buildIntakeSection: shows ✓/✗ per required key for this agent
@@ -141,7 +9,7 @@ function flatAttributeMap(
 function buildIntakeSection(agentId: string, input: AgentInput): string[] {
   const intakeKeys = AGENT_INTAKE_KEYS[agentId]
   if (!intakeKeys) {
-    // Fallback: dump all attributes (current behavior)
+    // Fallback: dump all attributes (current behavior for unknown agents)
     return formatUserAttributes(input)
   }
 
@@ -289,7 +157,6 @@ function buildWeeklyTrendSummary(contextPack: ContextPack): string[] {
     | undefined
   const meals = nutritionTracker?.meals
   if (Array.isArray(meals) && meals.length > 0) {
-    // Group by day and average
     const byDay: Record<string, number[]> = {}
     for (const meal of meals) {
       if (meal.calories == null) continue
@@ -335,7 +202,6 @@ function buildCrossSessionContext(contextPack: ContextPack): string[] {
   const msgs = contextPack.history.crossConversationMessages
   if (!msgs || msgs.length === 0) return []
 
-  // Pick up to 2 assistant messages from previous sessions
   const assistantMsgs = msgs.filter((m) => m.role === 'assistant').slice(0, 2)
   if (assistantMsgs.length === 0) return []
 
@@ -351,7 +217,7 @@ function buildCrossSessionContext(contextPack: ContextPack): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Existing helpers (unchanged)
+// Helpers (unchanged)
 // ---------------------------------------------------------------------------
 
 function formatProfileSummary(input: AgentInput): string | null {
@@ -415,6 +281,12 @@ export function buildAgentUserPrompt(
   // 1B — Session mode
   const sessionMode = detectSessionMode(agentId, input.contextPack)
   parts.push(``, ...buildSessionModeBlock(sessionMode))
+
+  // Layer 2 — Program status block
+  const programLines = buildProgramStatusBlock(agentId, input.contextPack)
+  if (programLines.length > 0) {
+    parts.push(``, ...programLines)
+  }
 
   // 1C — Weekly trend summary
   const trendLines = buildWeeklyTrendSummary(input.contextPack)
@@ -483,6 +355,14 @@ export function buildAgentUserPrompt(
     `goals, diet restrictions, training frequency, medications, allergies, sleep hours, stress level etc.),`,
     `ALWAYS include a "user.setAttribute" tool call in your toolCalls[] with extracted values.`,
     `Use user.updateProfile only for legacy compatibility when needed by profile snapshot.`,
+    ``,
+    `PROGRAM TRACKING (se avvii o aggiorni un percorso):`,
+    `Quando definisci un piano strutturato con l'utente, usa user.setAttribute con domain:"program" per registrare:`,
+    `- key: "{tuoAgentId}_start" → data odierna ISO (es. "${new Date().toISOString().slice(0, 10)}")`,
+    `- key: "{tuoAgentId}_duration_days" → durata pianificata in giorni`,
+    `- key: "{tuoAgentId}_checkpoint_days" → array JSON con i giorni di verifica (es. [7,14,21,30])`,
+    `- key: "{tuoAgentId}_status" → "active"`,
+    `Aggiorna "{tuoAgentId}_status":"completed" o "extended" quando il programma cambia fase.`,
     ``,
     `RUOLO E APPROCCIO:`,
     `Sei uno specialista del team LiveWell. Il tuo compito è ANALIZZARE e CONSIGLIARE proattivamente.`,

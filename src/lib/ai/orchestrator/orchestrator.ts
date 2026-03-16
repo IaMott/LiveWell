@@ -85,6 +85,7 @@ export async function orchestrate(
     consensusGatingQuestions: consensusOutcome.gatingQuestions,
     round2Proposals,
     activeSpecialist,
+    teamAgentIds: deps.team.map((a) => a.id),
   })
 
   const synthesis = await synthesizeRawResponse({
