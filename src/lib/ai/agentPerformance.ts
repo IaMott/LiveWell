@@ -109,25 +109,3 @@ export async function persistPerformanceLogs(entries: AgentPerformanceEntry[]): 
     // Fire-and-forget: performance logging failure must never break a user turn
   }
 }
-
-/**
- * Aggiorna il feedback utente su un log di performance esistente.
- * Chiamato quando l'utente esprime un giudizio sul turno (thumb up/down).
- */
-export async function updateUserFeedback(params: {
-  userId: string
-  requestId: string
-  feedback: 1 | 2 | 3 | 4 | 5
-}): Promise<void> {
-  if (process.env.NODE_ENV === 'test') return
-
-  try {
-    const { prisma } = await import('@/lib/prisma')
-    await prisma.agentPerformanceLog.updateMany({
-      where: { userId: params.userId, requestId: params.requestId },
-      data: { userFeedback: params.feedback },
-    })
-  } catch {
-    // Fire-and-forget
-  }
-}

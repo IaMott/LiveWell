@@ -62,8 +62,8 @@ async function getMetrics() {
       orderBy: { _count: { id: 'desc' } },
     }),
 
-    // Feedback medio globale
-    prisma.userFeedback.aggregate({
+    // Feedback medio globale (MessageReview)
+    prisma.messageReview.aggregate({
       _avg: { rating: true },
       _count: { id: true },
       where: { createdAt: { gte: last30d } },
@@ -76,6 +76,24 @@ async function getMetrics() {
     prisma.conversation.count({ where: { deletedAt: null } }),
   ])
 
+  // Ultimi 10 commenti scritti (per studio)
+  const recentComments = await prisma.messageReview.findMany({
+    where: { comment: { not: null }, createdAt: { gte: last30d } },
+    select: { rating: true, comment: true, agentName: true, domain: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+  })
+
+  // Rating medio per agente (da MessageReview)
+  const reviewsByAgent = await prisma.messageReview.groupBy({
+    by: ['agentName'],
+    _avg: { rating: true },
+    _count: { id: true },
+    where: { createdAt: { gte: last30d }, agentName: { not: null } },
+    orderBy: { _count: { id: 'desc' } },
+    take: 8,
+  })
+
   return {
     errorCount7d,
     errorByCode,
@@ -87,6 +105,8 @@ async function getMetrics() {
     feedbackCount: feedbackAvg._count.id,
     totalUsers,
     totalConvos,
+    recentComments,
+    reviewsByAgent,
   }
 }
 
@@ -251,6 +271,76 @@ export default async function AdminPage() {
                   </div>
                 )
               })}
+            </div>
+          )}
+        </div>
+
+        {/* Message Reviews — rating per agente */}
+        <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <h2 className="mb-4 font-semibold text-gray-900">Rating per Agente (30gg)</h2>
+          {m.reviewsByAgent.length === 0 ? (
+            <p className="text-sm text-gray-400">Nessuna valutazione ancora</p>
+          ) : (
+            <div className="space-y-3">
+              {m.reviewsByAgent.map((r) => {
+                const avg = r._avg.rating ?? 0
+                const pct = Math.round((avg / 5) * 100)
+                return (
+                  <div key={r.agentName} className="flex items-center gap-3">
+                    <span className="w-28 shrink-0 text-sm font-medium text-gray-700 truncate">
+                      {r.agentName ?? '—'}
+                    </span>
+                    <div className="flex-1 rounded-full bg-gray-100 h-2">
+                      <div
+                        className={`h-2 rounded-full ${avg >= 4 ? 'bg-green-500' : avg >= 3 ? 'bg-yellow-500' : 'bg-red-400'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="w-10 text-right text-xs text-gray-500">
+                      {avg.toFixed(1)}/5
+                    </span>
+                    <span className="w-10 text-right text-xs text-gray-400">{r._count.id}x</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Commenti recenti */}
+        <div className="rounded-xl border border-gray-200 bg-white p-6 lg:col-span-2">
+          <h2 className="mb-4 font-semibold text-gray-900">Commenti recenti (30gg)</h2>
+          {m.recentComments.length === 0 ? (
+            <p className="text-sm text-gray-400">Nessun commento ancora</p>
+          ) : (
+            <div className="space-y-3">
+              {m.recentComments.map((c, i) => (
+                <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      {c.agentName ?? 'Team'}
+                    </span>
+                    {c.domain && (
+                      <span className="rounded bg-gray-200 px-1.5 py-0.5 text-xs text-gray-500">
+                        {c.domain}
+                      </span>
+                    )}
+                    <span className="ml-auto text-xs text-yellow-500">
+                      {'★'.repeat(c.rating)}
+                      {'☆'.repeat(5 - c.rating)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">{c.comment}</p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    {new Date(c.createdAt).toLocaleDateString('it-IT', {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                </div>
+              ))}
             </div>
           )}
         </div>

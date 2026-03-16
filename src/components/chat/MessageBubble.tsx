@@ -102,7 +102,12 @@ export function MessageBubble({ message, conversationId }: Props) {
 
       {/* Feedback widget — only for completed assistant messages */}
       {!isUser && !message.streaming && message.content && conversationId && (
-        <FeedbackWidget conversationId={conversationId} requestId={message.id} />
+        <FeedbackWidget
+          messageId={message.id}
+          conversationId={conversationId}
+          agentName={message.specialistName ?? specialistLabel ?? undefined}
+          domain={message.domain}
+        />
       )}
     </div>
   )

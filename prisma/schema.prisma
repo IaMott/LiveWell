@@ -419,7 +419,6 @@ model AgentPerformanceLog {
   confidence     Float    // 0.0 - 1.0 (da AgentProposal.confidence)
   proposalHash   String   @map("proposal_hash")
   durationMs     Int?     @map("duration_ms")
-  userFeedback   Int?     @map("user_feedback") // 1-5 opzionale, aggiornato post-turn
   wasSelected    Boolean  @map("was_selected")
   createdAt      DateTime @default(now()) @map("created_at")
 
@@ -448,22 +447,32 @@ model ConversationSummary {
 }
 
 // ─────────────────────────────────────────
-// User Feedback — rating per response
+// Message Reviews — strumento di studio/miglioramento
+// ISOLATO: nessuna FK a tabelle utente.
+// userHash = SHA-256(userId).slice(0,16) — opaco, non tracciabile.
 // ─────────────────────────────────────────
 
-model UserFeedback {
+model MessageReview {
   id             String   @id @default(cuid())
-  userId         String   @map("user_id")
-  conversationId String   @map("conversation_id")
-  requestId      String   @map("request_id")
-  rating         Int      // 1-5
-  comment        String?
+  // Identificatori opachi — nessuna relazione a tabelle user/conversation
+  userHash       String   @map("user_hash")        // hash anonimizzato, non FK
+  messageId      String   @map("message_id")        // ID del messaggio AI valutato
+  conversationId String   @map("conversation_id")   // opaque, non FK
+  // Contesto AI per analisi
+  agentId        String?  @map("agent_id")
+  agentName      String?  @map("agent_name")
+  domain         String?
+  // Valutazione
+  rating         Int      // 1-5 stelle
+  comment        String?  // commento libero (opzionale)
   createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  @@unique([userId, requestId])
-  @@index([userId, createdAt])
-  @@index([conversationId])
-  @@map("user_feedbacks")
+  @@unique([userHash, messageId])
+  @@index([agentId, rating])
+  @@index([domain, rating])
+  @@index([createdAt])
+  @@map("message_reviews")
 }
 
 // ─────────────────────────────────────────
