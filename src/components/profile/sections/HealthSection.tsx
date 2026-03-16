@@ -1,7 +1,5 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
 import type React from 'react'
 
@@ -45,13 +43,7 @@ function SparklineChart({
           return <circle key={i} cx={x} cy={y} r="2.5" fill={color} />
         })}
       </svg>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginTop: '0.25rem',
-        }}
-      >
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.25rem' }}>
         <span style={{ fontSize: '0.625rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
           min {min}
         </span>
@@ -98,23 +90,10 @@ function AttrRow({
 
 export function HealthSection({ data }: Props) {
   const { profile, stats, attributesByDomain, bodyMetrics30d } = data
-  const router = useRouter()
-  const [addingWeight, setAddingWeight] = useState(false)
-  const [weightSaving, setWeightSaving] = useState(false)
-  const [weightForm, setWeightForm] = useState({ value: '', unit: 'kg' })
-  const [editing, setEditing] = useState(false)
-  const [saving, setSaving] = useState(false)
 
   const healthProfile = profile?.health as Record<string, unknown> | null
   const healthAttrs = attributesByDomain?.['health'] ?? {}
   const personalAttrs = attributesByDomain?.['personal'] ?? {}
-
-  const [form, setForm] = useState({
-    conditions: healthProfile?.conditions != null ? String(healthProfile.conditions) : '',
-    medications: healthProfile?.medications != null ? String(healthProfile.medications) : '',
-    allergies: healthProfile?.allergies != null ? String(healthProfile.allergies) : '',
-    smokingStatus: healthProfile?.smokingStatus != null ? String(healthProfile.smokingStatus) : '',
-  })
 
   const lastWeight = stats.lastWeightEntry
 
@@ -122,50 +101,6 @@ export function HealthSection({ data }: Props) {
   const heightFromAttrs = personalAttrs['height']?.value
   const mergedHeight =
     profile?.height ?? (typeof heightFromAttrs === 'number' ? heightFromAttrs : null)
-
-  async function saveWeight() {
-    if (!weightForm.value) return
-    setWeightSaving(true)
-    try {
-      await fetch('/api/profile/body-metric', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          metricType: 'weight',
-          value: Number(weightForm.value),
-          unit: weightForm.unit,
-        }),
-      })
-      setAddingWeight(false)
-      setWeightForm({ value: '', unit: 'kg' })
-      router.refresh()
-    } finally {
-      setWeightSaving(false)
-    }
-  }
-
-  async function saveProfile() {
-    setSaving(true)
-    try {
-      await fetch('/api/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          section: 'health',
-          data: {
-            conditions: form.conditions || undefined,
-            medications: form.medications || undefined,
-            allergies: form.allergies || undefined,
-            smokingStatus: form.smokingStatus || undefined,
-          },
-        }),
-      })
-      setEditing(false)
-      router.refresh()
-    } finally {
-      setSaving(false)
-    }
-  }
 
   // Cartella clinica (agent-collected health attributes)
   const clinicaCartella = [
@@ -181,6 +116,15 @@ export function HealthSection({ data }: Props) {
   ]
   const hasClinicaData = clinicaCartella.some((item) => healthAttrs[item.key]?.value != null)
 
+  // Manual profile fields (read-only display)
+  const manualFields = [
+    { label: 'Patologie', value: healthProfile?.conditions as string | null },
+    { label: 'Farmaci', value: healthProfile?.medications as string | null },
+    { label: 'Allergie', value: healthProfile?.allergies as string | null },
+    { label: 'Fumo', value: healthProfile?.smokingStatus as string | null },
+  ]
+  const hasManualData = manualFields.some((f) => f.value)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Vital signs */}
@@ -195,7 +139,7 @@ export function HealthSection({ data }: Props) {
               {lastWeight ? lastWeight.unit : 'kg'}
             </span>
           </p>
-          {lastWeight && (
+          {lastWeight ? (
             <p
               style={{
                 margin: 0,
@@ -208,23 +152,17 @@ export function HealthSection({ data }: Props) {
                 month: 'short',
               })}
             </p>
+          ) : (
+            <p
+              style={{
+                margin: 0,
+                fontSize: '0.6875rem',
+                color: 'var(--color-text-secondary, #8E8E93)',
+              }}
+            >
+              Comunicalo in chat
+            </p>
           )}
-          <button
-            type="button"
-            onClick={() => setAddingWeight(true)}
-            style={{
-              marginTop: '0.5rem',
-              fontSize: '0.75rem',
-              color: '#34C759',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-              fontWeight: 600,
-            }}
-          >
-            + Aggiorna
-          </button>
         </div>
 
         {/* BMI card */}
@@ -255,10 +193,10 @@ export function HealthSection({ data }: Props) {
               }}
             >
               {!mergedHeight && !lastWeight
-                ? 'Inserisci peso e altezza'
+                ? 'Comunicami peso e altezza in chat'
                 : !mergedHeight
-                  ? 'Inserisci altezza'
-                  : 'Inserisci peso'}
+                  ? "Comunicami l'altezza in chat"
+                  : 'Comunicami il peso in chat'}
             </p>
           )}
         </div>
@@ -290,73 +228,8 @@ export function HealthSection({ data }: Props) {
         </div>
       )}
 
-      {/* Weight entry form */}
-      {addingWeight && (
-        <div
-          style={{
-            backgroundColor: 'var(--color-surface, #fff)',
-            borderRadius: '1rem',
-            padding: '1rem',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}
-        >
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <input
-              type="number"
-              placeholder="70.5"
-              value={weightForm.value}
-              onChange={(e) => setWeightForm((f) => ({ ...f, value: e.target.value }))}
-              style={{ ...inputStyle, flex: 2 }}
-              min={30}
-              max={300}
-              step={0.1}
-            />
-            <select
-              value={weightForm.unit}
-              onChange={(e) => setWeightForm((f) => ({ ...f, unit: e.target.value }))}
-              style={{ ...inputStyle, flex: 1 }}
-            >
-              <option value="kg">kg</option>
-              <option value="lbs">lbs</option>
-            </select>
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button
-              type="button"
-              onClick={() => setAddingWeight(false)}
-              style={{
-                ...btnStyle,
-                backgroundColor: 'var(--color-bg, #F2F2F7)',
-                color: 'var(--color-text-primary, #1C1C1E)',
-                flex: 1,
-              }}
-            >
-              Annulla
-            </button>
-            <button
-              type="button"
-              onClick={saveWeight}
-              disabled={weightSaving || !weightForm.value}
-              style={{ ...btnStyle, backgroundColor: '#34C759', color: '#fff', flex: 2 }}
-            >
-              {weightSaving ? 'Salvataggio…' : 'Salva peso'}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Cartella Clinica (agent-collected) */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginTop: '0.25rem',
-        }}
-      >
-        <h3 style={{ ...sectionHeaderStyle, margin: 0 }}>Cartella Clinica</h3>
-      </div>
-
+      <h3 style={sectionHeaderStyle}>Cartella Clinica</h3>
       {hasClinicaData ? (
         <div
           style={{
@@ -401,7 +274,7 @@ export function HealthSection({ data }: Props) {
               color: 'var(--color-text-primary, #1C1C1E)',
             }}
           >
-            💬 Parla con il medico
+            💬 Inizia una chat
           </p>
           <p
             style={{
@@ -411,143 +284,62 @@ export function HealthSection({ data }: Props) {
               lineHeight: 1.4,
             }}
           >
-            Inizia una chat per costruire la tua cartella clinica: patologie, farmaci, allergie,
+            Parla con il medico per costruire la tua cartella clinica: patologie, farmaci, allergie,
             esami e stile di vita.
           </p>
         </div>
       )}
 
-      {/* Manual health profile edit */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <h3 style={{ ...sectionHeaderStyle, margin: 0 }}>Profilo Clinico Manuale</h3>
-        <button
-          type="button"
-          onClick={() => setEditing((v) => !v)}
-          style={{
-            fontSize: '0.8125rem',
-            color: 'var(--color-accent, #007AFF)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontWeight: 600,
-          }}
-        >
-          {editing ? 'Annulla' : 'Modifica'}
-        </button>
-      </div>
-
-      {!editing ? (
-        <div
-          style={{
-            backgroundColor: 'var(--color-surface, #fff)',
-            borderRadius: '1rem',
-            padding: '0 1rem',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}
-        >
-          {[
-            { label: 'Patologie', value: healthProfile?.conditions as string | null },
-            { label: 'Farmaci', value: healthProfile?.medications as string | null },
-            { label: 'Allergie', value: healthProfile?.allergies as string | null },
-            { label: 'Fumo', value: healthProfile?.smokingStatus as string | null },
-          ].map(({ label, value }, i) => (
-            <div key={label}>
-              {i > 0 && (
+      {/* Manual health profile — read-only, show only if has data */}
+      {hasManualData && (
+        <>
+          <h3 style={sectionHeaderStyle}>Profilo Clinico</h3>
+          <div
+            style={{
+              backgroundColor: 'var(--color-surface, #fff)',
+              borderRadius: '1rem',
+              padding: '0 1rem',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+            }}
+          >
+            {manualFields.map(({ label, value }, i) => (
+              <div key={label}>
+                {i > 0 && (
+                  <div
+                    style={{ height: '1px', backgroundColor: 'var(--color-separator, #E5E5EA)' }}
+                  />
+                )}
                 <div
-                  style={{ height: '1px', backgroundColor: 'var(--color-separator, #E5E5EA)' }}
-                />
-              )}
-              <div
-                style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0' }}
-              >
-                <span
-                  style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary, #8E8E93)' }}
-                >
-                  {label}
-                </span>
-                <span
                   style={{
-                    fontSize: '0.875rem',
-                    fontWeight: 600,
-                    color: 'var(--color-text-primary, #1C1C1E)',
-                    maxWidth: '55%',
-                    textAlign: 'right',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    padding: '0.75rem 0',
                   }}
                 >
-                  {value || '—'}
-                </span>
+                  <span
+                    style={{
+                      fontSize: '0.875rem',
+                      color: 'var(--color-text-secondary, #8E8E93)',
+                    }}
+                  >
+                    {label}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      color: 'var(--color-text-primary, #1C1C1E)',
+                      maxWidth: '55%',
+                      textAlign: 'right',
+                    }}
+                  >
+                    {value || '—'}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div
-          style={{
-            backgroundColor: 'var(--color-surface, #fff)',
-            borderRadius: '1rem',
-            padding: '1rem',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.625rem',
-          }}
-        >
-          {[
-            { key: 'conditions' as const, label: 'Patologie o condizioni croniche' },
-            { key: 'medications' as const, label: 'Farmaci assunti' },
-            { key: 'allergies' as const, label: 'Allergie o intolleranze' },
-          ].map(({ key, label }) => (
-            <div key={key}>
-              <label style={labelStyle}>{label}</label>
-              <input
-                value={form[key]}
-                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                style={inputStyle}
-              />
-            </div>
-          ))}
-          <div>
-            <label style={labelStyle}>Fumo</label>
-            <select
-              value={form.smokingStatus}
-              onChange={(e) => setForm((f) => ({ ...f, smokingStatus: e.target.value }))}
-              style={inputStyle}
-            >
-              <option value="">Seleziona</option>
-              <option value="non_fumatore">Non fumatore</option>
-              <option value="ex_fumatore">Ex fumatore</option>
-              <option value="fumatore">Fumatore</option>
-            </select>
+            ))}
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              style={{
-                ...btnStyle,
-                backgroundColor: 'var(--color-bg, #F2F2F7)',
-                color: 'var(--color-text-primary, #1C1C1E)',
-                flex: 1,
-              }}
-            >
-              Annulla
-            </button>
-            <button
-              type="button"
-              onClick={saveProfile}
-              disabled={saving}
-              style={{ ...btnStyle, backgroundColor: '#34C759', color: '#fff', flex: 2 }}
-            >
-              {saving ? 'Salvataggio…' : 'Salva'}
-            </button>
-          </div>
-        </div>
+        </>
       )}
     </div>
   )
@@ -587,30 +379,4 @@ const vitalValueStyle: React.CSSProperties = {
   margin: '0 0 0.125rem',
   fontSize: '1.5rem',
   fontWeight: 700,
-}
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.5rem 0.75rem',
-  borderRadius: '0.625rem',
-  border: '1px solid var(--color-separator, #E5E5EA)',
-  backgroundColor: 'var(--color-bg, #F2F2F7)',
-  fontSize: '0.9375rem',
-  color: 'var(--color-text-primary, #1C1C1E)',
-  outline: 'none',
-  boxSizing: 'border-box',
-}
-const btnStyle: React.CSSProperties = {
-  padding: '0.75rem',
-  borderRadius: '0.75rem',
-  border: 'none',
-  fontSize: '0.9375rem',
-  fontWeight: 600,
-  cursor: 'pointer',
-}
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: '0.75rem',
-  fontWeight: 600,
-  color: 'var(--color-text-secondary, #8E8E93)',
-  marginBottom: '0.25rem',
 }

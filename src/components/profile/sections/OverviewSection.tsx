@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pencil } from 'lucide-react'
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
 import { StatCard } from './StatCard'
 
@@ -11,46 +10,15 @@ type Props = { data: ProfileData }
 export function OverviewSection({ data }: Props) {
   const { stats, user, profile, artifacts, attributesByDomain } = data
   const router = useRouter()
-  const [editing, setEditing] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [exporting, setExporting] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
-  const [form, setForm] = useState({
-    name: user.name ?? '',
-    birthDate: profile?.birthDate ? String(profile.birthDate).slice(0, 10) : '',
-    gender: profile?.gender ?? '',
-    height: profile?.height != null ? String(profile.height) : '',
-    weight: profile?.weight != null ? String(profile.weight) : '',
-  })
+  const [exporting, setExporting] = useState(false)
 
-  const age = form.birthDate
-    ? Math.floor((Date.now() - new Date(form.birthDate).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+  const age = profile?.birthDate
+    ? Math.floor(
+        (Date.now() - new Date(profile.birthDate).getTime()) / (1000 * 60 * 60 * 24 * 365.25),
+      )
     : null
-
-  async function save() {
-    setSaving(true)
-    try {
-      await fetch('/api/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          section: 'personal',
-          data: {
-            name: form.name || undefined,
-            birthDate: form.birthDate || undefined,
-            gender: form.gender || undefined,
-            height: form.height ? Number(form.height) : undefined,
-            weight: form.weight ? Number(form.weight) : undefined,
-          },
-        }),
-      })
-      setEditing(false)
-      router.refresh()
-    } finally {
-      setSaving(false)
-    }
-  }
 
   async function exportDynamicDb() {
     setExporting(true)
@@ -86,27 +54,6 @@ export function OverviewSection({ data }: Props) {
   // Build active programs from attributesByDomain.program
   const programDomain = attributesByDomain?.['program'] ?? {}
   const agentIds = new Set<string>()
-  for (const key of Object.keys(programDomain)) {
-    // keys like dietista_start, dietista_status, dietista_duration_days
-    const parts = key.split('_')
-    if (parts.length >= 2) {
-      // everything before the last segment(s) that are status/start/duration
-      const suffix = parts[parts.length - 1]
-      if (['status', 'start', 'days'].includes(suffix)) {
-        const agentId = parts
-          .slice(0, -1)
-          .join('_')
-          .replace(/_duration$/, '')
-        agentIds.add(agentId)
-      } else if (parts[parts.length - 1] === 'duration' && parts[parts.length - 2] === 'days') {
-        // edge: {agentId}_duration_days split gives last=days handled above
-      } else if (key.endsWith('_start')) {
-        agentIds.add(key.slice(0, -6))
-      }
-    }
-  }
-
-  // Also scan for any key ending with _start or _status as agentId signals
   for (const key of Object.keys(programDomain)) {
     if (key.endsWith('_start')) agentIds.add(key.slice(0, -6))
     else if (key.endsWith('_status')) agentIds.add(key.slice(0, -7))
@@ -214,7 +161,7 @@ export function OverviewSection({ data }: Props) {
         </div>
       )}
 
-      {/* Personal card */}
+      {/* Personal card — read-only */}
       <div
         style={{
           backgroundColor: 'var(--color-surface)',
@@ -278,96 +225,16 @@ export function OverviewSection({ data }: Props) {
             >
               {exporting ? 'Export…' : 'Export DB dinamico'}
             </button>
-            <button
-              onClick={() => setEditing((v) => !v)}
-              style={{
-                padding: '0.25rem 0.625rem',
-                borderRadius: '999px',
-                border: '1px solid var(--color-separator)',
-                background: 'transparent',
-                color: 'var(--color-accent)',
-                fontSize: '0.8125rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.25rem',
-              }}
-            >
-              <Pencil size={12} />
-              {editing ? 'Annulla' : 'Modifica'}
-            </button>
           </div>
         </div>
 
-        {!editing ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <Row label="Nome" value={user.name ?? '—'} />
-            <Row label="Età" value={age != null ? `${age} anni` : '—'} />
-            <Row label="Sesso" value={profile?.gender ?? '—'} />
-            <Row label="Altezza" value={profile?.height != null ? `${profile.height} cm` : '—'} />
-            <Row label="Peso" value={profile?.weight != null ? `${profile.weight} kg` : '—'} />
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <Field label="Nome">
-              <input
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Il tuo nome"
-                style={inputStyle}
-              />
-            </Field>
-            <Field label="Data di nascita">
-              <input
-                type="date"
-                value={form.birthDate}
-                onChange={(e) => setForm((f) => ({ ...f, birthDate: e.target.value }))}
-                style={inputStyle}
-              />
-            </Field>
-            <Field label="Sesso">
-              <select
-                value={form.gender}
-                onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
-                style={inputStyle}
-              >
-                <option value="">Seleziona</option>
-                <option value="M">Maschio</option>
-                <option value="F">Femmina</option>
-                <option value="altro">Altro</option>
-              </select>
-            </Field>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-              <Field label="Altezza (cm)">
-                <input
-                  type="number"
-                  value={form.height}
-                  onChange={(e) => setForm((f) => ({ ...f, height: e.target.value }))}
-                  placeholder="175"
-                  min={100}
-                  max={250}
-                  style={inputStyle}
-                />
-              </Field>
-              <Field label="Peso (kg)">
-                <input
-                  type="number"
-                  value={form.weight}
-                  onChange={(e) => setForm((f) => ({ ...f, weight: e.target.value }))}
-                  placeholder="70"
-                  min={30}
-                  max={300}
-                  step={0.1}
-                  style={inputStyle}
-                />
-              </Field>
-            </div>
-            <button onClick={save} disabled={saving} style={saveButtonStyle}>
-              {saving ? 'Salvataggio…' : 'Salva modifiche'}
-            </button>
-          </div>
-        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <Row label="Nome" value={user.name ?? '—'} />
+          <Row label="Età" value={age != null && age > 0 ? `${age} anni` : '—'} />
+          <Row label="Sesso" value={profile?.gender ?? '—'} />
+          <Row label="Altezza" value={profile?.height != null ? `${profile.height} cm` : '—'} />
+          <Row label="Peso" value={profile?.weight != null ? `${profile.weight} kg` : '—'} />
+        </div>
       </div>
 
       {/* Stats grid */}
@@ -423,7 +290,7 @@ export function OverviewSection({ data }: Props) {
               boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
             }}
           >
-            Nessun programma attivo
+            Nessun programma attivo — inizia una chat per ricevere un piano personalizzato
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -565,48 +432,4 @@ function Row({ label, value }: { label: string; value: string }) {
       </span>
     </div>
   )
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label
-        style={{
-          display: 'block',
-          fontSize: '0.75rem',
-          fontWeight: 600,
-          color: 'var(--color-text-secondary)',
-          marginBottom: '0.25rem',
-        }}
-      >
-        {label}
-      </label>
-      {children}
-    </div>
-  )
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.5rem 0.75rem',
-  borderRadius: '0.625rem',
-  border: '1px solid var(--color-separator)',
-  backgroundColor: 'var(--color-bg)',
-  fontSize: '0.9375rem',
-  color: 'var(--color-text-primary)',
-  outline: 'none',
-  boxSizing: 'border-box',
-}
-
-const saveButtonStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.75rem',
-  borderRadius: '0.75rem',
-  border: 'none',
-  backgroundColor: 'var(--color-accent)',
-  color: '#fff',
-  fontSize: '0.9375rem',
-  fontWeight: 600,
-  cursor: 'pointer',
-  marginTop: '0.25rem',
 }

@@ -1,7 +1,5 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
 import type React from 'react'
 
@@ -192,21 +190,14 @@ function AttrRow({ label, value, unit }: { label: string; value: unknown; unit?:
 
 export function MindfulnessSection({ data }: Props) {
   const { stats, recentMindfulness, attributesByDomain } = data
-  const router = useRouter()
-  const [adding, setAdding] = useState(false)
-  const [addSaving, setAddSaving] = useState(false)
-  const [addForm, setAddForm] = useState({ mood: '7', stress: '4', content: '' })
 
   const avgMood = stats.avgMood7d
   const avgStress = stats.avgStress7d
 
   const mindAttrs = attributesByDomain?.['mindfulness'] ?? {}
   const mentalAttrs = attributesByDomain?.['mental'] ?? {}
-
-  // Merge both domains for display
   const allMindAttrs = { ...mentalAttrs, ...mindAttrs }
 
-  // Dati Raccolti items
   const mindCartella = [
     { label: 'Ore di sonno', key: 'sleep_hours', unit: 'h' },
     { label: 'Latenza addormentamento', key: 'sleep_latency', unit: 'min' },
@@ -218,26 +209,6 @@ export function MindfulnessSection({ data }: Props) {
     { label: 'Intensità distress', key: 'distress_intensity' },
   ]
   const hasMindData = mindCartella.some((item) => allMindAttrs[item.key]?.value != null)
-
-  async function addEntry() {
-    setAddSaving(true)
-    try {
-      await fetch('/api/profile/mindfulness', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mood: Number(addForm.mood),
-          stress: Number(addForm.stress),
-          content: addForm.content,
-        }),
-      })
-      setAdding(false)
-      setAddForm({ mood: '7', stress: '4', content: '' })
-      router.refresh()
-    } finally {
-      setAddSaving(false)
-    }
-  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -263,7 +234,9 @@ export function MindfulnessSection({ data }: Props) {
             padding: '0.2rem 0.625rem',
           }}
         >
-          {recentMindfulness.length > 0 ? `${recentMindfulness.length} sessioni` : 'Inizia oggi'}
+          {recentMindfulness.length > 0
+            ? `${recentMindfulness.length} sessioni`
+            : 'Nessuna sessione'}
         </span>
       </div>
 
@@ -371,7 +344,7 @@ export function MindfulnessSection({ data }: Props) {
               color: 'var(--color-text-primary, #1C1C1E)',
             }}
           >
-            💬 Parla con lo psicologo
+            💬 Inizia una chat
           </p>
           <p
             style={{
@@ -381,8 +354,8 @@ export function MindfulnessSection({ data }: Props) {
               lineHeight: 1.4,
             }}
           >
-            Inizia una chat per raccogliere i tuoi dati: qualità del sonno, livello di stress,
-            contesto emotivo e molto altro.
+            Parla con lo psicologo per raccogliere i tuoi dati: qualità del sonno, livello di
+            stress, contesto emotivo e molto altro.
           </p>
         </div>
       )}
@@ -447,89 +420,6 @@ export function MindfulnessSection({ data }: Props) {
         </>
       )}
 
-      {/* Add entry */}
-      {!adding ? (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          style={{
-            padding: '0.875rem',
-            borderRadius: '1rem',
-            border: '1.5px dashed var(--color-separator, #E5E5EA)',
-            backgroundColor: 'transparent',
-            color: '#5AC8FA',
-            fontSize: '0.9375rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          + Registra stato d&apos;animo
-        </button>
-      ) : (
-        <div
-          style={{
-            backgroundColor: 'var(--color-surface, #fff)',
-            borderRadius: '1rem',
-            padding: '1rem',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}
-        >
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-            <div>
-              <label style={labelStyle}>Umore (1-10)</label>
-              <input
-                type="number"
-                value={addForm.mood}
-                min={1}
-                max={10}
-                onChange={(e) => setAddForm((f) => ({ ...f, mood: e.target.value }))}
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Stress (1-10)</label>
-              <input
-                type="number"
-                value={addForm.stress}
-                min={1}
-                max={10}
-                onChange={(e) => setAddForm((f) => ({ ...f, stress: e.target.value }))}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-          <textarea
-            value={addForm.content}
-            onChange={(e) => setAddForm((f) => ({ ...f, content: e.target.value }))}
-            placeholder="Come ti senti oggi? (opzionale)"
-            rows={2}
-            style={{ ...inputStyle, resize: 'none', marginTop: '0.5rem' }}
-          />
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button
-              type="button"
-              onClick={() => setAdding(false)}
-              style={{
-                ...btnStyle,
-                backgroundColor: 'var(--color-bg, #F2F2F7)',
-                color: 'var(--color-text-primary, #1C1C1E)',
-                flex: 1,
-              }}
-            >
-              Annulla
-            </button>
-            <button
-              type="button"
-              onClick={addEntry}
-              disabled={addSaving}
-              style={{ ...btnStyle, backgroundColor: '#5AC8FA', color: '#fff', flex: 2 }}
-            >
-              {addSaving ? 'Salvataggio…' : 'Salva'}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Bottom stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
         {[
@@ -582,30 +472,4 @@ const sectionHeaderStyle: React.CSSProperties = {
   color: 'var(--color-text-secondary, #8E8E93)',
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
-}
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.5rem 0.75rem',
-  borderRadius: '0.625rem',
-  border: '1px solid var(--color-separator, #E5E5EA)',
-  backgroundColor: 'var(--color-bg, #F2F2F7)',
-  fontSize: '0.9375rem',
-  color: 'var(--color-text-primary, #1C1C1E)',
-  outline: 'none',
-  boxSizing: 'border-box',
-}
-const btnStyle: React.CSSProperties = {
-  padding: '0.75rem',
-  borderRadius: '0.75rem',
-  border: 'none',
-  fontSize: '0.9375rem',
-  fontWeight: 600,
-  cursor: 'pointer',
-}
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: '0.75rem',
-  fontWeight: 600,
-  color: 'var(--color-text-secondary, #8E8E93)',
-  marginBottom: '0.25rem',
 }

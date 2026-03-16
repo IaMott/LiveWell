@@ -1,7 +1,5 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
 import type React from 'react'
 
@@ -137,15 +135,11 @@ function AttrRow({
 
 export function NutritionSection({ data }: Props) {
   const { stats, recentMeals, profile, attributesByDomain } = data
-  const router = useRouter()
-  const [adding, setAdding] = useState(false)
-  const [addSaving, setAddSaving] = useState(false)
-  const [addForm, setAddForm] = useState({ mealType: 'pranzo', notes: '' })
 
   const nutAttrs = attributesByDomain?.['nutrition'] ?? {}
   const nutritionProfile = profile?.nutrition as Record<string, unknown> | null
 
-  // Daily kcal: prefer agent-collected attr, then profile, then 0
+  // Daily kcal: prefer agent-collected attr, then profile
   const attrKcal = nutAttrs['daily_kcal']?.value
   const dailyKcal =
     (typeof attrKcal === 'number' ? attrKcal : null) ??
@@ -167,23 +161,6 @@ export function NutritionSection({ data }: Props) {
   const carbsG = kcalLogged > 0 ? Math.round((kcalLogged * 0.48) / 4) : 0
   const fatG = kcalLogged > 0 ? Math.round((kcalLogged * 0.3) / 9) : 0
   const hasAnyMacroData = stats.mealsLogged7d > 0 || dailyKcal != null
-
-  async function addMeal() {
-    if (!addForm.notes.trim()) return
-    setAddSaving(true)
-    try {
-      await fetch('/api/profile/meal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mealType: addForm.mealType, notes: addForm.notes }),
-      })
-      setAdding(false)
-      setAddForm({ mealType: 'pranzo', notes: '' })
-      router.refresh()
-    } finally {
-      setAddSaving(false)
-    }
-  }
 
   // Cartella nutrizionale items
   const nutCartella = [
@@ -209,7 +186,7 @@ export function NutritionSection({ data }: Props) {
             color: 'var(--color-text-primary, #1C1C1E)',
           }}
         >
-          Macro tracker
+          Nutrizione
         </h2>
         <span
           style={{
@@ -221,9 +198,7 @@ export function NutritionSection({ data }: Props) {
             padding: '0.2rem 0.625rem',
           }}
         >
-          {stats.mealsLogged7d > 0 && dailyKcal
-            ? `${Math.round((kcalLogged / kcalGoal) * 100)}%`
-            : `${stats.mealsLogged7d} pasti`}
+          {stats.mealsLogged7d} pasti (7gg)
         </span>
       </div>
 
@@ -267,7 +242,7 @@ export function NutritionSection({ data }: Props) {
                     color: 'var(--color-text-secondary, #8E8E93)',
                   }}
                 >
-                  {count} pasto{count > 1 ? 'i' : ''} registrat{count > 1 ? 'i' : 'o'}
+                  {count} registrat{count > 1 ? 'i' : 'o'}
                 </p>
                 {meals[0]?.notes && (
                   <p
@@ -300,7 +275,7 @@ export function NutritionSection({ data }: Props) {
         ))}
       </div>
 
-      {/* Macro rings — only when we have data */}
+      {/* Macro rings */}
       {hasAnyMacroData && (
         <div
           style={{
@@ -355,7 +330,7 @@ export function NutritionSection({ data }: Props) {
                 textAlign: 'center',
               }}
             >
-              Registra i pasti per vedere i progressi
+              I pasti vengono registrati automaticamente tramite chat
             </p>
           )}
         </div>
@@ -391,108 +366,13 @@ export function NutritionSection({ data }: Props) {
           })}
         </div>
       ) : (
-        <div
-          style={{
-            backgroundColor: 'rgba(175,82,222,0.06)',
-            borderRadius: '1rem',
-            padding: '1rem',
-          }}
-        >
-          <p
-            style={{
-              margin: '0 0 0.25rem',
-              fontSize: '0.9375rem',
-              fontWeight: 600,
-              color: 'var(--color-text-primary, #1C1C1E)',
-            }}
-          >
-            💬 Parla con il nutrizionista
-          </p>
-          <p
-            style={{
-              margin: 0,
-              fontSize: '0.8125rem',
-              color: 'var(--color-text-secondary, #8E8E93)',
-              lineHeight: 1.4,
-            }}
-          >
-            Inizia una chat per raccogliere la tua cartella nutrizionale: allergie, obiettivi,
-            restrizioni e piano alimentare personalizzato.
-          </p>
-        </div>
+        <ChatCta
+          color="#AF52DE"
+          text="Parla con il nutrizionista per raccogliere la tua cartella: allergie, obiettivi, restrizioni e piano alimentare."
+        />
       )}
 
-      {/* Add meal */}
-      {!adding ? (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          style={{
-            padding: '0.875rem',
-            borderRadius: '1rem',
-            border: '1.5px dashed var(--color-separator, #E5E5EA)',
-            backgroundColor: 'transparent',
-            color: '#AF52DE',
-            fontSize: '0.9375rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          + Aggiungi pasto
-        </button>
-      ) : (
-        <div
-          style={{
-            backgroundColor: 'var(--color-surface, #fff)',
-            borderRadius: '1rem',
-            padding: '1rem',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}
-        >
-          <select
-            value={addForm.mealType}
-            onChange={(e) => setAddForm((f) => ({ ...f, mealType: e.target.value }))}
-            style={inputStyle}
-          >
-            {MEAL_TYPES.map(({ key, label }) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <textarea
-            value={addForm.notes}
-            onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))}
-            placeholder="Descrivi cosa hai mangiato…"
-            rows={3}
-            style={{ ...inputStyle, resize: 'none', marginTop: '0.5rem' }}
-          />
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button
-              type="button"
-              onClick={() => setAdding(false)}
-              style={{
-                ...btnStyle,
-                backgroundColor: 'var(--color-bg, #F2F2F7)',
-                color: 'var(--color-text-primary, #1C1C1E)',
-                flex: 1,
-              }}
-            >
-              Annulla
-            </button>
-            <button
-              type="button"
-              onClick={addMeal}
-              disabled={addSaving || !addForm.notes.trim()}
-              style={{ ...btnStyle, backgroundColor: '#AF52DE', color: '#fff', flex: 2 }}
-            >
-              {addSaving ? 'Salvataggio…' : 'Salva pasto'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Weekly summary */}
+      {/* Bottom stats */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
         <StatMini label="Pasti (7gg)" value={String(stats.mealsLogged7d)} color="#AF52DE" />
         <StatMini
@@ -532,6 +412,39 @@ function StatMini({ label, value, color }: { label: string; value: string; color
   )
 }
 
+function ChatCta({ color, text }: { color: string; text: string }) {
+  return (
+    <div
+      style={{
+        backgroundColor: `${color}10`,
+        borderRadius: '1rem',
+        padding: '1rem',
+      }}
+    >
+      <p
+        style={{
+          margin: '0 0 0.25rem',
+          fontSize: '0.9375rem',
+          fontWeight: 600,
+          color: 'var(--color-text-primary, #1C1C1E)',
+        }}
+      >
+        💬 Inizia una chat
+      </p>
+      <p
+        style={{
+          margin: 0,
+          fontSize: '0.8125rem',
+          color: 'var(--color-text-secondary, #8E8E93)',
+          lineHeight: 1.4,
+        }}
+      >
+        {text}
+      </p>
+    </div>
+  )
+}
+
 const sectionHeaderStyle: React.CSSProperties = {
   margin: '0.25rem 0 0',
   fontSize: '0.8125rem',
@@ -539,24 +452,4 @@ const sectionHeaderStyle: React.CSSProperties = {
   color: 'var(--color-text-secondary, #8E8E93)',
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.5rem 0.75rem',
-  borderRadius: '0.625rem',
-  border: '1px solid var(--color-separator, #E5E5EA)',
-  backgroundColor: 'var(--color-bg, #F2F2F7)',
-  fontSize: '0.9375rem',
-  color: 'var(--color-text-primary, #1C1C1E)',
-  outline: 'none',
-  boxSizing: 'border-box',
-}
-const btnStyle: React.CSSProperties = {
-  padding: '0.75rem',
-  borderRadius: '0.75rem',
-  border: 'none',
-  fontSize: '0.9375rem',
-  fontWeight: 600,
-  cursor: 'pointer',
 }

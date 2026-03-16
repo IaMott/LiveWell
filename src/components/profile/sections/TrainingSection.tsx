@@ -1,7 +1,5 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
 import type React from 'react'
 
@@ -55,15 +53,6 @@ function AttrRow({
 
 export function TrainingSection({ data }: Props) {
   const { stats, recentWorkouts, profile, attributesByDomain, workoutPlan } = data
-  const router = useRouter()
-  const [adding, setAdding] = useState(false)
-  const [addSaving, setAddSaving] = useState(false)
-  const [addForm, setAddForm] = useState({
-    type: 'cardio',
-    durationMin: '30',
-    effort: '6',
-    notes: '',
-  })
 
   const trainAttrs = attributesByDomain?.['training'] ?? {}
   const sportAttrs = attributesByDomain?.['sport'] ?? {}
@@ -78,25 +67,6 @@ export function TrainingSection({ data }: Props) {
     100,
     weeklyTarget > 0 ? Math.round((stats.workoutSessions7d / weeklyTarget) * 100) : 0,
   )
-
-  async function addWorkout() {
-    setAddSaving(true)
-    try {
-      await fetch('/api/profile/workout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          durationMin: Number(addForm.durationMin),
-          perceivedEffort: Number(addForm.effort),
-          notes: `${addForm.type}: ${addForm.notes}`.trim(),
-        }),
-      })
-      setAdding(false)
-      router.refresh()
-    } finally {
-      setAddSaving(false)
-    }
-  }
 
   // Cartella allenamento
   const trainCartella = [
@@ -343,35 +313,10 @@ export function TrainingSection({ data }: Props) {
           ))}
         </div>
       ) : (
-        <div
-          style={{
-            backgroundColor: 'rgba(0,122,255,0.06)',
-            borderRadius: '1rem',
-            padding: '1rem',
-          }}
-        >
-          <p
-            style={{
-              margin: '0 0 0.25rem',
-              fontSize: '0.9375rem',
-              fontWeight: 600,
-              color: 'var(--color-text-primary, #1C1C1E)',
-            }}
-          >
-            💬 Parla con il personal trainer
-          </p>
-          <p
-            style={{
-              margin: 0,
-              fontSize: '0.8125rem',
-              color: 'var(--color-text-secondary, #8E8E93)',
-              lineHeight: 1.4,
-            }}
-          >
-            Inizia una chat per costruire la tua cartella allenamento: livello, obiettivi, infortuni
-            e piano settimanale personalizzato.
-          </p>
-        </div>
+        <ChatCta
+          color="#007AFF"
+          text="Parla con il personal trainer per costruire la tua cartella: livello, obiettivi, infortuni e piano settimanale."
+        />
       )}
 
       {/* Recent workouts */}
@@ -437,106 +382,6 @@ export function TrainingSection({ data }: Props) {
         </>
       )}
 
-      {/* Add workout */}
-      {!adding ? (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          style={{
-            padding: '0.875rem',
-            borderRadius: '1rem',
-            border: '1.5px dashed var(--color-separator, #E5E5EA)',
-            backgroundColor: 'transparent',
-            color: '#007AFF',
-            fontSize: '0.9375rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          + Aggiungi allenamento
-        </button>
-      ) : (
-        <div
-          style={{
-            backgroundColor: 'var(--color-surface, #fff)',
-            borderRadius: '1rem',
-            padding: '1rem',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}
-        >
-          <select
-            value={addForm.type}
-            onChange={(e) => setAddForm((f) => ({ ...f, type: e.target.value }))}
-            style={inputStyle}
-          >
-            {WORKOUT_TYPES.map(({ key, label }) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '0.5rem',
-              marginTop: '0.5rem',
-            }}
-          >
-            <div>
-              <label style={labelStyle}>Durata (min)</label>
-              <input
-                type="number"
-                value={addForm.durationMin}
-                min={5}
-                max={300}
-                onChange={(e) => setAddForm((f) => ({ ...f, durationMin: e.target.value }))}
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Sforzo (1-10)</label>
-              <input
-                type="number"
-                value={addForm.effort}
-                min={1}
-                max={10}
-                onChange={(e) => setAddForm((f) => ({ ...f, effort: e.target.value }))}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-          <input
-            value={addForm.notes}
-            onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))}
-            placeholder="Note opzionali…"
-            style={{ ...inputStyle, marginTop: '0.5rem' }}
-          />
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button
-              type="button"
-              onClick={() => setAdding(false)}
-              style={{
-                ...btnStyle,
-                backgroundColor: 'var(--color-bg, #F2F2F7)',
-                color: 'var(--color-text-primary, #1C1C1E)',
-                flex: 1,
-              }}
-            >
-              Annulla
-            </button>
-            <button
-              type="button"
-              onClick={addWorkout}
-              disabled={addSaving}
-              style={{ ...btnStyle, backgroundColor: '#007AFF', color: '#fff', flex: 2 }}
-            >
-              {addSaving ? 'Salvataggio…' : 'Salva sessione'}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Stats bottom bar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
         {[
@@ -574,6 +419,39 @@ export function TrainingSection({ data }: Props) {
   )
 }
 
+function ChatCta({ color, text }: { color: string; text: string }) {
+  return (
+    <div
+      style={{
+        backgroundColor: `${color}10`,
+        borderRadius: '1rem',
+        padding: '1rem',
+      }}
+    >
+      <p
+        style={{
+          margin: '0 0 0.25rem',
+          fontSize: '0.9375rem',
+          fontWeight: 600,
+          color: 'var(--color-text-primary, #1C1C1E)',
+        }}
+      >
+        💬 Inizia una chat
+      </p>
+      <p
+        style={{
+          margin: 0,
+          fontSize: '0.8125rem',
+          color: 'var(--color-text-secondary, #8E8E93)',
+          lineHeight: 1.4,
+        }}
+      >
+        {text}
+      </p>
+    </div>
+  )
+}
+
 const sectionHeaderStyle: React.CSSProperties = {
   margin: '0.25rem 0 0',
   fontSize: '0.8125rem',
@@ -581,31 +459,4 @@ const sectionHeaderStyle: React.CSSProperties = {
   color: 'var(--color-text-secondary, #8E8E93)',
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.5rem 0.75rem',
-  borderRadius: '0.625rem',
-  border: '1px solid var(--color-separator, #E5E5EA)',
-  backgroundColor: 'var(--color-bg, #F2F2F7)',
-  fontSize: '0.9375rem',
-  color: 'var(--color-text-primary, #1C1C1E)',
-  outline: 'none',
-  boxSizing: 'border-box',
-}
-const btnStyle: React.CSSProperties = {
-  padding: '0.75rem',
-  borderRadius: '0.75rem',
-  border: 'none',
-  fontSize: '0.9375rem',
-  fontWeight: 600,
-  cursor: 'pointer',
-}
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: '0.75rem',
-  fontWeight: 600,
-  color: 'var(--color-text-secondary, #8E8E93)',
-  marginBottom: '0.25rem',
 }
