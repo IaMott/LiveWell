@@ -18,6 +18,95 @@ const WORKOUT_TYPES = [
   { key: 'sport', label: 'Sport', emoji: '⚽', color: '#FF9F0A', desc: 'Sport di squadra' },
 ]
 
+/**
+ * S2: Keyword dictionary for matching workout notes to display categories.
+ * The `notes` field is free-form text — a single keyword match is fragile.
+ * Each category lists Italian + English synonyms so sessions logged in either
+ * language are correctly counted.
+ */
+const WORKOUT_TYPE_KEYWORDS: Record<string, string[]> = {
+  cardio: [
+    'cardio',
+    'corsa',
+    'running',
+    'bici',
+    'cycling',
+    'nuoto',
+    'swimming',
+    'camminata',
+    'walking',
+    'trail',
+    'hiit',
+    'aerobico',
+    'aerobic',
+    'ellittica',
+    'elliptical',
+    'tapis',
+    'rowing',
+    'canottaggio',
+  ],
+  forza: [
+    'forza',
+    'strength',
+    'pesi',
+    'weights',
+    'palestra',
+    'gym',
+    'macchine',
+    'machines',
+    'squat',
+    'deadlift',
+    'bench',
+    'panca',
+    'powerlifting',
+    'bodybuilding',
+    'resistance',
+    'resistenza',
+    'bilanciere',
+    'manubri',
+    'dumbbell',
+    'barbell',
+  ],
+  flessibilita: [
+    'flessibilita',
+    'flessibilità',
+    'flexibility',
+    'yoga',
+    'stretching',
+    'pilates',
+    'mobilità',
+    'mobility',
+    'calisthenics',
+    'ginnastica',
+    'gymnastics',
+    'meditazione',
+    'meditation',
+  ],
+  sport: [
+    'sport',
+    'calcio',
+    'football',
+    'soccer',
+    'tennis',
+    'basket',
+    'basketball',
+    'pallavolo',
+    'volleyball',
+    'nuoto',
+    'swimming',
+    'boxe',
+    'boxing',
+    'arti marziali',
+    'martial arts',
+    'ciclismo',
+    'cycling',
+    'padel',
+    'golf',
+    'rugby',
+    'hockey',
+  ],
+}
+
 function AttrRow({
   label,
   value,
@@ -145,7 +234,12 @@ export function TrainingSection({ data }: Props) {
       <h3 style={sectionHeaderStyle}>Tipi di allenamento</h3>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
         {WORKOUT_TYPES.map(({ key, label, emoji, color, desc }) => {
-          const count = recentWorkouts.filter((w) => w.notes?.toLowerCase().includes(key)).length
+          // S2: Use the keyword dictionary for robust matching (Italian + English synonyms).
+          const keywords = WORKOUT_TYPE_KEYWORDS[key] ?? [key]
+          const count = recentWorkouts.filter((w) => {
+            const notes = w.notes?.toLowerCase() ?? ''
+            return keywords.some((kw) => notes.includes(kw))
+          }).length
           return (
             <div
               key={key}

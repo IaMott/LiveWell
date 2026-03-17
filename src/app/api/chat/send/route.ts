@@ -422,6 +422,8 @@ export async function POST(request: Request): Promise<Response> {
             round1Proposals: consensus.debug?.round1Proposals,
             round2Proposals: consensus.debug?.round2Proposals,
             toolExecutionTrace: persistedToolExecutionTrace,
+            // C1: Pass full history so the long-term memory summary covers the whole arc.
+            recentMessages: contextPack.history.recentMessages,
           })
         } catch (error) {
           console.error('[chat/send] persistChatTurn failed, continuing in fallback mode', error)
@@ -472,7 +474,8 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         // ── Step 6: Stream response ────────────────────────────────────────
-        const chunks = responseText.match(/.{1,32}/g) ?? [responseText]
+        // C2: Use [\s\S] so newlines inside markdown are not dropped.
+        const chunks = responseText.match(/[\s\S]{1,32}/g) ?? [responseText]
         for (let i = 0; i < chunks.length; i += 1) {
           controller.enqueue(
             encoder.encode(toSse({ type: 'message.delta', id: assistantId, delta: chunks[i] })),
@@ -490,6 +493,8 @@ export async function POST(request: Request): Promise<Response> {
               specialistName,
               activeSpecialistId,
               specialistDomains,
+              // S1: Include conversationId so the client can sync newly-created conversations.
+              conversationId,
             }),
           ),
         )

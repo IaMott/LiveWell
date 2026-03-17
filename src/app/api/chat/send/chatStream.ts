@@ -18,6 +18,8 @@ export type ChatStreamEvent =
       specialistName?: string
       activeSpecialistId?: string
       specialistDomains?: Domain[]
+      /** S1: Sent so the client can sync the conversationId for newly-created conversations. */
+      conversationId?: string
     }
   | {
       type: 'tool.result'

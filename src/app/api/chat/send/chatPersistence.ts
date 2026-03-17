@@ -44,6 +44,8 @@ export type RoutePersistenceDeps = {
       code?: string
       message?: string
     }>
+    /** C1: Full conversation history for accurate long-term memory summaries. */
+    recentMessages?: Array<{ role: string; content: string }>
   }) => Promise<void>
   buildContextPack: (input: {
     userId: string
@@ -105,6 +107,7 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       round1Proposals,
       round2Proposals,
       toolExecutionTrace,
+      recentMessages,
     }) => {
       // ── Phase 1: Critical — conversation + messages ──────────────────────
       // Sequential saves (no $transaction) for maximum compatibility with Neon
@@ -221,17 +224,19 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       }
 
       // ── Phase 3: Long-term memory — fire-and-forget summary upsert ────────
-      // Persist a short cross-conversation summary so future turns can reference it.
-      // messageCount=99 bypasses the MIN_MESSAGES gate (we always want a summary after a turn).
+      // C1: Build summary from full conversation arc (not just the last exchange).
+      // M3: Pass the actual message count so MIN_MESSAGES_FOR_SUMMARY is respected.
+      const allMessages = [
+        ...(recentMessages ?? []).map((m) => ({ role: m.role, content: m.content })),
+        { role: 'user', content: userMessage },
+        { role: 'assistant', content: assistantMessage },
+      ]
       upsertConversationSummary({
         userId,
         conversationId,
-        messages: [
-          { role: 'user', content: userMessage },
-          { role: 'assistant', content: assistantMessage },
-        ],
+        messages: allMessages,
         domain: domain ?? 'general',
-        messageCount: 99,
+        messageCount: allMessages.length,
       })
     },
     buildContextPack: async ({ userId, conversationId, role }) => {

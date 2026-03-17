@@ -276,7 +276,10 @@ export function LiveModal({ onClose, onTranscription }: Props) {
       src.connect(analyser)
       analyserRef.current = analyser
 
-      // ScriptProcessor: reliable cross-browser, no worker-blob CSP issues
+      // ScriptProcessor: reliable cross-browser, no worker-blob CSP issues.
+      // M6: TODO — createScriptProcessor is deprecated (W3C AudioWorklet is the replacement).
+      //            Migrate to AudioWorkletNode when AudioWorklet processor CSP issues are resolved.
+
       const proc = inCtx.createScriptProcessor(2048, 1, 1)
       const mute = inCtx.createGain()
       mute.gain.value = 0
@@ -600,6 +603,10 @@ export function LiveModal({ onClose, onTranscription }: Props) {
   async function switchCamera() {
     if (!videoEnabled) return
 
+    // M7: Record the current camera state so we can revert on failure.
+    const prevCameraIdx = currentCameraIdx
+    const prevFacingMode = facingModeRef.current
+
     // Stop current video stream
     if (videoTimerRef.current) {
       clearInterval(videoTimerRef.current)
@@ -624,6 +631,14 @@ export function LiveModal({ onClose, onTranscription }: Props) {
       }
     } catch (e) {
       console.error('[LiveModal] camera switch error', e)
+      // M7: Revert to the original camera on failure so the user is not left without video.
+      try {
+        setCurrentCameraIdx(prevCameraIdx)
+        facingModeRef.current = prevFacingMode
+        await startVideoStream(videoDevices[prevCameraIdx]?.deviceId, prevFacingMode)
+      } catch (revertErr) {
+        console.error('[LiveModal] camera revert error', revertErr)
+      }
     }
   }
 

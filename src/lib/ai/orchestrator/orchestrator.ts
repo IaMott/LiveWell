@@ -114,7 +114,9 @@ export async function orchestrate(
     userMessage: input.message,
     proposals: round2WithQueue,
     gatingQuestions: finalInterviewQuestions,
-    criticalQuestions: finalInterviewQuestions,
+    // S3: criticalQuestions come from consensus (baseline safety/triage), not from the
+    // interview-flow queue — passing the same array twice caused double-counting.
+    criticalQuestions: consensusOutcome.gatingQuestions ?? [],
     contextPack: input.contextPack,
     activeSpecialist,
   })

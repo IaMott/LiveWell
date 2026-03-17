@@ -15,9 +15,25 @@ const GREETING_PATTERNS = [
   /^(ciao\s+a\s+tutti|ciao\s+raga|ciao\s+a\s+te)[!.,\s]*$/i,
 ]
 
+/**
+ * M1: Mid-conversation filler patterns — short acknowledgements with no informational content.
+ * These appear in the middle of a conversation (hasHistory=true) and should skip agent rounds
+ * to avoid specialists treating "ok" as a topic trigger.
+ */
+const FILLER_PATTERNS = [
+  /^(ok|okay|va bene|va benissimo|perfetto|ottimo|capito|ho capito|grazie|thanks|thank you|👍|✅)[!.,\s]*$/i,
+  /^(sì|si|no|certo|esatto|giusto|esattamente|assolutamente)[!.,\s]*$/i,
+  /^(continua|prosegui|dimmi|dimmi pure|e poi|poi)[!.,\s]*$/i,
+]
+
 function isGenericGreeting(message: string): boolean {
   const trimmed = message.trim()
   return GREETING_PATTERNS.some((pattern) => pattern.test(trimmed))
+}
+
+function isMidConversationFiller(message: string): boolean {
+  const trimmed = message.trim()
+  return FILLER_PATTERNS.some((pattern) => pattern.test(trimmed))
 }
 
 /**
@@ -34,11 +50,15 @@ function isGenericGreeting(message: string): boolean {
  */
 export function isGenericMessage(input: AgentInput): boolean {
   const trimmed = input.message.trim()
-  // Greeting
+  // Greeting (first message or mid-conversation)
   if (isGenericGreeting(trimmed)) return true
+  // M1: Mid-conversation filler — "ok", "grazie", "perfetto" etc. with no domain signal.
+  // Only applies when there IS history (otherwise the short-message guard below handles it).
+  const hasHistory = input.contextPack.history.recentMessages.length > 0
+  if (hasHistory && isMidConversationFiller(trimmed)) return true
   // Very short (≤4 words), no domain keywords, no history
   const wordCount = trimmed.split(/\s+/).length
-  const hasNoHistory = input.contextPack.history.recentMessages.length === 0
+  const hasNoHistory = !hasHistory
   const detectedDomain = detectDomainFromText(trimmed)
   if (wordCount <= 4 && hasNoHistory && detectedDomain === 'general') return true
   return false

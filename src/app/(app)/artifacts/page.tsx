@@ -35,7 +35,12 @@ export default async function ArtifactsPage({
   const session = await auth()
   if (!session?.user?.id) redirect('/login')
 
-  const { type, page: pageParam } = await searchParams
+  const { type: rawType, page: pageParam } = await searchParams
+  // M5: Validate `type` against the DB enum to prevent passing arbitrary strings to Prisma.
+  const VALID_ARTIFACT_TYPES = ['nutrition', 'training', 'mindfulness', 'other'] as const
+  const type = VALID_ARTIFACT_TYPES.includes(rawType as (typeof VALID_ARTIFACT_TYPES)[number])
+    ? rawType
+    : undefined
   const page = Math.max(1, parseInt(pageParam ?? '1', 10))
   const limit = 12
   const offset = (page - 1) * limit

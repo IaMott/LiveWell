@@ -35,10 +35,13 @@ function buildTopRecommendations(proposals: AgentProposal[]): string {
 }
 
 function buildRecentHistory(contextPack: ContextPack): string {
-  return contextPack.history.recentMessages
-    .slice(-10) // M1: extended from 6 to 10 messages (5 full exchanges)
-    .map((m) => `${m.role === 'user' ? 'Utente' : 'Assistente'}: ${m.content.slice(0, 200)}`)
-    .join('\n')
+  return (
+    contextPack.history.recentMessages
+      .slice(-10) // M1: extended from 6 to 10 messages (5 full exchanges)
+      // M2: 400 chars per message (was 200) — avoids truncating multi-sentence context.
+      .map((m) => `${m.role === 'user' ? 'Utente' : 'Assistente'}: ${m.content.slice(0, 400)}`)
+      .join('\n')
+  )
 }
 
 /**
@@ -608,11 +611,16 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
   const crossConversationContext = buildCrossConversationContext(input.contextPack)
 
   const conversationLength = input.contextPack.history.recentMessages.length
-  // True only when the user has genuinely never spoken to the system:
-  // no messages in the current conversation AND no messages in prior conversations.
+  // C3: True only when the user has genuinely never spoken to the system:
+  // no messages in the current conversation, no prior-conversation messages, AND
+  // no stored summaries from past sessions (built by upsertConversationSummary).
+  // M4: Two cross-session mechanisms coexist — crossConversationMessages (contextPackBuilder
+  // inline history) and recentConversationSummaries (longTermMemory upsert). Both must be
+  // empty for a real first-ever encounter.
   const isFirstMessage =
     conversationLength === 0 &&
-    (input.contextPack.history.crossConversationMessages?.length ?? 0) === 0
+    (input.contextPack.history.crossConversationMessages?.length ?? 0) === 0 &&
+    (input.contextPack.history.recentConversationSummaries?.length ?? 0) === 0
   const rawHasMissingData = input.gatingQuestions.length > 0 || input.criticalQuestions.length > 0
   // S2: After 6 full exchanges (12 messages), stop asking gating questions and give advice.
   // Was 6 (3 exchanges) which was too aggressive — users could exhaust the budget with 3 short
