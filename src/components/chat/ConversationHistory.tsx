@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, MessageSquare, Trash2, Plus, Download } from 'lucide-react'
+import { X, MessageSquare, Trash2, Plus } from 'lucide-react'
 
 type ConvPreview = {
   id: string
@@ -32,6 +32,7 @@ export function ConversationHistory({
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [exporting, setExporting] = useState<string | null>(null)
+  const [exportingFeedback, setExportingFeedback] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -63,6 +64,27 @@ export function ConversationHistory({
       await onExport(id)
     } finally {
       setExporting(null)
+    }
+  }
+
+  const handleExportWithFeedback = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (exportingFeedback) return
+    setExportingFeedback(id)
+    try {
+      const res = await fetch(`/api/conversations/${id}/export?includeFeedback=true`)
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `livewell-${id.slice(0, 8)}-feedback.txt`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExportingFeedback(null)
     }
   }
 
@@ -285,22 +307,51 @@ export function ConversationHistory({
                     minute: '2-digit',
                   })}
                 </span>
+                {/* Export: solo chat */}
                 <button
                   onClick={(e) => handleExport(c.id, e)}
-                  aria-label="Esporta conversazione"
+                  aria-label="Scarica chat"
+                  title="Scarica solo chat"
                   style={{
-                    padding: '0.25rem',
+                    padding: '0.2rem 0.4rem',
                     background: 'transparent',
-                    border: 'none',
+                    border: '1px solid var(--color-separator)',
+                    borderRadius: '6px',
                     color:
                       exporting === c.id ? 'var(--color-text-secondary)' : 'var(--color-accent)',
-                    cursor: 'pointer',
+                    cursor: exporting === c.id ? 'not-allowed' : 'pointer',
                     flexShrink: 0,
-                    display: 'flex',
-                    alignItems: 'center',
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    lineHeight: 1,
+                    opacity: exporting === c.id ? 0.5 : 1,
                   }}
                 >
-                  <Download size={15} />
+                  {exporting === c.id ? '…' : '↓ chat'}
+                </button>
+                {/* Export: chat + feedback */}
+                <button
+                  onClick={(e) => handleExportWithFeedback(c.id, e)}
+                  aria-label="Scarica chat con feedback"
+                  title="Scarica chat + feedback"
+                  style={{
+                    padding: '0.2rem 0.4rem',
+                    background: 'transparent',
+                    border: '1px solid var(--color-separator)',
+                    borderRadius: '6px',
+                    color:
+                      exportingFeedback === c.id
+                        ? 'var(--color-text-secondary)'
+                        : 'var(--color-text-secondary)',
+                    cursor: exportingFeedback === c.id ? 'not-allowed' : 'pointer',
+                    flexShrink: 0,
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    lineHeight: 1,
+                    opacity: exportingFeedback === c.id ? 0.5 : 1,
+                  }}
+                >
+                  {exportingFeedback === c.id ? '…' : '↓ ★'}
                 </button>
                 <button
                   onClick={(e) => handleDelete(c.id, e)}

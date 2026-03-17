@@ -319,7 +319,7 @@ export function inferAttributeToolCallsFromMessage(
     })
   }
 
-  // Weight — "peso 80 kg", "peso 80kg", "80 chili", "80 kg"
+  // Weight — "peso 80 kg", "peso 80kg", "80 chili", "80 kg", bare "89 kg"
   const weightMatch = lower.match(
     /(?:peso|peso\s+circa|sono\s+(?:sui|intorno\s+ai|a\s+circa))\s*(\d{2,3})(?:[.,]\d)?\s*(?:kg|chili|chilo|kili|k(?:g)?)?(?:\b|$)/i,
   )
@@ -333,8 +333,23 @@ export function inferAttributeToolCallsFromMessage(
       })
     }
   }
+  // Bare "X kg" / "X chili" — common short answer to "qual è il tuo peso?"
+  // Only if weight not already captured from above pattern.
+  if (!weightMatch) {
+    const bareWeightKg = lower.match(/\b(\d{2,3})(?:[.,]\d)?\s*(?:kg|chili|chilo)\b/i)
+    if (bareWeightKg?.[1]) {
+      const w = Number(bareWeightKg[1])
+      if (w >= 30 && w <= 300) {
+        calls.push({
+          id: crypto.randomUUID(),
+          name: 'user.setAttribute',
+          args: { domain: 'health', key: 'weight', value: w, unit: 'kg' },
+        })
+      }
+    }
+  }
 
-  // Height — "sono alto 180", "altezza 180cm", "alto 1,80m", "1.75m", "175 cm"
+  // Height — "sono alto 180", "altezza 180cm", "alto 1,80m", "1.75m", "175 cm", bare "189 cm"
   const heightCmMatch = lower.match(/(?:sono\s+alto|altezza|alt\.|alto)\s+(\d{2,3})\s*cm/i)
   if (heightCmMatch?.[1]) {
     const h = Number(heightCmMatch[1])
@@ -368,6 +383,22 @@ export function inferAttributeToolCallsFromMessage(
         name: 'user.setAttribute',
         args: { domain: 'health', key: 'height', value: h, unit: 'cm' },
       })
+    }
+  }
+  // Bare "X cm" without prefix — common short answer to "qual è la tua altezza?"
+  // Only if no height already captured. Exclude blood pressure context (e.g. "120/80").
+  const heightAlreadyCaptured = !!(heightCmMatch ?? heightMtMatch ?? heightBareMatch)
+  if (!heightAlreadyCaptured && !lower.includes('/')) {
+    const bareHeightCm = lower.match(/\b(1[0-9]{2}|2[0-4]\d)\s*cm\b/i)
+    if (bareHeightCm?.[1]) {
+      const h = Number(bareHeightCm[1])
+      if (h >= 100 && h <= 250) {
+        calls.push({
+          id: crypto.randomUUID(),
+          name: 'user.setAttribute',
+          args: { domain: 'health', key: 'height', value: h, unit: 'cm' },
+        })
+      }
     }
   }
 

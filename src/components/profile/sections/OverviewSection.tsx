@@ -1,23 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
 import { StatCard } from './StatCard'
 
-type FeedbackReview = {
-  id: string
-  agentId: string | null
-  agentName: string | null
-  domain: string | null
-  rating: number
-  comment: string | null
-  createdAt: string
-}
-
 type Props = { data: ProfileData }
-
-const STARS = ['', '😞', '😕', '😐', '🙂', '😊']
 
 export function OverviewSection({ data }: Props) {
   const { stats, user, profile, artifacts, attributesByDomain } = data
@@ -25,46 +13,6 @@ export function OverviewSection({ data }: Props) {
   const [resetting, setResetting] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [feedbackList, setFeedbackList] = useState<FeedbackReview[]>([])
-  const [feedbackLoaded, setFeedbackLoaded] = useState(false)
-  const [exportingFeedback, setExportingFeedback] = useState(false)
-
-  useEffect(() => {
-    fetch('/api/feedback/history?limit=20')
-      .then((r) => r.json())
-      .then((d: { reviews: FeedbackReview[] }) => {
-        setFeedbackList(d.reviews ?? [])
-        setFeedbackLoaded(true)
-      })
-      .catch(() => setFeedbackLoaded(true))
-  }, [])
-
-  function exportFeedback() {
-    setExportingFeedback(true)
-    try {
-      const lines = [
-        'Data,Agente,Dominio,Voto,Commento',
-        ...feedbackList.map((r) => {
-          const date = new Date(r.createdAt).toLocaleDateString('it-IT')
-          const agent = r.agentName ?? r.agentId ?? '—'
-          const domain = r.domain ?? '—'
-          const comment = (r.comment ?? '').replace(/"/g, '""')
-          return `"${date}","${agent}","${domain}",${r.rating},"${comment}"`
-        }),
-      ]
-      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `livewell-feedback-${new Date().toISOString().slice(0, 10)}.csv`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
-    } finally {
-      setExportingFeedback(false)
-    }
-  }
 
   const age = profile?.birthDate
     ? Math.floor(
@@ -469,137 +417,6 @@ export function OverviewSection({ data }: Props) {
               </div>
             ))}
           </div>
-        </section>
-      )}
-
-      {/* I miei feedback */}
-      {feedbackLoaded && (
-        <section>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '0.5rem',
-            }}
-          >
-            <h2
-              style={{
-                fontSize: '0.8125rem',
-                fontWeight: 600,
-                color: 'var(--color-text-secondary)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                margin: 0,
-              }}
-            >
-              I miei feedback
-            </h2>
-            {feedbackList.length > 0 && (
-              <button
-                onClick={exportFeedback}
-                disabled={exportingFeedback}
-                style={{
-                  padding: '0.2rem 0.6rem',
-                  borderRadius: '999px',
-                  border: '1px solid var(--color-separator)',
-                  background: 'transparent',
-                  color: 'var(--color-accent)',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  cursor: exportingFeedback ? 'not-allowed' : 'pointer',
-                  opacity: exportingFeedback ? 0.7 : 1,
-                }}
-              >
-                {exportingFeedback ? 'Export…' : '⬇ CSV'}
-              </button>
-            )}
-          </div>
-
-          {feedbackList.length === 0 ? (
-            <p
-              style={{
-                fontSize: '0.875rem',
-                color: 'var(--color-text-secondary)',
-                margin: 0,
-                padding: '0.75rem 1rem',
-                backgroundColor: 'var(--color-surface)',
-                borderRadius: '1rem',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-              }}
-            >
-              Nessun feedback ancora — valuta le risposte con le stelle ★ nella chat
-            </p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {feedbackList.map((r) => (
-                <div
-                  key={r.id}
-                  style={{
-                    backgroundColor: 'var(--color-surface)',
-                    borderRadius: '1rem',
-                    padding: '0.75rem 1rem',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.25rem',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: '0.8125rem',
-                        fontWeight: 600,
-                        color: 'var(--color-text-primary)',
-                      }}
-                    >
-                      {STARS[r.rating]} {'★'.repeat(r.rating)}
-                      {'☆'.repeat(5 - r.rating)}
-                    </span>
-                    <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary)' }}>
-                      {new Date(r.createdAt).toLocaleDateString('it-IT', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </span>
-                  </div>
-                  {(r.agentName ?? r.domain) && (
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: '0.75rem',
-                        color: 'var(--color-accent)',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.03em',
-                      }}
-                    >
-                      {r.agentName ?? r.domain}
-                    </p>
-                  )}
-                  {r.comment && (
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: '0.8125rem',
-                        color: 'var(--color-text-secondary)',
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      &ldquo;{r.comment}&rdquo;
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </section>
       )}
     </div>
