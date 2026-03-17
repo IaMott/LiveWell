@@ -12,13 +12,18 @@ function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string)
   const attrs = contextPack.user.attributes ?? {}
   const lower = userMessage.toLowerCase()
 
-  // Skip L1 if the message already carries specific health/numeric data
+  // Skip L1 if the message already carries specific health/numeric data (measurements, symptoms).
+  // Bare numbers alone (e.g. answering "35" to an age question) do NOT skip L1 because the
+  // inference layer handles capture and the next turn will reflect the collected value.
   const hasSpecificData =
-    /\d/.test(lower) ||
+    /\b\d{2,3}\s*(?:kg|cm|bpm|mmhg|m\/s)\b/i.test(lower) ||
     lower.includes('soffro') ||
     lower.includes('dolore') ||
     lower.includes('sintomo') ||
-    lower.includes('alleno')
+    lower.includes('alleno') ||
+    lower.includes('sono nato') ||
+    lower.includes('sono nata') ||
+    lower.includes('data di nascita')
   if (hasSpecificData) return []
 
   // Priority order for onboarding — like a clinical intake:
@@ -55,8 +60,11 @@ function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string)
   }
 
   // Step 6 — obiettivo principale
+  // Note: inference saves key 'goal'; legacy data may use 'declared_goal' — check both.
   const generalAttrs = attrs['general'] as Record<string, { value?: unknown }> | undefined
-  const hasDeclaredGoal = Boolean(generalAttrs?.['declared_goal']?.value != null)
+  const hasDeclaredGoal = Boolean(
+    generalAttrs?.['goal']?.value != null || generalAttrs?.['declared_goal']?.value != null,
+  )
   if (!hasDeclaredGoal) {
     return ['Qual è la cosa più importante che vorresti migliorare o raggiungere?']
   }

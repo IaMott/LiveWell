@@ -228,6 +228,12 @@ export function SettingsSection({ user }: Props) {
             onChange={(v) => {
               setGeoEnabled(v)
               save({ geoEnabled: v })
+              // Sync preference to DB so AI agents can read the setting
+              void fetch('/api/geo/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: v }),
+              }).catch(() => undefined)
             }}
           />
           <p

@@ -1,5 +1,6 @@
 import { AttributeValue, ContextPack, Domain, Role, UserAttributes } from '../types'
 import { computeMedicalRecord } from './medicalRecord'
+import { getRecentConversationSummaries } from '../longTermMemory'
 
 type QueryArgs = Record<string, unknown>
 type UnknownRecord = Record<string, unknown>
@@ -219,13 +220,14 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
     select: { type: true, title: true, createdAt: true, content: true },
   })
 
-  const [unreadCount, lastNotification] = await Promise.all([
+  const [unreadCount, lastNotification, conversationSummaries] = await Promise.all([
     opts.db.notification.count({ where: { userId: opts.userId, readAt: null } }),
     opts.db.notification.findFirst({
       where: { userId: opts.userId },
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     }),
+    getRecentConversationSummaries(opts.userId, opts.conversationId).catch(() => []),
   ])
 
   // Trackers (last 7 days - simplified)
@@ -437,6 +439,15 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
                 content: m.content,
                 createdAt: new Date(m.createdAt).toISOString(),
               }))
+          : undefined,
+      recentConversationSummaries:
+        conversationSummaries.length > 0
+          ? conversationSummaries.map((s) => ({
+              conversationId: s.conversationId,
+              summary: s.summary,
+              domain: s.domain,
+              updatedAt: s.updatedAt.toISOString(),
+            }))
           : undefined,
     },
     trackers: {

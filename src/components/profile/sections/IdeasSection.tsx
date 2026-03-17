@@ -55,11 +55,13 @@ export function IdeasSection({ data }: Props) {
   const filtered =
     activeFilter === 'all' ? artifacts : artifacts.filter((a) => a.type === activeFilter)
 
-  // Cartella Professionale from career, financial, life-organizer, commercialista domains
+  // Cartella Professionale from career and financial domains.
+  // normalizeDomain maps: life-organizer → career, commercialista → financial, inspiration → career.
   const careerAttrs = attributesByDomain?.['career'] ?? {}
   const financialAttrs = attributesByDomain?.['financial'] ?? {}
-  const lifeAttrs = attributesByDomain?.['life-organizer'] ?? {}
-  const commAttrs = attributesByDomain?.['commercialista'] ?? {}
+  // life-organizer and commercialista are now stored under career/financial respectively
+  const lifeAttrs = careerAttrs
+  const commAttrs = financialAttrs
 
   const professionalSections = [
     {

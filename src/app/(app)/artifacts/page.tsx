@@ -7,6 +7,7 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
+import { CopyButton } from '@/components/artifacts/CopyButton'
 
 const DOMAIN_LABELS: Record<string, string> = {
   nutrition: '🥗 Nutrizione',
@@ -160,13 +161,7 @@ export default async function ArtifactsPage({
                     Vedi conversazione →
                   </Link>
                 )}
-                <button
-                  className="ml-auto rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100"
-                  title="Copia contenuto"
-                  onClick={undefined} // handled client-side
-                >
-                  Copia
-                </button>
+                <CopyButton content={a.contentMarkdown} />
               </div>
             </div>
           ))}

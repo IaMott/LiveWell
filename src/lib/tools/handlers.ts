@@ -54,11 +54,25 @@ function coerceDate(value: unknown): Date | null {
 
 function normalizeDomain(
   raw: string,
-): 'health' | 'nutrition' | 'training' | 'mindfulness' | 'personal' | 'general' {
+):
+  | 'health'
+  | 'nutrition'
+  | 'training'
+  | 'mindfulness'
+  | 'personal'
+  | 'general'
+  | 'career'
+  | 'financial' {
   const d = raw.trim().toLowerCase()
   if (d === 'mind' || d === 'mental') return 'mindfulness'
-  if (d === 'idea' || d === 'inspiration' || d === 'ideas') return 'general'
   if (d === 'person' || d === 'profile') return 'personal'
+  if (d === 'sport') return 'training'
+  if (d === 'life-organizer' || d === 'life_organizer' || d === 'organizer') return 'career'
+  if (d === 'commercialista' || d === 'accountant' || d === 'fiscal' || d === 'tax')
+    return 'financial'
+  if (d === 'financial' || d === 'finance' || d === 'finances') return 'financial'
+  if (d === 'career' || d === 'lavoro' || d === 'work') return 'career'
+  if (d === 'idea' || d === 'inspiration' || d === 'ideas') return 'career'
   if (
     d === 'health' ||
     d === 'nutrition' ||

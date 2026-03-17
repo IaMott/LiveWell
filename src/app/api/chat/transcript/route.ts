@@ -59,13 +59,25 @@ export async function POST(request: Request): Promise<Response> {
     conversationId = created.id
   }
 
-  await prisma.message.createMany({
-    data: body.messages.map((m) => ({
-      conversationId: conversationId as string,
-      role: m.role,
-      content: m.content,
-    })),
+  // De-duplicate: skip messages whose (role, content) pair already exists in this conversation.
+  // Prevents duplicate rows when the client calls the endpoint multiple times with the same messages.
+  const existingMessages = await prisma.message.findMany({
+    where: { conversationId: conversationId as string },
+    select: { role: true, content: true },
   })
+  const existingSet = new Set(existingMessages.map((m) => `${m.role}::${m.content}`))
+
+  const newMessages = body.messages.filter((m) => !existingSet.has(`${m.role}::${m.content}`))
+
+  if (newMessages.length > 0) {
+    await prisma.message.createMany({
+      data: newMessages.map((m) => ({
+        conversationId: conversationId as string,
+        role: m.role,
+        content: m.content,
+      })),
+    })
+  }
 
   return new Response(JSON.stringify({ ok: true, conversationId }), {
     status: 200,

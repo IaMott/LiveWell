@@ -341,7 +341,7 @@ export function inferAttributeToolCallsFromMessage(
   // Bare "X kg" / "X chili" — common short answer to "qual è il tuo peso?"
   // Only if weight not already captured from above pattern.
   if (!weightMatch) {
-    const bareWeightKg = lower.match(/\b(\d{2,3})(?:[.,]\d)?\s*(?:kg|chili|chilo)\b/i)
+    const bareWeightKg = lower.match(/\b(\d{2,3})(?:[.,]\d)?\s*(?:kg|chili|chilo|kili)\b/i)
     if (bareWeightKg?.[1]) {
       const w = Number(bareWeightKg[1])
       if (w >= 30 && w <= 300) {

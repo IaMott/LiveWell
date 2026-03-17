@@ -139,6 +139,13 @@ export type ContextPack = {
       createdAt: string
       contentMarkdown?: string
     }>
+    /** Cross-conversation summaries for long-term memory (populated from ConversationSummary table) */
+    recentConversationSummaries?: Array<{
+      conversationId: string
+      summary: string
+      domain: string
+      updatedAt: string
+    }>
   }
   trackers: {
     health?: Record<string, unknown>

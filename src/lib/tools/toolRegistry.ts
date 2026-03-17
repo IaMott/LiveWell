@@ -39,7 +39,16 @@ const userUpdateProfileSchema = z.object({
 })
 
 const userSetAttributeSchema = z.object({
-  domain: z.enum(['health', 'nutrition', 'training', 'mindfulness', 'personal', 'general']),
+  domain: z.enum([
+    'health',
+    'nutrition',
+    'training',
+    'mindfulness',
+    'personal',
+    'general',
+    'career',
+    'financial',
+  ]),
   key: baseString.max(64),
   value: z.unknown(),
   unit: z.string().trim().max(32).optional(),

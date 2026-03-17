@@ -55,7 +55,8 @@ export function TrainingSection({ data }: Props) {
   const { stats, recentWorkouts, profile, attributesByDomain, workoutPlan } = data
 
   const trainAttrs = attributesByDomain?.['training'] ?? {}
-  const sportAttrs = attributesByDomain?.['sport'] ?? {}
+  // 'sport' domain is normalized → 'training' in handlers.ts; read from same bucket
+  const sportAttrs = trainAttrs
 
   // Weekly target: prefer agent-collected attr, then profile, then 3
   const trainingProfile = profile?.training as Record<string, unknown> | null

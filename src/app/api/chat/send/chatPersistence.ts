@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { buildContextPack } from '@/lib/ai/context/contextPackBuilder'
 import { prisma } from '@/lib/prisma'
+import { upsertConversationSummary } from '@/lib/ai/longTermMemory'
 import type { AgentProposal, ContextPack, Role } from '@/lib/ai/types'
 import type { MutationAuditEvent } from '@/lib/tools/toolExecutor'
 
@@ -218,12 +219,27 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
           // non-critical
         }
       }
+
+      // ── Phase 3: Long-term memory — fire-and-forget summary upsert ────────
+      // Persist a short cross-conversation summary so future turns can reference it.
+      // messageCount=99 bypasses the MIN_MESSAGES gate (we always want a summary after a turn).
+      upsertConversationSummary({
+        userId,
+        conversationId,
+        messages: [
+          { role: 'user', content: userMessage },
+          { role: 'assistant', content: assistantMessage },
+        ],
+        domain: domain ?? 'general',
+        messageCount: 99,
+      })
     },
     buildContextPack: async ({ userId, conversationId, role }) => {
       try {
         return await buildContextPack({
           userId,
           conversationId,
+          includeFileExtracts: true,
           db: {
             user: {
               findUnique: async () =>
