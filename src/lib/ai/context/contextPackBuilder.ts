@@ -44,7 +44,9 @@ function isToolExecutionTraceEntry(value: unknown): value is ToolExecutionTraceE
 
 export type DbClient = {
   user: {
-    findUnique: (args: QueryArgs) => Promise<{ id: string; role?: string } | null>
+    findUnique: (
+      args: QueryArgs,
+    ) => Promise<{ id: string; role?: string; name?: string | null } | null>
   }
   message: {
     findMany: (
@@ -181,7 +183,10 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
   void opts.nowIso
 
   const [user, userProfile, medicalInfo] = await Promise.all([
-    opts.db.user.findUnique({ where: { id: opts.userId }, select: { id: true, role: true } }),
+    opts.db.user.findUnique({
+      where: { id: opts.userId },
+      select: { id: true, role: true, name: true },
+    }),
     opts.db.userProfile.findUnique({ where: { userId: opts.userId } }),
     opts.db.medicalInfo.findUnique({ where: { userId: opts.userId } }),
   ])
@@ -360,6 +365,8 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
       profile: {
         ...(userProfile ?? {}),
         medicalInfo: medicalInfo ?? undefined,
+        // Inject account name so AI always knows the user's name
+        ...(user?.name ? { name: user.name } : {}),
       },
       attributes: Object.keys(userAttributes).length > 0 ? userAttributes : undefined,
       medicalRecord,

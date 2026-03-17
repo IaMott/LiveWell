@@ -42,8 +42,16 @@ function buildRecentHistory(contextPack: ContextPack): string {
 }
 
 function getUserName(contextPack: ContextPack): string | null {
+  // 1. Account name (from User model — always authoritative)
   const profile = contextPack.user?.profile as Record<string, unknown> | undefined
-  if (profile?.name && typeof profile.name === 'string') return profile.name
+  if (profile?.name && typeof profile.name === 'string') return profile.name.split(' ')[0] ?? null
+  // 2. Stored personal.name attribute (user told name during chat)
+  const attrs = contextPack.user?.attributes as
+    | Record<string, Record<string, { value?: unknown }>>
+    | undefined
+  const personalName = attrs?.personal?.name?.value
+  if (typeof personalName === 'string' && personalName.length > 0)
+    return personalName.split(' ')[0] ?? null
   return null
 }
 

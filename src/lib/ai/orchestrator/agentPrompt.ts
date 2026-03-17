@@ -254,11 +254,28 @@ export function buildAgentUserPrompt(
   agentId: string,
   peerInsights?: string,
 ): string {
+  // Extract user name from profile (injected by contextPackBuilder from User.name account field)
+  const profileRaw = input.contextPack.user.profile as Record<string, unknown> | undefined
+  const accountName =
+    profileRaw?.name && typeof profileRaw.name === 'string' ? profileRaw.name : null
+  // Also check personal.name attribute as fallback
+  const personalAttr = (
+    input.contextPack.user.attributes as
+      | Record<string, Record<string, { value?: unknown }>>
+      | undefined
+  )?.personal
+  const attrName =
+    personalAttr?.name?.value && typeof personalAttr.name.value === 'string'
+      ? personalAttr.name.value
+      : null
+  const userName = accountName ?? attrName
+
   const parts: string[] = [
     `USER MESSAGE:`,
     input.message,
     ``,
     `CONTEXT (summary):`,
+    ...(userName ? [`- userName: ${userName} (usa questo nome quando ti rivolgi all'utente)`] : []),
     `- role: ${input.contextPack.user.role}`,
     `- moodScore: ${input.contextPack.ui.moodScore}`,
     `- recentMessages: ${input.contextPack.history.recentMessages

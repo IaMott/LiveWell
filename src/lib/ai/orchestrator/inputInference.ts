@@ -6,6 +6,7 @@ export type InferenceContext = {
 }
 
 export type PersonalSnapshot = {
+  name?: string
   birthDate?: string
   gender?: string
   height?: number
@@ -110,6 +111,12 @@ export function readPersonalSnapshot(contextPack: ContextPack): PersonalSnapshot
   const personal = (attrs.personal ?? {}) as Record<string, { value?: unknown }>
 
   const out: PersonalSnapshot = {}
+
+  // Name — from account (injected by contextPackBuilder) or stored attribute
+  const nameFromProfile = profile.name
+  if (typeof nameFromProfile === 'string' && nameFromProfile) out.name = nameFromProfile
+  const nameFromAttr = personal.name?.value
+  if (!out.name && typeof nameFromAttr === 'string' && nameFromAttr) out.name = nameFromAttr
 
   const birthFromProfile = profile.birthDate
   if (typeof birthFromProfile === 'string' && birthFromProfile) out.birthDate = birthFromProfile
@@ -415,21 +422,42 @@ export function inferAttributeToolCallsFromMessage(
     })
   }
 
-  // Gender — "sono un uomo", "sono una donna", "sono maschio", "sono femmina", "uomo", "donna"
+  // Name — "mi chiamo X", "il mio nome è X", "sono X" (only if single capitalized word, not a verb phrase)
+  // Avoids saving "sono stanco", "sono qui", etc.
+  const namePatterns = [
+    /\bmi\s+chiamo\s+([A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30}(?:\s+[A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30})?)/,
+    /\bil\s+mio\s+nome\s+[eè]\s+([A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30}(?:\s+[A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30})?)/i,
+    /\bmi\s+presento[,:]?\s+sono\s+([A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30}(?:\s+[A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30})?)/,
+  ]
+  for (const re of namePatterns) {
+    const m = message.match(re)
+    if (m?.[1] && m[1].length >= 2) {
+      calls.push({
+        id: crypto.randomUUID(),
+        name: 'user.setAttribute',
+        args: { domain: 'personal', key: 'name', value: m[1].trim() },
+      })
+      break
+    }
+  }
+
+  // Gender — "sono un uomo", "M", "maschio", "sono donna", "F", "femmina"
   if (!calls.some((c) => (c.args as Record<string, unknown>)['key'] === 'gender')) {
-    if (
-      /\b(?:sono\s+(?:un\s+)?uomo|sono\s+maschio|sesso\s+maschile|genere\s+maschile)\b/.test(lower)
-    ) {
+    const isMale =
+      /\b(?:sono\s+(?:un\s+)?uomo|sono\s+maschio|sesso\s+maschile|genere\s+maschile)\b/.test(
+        lower,
+      ) || /^m(?:aschio)?\.?$/i.test(lower.trim())
+    const isFemale =
+      /\b(?:sono\s+(?:una\s+)?donna|sono\s+femmina|sesso\s+femminile|genere\s+femminile)\b/.test(
+        lower,
+      ) || /^f(?:emmina)?\.?$/i.test(lower.trim())
+    if (isMale) {
       calls.push({
         id: crypto.randomUUID(),
         name: 'user.setAttribute',
         args: { domain: 'personal', key: 'gender', value: 'male' },
       })
-    } else if (
-      /\b(?:sono\s+(?:una\s+)?donna|sono\s+femmina|sesso\s+femminile|genere\s+femminile)\b/.test(
-        lower,
-      )
-    ) {
+    } else if (isFemale) {
       calls.push({
         id: crypto.randomUUID(),
         name: 'user.setAttribute',

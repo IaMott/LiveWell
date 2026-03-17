@@ -12,28 +12,51 @@ function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string)
   const attrs = contextPack.user.attributes ?? {}
   const lower = userMessage.toLowerCase()
 
-  // Skip if message already contains specific data (e.g. numbers, symptoms)
+  // Skip L1 if the message already carries specific health/numeric data
   const hasSpecificData =
     /\d/.test(lower) ||
-    lower.includes('ho ') ||
-    lower.includes('sono ') ||
     lower.includes('soffro') ||
     lower.includes('dolore') ||
     lower.includes('sintomo') ||
-    lower.includes('peso') ||
     lower.includes('alleno')
   if (hasSpecificData) return []
 
-  // Check declared goal in general attributes
-  const generalAttrs = attrs['general'] as Record<string, { value?: unknown }> | undefined
-  const hasDeclaredGoal = Boolean(generalAttrs?.['declared_goal']?.value != null)
+  // Priority order for onboarding — like a clinical intake:
+  // 1. Nome (skip if known from account)
+  // 2. Sesso
+  // 3. Età
+  // 4. Altezza
+  // 5. Peso
+  // Then goal
 
-  // Step 1 — collect age first (prerequisite for all agents)
-  if (!personal.birthDate) {
-    return ['Quanti anni hai?']
+  // Step 1 — Nome (solo se non viene dall'account)
+  if (!personal.name) {
+    return ['Come ti chiami?']
   }
 
-  // Step 2 — once age is known, collect the primary goal
+  // Step 2 — Sesso
+  if (!personal.gender) {
+    return [`${personal.name}, qual è il tuo sesso biologico? (M/F)`]
+  }
+
+  // Step 3 — Età
+  if (!personal.birthDate) {
+    return [`Quanti anni hai, ${personal.name}?`]
+  }
+
+  // Step 4 — Altezza
+  if (!personal.height) {
+    return ['Qual è la tua altezza in cm?']
+  }
+
+  // Step 5 — Peso
+  if (!personal.weight) {
+    return ['Qual è il tuo peso attuale in kg?']
+  }
+
+  // Step 6 — obiettivo principale
+  const generalAttrs = attrs['general'] as Record<string, { value?: unknown }> | undefined
+  const hasDeclaredGoal = Boolean(generalAttrs?.['declared_goal']?.value != null)
   if (!hasDeclaredGoal) {
     return ['Qual è la cosa più importante che vorresti migliorare o raggiungere?']
   }
