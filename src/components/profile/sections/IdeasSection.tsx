@@ -1,12 +1,21 @@
 'use client'
 
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
+import Link from 'next/link'
 import type React from 'react'
 import { useState } from 'react'
 
 type Props = { data: ProfileData }
 
+// C3: Map the actual DB enum values (toolRegistry: 'nutrition'|'training'|'mindfulness'|'other')
+// to colors. Legacy values kept for backward compatibility with older artifact records.
 const ARTIFACT_TYPE_COLORS: Record<string, string> = {
+  // DB-stored values (toolRegistry.ts enum)
+  nutrition: '#34C759',
+  training: '#007AFF',
+  mindfulness: '#AF52DE',
+  other: '#FF9F0A',
+  // Legacy values (old artifact records pre-schema alignment)
   workout_plan: '#007AFF',
   meal_plan: '#34C759',
   recommendation: '#FF9F0A',
@@ -380,37 +389,53 @@ export function IdeasSection({ data }: Props) {
               lineHeight: 1.4,
             }}
           >
-            Il team include career coach, financial planner e commercialista. Inizia una chat per
-            costruire la tua cartella professionale.
+            Il team include career coach, financial planner e commercialista.{' '}
+            {/* M9: added actionable link so user has a clear path forward */}
+            <Link
+              href="/chat"
+              style={{ color: '#FF9F0A', textDecoration: 'none', fontWeight: 600 }}
+            >
+              Inizia una chat
+            </Link>{' '}
+            per costruire la tua cartella professionale.
           </p>
         </div>
       )}
 
       {/* Chat CTA */}
-      <div
-        style={{ backgroundColor: 'rgba(255,159,10,0.08)', borderRadius: '1rem', padding: '1rem' }}
-      >
-        <p
+      {/* M9: Chat CTA with actionable link */}
+      <Link href="/chat" style={{ textDecoration: 'none', display: 'block' }}>
+        <div
           style={{
-            margin: '0 0 0.375rem',
-            fontSize: '0.9375rem',
-            fontWeight: 700,
-            color: 'var(--color-text-primary, #1C1C1E)',
+            backgroundColor: 'rgba(255,159,10,0.08)',
+            borderRadius: '1rem',
+            padding: '1rem',
+            cursor: 'pointer',
           }}
         >
-          💬 Richiedi nuove idee
-        </p>
-        <p
-          style={{
-            margin: 0,
-            fontSize: '0.8125rem',
-            color: 'var(--color-text-secondary, #8E8E93)',
-            lineHeight: 1.4,
-          }}
-        >
-          Scrivi nella chat per ricevere idee personalizzate basate sui tuoi obiettivi e interessi.
-        </p>
-      </div>
+          <p
+            style={{
+              margin: '0 0 0.375rem',
+              fontSize: '0.9375rem',
+              fontWeight: 700,
+              color: 'var(--color-text-primary, #1C1C1E)',
+            }}
+          >
+            💬 Richiedi nuove idee
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.8125rem',
+              color: 'var(--color-text-secondary, #8E8E93)',
+              lineHeight: 1.4,
+            }}
+          >
+            Scrivi nella chat per ricevere idee personalizzate basate sui tuoi obiettivi e
+            interessi.
+          </p>
+        </div>
+      </Link>
 
       {/* Bottom stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>

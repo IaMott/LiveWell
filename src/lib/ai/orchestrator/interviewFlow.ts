@@ -40,8 +40,9 @@ function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string)
   }
 
   // Step 2 — Sesso
+  // M10: added neutral option — users who respond outside M/F won't loop indefinitely.
   if (!personal.gender) {
-    return [`${personal.name}, qual è il tuo sesso biologico? (M/F)`]
+    return [`${personal.name}, qual è il tuo sesso biologico? (M / F / Preferisco non specificare)`]
   }
 
   // Step 3 — Età
@@ -80,17 +81,19 @@ function buildL2TriageQuestions(contextPack: ContextPack, userMessage: string): 
   const attrs = contextPack.user.attributes ?? {}
   const lower = userMessage.toLowerCase()
 
-  // Skip if message already contains specific symptom/domain data
+  // S1 + M4: Skip L2 only when message contains specific health/metric data.
+  // Was using bare /\d/ (any digit) which wrongly skipped on "ho 30 anni", "piano 4", etc.
+  // Fixed to measurement-specific pattern matching L1's guard.
+  // Removed 'ho la' which was too broad (matched "ho la pizza", "ho la macchina", etc.).
   const hasSpecificContext =
-    /\d/.test(lower) ||
+    /\b\d{2,3}\s*(?:kg|cm|bpm|mmhg|m\/s)\b/i.test(lower) ||
     lower.includes('dolore') ||
     lower.includes('sintomo') ||
     lower.includes('problema') ||
     lower.includes('sento') ||
     lower.includes('mangio') ||
     lower.includes('alleno') ||
-    lower.includes('soffro') ||
-    lower.includes('ho la')
+    lower.includes('soffro')
   if (hasSpecificContext) return []
 
   // Check if main_complaint already known

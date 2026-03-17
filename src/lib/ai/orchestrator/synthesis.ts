@@ -36,8 +36,21 @@ function buildTopRecommendations(proposals: AgentProposal[]): string {
 
 function buildRecentHistory(contextPack: ContextPack): string {
   return contextPack.history.recentMessages
-    .slice(-6)
+    .slice(-10) // M1: extended from 6 to 10 messages (5 full exchanges)
     .map((m) => `${m.role === 'user' ? 'Utente' : 'Assistente'}: ${m.content.slice(0, 200)}`)
+    .join('\n')
+}
+
+/**
+ * C1 — Builds a cross-conversation memory block from stored ConversationSummary records.
+ * These come from `upsertConversationSummary` written at end of each chat turn.
+ */
+function buildCrossConversationContext(contextPack: ContextPack): string {
+  const summaries = contextPack.history.recentConversationSummaries
+  if (!summaries || summaries.length === 0) return ''
+  return summaries
+    .slice(-5)
+    .map((s) => `[${s.domain} — ${s.updatedAt.slice(0, 10)}] ${s.summary}`)
     .join('\n')
 }
 
@@ -58,6 +71,8 @@ function getUserName(contextPack: ContextPack): string | null {
 /**
  * Returns true when the user is explicitly requesting a concrete plan/output,
  * not just asking a question or giving information.
+ * S5: removed bare conversational continuers ("procediamo", "iniziamo", "ok dai") which
+ * caused false positives — these do not imply a request for a full professional document.
  */
 function isPlanRequest(userMessage: string): boolean {
   const lower = userMessage.toLowerCase()
@@ -67,14 +82,14 @@ function isPlanRequest(userMessage: string): boolean {
     ) ||
     /\b(piano|programma|dieta|menu|protocollo)\b.{0,20}\b(nutrizionale|alimentare|di allenamento|fitness|psicologico|terapeutico|di recupero|dettagliato|completo)\b/i.test(
       lower,
-    ) ||
-    /\bcosa aspettiamo\b|\bprocediamo\b|\biniziamo\b|\bok,?\s*(dai|forza|andiamo)\b/i.test(lower)
+    )
   )
 }
 
 /**
  * Returns the most appropriate cross-domain specialist name if the proposals
  * indicate the current message is clearly outside the active specialist's domain.
+ * M3: added null guard on p.domain to avoid undefined !== domain always being true.
  */
 function detectCrossDomainSpecialist(
   proposals: AgentProposal[],
@@ -84,6 +99,7 @@ function detectCrossDomainSpecialist(
   const topAlternative = proposals
     .filter(
       (p) =>
+        p.domain != null &&
         p.domain !== activeSpecialist.domain &&
         (p.confidence ?? 0) >= 0.6 &&
         p.summary &&
@@ -461,7 +477,7 @@ function buildSystemPrompt(
       teamAntiPattern,
       activeSpecialistNote,
       ``,
-      `Primo contatto: il tuo obiettivo è CONOSCERE ${nameRef}, non darle consigli.`,
+      `Primo contatto: il tuo obiettivo è CONOSCERE ${nameRef}, non dare consigli.`,
       `Fai UNA sola domanda aperta — quella che ti permette di capire cosa sta cercando.`,
       `Niente consigli generici. Niente liste. Puoi iniziare direttamente con la domanda.`,
     ].join('\n')
@@ -501,6 +517,8 @@ function buildUserPrompt(params: {
   summaries: string
   topRecommendations: string
   recentHistory: string
+  /** C1: cross-conversation memory summaries from prior sessions */
+  crossConversationContext: string
   /** The single most important missing datum — if any */
   topMissingQuestion: string | null
   hasImages: boolean
@@ -511,12 +529,17 @@ function buildUserPrompt(params: {
     summaries,
     topRecommendations,
     recentHistory,
+    crossConversationContext,
     topMissingQuestion,
     hasImages,
     planRequest,
   } = params
 
   return [
+    // C1: long-term memory from past sessions shown first so model has full context
+    crossConversationContext
+      ? `MEMORIA SESSIONI PRECEDENTI (conversazioni passate con l'utente):\n${crossConversationContext}\n`
+      : '',
     recentHistory ? `CONVERSAZIONE RECENTE:\n${recentHistory}\n` : '',
     `MESSAGGIO DI ${hasImages ? 'UTENTE (con allegato immagine)' : 'UTENTE'}: "${userMessage}"`,
     ``,
@@ -581,6 +604,8 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
   const summaries = buildSummaries(input.proposals)
   const topRecommendations = buildTopRecommendations(input.proposals)
   const recentHistory = buildRecentHistory(input.contextPack)
+  // C1: load cross-conversation long-term memory
+  const crossConversationContext = buildCrossConversationContext(input.contextPack)
 
   const conversationLength = input.contextPack.history.recentMessages.length
   // True only when the user has genuinely never spoken to the system:
@@ -589,8 +614,10 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
     conversationLength === 0 &&
     (input.contextPack.history.crossConversationMessages?.length ?? 0) === 0
   const rawHasMissingData = input.gatingQuestions.length > 0 || input.criticalQuestions.length > 0
-  // After 3 full exchanges (6 messages), stop asking gating questions and give advice
-  const hasMissingData = conversationLength < 6 ? rawHasMissingData : false
+  // S2: After 6 full exchanges (12 messages), stop asking gating questions and give advice.
+  // Was 6 (3 exchanges) which was too aggressive — users could exhaust the budget with 3 short
+  // messages and never receive proper onboarding questions.
+  const hasMissingData = conversationLength < 12 ? rawHasMissingData : false
   const userName = getUserName(input.contextPack)
   const planRequest = isPlanRequest(input.userMessage)
 
@@ -616,6 +643,7 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
     summaries,
     topRecommendations,
     recentHistory,
+    crossConversationContext, // C1: long-term memory from past sessions
     topMissingQuestion: hasMissingData ? topMissingQuestion : null,
     hasImages,
     planRequest,

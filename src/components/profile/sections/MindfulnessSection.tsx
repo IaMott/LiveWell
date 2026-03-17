@@ -264,8 +264,10 @@ export function MindfulnessSection({ data }: Props) {
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <MoodBar label="Umore" value={avgMood} color="#5AC8FA" />
+            {/* M6: stress is inverted so the bar reads as "wellness" — high bar = low stress = good.
+                Label updated to be user-facing (no cryptic "(inv.)" annotation). */}
             <MoodBar
-              label="Stress (inv.)"
+              label="Assenza stress"
               value={avgStress != null ? 10 - avgStress : null}
               color="#AF52DE"
             />

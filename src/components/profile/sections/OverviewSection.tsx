@@ -52,17 +52,33 @@ export function OverviewSection({ data }: Props) {
   }
 
   // Build active programs from attributesByDomain.program
+  // S6: supports both '_' and '-' separators and Italian 'inizio' alias for 'start',
+  // so agents that save keys like 'fisioterapista-start' or 'personal_trainer_inizio' are detected.
   const programDomain = attributesByDomain?.['program'] ?? {}
   const agentIds = new Set<string>()
   for (const key of Object.keys(programDomain)) {
-    if (key.endsWith('_start')) agentIds.add(key.slice(0, -6))
-    else if (key.endsWith('_status')) agentIds.add(key.slice(0, -7))
+    if (key.endsWith('_start') || key.endsWith('-start'))
+      agentIds.add(key.replace(/[_-]start$/, ''))
+    else if (key.endsWith('_status') || key.endsWith('-status'))
+      agentIds.add(key.replace(/[_-]status$/, ''))
+    else if (key.endsWith('_inizio') || key.endsWith('-inizio'))
+      agentIds.add(key.replace(/[_-]inizio$/, ''))
   }
 
   const programs = Array.from(agentIds).map((agentId) => {
-    const status = String(programDomain[`${agentId}_status`]?.value ?? 'active')
-    const startVal = programDomain[`${agentId}_start`]?.value
-    const durationVal = programDomain[`${agentId}_duration_days`]?.value
+    const status = String(
+      programDomain[`${agentId}_status`]?.value ??
+        programDomain[`${agentId}-status`]?.value ??
+        'active',
+    )
+    const startVal =
+      programDomain[`${agentId}_start`]?.value ??
+      programDomain[`${agentId}-start`]?.value ??
+      programDomain[`${agentId}_inizio`]?.value ??
+      programDomain[`${agentId}-inizio`]?.value
+    const durationVal =
+      programDomain[`${agentId}_duration_days`]?.value ??
+      programDomain[`${agentId}-duration-days`]?.value
     const startDate = startVal ? new Date(String(startVal)) : null
     const durationDays = durationVal ? Number(durationVal) : null
     const dayElapsed =

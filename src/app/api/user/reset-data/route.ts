@@ -33,7 +33,8 @@ export async function DELETE(request: Request): Promise<Response> {
   const rate = checkRateLimit({ key: `reset-data:${userId}:${getClientIp(request)}`, max: 5 })
   if (!rate.ok) return errorResponse(429, 'RATE_LIMITED', 'Too many requests')
 
-  // Execute all deletes in parallel (no FK dependencies between most tables)
+  // S3: Execute all deletes inside a transaction so a partial failure leaves data consistent.
+  // Conversations must come last to avoid FK constraint issues with Messages (cascade-deleted).
   const [
     bodyMetrics,
     meals,
@@ -45,7 +46,7 @@ export async function DELETE(request: Request): Promise<Response> {
     workspaces,
     notifications,
     conversations,
-  ] = await Promise.all([
+  ] = await prisma.$transaction([
     prisma.bodyMetricEntry.deleteMany({ where: { userId } }),
     prisma.meal.deleteMany({ where: { createdByUserId: userId } }),
     prisma.workoutSession.deleteMany({ where: { userId } }),

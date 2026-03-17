@@ -168,7 +168,8 @@ export function HealthSection({ data }: Props) {
         {/* BMI card */}
         <div style={vitalCardStyle('#5AC8FA')}>
           <p style={vitalLabelStyle}>BMI</p>
-          {mergedHeight && lastWeight ? (
+          {/* C4: guard against division by zero when mergedHeight is 0 or falsy */}
+          {mergedHeight && Number(mergedHeight) > 0 && lastWeight ? (
             <>
               <p style={{ ...vitalValueStyle, color: '#5AC8FA' }}>
                 {(lastWeight.value / Math.pow(Number(mergedHeight) / 100, 2)).toFixed(1)}

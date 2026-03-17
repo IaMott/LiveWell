@@ -12,6 +12,17 @@ const MEAL_TYPES = [
   { key: 'spuntino', label: 'Spuntino', emoji: '🍎', color: '#AF52DE' },
 ]
 
+/**
+ * C2 — toolRegistry stores English enum values ('breakfast','lunch','dinner','snack').
+ * Map them to the Italian UI keys used by MEAL_TYPES so meals appear correctly.
+ */
+const MEAL_TYPE_DB_TO_IT: Record<string, string> = {
+  breakfast: 'colazione',
+  lunch: 'pranzo',
+  dinner: 'cena',
+  snack: 'spuntino',
+}
+
 function MacroRing({
   value,
   max,
@@ -146,12 +157,15 @@ export function NutritionSection({ data }: Props) {
     (nutritionProfile?.dailyKcal != null ? Number(nutritionProfile.dailyKcal) : null)
   const kcalGoal = dailyKcal ?? 2000
 
-  // Group recent meals by type
+  // C2 + M5: Group recent meals by type.
+  // Normalize DB English values ('breakfast' → 'colazione') before comparing.
+  // Removed dead fuzzy startsWith(key.slice(0,4)) which never matched EN↔IT pairs.
   const mealsByType = MEAL_TYPES.map(({ key, label, emoji, color }) => {
-    const meals = recentMeals.filter(
-      (m) =>
-        m.mealType?.toLowerCase() === key || m.mealType?.toLowerCase().startsWith(key.slice(0, 4)),
-    )
+    const meals = recentMeals.filter((m) => {
+      const raw = m.mealType?.toLowerCase() ?? ''
+      const normalized = MEAL_TYPE_DB_TO_IT[raw] ?? raw
+      return normalized === key
+    })
     return { key, label, emoji, color, meals, count: meals.length }
   })
 
@@ -299,12 +313,14 @@ export function NutritionSection({ data }: Props) {
             {hasMacroAttrs ? 'Macronutrienti raccolti' : 'Riepilogo nutrizionale'}
           </p>
           <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+            {/* S4: when kcal goal is set, show it as a target ring (100% = goal defined).
+                When no kcal data, show actual meal count vs a 14-meal/week target. */}
             <MacroRing
-              value={stats.mealsLogged7d}
-              max={Math.max(stats.mealsLogged7d, 1)}
+              value={dailyKcal ?? stats.mealsLogged7d}
+              max={dailyKcal ?? Math.max(stats.mealsLogged7d, 14)}
               color="#FF9F0A"
-              label={dailyKcal ? `${dailyKcal} kcal/die` : 'Pasti 7gg'}
-              unit={dailyKcal ? 'kcal' : 'pasti'}
+              label={dailyKcal ? 'Obiettivo' : 'Pasti 7gg'}
+              unit={dailyKcal ? 'kcal/d' : 'pasti'}
             />
             {hasMacroAttrs && (
               <>
