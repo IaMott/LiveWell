@@ -229,8 +229,8 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
               findUnique: async () =>
                 prisma.user.findUnique({
                   where: { id: userId },
-                  select: { id: true },
-                }) as Promise<{ id: string; role?: string } | null>,
+                  select: { id: true, name: true },
+                }) as Promise<{ id: string; role?: string; name?: string | null } | null>,
             },
             message: {
               findMany: async (args) =>

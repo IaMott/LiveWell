@@ -109,6 +109,8 @@ export function readPersonalSnapshot(contextPack: ContextPack): PersonalSnapshot
   const profile = (contextPack.user.profile ?? {}) as Record<string, unknown>
   const attrs = contextPack.user.attributes ?? {}
   const personal = (attrs.personal ?? {}) as Record<string, { value?: unknown }>
+  // health domain fallback — older entries were saved there before the fix
+  const health = (attrs.health ?? {}) as Record<string, { value?: unknown }>
 
   const out: PersonalSnapshot = {}
 
@@ -137,14 +139,16 @@ export function readPersonalSnapshot(contextPack: ContextPack): PersonalSnapshot
   const genderFromAttr = personal.gender?.value
   if (typeof genderFromAttr === 'string' && genderFromAttr) out.gender = genderFromAttr
 
+  // Height — check personal first, then UserProfile, then health (backward compat)
   const hProfile = profile.height
   if (typeof hProfile === 'number') out.height = hProfile
-  const hAttr = personal.height?.value
+  const hAttr = personal.height?.value ?? health.height?.value
   if (typeof hAttr === 'number') out.height = hAttr
 
+  // Weight — check personal first, then UserProfile, then health (backward compat)
   const wProfile = profile.weight
   if (typeof wProfile === 'number') out.weight = wProfile
-  const wAttr = personal.weight?.value
+  const wAttr = personal.weight?.value ?? health.weight?.value
   if (typeof wAttr === 'number') out.weight = wAttr
 
   return out
@@ -320,6 +324,7 @@ export function inferAttributeToolCallsFromMessage(
   }
 
   // Weight — "peso 80 kg", "peso 80kg", "80 chili", "80 kg", bare "89 kg"
+  // Stored in personal domain (matches readPersonalSnapshot)
   const weightMatch = lower.match(
     /(?:peso|peso\s+circa|sono\s+(?:sui|intorno\s+ai|a\s+circa))\s*(\d{2,3})(?:[.,]\d)?\s*(?:kg|chili|chilo|kili|k(?:g)?)?(?:\b|$)/i,
   )
@@ -329,7 +334,7 @@ export function inferAttributeToolCallsFromMessage(
       calls.push({
         id: crypto.randomUUID(),
         name: 'user.setAttribute',
-        args: { domain: 'health', key: 'weight', value: w, unit: 'kg' },
+        args: { domain: 'personal', key: 'weight', value: w, unit: 'kg' },
       })
     }
   }
@@ -343,13 +348,14 @@ export function inferAttributeToolCallsFromMessage(
         calls.push({
           id: crypto.randomUUID(),
           name: 'user.setAttribute',
-          args: { domain: 'health', key: 'weight', value: w, unit: 'kg' },
+          args: { domain: 'personal', key: 'weight', value: w, unit: 'kg' },
         })
       }
     }
   }
 
   // Height — "sono alto 180", "altezza 180cm", "alto 1,80m", "1.75m", "175 cm", bare "189 cm"
+  // Stored in personal domain (matches readPersonalSnapshot)
   const heightCmMatch = lower.match(/(?:sono\s+alto|altezza|alt\.|alto)\s+(\d{2,3})\s*cm/i)
   if (heightCmMatch?.[1]) {
     const h = Number(heightCmMatch[1])
@@ -357,7 +363,7 @@ export function inferAttributeToolCallsFromMessage(
       calls.push({
         id: crypto.randomUUID(),
         name: 'user.setAttribute',
-        args: { domain: 'health', key: 'height', value: h, unit: 'cm' },
+        args: { domain: 'personal', key: 'height', value: h, unit: 'cm' },
       })
     }
   }
@@ -369,7 +375,7 @@ export function inferAttributeToolCallsFromMessage(
       calls.push({
         id: crypto.randomUUID(),
         name: 'user.setAttribute',
-        args: { domain: 'health', key: 'height', value: h, unit: 'cm' },
+        args: { domain: 'personal', key: 'height', value: h, unit: 'cm' },
       })
     }
   }
@@ -381,7 +387,7 @@ export function inferAttributeToolCallsFromMessage(
       calls.push({
         id: crypto.randomUUID(),
         name: 'user.setAttribute',
-        args: { domain: 'health', key: 'height', value: h, unit: 'cm' },
+        args: { domain: 'personal', key: 'height', value: h, unit: 'cm' },
       })
     }
   }
@@ -396,7 +402,7 @@ export function inferAttributeToolCallsFromMessage(
         calls.push({
           id: crypto.randomUUID(),
           name: 'user.setAttribute',
-          args: { domain: 'health', key: 'height', value: h, unit: 'cm' },
+          args: { domain: 'personal', key: 'height', value: h, unit: 'cm' },
         })
       }
     }
@@ -460,6 +466,7 @@ export function inferAttributeToolCallsFromMessage(
     /\bil\s+mio\s+nome\s+[eè]\s+([A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30}(?:\s+[A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30})?)/i,
     /\bmi\s+presento[,:]?\s+sono\s+([A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30}(?:\s+[A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30})?)/,
   ]
+  let nameFound = false
   for (const re of namePatterns) {
     const m = message.match(re)
     if (m?.[1] && m[1].length >= 2) {
@@ -468,7 +475,23 @@ export function inferAttributeToolCallsFromMessage(
         name: 'user.setAttribute',
         args: { domain: 'personal', key: 'name', value: m[1].trim() },
       })
+      nameFound = true
       break
+    }
+  }
+  // Bare two-word proper name — direct answer to "Come ti chiami?" (e.g. "Mattia Mottisi")
+  // Requires exactly two capitalized words, each 3+ chars. Avoids accidental matches on
+  // phrases like "Ciao Bene" by rejecting single-word messages.
+  if (!nameFound) {
+    const bareFullName = message
+      .trim()
+      .match(/^([A-ZÀÈÉÌÒÙ][a-zàèéìòù]{2,30})\s+([A-ZÀÈÉÌÒÙ][a-zàèéìòù]{2,30})$/)
+    if (bareFullName) {
+      calls.push({
+        id: crypto.randomUUID(),
+        name: 'user.setAttribute',
+        args: { domain: 'personal', key: 'name', value: `${bareFullName[1]} ${bareFullName[2]}` },
+      })
     }
   }
 
