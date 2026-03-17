@@ -9,6 +9,8 @@
   "groupMembership": "none",
   "coordinates": ["nutrizione", "allenamento", "salute-biologica", "salute-mentale", "idee"],
   "toolsAllowed": [
+    "user.setAttribute",
+    "user.updateProfile",
     "artifacts.saveRecommendation",
     "notifications.createInApp",
     "share.createLink"

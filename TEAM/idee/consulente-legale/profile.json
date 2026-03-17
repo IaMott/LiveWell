@@ -5,6 +5,7 @@
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.setAttribute",
+    "user.updateProfile",
     "artifacts.saveRecommendation",
     "notifications.createInApp"
   ],
