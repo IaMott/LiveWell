@@ -13,10 +13,13 @@ function buildIntakeSection(agentId: string, input: AgentInput): string[] {
     return formatUserAttributes(input)
   }
 
+  // F1: Include UserProfile data so weight/height/gender from the profile section
+  // are visible in the agent's intake checklist (not just chat-collected attributes).
   const attrMap = flatAttributeMap(
     input.contextPack.user.attributes as
       | Record<string, Record<string, { value: unknown; unit?: string }>>
       | undefined,
+    input.contextPack.user.profile as Record<string, unknown> | undefined,
   )
 
   const lines: string[] = ['INTAKE SPECIALISTICO MINIMO (dati necessari per il tuo dominio):']

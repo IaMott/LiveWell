@@ -1,16 +1,7 @@
 import type { ChatMessage, ThinkingStep } from '@/hooks/useChat'
 import type { Domain } from '@/lib/ai/types'
 import { FeedbackWidget } from './FeedbackWidget'
-
-const DOMAIN_COLORS: Record<Domain, string> = {
-  nutrition: '#AF52DE',
-  training: '#007AFF',
-  health: '#34C759',
-  mindfulness: '#5AC8FA',
-  inspiration: '#FF9F0A',
-  general: '#8E8E93',
-  coordination: '#8E8E93',
-}
+import { DOMAIN_COLORS } from '@/lib/ui/domainColors'
 
 /** Convert a hex color to rgba with the given alpha */
 function hexToRgba(hex: string, alpha: number): string {

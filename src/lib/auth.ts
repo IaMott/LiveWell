@@ -50,17 +50,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
  * In test environment (NODE_ENV=test): reads from x-user-id header
  * for unit test compatibility.
  * In production: reads from NextAuth JWT session (cookie-based).
- */
-/**
- * Returns the authenticated userId for a route handler.
  *
- * In test environment (NODE_ENV=test): reads from x-user-id header
- * for unit test compatibility.
- * In production: reads from NextAuth JWT session (cookie-based).
- *
- * Auto-repair: if the JWT user ID is not found in DB (e.g. after a DB
- * migration that wiped user records), the function recreates the user
- * row from session data so FK constraints don't block chat persistence.
+ * Auto-repair (dev only): if the JWT user ID is not found in DB, the
+ * function recreates the user row so FK constraints don't block chat
+ * persistence. Disabled in production (C4).
  */
 export async function getAuthUserId(request?: Request): Promise<string | null> {
   if (process.env.NODE_ENV === 'test' && request) {
@@ -82,15 +75,20 @@ export async function getAuthUserId(request?: Request): Promise<string | null> {
           // Different DB id — return the current DB id so FK constraints work
           return byEmail.id
         }
-        // Recreate user preserving the JWT id so the session stays valid
+        // C4: Auto-repair is restricted to non-production — in production a missing
+        // user means the DB was reset and the user must re-register.
+        if (process.env.NODE_ENV === 'production') {
+          return null
+        }
+        // Recreate user preserving the JWT id so the session stays valid (dev only)
         await prisma.user.create({
           data: {
             id: userId,
             email,
             name: session?.user?.name ?? null,
-            // Random hash — user logs in via existing JWT; can reset password later
             passwordHash: await bcrypt.hash(randomBytes(24).toString('hex'), 10),
-            role: (session?.user?.role as 'USER' | 'ADMIN' | 'OWNER') ?? 'USER',
+            // C4: Always force USER role — never copy elevated roles from JWT.
+            role: 'USER',
           },
         })
       }

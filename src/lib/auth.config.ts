@@ -23,9 +23,15 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     authorized({ auth: session, request: { nextUrl } }) {
       const isLoggedIn = !!session?.user
-      const isProtectedPage = nextUrl.pathname.startsWith('/profile')
-      if (isProtectedPage) return isLoggedIn
-      return true
+      const { pathname } = nextUrl
+      // Public pages that don't require authentication
+      const isPublicPage =
+        pathname.startsWith('/login') ||
+        pathname.startsWith('/register') ||
+        pathname.startsWith('/api/auth')
+      if (isPublicPage) return true
+      // All other app routes require login
+      return isLoggedIn
     },
     jwt({ token, user }) {
       if (user) {

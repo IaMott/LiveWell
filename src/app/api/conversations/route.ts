@@ -89,6 +89,8 @@ export async function DELETE(request: Request): Promise<Response> {
   if (!conv || conv.userId !== userId)
     return errorResponse(404, 'NOT_FOUND', 'Conversation not found')
 
-  await prisma.conversation.delete({ where: { id } })
+  // C2: Soft-delete — set deletedAt instead of hard delete to preserve data recovery.
+  // The GET query already filters `deletedAt: null`.
+  await prisma.conversation.update({ where: { id }, data: { deletedAt: new Date() } })
   return Response.json({ ok: true })
 }

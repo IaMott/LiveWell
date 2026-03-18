@@ -59,6 +59,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const conversationIdRef = useRef<string | undefined>(undefined)
   const activeSpecialistIdRef = useRef<string | undefined>(undefined)
   const isStreamingRef = useRef(false)
+  // F5: AbortController ref so in-flight SSE streams can be cancelled on navigation/re-send.
+  const sendAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     conversationIdRef.current = conversationId
@@ -105,6 +107,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const loadConversation = useCallback(async (id: string) => {
+    // F5: If a send is in progress, abort the stream so we don't get duplicate messages.
+    if (sendAbortRef.current) {
+      sendAbortRef.current.abort()
+      sendAbortRef.current = null
+    }
     setIsStreaming(true)
     setMessages([])
     setActiveDomain(null)
@@ -242,6 +249,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsStreaming(true)
     isStreamingRef.current = true
 
+    // F5: Abort any in-flight SSE stream before starting a new one.
+    if (sendAbortRef.current) sendAbortRef.current.abort()
+    const sendAbort = new AbortController()
+    sendAbortRef.current = sendAbort
+
     try {
       const res = await fetch('/api/chat/send', {
         method: 'POST',
@@ -252,6 +264,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           activeSpecialistId: activeSpecialistIdRef.current,
           fileIds: fileIds.length > 0 ? fileIds : undefined,
         }),
+        signal: sendAbort.signal,
       })
 
       if (!res.ok || !res.body) {

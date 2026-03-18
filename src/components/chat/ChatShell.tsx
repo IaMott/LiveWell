@@ -6,20 +6,12 @@ import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { ConversationHistory } from './ConversationHistory'
 import { useChat } from '@/hooks/useChat'
+import { getDomainColor } from '@/lib/ui/domainColors'
 
 type Props = {
   userInitials?: string
   userName?: string | null
   userImage?: string | null
-}
-
-const DOMAIN_COLORS: Record<string, string> = {
-  nutrition: '#34C759',
-  health: '#FF3B30',
-  training: '#FF9500',
-  mindfulness: '#AF52DE',
-  inspiration: '#007AFF',
-  coordination: '#8E8E93',
 }
 
 export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
@@ -65,7 +57,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     [loadConversation],
   )
 
-  const specialistColor = activeDomain ? (DOMAIN_COLORS[activeDomain] ?? '#007AFF') : '#007AFF'
+  const specialistColor = getDomainColor(activeDomain)
 
   return (
     <div

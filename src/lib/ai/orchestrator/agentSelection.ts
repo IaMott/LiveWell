@@ -73,8 +73,13 @@ export function selectAgentsForRequest(
     })(),
   }))
 
+  // F3: Filter out low-confidence specialists. With the base domain score of +4,
+  // a specialist that ONLY matches on domain (no competence hints, no name mention)
+  // scores exactly 4. We keep them but cap the total to avoid flooding the pipeline.
+  // Agents scoring ≤ 2 (only from secondary domain or 'general') are excluded to
+  // prevent out-of-scope specialists (e.g. endocrinologo on a nutrition-only query).
   return scored
-    .filter((x) => x.score > 0)
+    .filter((x) => x.score > 2)
     .sort((a, b) => b.score - a.score || a.agent.id.localeCompare(b.agent.id))
     .slice(0, maxAgents)
     .map((x) => x.agent)

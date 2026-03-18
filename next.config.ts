@@ -1,9 +1,11 @@
 import type { NextConfig } from 'next'
 
+const isDev = process.env.NODE_ENV !== 'production'
+
 const cspDirectives = [
   "default-src 'self'",
-  // Next.js requires unsafe-inline for styles and eval for dev hot reload
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  // C5: unsafe-eval is only needed for Next.js dev hot reload — removed in production.
+  isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self'",

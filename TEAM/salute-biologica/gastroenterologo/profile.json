@@ -1,7 +1,7 @@
 {
   "id": "gastroenterologo",
   "displayName": "Gastroenterologo",
-  "domainTags": ["health", "nutrition"],
+  "domainTags": ["health"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",

@@ -515,6 +515,50 @@ function buildSystemPrompt(
   ].join('\n')
 }
 
+/**
+ * F2: Build a structured profile summary from the ContextPack so the synthesis
+ * model always has explicit access to weight, height, age, gender, goal, etc.
+ * This prevents the "I don't have your height" bug when the data IS in the profile.
+ */
+function buildStructuredProfileBlock(contextPack: ContextPack): string {
+  const profile = (contextPack.user.profile ?? {}) as Record<string, unknown>
+  const attrs = contextPack.user.attributes ?? {}
+  const personal = (attrs.personal ?? {}) as Record<string, { value?: unknown }>
+  const health = (attrs.health ?? {}) as Record<string, { value?: unknown }>
+  const general = (attrs.general ?? {}) as Record<string, { value?: unknown }>
+
+  const lines: string[] = []
+
+  // Helper: get value from attribute OR profile (attribute wins)
+  const val = (attrKey: string, ...profileKeys: string[]): unknown => {
+    if (personal[attrKey]?.value != null) return personal[attrKey].value
+    if (health[attrKey]?.value != null) return health[attrKey].value
+    for (const pk of profileKeys) {
+      if (profile[pk] != null && profile[pk] !== '') return profile[pk]
+    }
+    return null
+  }
+
+  const name = val('name', 'name')
+  const gender = val('gender', 'gender')
+  const age = val('age', 'age')
+  const birthDate = val('birthDate', 'birthDate')
+  const weight = val('weight', 'weight')
+  const height = val('height', 'height')
+  const goal = general?.['goal']?.value ?? general?.['declared_goal']?.value ?? profile.goal
+
+  if (name) lines.push(`Nome: ${name}`)
+  if (gender) lines.push(`Sesso: ${gender}`)
+  if (age) lines.push(`Età: ${age} anni`)
+  else if (birthDate) lines.push(`Data di nascita: ${birthDate}`)
+  if (height) lines.push(`Altezza: ${height} cm`)
+  if (weight) lines.push(`Peso: ${weight} kg`)
+  if (goal) lines.push(`Obiettivo: ${goal}`)
+
+  if (lines.length === 0) return ''
+  return `DATI PROFILO UTENTE (conferme già raccolte):\n${lines.join('\n')}`
+}
+
 function buildUserPrompt(params: {
   userMessage: string
   summaries: string
@@ -526,6 +570,8 @@ function buildUserPrompt(params: {
   topMissingQuestion: string | null
   hasImages: boolean
   planRequest: boolean
+  /** F2: ContextPack for structured profile data */
+  contextPack: ContextPack
 }): string {
   const {
     userMessage,
@@ -536,13 +582,19 @@ function buildUserPrompt(params: {
     topMissingQuestion,
     hasImages,
     planRequest,
+    contextPack,
   } = params
+
+  // F2: Structured profile block so the model always sees weight, height, etc.
+  const profileBlock = buildStructuredProfileBlock(contextPack)
 
   return [
     // C1: long-term memory from past sessions shown first so model has full context
     crossConversationContext
       ? `MEMORIA SESSIONI PRECEDENTI (conversazioni passate con l'utente):\n${crossConversationContext}\n`
       : '',
+    // F2: Structured profile data — always visible before the conversation
+    profileBlock ? `${profileBlock}\n` : '',
     recentHistory ? `CONVERSAZIONE RECENTE:\n${recentHistory}\n` : '',
     `MESSAGGIO DI ${hasImages ? 'UTENTE (con allegato immagine)' : 'UTENTE'}: "${userMessage}"`,
     ``,
@@ -655,6 +707,7 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
     topMissingQuestion: hasMissingData ? topMissingQuestion : null,
     hasImages,
     planRequest,
+    contextPack: input.contextPack, // F2: for structured profile block
   })
 
   try {

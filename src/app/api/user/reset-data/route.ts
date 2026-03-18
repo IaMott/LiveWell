@@ -35,6 +35,7 @@ export async function DELETE(request: Request): Promise<Response> {
 
   // S3: Execute all deletes inside a transaction so a partial failure leaves data consistent.
   // Conversations must come last to avoid FK constraint issues with Messages (cascade-deleted).
+  // C3: Delete ALL user data tables including the 7 that were previously missing.
   const [
     bodyMetrics,
     meals,
@@ -45,6 +46,9 @@ export async function DELETE(request: Request): Promise<Response> {
     artifacts,
     workspaces,
     notifications,
+    conversationSummaries,
+    toolAuditLogs,
+    fileAssets,
     conversations,
   ] = await prisma.$transaction([
     prisma.bodyMetricEntry.deleteMany({ where: { userId } }),
@@ -56,6 +60,10 @@ export async function DELETE(request: Request): Promise<Response> {
     prisma.recommendationArtifact.deleteMany({ where: { userId } }),
     prisma.agentWorkspace.deleteMany({ where: { userId } }),
     prisma.notification.deleteMany({ where: { userId } }),
+    // C3: Previously missing tables — privacy/GDPR compliance
+    prisma.conversationSummary.deleteMany({ where: { userId } }),
+    prisma.toolAuditLog.deleteMany({ where: { userId } }),
+    prisma.fileAsset.deleteMany({ where: { userId } }),
     // Messages are cascade-deleted when conversations are deleted
     prisma.conversation.deleteMany({ where: { userId } }),
   ])
@@ -92,6 +100,9 @@ export async function DELETE(request: Request): Promise<Response> {
       artifacts: artifacts.count,
       workspaces: workspaces.count,
       notifications: notifications.count,
+      conversationSummaries: conversationSummaries.count,
+      toolAuditLogs: toolAuditLogs.count,
+      fileAssets: fileAssets.count,
       conversations: conversations.count,
     },
   })

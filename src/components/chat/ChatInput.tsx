@@ -3,17 +3,10 @@
 import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react'
 import type React from 'react'
 import type { Domain } from '@/lib/ai/types'
+import { DOMAIN_COLORS, getDomainColor } from '@/lib/ui/domainColors'
 import { LiveModal } from './live/LiveModal'
 
 const ALLOWED_UPLOAD_TYPES = 'image/*,.pdf,.txt,.md,.doc,.docx,.csv,.json'
-
-const DOMAIN_COLORS: Partial<Record<Domain, string>> = {
-  nutrition: '#AF52DE',
-  training: '#007AFF',
-  health: '#34C759',
-  mindfulness: '#5AC8FA',
-  inspiration: '#FF9F0A',
-}
 
 // ── Icons from design/icons/ ──────────────────────────────────────────────────
 
@@ -231,7 +224,7 @@ export function ChatInput({
     }
   }, [activeDomain]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const currentColor = selectedDomain ? (DOMAIN_COLORS[selectedDomain] ?? '#8E8E93') : '#8E8E93'
+  const currentColor = selectedDomain ? getDomainColor(selectedDomain) : '#8E8E93'
 
   function autoResize() {
     const el = textareaRef.current

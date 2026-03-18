@@ -13,8 +13,6 @@ function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string)
   const lower = userMessage.toLowerCase()
 
   // Skip L1 if the message already carries specific health/numeric data (measurements, symptoms).
-  // Bare numbers alone (e.g. answering "35" to an age question) do NOT skip L1 because the
-  // inference layer handles capture and the next turn will reflect the collected value.
   const hasSpecificData =
     /\b\d{2,3}\s*(?:kg|cm|bpm|mmhg|m\/s)\b/i.test(lower) ||
     lower.includes('soffro') ||
@@ -26,51 +24,51 @@ function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string)
     lower.includes('data di nascita')
   if (hasSpecificData) return []
 
-  // Priority order for onboarding — like a clinical intake:
-  // 1. Nome (skip if known from account)
-  // 2. Sesso
-  // 3. Età
-  // 4. Altezza
-  // 5. Peso
-  // Then goal
+  // F4: Collect ALL missing baseline fields and ask up to 3 at once instead of 1 per turn.
+  // This reduces the 6+ turn onboarding to 2-3 turns max.
+  const missing: string[] = []
 
   // Step 1 — Nome (solo se non viene dall'account)
   if (!personal.name) {
-    return ['Come ti chiami?']
+    missing.push('Come ti chiami?')
   }
 
   // Step 2 — Sesso
-  // M10: added neutral option — users who respond outside M/F won't loop indefinitely.
   if (!personal.gender) {
-    return [`${personal.name}, qual è il tuo sesso biologico? (M / F / Preferisco non specificare)`]
+    const nameRef = personal.name ?? ''
+    missing.push(
+      `${nameRef ? `${nameRef}, q` : 'Q'}ual è il tuo sesso biologico? (M / F / Preferisco non specificare)`,
+    )
   }
 
   // Step 3 — Età
   if (!personal.birthDate) {
-    return [`Quanti anni hai, ${personal.name}?`]
+    missing.push(`Quanti anni hai?`)
   }
 
   // Step 4 — Altezza
   if (!personal.height) {
-    return ['Qual è la tua altezza in cm?']
+    missing.push('Qual è la tua altezza in cm?')
   }
 
   // Step 5 — Peso
   if (!personal.weight) {
-    return ['Qual è il tuo peso attuale in kg?']
+    missing.push('Qual è il tuo peso attuale in kg?')
   }
 
   // Step 6 — obiettivo principale
-  // Note: inference saves key 'goal'; legacy data may use 'declared_goal' — check both.
   const generalAttrs = attrs['general'] as Record<string, { value?: unknown }> | undefined
   const hasDeclaredGoal = Boolean(
     generalAttrs?.['goal']?.value != null || generalAttrs?.['declared_goal']?.value != null,
   )
   if (!hasDeclaredGoal) {
-    return ['Qual è la cosa più importante che vorresti migliorare o raggiungere?']
+    missing.push('Qual è la cosa più importante che vorresti migliorare o raggiungere?')
   }
 
-  return []
+  // F4: Return up to 3 questions at once (batched), skip name if it's the only one known.
+  // If name is the ONLY missing item, ask it alone for a warm greeting.
+  if (missing.length === 0) return []
+  return missing.slice(0, 3)
 }
 
 // ---------------------------------------------------------------------------

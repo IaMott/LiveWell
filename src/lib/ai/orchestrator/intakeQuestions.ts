@@ -366,11 +366,38 @@ export const FIELD_PRIMARY_OWNER: Record<string, string> = {
 // flatAttributeMap — flatten all UserAttributes into key → display string
 // ---------------------------------------------------------------------------
 
+/**
+ * F1: Profile→Attribute mapping — UserProfile fields that agents need as intake data.
+ * These are merged as low-priority defaults; attributes from `user.attributes` always
+ * override them (the user may have updated via chat after the profile was saved).
+ */
+const PROFILE_TO_ATTRIBUTE: Array<{ key: string; profileKey: string; unit?: string }> = [
+  { key: 'weight', profileKey: 'weight', unit: 'kg' },
+  { key: 'height', profileKey: 'height', unit: 'cm' },
+  { key: 'gender', profileKey: 'gender' },
+  { key: 'birthDate', profileKey: 'birthDate' },
+  { key: 'goal', profileKey: 'goal' },
+]
+
 export function flatAttributeMap(
   attrs: Record<string, Record<string, { value: unknown; unit?: string }>> | undefined,
+  /** F1: Optional UserProfile — fields are merged as low-priority defaults. */
+  profile?: Record<string, unknown>,
 ): Map<string, string> {
   const map = new Map<string, string>()
+
+  // F1: Seed the map with UserProfile data (lower priority — attributes override below).
+  if (profile) {
+    for (const { key, profileKey, unit } of PROFILE_TO_ATTRIBUTE) {
+      const val = profile[profileKey]
+      if (val != null && val !== '') {
+        map.set(key, String(val) + (unit ? ` ${unit}` : ''))
+      }
+    }
+  }
+
   if (!attrs) return map
+  // Overlay with UserAttribute values (higher priority — chat-collected data wins).
   for (const domainValues of Object.values(attrs)) {
     if (!domainValues || typeof domainValues !== 'object') continue
     for (const [k, v] of Object.entries(
@@ -414,10 +441,12 @@ export function getMissingRequiredFields(
   const intakeKeys = AGENT_INTAKE_KEYS[agentId]
   if (!intakeKeys) return { ownFields: [], peerFields: [] }
 
+  // F1: Include UserProfile data so weight/height/gender from profile are recognized.
   const attrMap = flatAttributeMap(
     contextPack.user.attributes as
       | Record<string, Record<string, { value: unknown; unit?: string }>>
       | undefined,
+    contextPack.user.profile as Record<string, unknown> | undefined,
   )
 
   const ownFields: string[] = []

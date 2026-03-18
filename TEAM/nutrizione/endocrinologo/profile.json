@@ -1,7 +1,7 @@
 {
   "id": "endocrinologo",
   "displayName": "Endocrinologo",
-  "domainTags": ["health", "nutrition"],
+  "domainTags": ["health"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
