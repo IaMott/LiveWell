@@ -90,6 +90,79 @@ function isPlanRequest(userMessage: string): boolean {
 }
 
 /**
+ * BUG-B fix: Domain-aware plan request detection.
+ * Prevents a specialist from producing a professional output template for a request
+ * that belongs to a DIFFERENT domain.
+ * Example: "voglio iniziare una dieta" with Personal Trainer active → NOT a training plan request.
+ */
+function isPlanRequestInSpecialistDomain(userMessage: string, specialistId: string): boolean {
+  if (!isPlanRequest(userMessage)) return false
+  const lower = userMessage.toLowerCase()
+
+  // Training specialists only respond to training-specific plan requests
+  const trainingSpecialists = new Set([
+    'persona-trainer',
+    'chinesologo',
+    'medico-dello-sport',
+    'fisioterapista',
+    'fisiatra',
+  ])
+  if (trainingSpecialists.has(specialistId)) {
+    return /\b(allenamento|training|palestra|esercizi|workout|scheda|muscol|forza|cardio|corsa|sport|attività fisica|movimento fisico|sessione)\b/i.test(
+      lower,
+    )
+  }
+
+  // Nutrition specialists only respond to nutrition-specific plan requests
+  const nutritionSpecialists = new Set(['dietista', 'chef', 'gastroenterologo'])
+  if (nutritionSpecialists.has(specialistId)) {
+    return /\b(dieta|alimentar|nutriz|calorie|pasto|mangiare|cibo|ricett|menu|peso|dimagrire|deficit|macros)\b/i.test(
+      lower,
+    )
+  }
+
+  // All other specialists: any recognised plan request is valid
+  return true
+}
+
+/**
+ * BUG-C fix: Detects an explicit user request to speak with a named specialist.
+ * Returns the specialist's display name if found, null otherwise.
+ */
+function detectExplicitSpecialistRequest(userMessage: string): string | null {
+  const lower = userMessage.toLowerCase()
+  // Only fire on clear intent verbs — avoids false positives in generic sentences
+  if (
+    !/\b(voglio parlare|fammi parlare|passami|parla(re)? con (il|la|lo)|voglio (il|la|lo)|chiamare|mandami)\b/.test(
+      lower,
+    )
+  )
+    return null
+
+  const patterns: Array<{ pattern: RegExp; name: string }> = [
+    { pattern: /\b(nutrizionista|dietista|dietolog)\b/, name: 'Nutrizionista/Dietista' },
+    {
+      pattern: /\b(personal trainer|trainer|allenatore|personal)\b/,
+      name: 'Personal Trainer',
+    },
+    { pattern: /\b(psicologo|psicolog)\b/, name: 'Psicologo' },
+    {
+      pattern: /\b(medico|dottore|mmg|medicina generale|medico di base)\b/,
+      name: 'Medico',
+    },
+    { pattern: /\b(fisioterapista|fisio)\b/, name: 'Fisioterapista' },
+    { pattern: /\b(cardiologo|cardiol)\b/, name: 'Cardiologo' },
+    { pattern: /\b(endocrinologo|endocrinol)\b/, name: 'Endocrinologo' },
+    { pattern: /\b(mental coach|coach mentale)\b/, name: 'Mental Coach' },
+    { pattern: /\b(chef|cuoco)\b/, name: 'Chef' },
+  ]
+  for (const { pattern, name } of patterns) {
+    if (pattern.test(lower)) return name
+  }
+  return null
+}
+
+/**
  * Returns the most appropriate cross-domain specialist name if the proposals
  * indicate the current message is clearly outside the active specialist's domain.
  * M3: added null guard on p.domain to avoid undefined !== domain always being true.
@@ -396,6 +469,10 @@ function buildSystemPrompt(
   hasImages: boolean,
   userMessage: string,
   proposals: AgentProposal[],
+  /** BUG-A: number of gating questions — drives singular/plural instruction */
+  gatingQuestionCount: number,
+  /** BUG-B: whether the plan request is in the active specialist's domain */
+  planRequest: boolean,
 ): string {
   const nameRef = userName ? `${userName}` : "l'utente"
 
@@ -403,7 +480,6 @@ function buildSystemPrompt(
     ? `\nHai ricevuto un'immagine allegata da ${nameRef}. Analizzala e integra le informazioni visive nella tua risposta.`
     : ''
 
-  const planRequest = isPlanRequest(userMessage)
   // When user explicitly asks for a plan, override hasMissingData so we don't block output
   const effectivelyHasMissingData = hasMissingData && !planRequest
 
@@ -414,10 +490,27 @@ function buildSystemPrompt(
       ? `\n\nIMPORTANTE — ARGOMENTO TRASVERSALE: Questo messaggio riguarda principalmente un ambito di competenza di un altro specialista del team (${crossDomainSpecialistId}). Rispondi come se fossi quel collega specialista per questo specifico punto, indicando esplicitamente il passaggio (es. "Per questo aspetto ti rispondo come [Specialista]..."), poi concludi ricordando che per il percorso principale continuerà ${activeSpecialist.displayName}.`
       : ''
 
+    // BUG-C: Explicit specialist routing — user is asking to switch to a different specialist
+    const explicitSpecialist = detectExplicitSpecialistRequest(userMessage)
+    const explicitRoutingNote =
+      explicitSpecialist &&
+      explicitSpecialist.toLowerCase() !== activeSpecialist.displayName.toLowerCase()
+        ? `\n\nATTENZIONE: ${nameRef} vuole parlare con ${explicitSpecialist}. Riconosci immediatamente questa richiesta, incoraggiala, e fornisci eventualmente un'ultima informazione utile da parte tua. NON bloccare o ritardare il passaggio — ${nameRef} può rivolgersi a qualsiasi collega in qualsiasi momento.`
+        : ''
+
     const firstPersonRule = `Parla SEMPRE in prima persona singolare (io, mi, ti consiglio, penso). NON usare MAI "noi", "il team", "siamo", "il nostro team" o qualsiasi altra forma plurale — sei un singolo specialista.`
 
     // Anti-pattern: ban robotic openers and self-referential phrases that sound pre-set
     const antiPattern = `NON iniziare MAI la risposta con frasi formule come "Il team LiveWell", "Caro utente", "Gentile utente", "Ti ringrazio per avermi", "Capisco perfettamente", "Certamente", seguito da una riformulazione di ciò che hai appena detto. Varia sempre l'apertura — parla direttamente, come farebbe una persona reale in conversazione.`
+
+    // BUG-C: Anti-gatekeeper rule — agents must never block access to other specialists
+    const antiGatekeeperRule = `REGOLA CRITICA: Non sei mai un prerequisito o precondizione per altri specialisti del team. Se ${nameRef} vuole parlare con un collega, sostieni e incoraggia immediatamente quella scelta — non bloccare, non dichiarare sequenze obbligatorie, non ritardare l'accesso. ${nameRef} può rivolgersi a qualsiasi specialista in qualsiasi momento.`
+
+    // BUG-E: Prevent repeating already-communicated data
+    const noRepetitionRule = `NON riformulare o ripetere informazioni già menzionate nella conversazione recente (IMC/BMI, peso, altezza, sedentarietà, condizioni note, situazione lavorativa, ecc.). ${nameRef} le conosce già — vai avanti con contenuto nuovo.`
+
+    // BUG-H: Strict domain boundary
+    const domainBoundaryRule = `Rimani strettamente nel tuo ambito di competenza. Se ${nameRef} menziona qualcosa fuori dal tuo dominio specifico, riconoscilo in UNA sola riga rimandando al collega competente — non approfondire né dare consigli su aree di altri specialisti.`
 
     if (isFirstMessage) {
       return [
@@ -425,26 +518,38 @@ function buildSystemPrompt(
         `Parla in italiano, tono diretto e umano — come un professionista vero, non come un chatbot.${imageNote}`,
         firstPersonRule,
         antiPattern,
+        antiGatekeeperRule,
         ``,
         `Primo contatto: il tuo obiettivo è CAPIRE chi è questa persona, non dare consigli.`,
         `Fai UNA sola domanda aperta — quella più importante per cominciare a conoscere ${nameRef}.`,
         `Niente consigli generici. Niente liste. Va bene anche andare dritti alla domanda senza preamboli.`,
         crossDomainNote,
+        explicitRoutingNote,
       ].join('\n')
     }
 
     if (effectivelyHasMissingData) {
+      // BUG-A + BUG-G: Batch instruction when multiple baseline questions; acknowledge data provided
+      const questionInstruction =
+        gatingQuestionCount > 1
+          ? `Fai le domande indicate nel prompt (${gatingQuestionCount} dati fondamentali mancanti) in modo naturale — puoi porle insieme come breve scheda di presentazione, in modo colloquiale.`
+          : `Fai la domanda indicata nel prompt — in modo naturale, come parte della conversazione.`
+
       return [
         `Sei ${activeSpecialist.displayName}. Stai seguendo ${nameRef}.`,
         `Parla in italiano, tono diretto e professionale.${imageNote}`,
         firstPersonRule,
         antiPattern,
+        antiGatekeeperRule,
+        noRepetitionRule,
         ``,
         `Stai ancora raccogliendo le informazioni essenziali per personalizzare il percorso di ${nameRef}.`,
-        `Fai UNA sola domanda — la più importante al momento — in modo naturale, come parte della conversazione.`,
-        `NON dare consigli finché non hai i dati fondamentali. NON fare liste di domande.`,
-        `Rimani nel tuo ambito specifico; per altri aspetti rimanda ai colleghi.`,
+        questionInstruction,
+        `Se il messaggio di ${nameRef} contiene già dati utili, riconoscili brevemente PRIMA di fare la prossima domanda.`,
+        `NON dare altri consigli finché non hai i dati fondamentali.`,
+        domainBoundaryRule,
         crossDomainNote,
+        explicitRoutingNote,
       ].join('\n')
     }
 
@@ -458,13 +563,16 @@ function buildSystemPrompt(
       `Parla in italiano, tono diretto — come un professionista che parla al suo paziente/cliente.${imageNote}`,
       firstPersonRule,
       antiPattern,
+      antiGatekeeperRule,
+      noRepetitionRule,
       ``,
       `Hai le informazioni necessarie. Dai consigli concreti, specifici per ${nameRef}, basati sui dati reali.`,
       `Sii diretto e personale. Se serve aggiustare il piano, fallo. Se emerge qualcosa di critico, segnalalo.`,
       `Solo se manca UN dato davvero critico, fai una sola domanda alla fine.`,
-      `Rimani nel tuo ambito; per altri aspetti rimanda ai colleghi.`,
+      domainBoundaryRule,
       professionalOutputNote,
       crossDomainNote,
+      explicitRoutingNote,
     ].join('\n')
   }
 
@@ -486,17 +594,27 @@ function buildSystemPrompt(
     ].join('\n')
   }
 
+  // BUG-E: No-repetition rule for team mode too
+  const teamNoRepetitionRule = `NON riformulare o ripetere informazioni già menzionate nella conversazione recente (dati biometrici, condizioni note, situazione lavorativa, ecc.). Sono già noti — vai avanti con contenuto nuovo.`
+
   if (effectivelyHasMissingData) {
+    // BUG-A: Team mode can now ask up to 3 baseline questions when L1 is pending
+    const teamQuestionInstruction =
+      gatingQuestionCount > 1
+        ? `Fai le domande indicate nel prompt (${gatingQuestionCount} dati fondamentali mancanti) in modo naturale — puoi porle insieme come breve scheda di benvenuto.`
+        : `Fai la domanda più importante ora — in modo naturale e conversazionale.`
+
     return [
       `Sei un gruppo di specialisti del benessere che segue ${nameRef}.`,
       `Parla in italiano, tono caldo e diretto.${imageNote}`,
       `Rispondi a nome del gruppo usando "noi". Se l'utente chiede esplicitamente chi sta analizzando il suo caso, cita i nomi degli specialisti attivi.`,
       teamAntiPattern,
+      teamNoRepetitionRule,
       activeSpecialistNote,
       ``,
       `Stai raccogliendo le informazioni per costruire un percorso personalizzato per ${nameRef}.`,
-      `Fai UNA sola domanda — la più importante ora — in modo naturale e conversazionale.`,
-      `NON dare consigli generici prima di conoscere la persona. NON fare liste di domande.`,
+      teamQuestionInstruction,
+      `Se il messaggio di ${nameRef} contiene già dati utili, riconoscili brevemente prima di fare le prossime domande.`,
       `Se ${nameRef} vuole consigli senza rispondere: dai consigli con le assunzioni che hai, esplicitandole.`,
     ].join('\n')
   }
@@ -506,6 +624,7 @@ function buildSystemPrompt(
     `Parla in italiano, tono diretto e professionale.${imageNote}`,
     `Rispondi a nome del gruppo usando "noi". Se l'utente chiede esplicitamente chi sta analizzando il suo caso, cita i nomi degli specialisti attivi.`,
     teamAntiPattern,
+    teamNoRepetitionRule,
     activeSpecialistNote,
     ``,
     `Hai informazioni sufficienti su ${nameRef}. Fornisci analisi e consigli concreti, personali, basati sui dati reali.`,
@@ -566,8 +685,12 @@ function buildUserPrompt(params: {
   recentHistory: string
   /** C1: cross-conversation memory summaries from prior sessions */
   crossConversationContext: string
-  /** The single most important missing datum — if any */
-  topMissingQuestion: string | null
+  /**
+   * BUG-A: All missing baseline questions (up to 3 for batch L1, 1 for specialist mode).
+   * Replaces the old single `topMissingQuestion` — enables the model to ask multiple
+   * baseline questions at once instead of one per turn.
+   */
+  missingQuestions: string[]
   hasImages: boolean
   planRequest: boolean
   /** F2: ContextPack for structured profile data */
@@ -579,7 +702,7 @@ function buildUserPrompt(params: {
     topRecommendations,
     recentHistory,
     crossConversationContext,
-    topMissingQuestion,
+    missingQuestions,
     hasImages,
     planRequest,
     contextPack,
@@ -587,6 +710,23 @@ function buildUserPrompt(params: {
 
   // F2: Structured profile block so the model always sees weight, height, etc.
   const profileBlock = buildStructuredProfileBlock(contextPack)
+
+  // BUG-A: Format missing questions — single question stays inline, multiple shown as bullet list
+  const missingQuestionsBlock =
+    missingQuestions.length === 1
+      ? `\nINFORMAZIONE CHIAVE DA RACCOGLIERE ORA:\n${missingQuestions[0]}`
+      : missingQuestions.length > 1
+        ? `\nDATI FONDAMENTALI ANCORA MANCANTI (chiedi questi in modo naturale):\n${missingQuestions.map((q) => `• ${q}`).join('\n')}`
+        : ''
+
+  // BUG-A + BUG-G: Bottom instruction adapts to batch size
+  const closingInstruction = planRequest
+    ? `L'utente chiede esplicitamente un piano/output definitivo. Produci un documento professionale COMPLETO con dati specifici (grammature, kcal, esercizi, serie, ripetizioni, ecc.). NON chiedere altre informazioni — usa i dati disponibili e specifica le assunzioni fatte.`
+    : missingQuestions.length > 1
+      ? `Fai le domande indicate sopra in modo naturale e colloquiale — sono i dati fondamentali del profilo ancora mancanti. Puoi porle insieme brevemente. Non dare altri consigli in questo messaggio.`
+      : missingQuestions.length === 1
+        ? `Fai la domanda indicata sopra in modo naturale. Non dare consigli in questo messaggio.`
+        : `Dai una risposta diretta, concreta e personalizzata basandoti sui dati disponibili.`
 
   return [
     // C1: long-term memory from past sessions shown first so model has full context
@@ -601,14 +741,10 @@ function buildUserPrompt(params: {
     `ANALISI DEL TEAM SPECIALISTICO:`,
     summaries || '(primo contatto — nessun dato sul profilo ancora)',
     topRecommendations ? `\nRACCOMANDAZIONI EMERSE:\n${topRecommendations}` : '',
-    topMissingQuestion ? `\nINFORMAZIONE CHIAVE DA RACCOGLIERE ORA:\n${topMissingQuestion}` : '',
+    missingQuestionsBlock,
     ``,
     `Scrivi la risposta in italiano, rivolta direttamente all'utente.`,
-    planRequest
-      ? `L'utente chiede esplicitamente un piano/output definitivo. Produci un documento professionale COMPLETO con dati specifici (grammature, kcal, esercizi, serie, ripetizioni, ecc.). NON chiedere altre informazioni — usa i dati disponibili e specifica le assunzioni fatte.`
-      : topMissingQuestion
-        ? `Fai UNA sola domanda — quella indicata sopra — in modo naturale. Non dare consigli in questo messaggio.`
-        : `Dai una risposta diretta, concreta e personalizzata basandoti sui dati disponibili.`,
+    closingInstruction,
   ]
     .filter(Boolean)
     .join('\n')
@@ -679,11 +815,18 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
   // messages and never receive proper onboarding questions.
   const hasMissingData = conversationLength < 12 ? rawHasMissingData : false
   const userName = getUserName(input.contextPack)
-  const planRequest = isPlanRequest(input.userMessage)
 
-  // The single most important missing question — always computed, always shown in prompt as context.
-  // For plan requests the LLM instruction says "NON chiedere"; the question appears as context only.
-  const topMissingQuestion = input.gatingQuestions[0] ?? input.criticalQuestions[0] ?? null
+  // BUG-B: Domain-aware plan request — prevents PT from producing a training plan on a diet request
+  const planRequest = input.activeSpecialist
+    ? isPlanRequestInSpecialistDomain(input.userMessage, input.activeSpecialist.id)
+    : isPlanRequest(input.userMessage)
+
+  // BUG-A: Pass ALL missing questions (up to 3) so baseline can be batched.
+  // Previously only gatingQuestions[0] was passed → F4 batching was completely bypassed.
+  const rawMissingQuestions =
+    input.gatingQuestions.length > 0 ? input.gatingQuestions : input.criticalQuestions.slice(0, 1)
+  // When plan requested, still compute count for system prompt but don't block output
+  const missingQuestions = hasMissingData ? rawMissingQuestions.slice(0, 3) : []
 
   const imageData =
     input.imageData ?? (input.contextPack.files ? extractImageData(input.contextPack) : [])
@@ -697,6 +840,8 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
     hasImages,
     input.userMessage,
     input.proposals,
+    missingQuestions.length, // BUG-A: count for singular/plural instruction
+    planRequest, // BUG-B: domain-aware flag
   )
   const user = buildUserPrompt({
     userMessage: input.userMessage,
@@ -704,7 +849,7 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
     topRecommendations,
     recentHistory,
     crossConversationContext, // C1: long-term memory from past sessions
-    topMissingQuestion: hasMissingData ? topMissingQuestion : null,
+    missingQuestions, // BUG-A: full list replaces single topMissingQuestion
     hasImages,
     planRequest,
     contextPack: input.contextPack, // F2: for structured profile block

@@ -223,15 +223,29 @@ function buildInterviewQueue(
   /** Pre-computed questions for the specialist's own missing required fields */
   specialistOwnFieldQuestions?: string[],
 ): { askNow: string[]; pendingNext: string[] } {
-  // Allow more questions upfront only in locked-specialist mode when profile is empty + no queued questions.
-  // In team-led mode (no activeSpecialist) stay conservative at 1 to avoid flooding the user.
   const attrs = contextPack.user.attributes ?? {}
   const domainAttrs =
     ((attrs as Record<string, unknown>)[domain] as Record<string, unknown> | undefined) ?? {}
   const fromWorkspace = getPendingQuestionsFromWorkspace(contextPack, domain, activeSpecialist)
   const isFirstInteractionInDomain =
     Object.keys(domainAttrs).length === 0 && fromWorkspace.length === 0 && activeSpecialist != null
-  const maxAskNow = isFirstInteractionInDomain ? 3 : 1
+
+  // Compute baseline completion BEFORE maxAskNow — needed for both the cap and the L1 guard.
+  const personalForBaseline = readPersonalSnapshot(contextPack)
+  const hasCompletedBaseline = !!(
+    personalForBaseline.name &&
+    personalForBaseline.gender &&
+    personalForBaseline.birthDate &&
+    personalForBaseline.height &&
+    personalForBaseline.weight
+  )
+  const isEarlyConversation = contextPack.history.recentMessages.length < 8
+
+  // B-A fix: allow batching 3 questions in team mode when L1 baseline is still incomplete.
+  // Previously maxAskNow=1 in team mode always, making the F4 batching unreachable.
+  // isFirstInteractionInDomain covers specialist mode; isL1BaselinePending covers team mode.
+  const isL1BaselinePending = !activeSpecialist && !hasCompletedBaseline && isEarlyConversation
+  const maxAskNow = isFirstInteractionInDomain || isL1BaselinePending ? 3 : 1
 
   // 2A — PRIORITY QUEUE: workspace pending → L1 → L2 → L3 domain-specific
   // Workspace pending questions are computed first because they take absolute priority
@@ -253,15 +267,6 @@ function buildInterviewQueue(
   // - L1 continues across early messages of the SAME conversation (collecting data step by step)
   // - L1 stops once all baseline data is collected (across any conversation)
   // - L1 stops mid-conversation after too many exchanges (>= 8 messages) to avoid being intrusive
-  const personalForBaseline = readPersonalSnapshot(contextPack)
-  const hasCompletedBaseline = !!(
-    personalForBaseline.name &&
-    personalForBaseline.gender &&
-    personalForBaseline.birthDate &&
-    personalForBaseline.height &&
-    personalForBaseline.weight
-  )
-  const isEarlyConversation = contextPack.history.recentMessages.length < 8
   const l1Questions =
     !hasCompletedBaseline &&
     isEarlyConversation &&
