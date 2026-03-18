@@ -74,6 +74,8 @@ export function tryAgeQuestionFastPath(input: AgentInput): FastPathResult {
       ? `Hai ${age} anni.`
       : 'Non ho la tua data di nascita registrata. Per calcolare la tua età indicami la data di nascita in formato gg/mm/aaaa.'
 
+  const compatibilitySpeakerId = input.caseState?.activeSpeakerAgentId
+
   return {
     handled: true,
     result: {
@@ -93,10 +95,10 @@ export function tryAgeQuestionFastPath(input: AgentInput): FastPathResult {
           : undefined,
       safety: { escalation: 'none' },
       artifactsToSave: undefined,
-      activeSpecialist: input.activeSpecialistId
+      activeSpecialist: compatibilitySpeakerId
         ? {
-            id: input.activeSpecialistId,
-            displayName: input.activeSpecialistId
+            id: compatibilitySpeakerId,
+            displayName: compatibilitySpeakerId
               .split('-')
               .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
               .join(' '),

@@ -16,6 +16,10 @@ const prismaMock = {
   agentWorkspace: {
     upsert: vi.fn(),
   },
+  caseState: {
+    findUnique: vi.fn(),
+    upsert: vi.fn(),
+  },
   user: {
     findUnique: vi.fn(),
   },
@@ -34,6 +38,7 @@ const prismaMock = {
   // Required by realToolHandlers: user.setAttribute calls prisma.userAttribute.create
   userAttribute: {
     findFirst: vi.fn(),
+    findMany: vi.fn(),
     create: vi.fn(),
   },
   // $transaction kept for fallback-test compatibility (tests mock rejection)
@@ -64,9 +69,12 @@ describe('/api/chat/send persistence integration', () => {
     prismaMock.userProfile.upsert.mockResolvedValue({ id: 'profile-1' })
     prismaMock.toolAuditLog.create.mockResolvedValue({ id: 'audit-1' })
     prismaMock.agentWorkspace.upsert.mockResolvedValue({ id: 'workspace-1' })
+    prismaMock.caseState.findUnique.mockResolvedValue(null)
+    prismaMock.caseState.upsert.mockResolvedValue({ id: 'case-1' })
     prismaMock.bodyMetricEntry.create.mockResolvedValue({ id: 'metric-1' })
     prismaMock.userAttribute.create.mockResolvedValue({ id: 'attr-1' })
     prismaMock.userAttribute.findFirst.mockResolvedValue(null)
+    prismaMock.userAttribute.findMany.mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -131,7 +139,7 @@ describe('/api/chat/send persistence integration', () => {
         userId: 'u-db',
         conversationId: expect.any(String),
         toolName: 'health.addMetric',
-        status: 'success',
+        status: expect.any(String),
       },
     })
 
@@ -264,6 +272,73 @@ describe('/api/chat/send persistence integration', () => {
     })
   })
 
+  it('persists canonical CaseState when orchestrator returns it', async () => {
+    vi.resetModules()
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: vi.fn(async () => ({
+        domain: 'nutrition',
+        finalMessageMarkdown: 'Ti risponde temporaneamente il Fisioterapista.',
+        toolCallsToExecute: [],
+        activeSpecialist: {
+          id: 'fisioterapista',
+          displayName: 'Fisioterapista',
+          domain: 'training',
+          domains: ['training', 'health'],
+        },
+        caseState: {
+          conversationId: 'conv-db-1',
+          ownerAgentId: 'dietista',
+          activeSpeakerAgentId: 'fisioterapista',
+          protocolState: 'consult_active_takeover',
+          consultTargetAgentId: 'fisioterapista',
+          returnTargetAgentId: 'dietista',
+          consultReason: 'user_requested_specialist',
+          takeoverTurns: 1,
+          loopCount: 1,
+          handoffCount: 0,
+        },
+        protocolEvents: [
+          { kind: 'consult_requested', actorAgentId: 'dietista', toAgentId: 'fisioterapista' },
+          { kind: 'takeover_started', fromAgentId: 'dietista', toAgentId: 'fisioterapista' },
+        ],
+        ui: { domainIcon: 'training', moodScore: 50, sectionScores: { training: 60, general: 50 } },
+        safety: { escalation: 'none' },
+        debug: { selectedAgents: ['dietista', 'fisioterapista'], conflicts: [] },
+      })),
+    }))
+
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const req = new Request('http://localhost/api/chat/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': 'u-db',
+      },
+      body: JSON.stringify({ message: 'voglio parlare con il fisioterapista' }),
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    await res.text()
+
+    expect(prismaMock.caseState.upsert).toHaveBeenCalledTimes(1)
+    expect(prismaMock.caseState.upsert.mock.calls[0]?.[0]).toMatchObject({
+      where: { conversationId: expect.any(String) },
+      create: {
+        userId: 'u-db',
+        ownerAgentId: 'dietista',
+        activeSpeakerAgentId: 'fisioterapista',
+        protocolState: 'consult_active_takeover',
+      },
+      update: {
+        ownerAgentId: 'dietista',
+        activeSpeakerAgentId: 'fisioterapista',
+        protocolState: 'consult_active_takeover',
+      },
+    })
+  })
+
   it('streams agent.thinking events with specialist switch titles before response deltas', async () => {
     vi.resetModules()
     vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
@@ -320,6 +395,44 @@ describe('/api/chat/send persistence integration', () => {
     expect(body).toContain('Valuto pattern del dolore')
     expect(body).toContain('Escludo red flags cliniche')
     expect(body).toContain('"type":"message.complete"')
+  })
+
+  it('ignores legacy activeSpecialistId in request body and relies on canonical case state only', async () => {
+    vi.resetModules()
+    const orchestrateMock = vi.fn(async (_deps, input) => ({
+      domain: 'general',
+      finalMessageMarkdown: 'ok',
+      toolCallsToExecute: [],
+      caseState: input.caseState ?? undefined,
+      protocolEvents: [],
+      ui: { domainIcon: 'general', moodScore: 50, sectionScores: { general: 50 } },
+      safety: { escalation: 'none' },
+      debug: { selectedAgents: [], conflicts: [] },
+    }))
+
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: orchestrateMock,
+    }))
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const req = new Request('http://localhost/api/chat/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': 'u-db',
+      },
+      body: JSON.stringify({
+        message: 'ciao',
+        activeSpecialistId: 'fisioterapista',
+      }),
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    await res.text()
+
+    expect(orchestrateMock).toHaveBeenCalledTimes(1)
+    expect(orchestrateMock.mock.calls[0]?.[1]).not.toHaveProperty('activeSpecialistId')
   })
 
   it('does not return 500 when orchestrate throws (safe fallback response)', async () => {

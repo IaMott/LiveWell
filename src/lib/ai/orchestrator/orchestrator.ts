@@ -1,13 +1,18 @@
 import { AgentProfile, AgentInput, ConsensusResult } from '../types'
+import { deriveActiveSpecialistFromCaseState } from '../case/compat'
+import { advanceCaseState, detectRequestedAgentId, getCaseRoutingDomain } from '../case/protocol'
 import { detectDomainFromText, detectDomainsMulti } from '../domain/domainDetection'
 import { LlmClient } from './agentExecution'
 import { executeAgentRounds } from './agentRoundExecution'
 import { executeConsensusFlow } from './consensusFlow'
 import { adaptConsensusOutcome } from './consensusOutcome'
-import { buildDomainDetectedTraceEvent } from './decisionTrace'
+import {
+  buildDomainDetectedTraceEvent,
+  buildSpecialistModeResolvedTraceEvent,
+} from './decisionTrace'
 import { tryAgeQuestionFastPath, isGenericMessage } from './fastPaths'
 import { applyInterviewFlow } from './interviewFlow'
-import { resolveRoutingContext } from './routing'
+import { resolveRoutingCandidates } from './routing'
 import { synthesizeRawResponse } from './synthesis'
 import { hardenFinalAnswer } from './finalAnswer'
 import { planToolCalls } from './toolCallPlan'
@@ -58,17 +63,40 @@ export async function orchestrate(
       source: input.domainHint ? 'input.domainHint' : 'domainDetection',
     }),
   ]
-  const {
-    activeSpecialist,
-    domainHint,
-    selectedAgents,
-    decisionTrace: routingDecisionTrace,
-  } = resolveRoutingContext({
-    team: deps.team,
+
+  const caseProtocol = advanceCaseState({
+    current: input.caseState ?? null,
+    conversationId: input.conversationId,
     message: input.message,
     detectedDomain,
     allDomains,
-    activeSpecialistId: input.activeSpecialistId,
+    team: deps.team,
+  })
+  const activeSpecialist = deriveActiveSpecialistFromCaseState(caseProtocol.caseState, deps.team)
+  const domainHint = getCaseRoutingDomain(caseProtocol.caseState, deps.team, detectedDomain)
+  const requestedSpecialistId = detectRequestedAgentId(input.message, deps.team)
+  decisionTrace.push(
+    buildSpecialistModeResolvedTraceEvent({
+      step: 2,
+      requestedSpecialistId,
+      previousActiveSpecialistId: input.caseState?.activeSpeakerAgentId ?? null,
+      activeSpecialist,
+      exitSpecialistMode:
+        input.caseState?.protocolState === 'consult_active_takeover' &&
+        caseProtocol.caseState.protocolState === 'owner_active',
+      reason:
+        caseProtocol.events[0]?.kind === 'return_baton'
+          ? 'return_baton'
+          : caseProtocol.caseState.protocolState,
+    }),
+  )
+
+  const { selectedAgents, decisionTrace: routingDecisionTrace } = resolveRoutingCandidates({
+    team: deps.team,
+    message: input.message,
+    detectedDomain: domainHint,
+    allDomains,
+    currentSpeakerId: activeSpecialist?.id,
   })
   decisionTrace.push(...routingDecisionTrace)
 
@@ -141,6 +169,8 @@ export async function orchestrate(
 
   return {
     ...consensusOutcome.baseConsensus,
+    caseState: caseProtocol.caseState,
+    protocolEvents: caseProtocol.events,
     gatingQuestions: finalInterviewQuestions,
     toolCallsToExecute: toolCallPlan.toolCallsToExecute,
     finalMessageMarkdown: finalAnswer.finalText,

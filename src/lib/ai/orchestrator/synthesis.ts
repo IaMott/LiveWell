@@ -1,5 +1,15 @@
 import { ActiveSpecialist, AgentProposal, ContextPack } from '../types'
+import { buildProfessionalOutputInstructions } from '../artifacts/contracts'
 import { LlmClient } from './agentExecution'
+import {
+  buildActiveSpecialistNote,
+  buildCrossConversationContext,
+  buildRecentHistory,
+  buildStructuredProfileBlock,
+  buildSummaries,
+  buildTopRecommendations,
+  getUserName,
+} from './synthesisContext'
 
 export type SynthesisInput = {
   llm: LlmClient
@@ -16,59 +26,6 @@ export type SynthesisInput = {
 export type SynthesisResult = {
   rawText: string
   fallbackUsed: boolean
-}
-
-function buildSummaries(proposals: AgentProposal[]): string {
-  return proposals
-    .filter((p) => p.summary)
-    .sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5))
-    .map((p) => p.summary)
-    .join('\n')
-}
-
-function buildTopRecommendations(proposals: AgentProposal[]): string {
-  return proposals
-    .flatMap((p) => p.recommendations ?? [])
-    .slice(0, 3)
-    .map((r) => `• ${r.title}: ${r.steps.slice(0, 2).join('; ')}`)
-    .join('\n')
-}
-
-function buildRecentHistory(contextPack: ContextPack): string {
-  return (
-    contextPack.history.recentMessages
-      .slice(-10) // M1: extended from 6 to 10 messages (5 full exchanges)
-      // M2: 400 chars per message (was 200) — avoids truncating multi-sentence context.
-      .map((m) => `${m.role === 'user' ? 'Utente' : 'Assistente'}: ${m.content.slice(0, 400)}`)
-      .join('\n')
-  )
-}
-
-/**
- * C1 — Builds a cross-conversation memory block from stored ConversationSummary records.
- * These come from `upsertConversationSummary` written at end of each chat turn.
- */
-function buildCrossConversationContext(contextPack: ContextPack): string {
-  const summaries = contextPack.history.recentConversationSummaries
-  if (!summaries || summaries.length === 0) return ''
-  return summaries
-    .slice(-5)
-    .map((s) => `[${s.domain} — ${s.updatedAt.slice(0, 10)}] ${s.summary}`)
-    .join('\n')
-}
-
-function getUserName(contextPack: ContextPack): string | null {
-  // 1. Account name (from User model — always authoritative)
-  const profile = contextPack.user?.profile as Record<string, unknown> | undefined
-  if (profile?.name && typeof profile.name === 'string') return profile.name.split(' ')[0] ?? null
-  // 2. Stored personal.name attribute (user told name during chat)
-  const attrs = contextPack.user?.attributes as
-    | Record<string, Record<string, { value?: unknown }>>
-    | undefined
-  const personalName = attrs?.personal?.name?.value
-  if (typeof personalName === 'string' && personalName.length > 0)
-    return personalName.split(' ')[0] ?? null
-  return null
 }
 
 /**
@@ -126,330 +83,6 @@ function isPlanRequestInSpecialistDomain(userMessage: string, specialistId: stri
 }
 
 /**
- * BUG-C fix: Detects an explicit user request to speak with a named specialist.
- * Returns the specialist's display name if found, null otherwise.
- */
-function detectExplicitSpecialistRequest(userMessage: string): string | null {
-  const lower = userMessage.toLowerCase()
-  // Only fire on clear intent verbs — avoids false positives in generic sentences
-  if (
-    !/\b(voglio parlare|fammi parlare|passami|parla(re)? con (il|la|lo)|voglio (il|la|lo)|chiamare|mandami)\b/.test(
-      lower,
-    )
-  )
-    return null
-
-  const patterns: Array<{ pattern: RegExp; name: string }> = [
-    { pattern: /\b(nutrizionista|dietista|dietolog)\b/, name: 'Nutrizionista/Dietista' },
-    {
-      pattern: /\b(personal trainer|trainer|allenatore|personal)\b/,
-      name: 'Personal Trainer',
-    },
-    { pattern: /\b(psicologo|psicolog)\b/, name: 'Psicologo' },
-    {
-      pattern: /\b(medico|dottore|mmg|medicina generale|medico di base)\b/,
-      name: 'Medico',
-    },
-    { pattern: /\b(fisioterapista|fisio)\b/, name: 'Fisioterapista' },
-    { pattern: /\b(cardiologo|cardiol)\b/, name: 'Cardiologo' },
-    { pattern: /\b(endocrinologo|endocrinol)\b/, name: 'Endocrinologo' },
-    { pattern: /\b(mental coach|coach mentale)\b/, name: 'Mental Coach' },
-    { pattern: /\b(chef|cuoco)\b/, name: 'Chef' },
-  ]
-  for (const { pattern, name } of patterns) {
-    if (pattern.test(lower)) return name
-  }
-  return null
-}
-
-/**
- * Returns the most appropriate cross-domain specialist name if the proposals
- * indicate the current message is clearly outside the active specialist's domain.
- * M3: added null guard on p.domain to avoid undefined !== domain always being true.
- */
-function detectCrossDomainSpecialist(
-  proposals: AgentProposal[],
-  activeSpecialist: ActiveSpecialist,
-): string | null {
-  // If there's a proposal from a different domain with high confidence, delegate
-  const topAlternative = proposals
-    .filter(
-      (p) =>
-        p.domain != null &&
-        p.domain !== activeSpecialist.domain &&
-        (p.confidence ?? 0) >= 0.6 &&
-        p.summary &&
-        !p.summary.toLowerCase().includes('[unavailable]'),
-    )
-    .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]
-
-  return topAlternative?.agentId ?? null
-}
-
-/**
- * Per-agent professional output format mandates.
- * Keys are substrings of agent IDs (lowercase). Matched by first hit.
- * Add new entries here to support new agents — no other code changes needed.
- */
-const AGENT_OUTPUT_TEMPLATES: Array<{ match: string[]; instructions: string[] }> = [
-  {
-    match: ['dietista', 'nutrizionista'],
-    instructions: [
-      `PIANO NUTRIZIONALE COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Calcolo fabbisogno calorico (BMR Harris-Benedict, TDEE basato sull'attività dichiarata)`,
-      `2. Distribuzione macro-nutrienti (% proteine/carboidrati/grassi)`,
-      `3. Menu dettagliato per ALMENO 2 settimane (idealmente 4), giorno per giorno:`,
-      `   COLAZIONE / SPUNTINO / PRANZO / MERENDA / CENA — con grammature precise (es. "80g avena") e kcal per pasto`,
-      `   TOTALE GIORNALIERO: kcal + g proteine/carboidrati/grassi`,
-      `4. Per ≥5 piatti della settimana: ricetta con ingredienti e procedimento`,
-      `5. Note su condizioni dichiarate (allergie, patologie, farmaci)`,
-      `Se mancano dati: usa assunzioni ragionevoli dichiarandole esplicitamente.`,
-    ],
-  },
-  {
-    match: ['chef'],
-    instructions: [
-      `MENU/RICETTE COMPLETE — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Menu completo per il periodo richiesto (es. settimanale/mensile/evento)`,
-      `2. Per ogni ricetta: ingredienti con grammature precise, procedimento passo-passo, tempi di preparazione e cottura`,
-      `3. Varianti per esigenze alimentari dichiarate (allergie, intolleranze, preferenze)`,
-      `4. Lista della spesa consolidata`,
-      `5. Consigli di conservazione e preparazione anticipata`,
-    ],
-  },
-  {
-    match: ['persona-trainer', 'personal', 'chinesologo'],
-    instructions: [
-      `PIANO DI ALLENAMENTO COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Valutazione del livello attuale e obiettivi specifici`,
-      `2. Struttura settimanale (giorni, gruppi muscolari, riposi strategici)`,
-      `3. Piano per ALMENO 4-6 settimane con progressione:`,
-      `   Per ogni giornata: esercizi con serie × ripetizioni × carico consigliato, recupero, note tecniche`,
-      `   Riscaldamento e defaticamento per ogni sessione`,
-      `4. Schema di progressione del carico settimana per settimana`,
-      `5. Consigli nutrizione peri-workout se pertinente`,
-    ],
-  },
-  {
-    match: ['medico-dello-sport'],
-    instructions: [
-      `PIANO SPORT-MEDICINA COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Valutazione idoneità sportiva e rischi rilevati`,
-      `2. Periodizzazione del carico sportivo (mesocicli/macrocicli) con intensità e volumi`,
-      `3. Protocollo di prevenzione infortuni specifico per la disciplina`,
-      `4. Indicazioni su recupero, monitoraggio parametri fisiologici e test prestazionali`,
-      `5. Piano di rientro post-infortunio se applicabile`,
-      `6. Consigli nutrizionali sport-specifici`,
-    ],
-  },
-  {
-    match: ['fisioterapista'],
-    instructions: [
-      `PIANO RIABILITATIVO COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Assessment funzionale: ROM, forza, dolore (scala NRS), limitazioni`,
-      `2. Diagnosi funzionale e obiettivi riabilitativi a breve/medio termine`,
-      `3. Programma settimanale per ALMENO 4-8 settimane:`,
-      `   Per ogni sessione: esercizi specifici con serie × reps × carico, tempo di tenuta, note esecutive`,
-      `   Progressione graduale con criteri di avanzamento`,
-      `4. Esercizi domiciliari quotidiani (con istruzioni chiare)`,
-      `5. Criteri di stop/rivalutazione e segnali d'allarme`,
-    ],
-  },
-  {
-    match: ['fisiatra'],
-    instructions: [
-      `PIANO FISIATRICO COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Inquadramento diagnostico e valutazione disabilità/funzionalità`,
-      `2. Obiettivi riabilitativi misurabili (FIM, Barthel o equivalenti)`,
-      `3. Piano riabilitativo multidisciplinare per ALMENO 4-12 settimane:`,
-      `   Fisioterapia, terapia occupazionale, logopedia se indicati — frequenza e obiettivi per ciascuno`,
-      `4. Ausili/ortesi consigliati con indicazioni d'uso`,
-      `5. Piano di follow-up e criteri di dimissione`,
-    ],
-  },
-  {
-    match: ['sleep-coach', 'sleep'],
-    instructions: [
-      `PROTOCOLLO SONNO COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Assessment del sonno: qualità attuale, latenza, risvegli, orari, igiene`,
-      `2. Diagnosi funzionale (insonnia, ritardo di fase, ecc.) e fattori mantenenti`,
-      `3. Programma strutturato per 4-6 settimane:`,
-      `   Settimana per settimana: tecnica principale (CBT-I, stimulus control, restrizione, ecc.) con istruzioni precise`,
-      `   Routine serale raccomandata (orari, attività da fare/evitare)`,
-      `4. Diario del sonno da compilare (modello fornito)`,
-      `5. Criteri di successo e quando escalare a medico/polisomnografia`,
-    ],
-  },
-  {
-    match: ['psicologo'],
-    instructions: [
-      `PERCORSO PSICOLOGICO COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Assessment iniziale: punti di forza, aree di lavoro, formulazione del caso`,
-      `2. Obiettivi terapeutici specifici e misurabili (SMART)`,
-      `3. Programma per ALMENO 4-8 settimane:`,
-      `   Per ogni settimana: tema, tecnica specifica (CBT, ACT, DBT skills, ecc.), esercizi pratici, compiti`,
-      `4. Strumenti di monitoraggio (PHQ-9, GAD-7, diario pensieri, ecc.)`,
-      `5. Piano di gestione crisi e criteri di escalation`,
-    ],
-  },
-  {
-    match: ['mental', 'coach-relazionale', 'relationship-coach', 'relationship coach'],
-    instructions: [
-      `PERCORSO MENTAL COACHING COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Assessment: valori, risorse, obiettivi di vita/performance, blocchi identificati`,
-      `2. Obiettivi di coaching specifici e misurabili`,
-      `3. Programma per ALMENO 4-8 settimane:`,
-      `   Per ogni settimana: focus, esercizio/pratica principale, riflessione guidata, azione concreta`,
-      `4. Tecniche di mindfulness/regolazione emotiva con istruzioni d'uso`,
-      `5. Metriche di progresso soggettive e oggettive`,
-    ],
-  },
-  {
-    match: ['mmg', 'medico di medicina', 'medicina generale'],
-    instructions: [
-      `PIANO DI GESTIONE CLINICA COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Sintesi diagnostica: problemi attivi, diagnosi differenziali con probabilità`,
-      `2. Piano diagnostico: esami richiesti con razionale e urgenza`,
-      `3. Piano terapeutico:`,
-      `   Farmaci (nome, dosaggio, posologia, durata, monitoraggio) con razionale EBM`,
-      `   Misure non farmacologiche (dieta, attività fisica, igiene)`,
-      `4. Safety-netting: segnali d'allarme che richiedono PS/rivalutazione urgente`,
-      `5. Follow-up programmato con criteri di escalation specialistica`,
-    ],
-  },
-  {
-    match: ['cardiologo'],
-    instructions: [
-      `PIANO CARDIOLOGICO COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Valutazione del rischio cardiovascolare (score, fattori di rischio)`,
-      `2. Diagnosi funzionale e piano diagnostico (ECG, ecocardiogramma, holter, ecc.)`,
-      `3. Piano terapeutico farmacologico e non farmacologico con target (PA, LDL, FC)`,
-      `4. Stile di vita: attività fisica raccomandata (intensità, durata, frequenza), dieta cardiovascolare`,
-      `5. Piano di monitoraggio e criteri di ricovero/urgenza`,
-    ],
-  },
-  {
-    match: ['endocrinologo'],
-    instructions: [
-      `PIANO ENDOCRINOLOGICO COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Inquadramento: diagnosi, esami ormonali/metabolici rilevanti e target`,
-      `2. Piano farmacologico se indicato (nome, dosaggio, timing, monitoraggio)`,
-      `3. Piano nutrizionale specifico per la patologia endocrina (es. dieta per tiroidea, IR, ecc.)`,
-      `4. Attività fisica raccomandata in relazione alla condizione`,
-      `5. Calendario di follow-up con esami programmati e criteri di revisione terapia`,
-    ],
-  },
-  {
-    match: ['gastroenterologo'],
-    instructions: [
-      `PIANO GASTROENTEROLOGICO COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Diagnosi funzionale e piano diagnostico (gastroscopia, colonscopia, breath test, ecc.)`,
-      `2. Piano terapeutico farmacologico (PPI, probiotici, antispastici, ecc.) con posologia e durata`,
-      `3. Piano dietetico specifico per la patologia (dieta FODMAP, senza glutine, ecc.) con esempi pratici`,
-      `4. Modifiche stile di vita (pasti, alcol, fumo, stress)`,
-      `5. Segnali d'allarme e criteri di rivalutazione urgente`,
-    ],
-  },
-  {
-    match: ['dermatologo'],
-    instructions: [
-      `PIANO DERMATOLOGICO COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento professionale che include:`,
-      `1. Diagnosi differenziale con probabilità e piano diagnostico (biopsia, patch test, ecc.)`,
-      `2. Piano terapeutico topico e/o sistemico (nome farmaco, concentrazione, applicazione, durata)`,
-      `3. Routine skincare raccomandata (mattina e sera, prodotti e frequenza)`,
-      `4. Trigger da evitare e modifiche comportamentali`,
-      `5. Follow-up con criteri di escalation (dermatologo, fotoprotocollo, biologici)`,
-    ],
-  },
-  {
-    match: ['analista-contesto', 'analista contesto'],
-    instructions: [
-      `ANALISI DEL CONTESTO COMPLETA — FORMATO OBBLIGATORIO:`,
-      `Produce un documento strutturato che include:`,
-      `1. Mappa della situazione attuale: risorse, vincoli, opportunità, minacce (SWOT)`,
-      `2. Analisi delle priorità con matrice impatto/urgenza`,
-      `3. Scenari alternativi (almeno 3) con pro/contro e probabilità stimata`,
-      `4. Piano d'azione raccomandato con milestone, responsabilità e KPI`,
-      `5. Risk register: rischi principali, probabilità, impatto, mitigazioni`,
-    ],
-  },
-  {
-    match: ['financial-planner', 'financial planner', 'commercialista'],
-    instructions: [
-      `PIANO FINANZIARIO COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento strutturato che include:`,
-      `1. Snapshot finanziario attuale: entrate, uscite, patrimonio, debiti`,
-      `2. Obiettivi finanziari a breve/medio/lungo termine con cifre target`,
-      `3. Piano di budget mensile dettagliato (categoria per categoria)`,
-      `4. Strategia di risparmio/investimento con allocazione % e strumenti consigliati`,
-      `5. Piano fiscale: ottimizzazione deduzioni/detrazioni applicabili al caso specifico`,
-    ],
-  },
-  {
-    match: ['career-coach', 'career coach', 'executive-coach', 'executive coach', 'life-organizer'],
-    instructions: [
-      `PIANO DI SVILUPPO PERSONALE/PROFESSIONALE COMPLETO — FORMATO OBBLIGATORIO:`,
-      `Produce un documento strutturato che include:`,
-      `1. Assessment: competenze attuali, gap, valori, motivazioni`,
-      `2. Obiettivi SMART a 3, 6 e 12 mesi`,
-      `3. Piano d'azione settimanale/mensile:`,
-      `   Azioni concrete, risorse necessarie, milestone, metriche di successo`,
-      `4. Sviluppo competenze: corsi, libri, esperienze, networking (specifici e prioritizzati)`,
-      `5. Gestione ostacoli e piano B per i rischi principali`,
-    ],
-  },
-  {
-    match: ['consulente-legale', 'consulente legale'],
-    instructions: [
-      `ANALISI LEGALE COMPLETA — FORMATO OBBLIGATORIO:`,
-      `Produce un documento strutturato che include:`,
-      `1. Inquadramento della fattispecie: norme applicabili, giurisprudenza rilevante`,
-      `2. Analisi dei rischi legali e valutazione delle opzioni disponibili`,
-      `3. Percorso raccomandato: azioni, documenti necessari, tempistiche`,
-      `4. Costi stimati (consulenze, spese legali, tasse)`,
-      `5. Disclaimer: questo è un orientamento informativo — per atti formali rivolgersi a un avvocato/notaio`,
-    ],
-  },
-]
-
-const DEFAULT_OUTPUT_INSTRUCTIONS = [
-  `OUTPUT PROFESSIONALE COMPLETO:`,
-  `Quando l'utente chiede un piano o documento, produce un output professionale dettagliato,`,
-  `strutturato, con dati specifici (numeri, date, quantità) — non linee guida generiche.`,
-  `Se mancano dati, usa assunzioni ragionevoli dichiarandole esplicitamente.`,
-]
-
-/**
- * Returns domain-specific format mandates for a given specialist.
- * Scalable: add entries to AGENT_OUTPUT_TEMPLATES to support new agents.
- */
-function buildProfessionalOutputInstructions(specialistId: string): string {
-  const id = specialistId.toLowerCase()
-  const template = AGENT_OUTPUT_TEMPLATES.find((t) => t.match.some((m) => id.includes(m)))
-  const lines = template ? template.instructions : DEFAULT_OUTPUT_INSTRUCTIONS
-  return [
-    ``,
-    `REGOLE OUTPUT — OBBLIGATORIE QUANDO L'UTENTE CHIEDE UN PIANO/DOCUMENTO:`,
-    ...lines,
-    `NON dare solo linee guida generali. Se mancano dati, assumi valori ragionevoli dichiarandoli.`,
-  ].join('\n')
-}
-
-/**
  * Builds the system prompt for the final synthesis call to Gemini.
  *
  * Core principle: the team LiveWell is like a multidisciplinary clinic.
@@ -467,7 +100,6 @@ function buildSystemPrompt(
   hasMissingData: boolean,
   userName: string | null,
   hasImages: boolean,
-  userMessage: string,
   proposals: AgentProposal[],
   /** BUG-A: number of gating questions — drives singular/plural instruction */
   gatingQuestionCount: number,
@@ -484,20 +116,6 @@ function buildSystemPrompt(
   const effectivelyHasMissingData = hasMissingData && !planRequest
 
   if (activeSpecialist) {
-    // Check if the current message is better handled by a different specialist
-    const crossDomainSpecialistId = detectCrossDomainSpecialist(proposals, activeSpecialist)
-    const crossDomainNote = crossDomainSpecialistId
-      ? `\n\nIMPORTANTE — ARGOMENTO TRASVERSALE: Questo messaggio riguarda principalmente un ambito di competenza di un altro specialista del team (${crossDomainSpecialistId}). Rispondi come se fossi quel collega specialista per questo specifico punto, indicando esplicitamente il passaggio (es. "Per questo aspetto ti rispondo come [Specialista]..."), poi concludi ricordando che per il percorso principale continuerà ${activeSpecialist.displayName}.`
-      : ''
-
-    // BUG-C: Explicit specialist routing — user is asking to switch to a different specialist
-    const explicitSpecialist = detectExplicitSpecialistRequest(userMessage)
-    const explicitRoutingNote =
-      explicitSpecialist &&
-      explicitSpecialist.toLowerCase() !== activeSpecialist.displayName.toLowerCase()
-        ? `\n\nATTENZIONE: ${nameRef} vuole parlare con ${explicitSpecialist}. Riconosci immediatamente questa richiesta, incoraggiala, e fornisci eventualmente un'ultima informazione utile da parte tua. NON bloccare o ritardare il passaggio — ${nameRef} può rivolgersi a qualsiasi collega in qualsiasi momento.`
-        : ''
-
     const firstPersonRule = `Parla SEMPRE in prima persona singolare (io, mi, ti consiglio, penso). NON usare MAI "noi", "il team", "siamo", "il nostro team" o qualsiasi altra forma plurale — sei un singolo specialista.`
 
     // Anti-pattern: ban robotic openers and self-referential phrases that sound pre-set
@@ -523,8 +141,6 @@ function buildSystemPrompt(
         `Primo contatto: il tuo obiettivo è CAPIRE chi è questa persona, non dare consigli.`,
         `Fai UNA sola domanda aperta — quella più importante per cominciare a conoscere ${nameRef}.`,
         `Niente consigli generici. Niente liste. Va bene anche andare dritti alla domanda senza preamboli.`,
-        crossDomainNote,
-        explicitRoutingNote,
       ].join('\n')
     }
 
@@ -548,14 +164,20 @@ function buildSystemPrompt(
         `Se il messaggio di ${nameRef} contiene già dati utili, riconoscili brevemente PRIMA di fare la prossima domanda.`,
         `NON dare altri consigli finché non hai i dati fondamentali.`,
         domainBoundaryRule,
-        crossDomainNote,
-        explicitRoutingNote,
       ].join('\n')
     }
 
     // Has data OR explicit plan request
     const professionalOutputNote = planRequest
-      ? buildProfessionalOutputInstructions(activeSpecialist.id)
+      ? buildProfessionalOutputInstructions({
+          id: activeSpecialist.id,
+          displayName: activeSpecialist.displayName,
+          domainTags: activeSpecialist.domains ?? [activeSpecialist.domain],
+          systemPrompt: '',
+          toolsAllowed: [],
+          decisionStyle: 'team-led',
+          runtimeCapabilities: activeSpecialist.runtimeCapabilities,
+        })
       : ''
 
     return [
@@ -571,8 +193,6 @@ function buildSystemPrompt(
       `Solo se manca UN dato davvero critico, fai una sola domanda alla fine.`,
       domainBoundaryRule,
       professionalOutputNote,
-      crossDomainNote,
-      explicitRoutingNote,
     ].join('\n')
   }
 
@@ -632,50 +252,6 @@ function buildSystemPrompt(
     `Solo se manca UN dato davvero critico, fai una sola domanda alla fine.`,
     `Gestisci tutti gli aspetti emersi — non lasciare temi aperti senza risposta.`,
   ].join('\n')
-}
-
-/**
- * F2: Build a structured profile summary from the ContextPack so the synthesis
- * model always has explicit access to weight, height, age, gender, goal, etc.
- * This prevents the "I don't have your height" bug when the data IS in the profile.
- */
-function buildStructuredProfileBlock(contextPack: ContextPack): string {
-  const profile = (contextPack.user.profile ?? {}) as Record<string, unknown>
-  const attrs = contextPack.user.attributes ?? {}
-  const personal = (attrs.personal ?? {}) as Record<string, { value?: unknown }>
-  const health = (attrs.health ?? {}) as Record<string, { value?: unknown }>
-  const general = (attrs.general ?? {}) as Record<string, { value?: unknown }>
-
-  const lines: string[] = []
-
-  // Helper: get value from attribute OR profile (attribute wins)
-  const val = (attrKey: string, ...profileKeys: string[]): unknown => {
-    if (personal[attrKey]?.value != null) return personal[attrKey].value
-    if (health[attrKey]?.value != null) return health[attrKey].value
-    for (const pk of profileKeys) {
-      if (profile[pk] != null && profile[pk] !== '') return profile[pk]
-    }
-    return null
-  }
-
-  const name = val('name', 'name')
-  const gender = val('gender', 'gender')
-  const age = val('age', 'age')
-  const birthDate = val('birthDate', 'birthDate')
-  const weight = val('weight', 'weight')
-  const height = val('height', 'height')
-  const goal = general?.['goal']?.value ?? general?.['declared_goal']?.value ?? profile.goal
-
-  if (name) lines.push(`Nome: ${name}`)
-  if (gender) lines.push(`Sesso: ${gender}`)
-  if (age) lines.push(`Età: ${age} anni`)
-  else if (birthDate) lines.push(`Data di nascita: ${birthDate}`)
-  if (height) lines.push(`Altezza: ${height} cm`)
-  if (weight) lines.push(`Peso: ${weight} kg`)
-  if (goal) lines.push(`Obiettivo: ${goal}`)
-
-  if (lines.length === 0) return ''
-  return `DATI PROFILO UTENTE (conferme già raccolte):\n${lines.join('\n')}`
 }
 
 function buildUserPrompt(params: {
@@ -750,26 +326,6 @@ function buildUserPrompt(params: {
     .join('\n')
 }
 
-/**
- * Builds a human-readable list of active specialists from proposals.
- * Used to let the synthesis model answer "which specialist analyzed my case".
- */
-function buildActiveSpecialistNote(proposals: AgentProposal[]): string {
-  const active = proposals
-    .filter((p) => (p.confidence ?? 0) > 0 && !p.summary.toLowerCase().includes('[unavailable]'))
-    .map((p) => p.agentId)
-  if (active.length === 0) return ''
-  const formatted = active
-    .map((id) =>
-      id
-        .split('-')
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' '),
-    )
-    .join(', ')
-  return `\nSPECIALISTI ATTIVI IN QUESTA CONVERSAZIONE: ${formatted}. Se l'utente chiede esplicitamente chi ha analizzato il suo caso o chi sta rispondendo, cita questi specialisti per nome.`
-}
-
 function buildFallbackText(proposals: AgentProposal[]): string {
   return proposals.find((p) => p.summary)?.summary ?? 'Come posso aiutarti?'
 }
@@ -838,7 +394,6 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
     hasMissingData,
     userName,
     hasImages,
-    input.userMessage,
     input.proposals,
     missingQuestions.length, // BUG-A: count for singular/plural instruction
     planRequest, // BUG-B: domain-aware flag

@@ -1,3 +1,6 @@
+import type { CaseProtocolEvent, CaseState } from './case/state'
+import type { RuntimeCapabilityContract } from './capabilities/contracts'
+
 export type Domain =
   | 'general'
   | 'nutrition'
@@ -36,6 +39,7 @@ export type AgentProfile = {
   escalationRules?: string[]
   disclaimerStyle?: 'concise' | 'standard' | 'strict'
   decisionStyle: 'team-led'
+  runtimeCapabilities?: RuntimeCapabilityContract
 }
 
 /** Identifies the specialist currently active in a conversation turn */
@@ -48,6 +52,7 @@ export type ActiveSpecialist = {
    * Used by backend to keep specialist mode scoped to valid domains.
    */
   domains?: Domain[]
+  runtimeCapabilities?: RuntimeCapabilityContract
 }
 
 export type AgentInput = {
@@ -56,8 +61,8 @@ export type AgentInput = {
   conversationId: string
   message: string
   domainHint?: Domain
-  /** ID of the specialist locked for this conversation (persisted from previous turn) */
-  activeSpecialistId?: string
+  /** Canonical protocol state for the conversation. */
+  caseState?: CaseState | null
   contextPack: ContextPack
   constraints?: {
     locale?: string
@@ -222,6 +227,10 @@ export type ConsensusResult = {
   toolCallsToExecute: ToolCall[]
   /** Active specialist for this turn (set by orchestrator) */
   activeSpecialist?: ActiveSpecialist
+  /** Canonical case state after protocol evaluation for the current turn. */
+  caseState?: CaseState
+  /** Protocol events emitted by the canonical case engine. */
+  protocolEvents?: CaseProtocolEvent[]
   ui: {
     domainIcon: Domain
     moodScore: number

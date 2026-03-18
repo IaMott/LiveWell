@@ -1,9 +1,6 @@
-import { AgentProfile, ActiveSpecialist, DecisionTraceEvent, Domain } from '../types'
+import { AgentProfile, DecisionTraceEvent, Domain } from '../types'
 import { selectAgentsForRequest } from './agentSelection'
-import {
-  buildAgentsSelectedTraceEvent,
-  buildSpecialistModeResolvedTraceEvent,
-} from './decisionTrace'
+import { buildAgentsSelectedTraceEvent } from './decisionTrace'
 
 // ---------------------------------------------------------------------------
 // 3A — SYMPTOM_CLUSTER_RULES + detectMultiSpecialistNeed
@@ -591,7 +588,7 @@ const SYMPTOM_CLUSTER_RULES: SymptomCluster[] = [
   },
 ]
 
-function detectMultiSpecialistNeed(
+export function detectMultiSpecialistNeed(
   message: string,
   team: AgentProfile[],
 ): { specialists: AgentProfile[]; urgency: 'alta' | 'media' } | null {
@@ -696,7 +693,7 @@ const SPECIALIST_EXIT_PATTERNS = [
   /basta\s+specialista/i,
 ]
 
-function detectSpecialistRequest(message: string, team: AgentProfile[]): string | null {
+export function detectSpecialistRequest(message: string, team: AgentProfile[]): string | null {
   const lower = message.toLowerCase()
 
   for (const [kw, agentId] of Object.entries(SPECIALIST_KEYWORDS)) {
@@ -715,84 +712,40 @@ function detectSpecialistRequest(message: string, team: AgentProfile[]): string 
   return null
 }
 
-function shouldExitSpecialistMode(message: string): boolean {
+export function shouldExitSpecialistMode(message: string): boolean {
   return SPECIALIST_EXIT_PATTERNS.some((pattern) => pattern.test(message))
 }
 
-function pickSpecialistEffectiveDomain(
-  activeSpecialist: ActiveSpecialist | undefined,
-  detectedDomain: Domain,
-): Domain {
-  if (!activeSpecialist) return detectedDomain
-  const domains = activeSpecialist.domains ?? [activeSpecialist.domain]
-  if (domains.includes(detectedDomain)) return detectedDomain
-  const preferred = domains.find((domain) => domain !== 'general' && domain !== 'coordination')
-  return preferred ?? activeSpecialist.domain
-}
-
-type ResolveRoutingParams = {
-  team: AgentProfile[]
-  message: string
-  detectedDomain: Domain
-  allDomains: Domain[]
-  activeSpecialistId?: string
-}
-
-type RoutingResolution = {
-  activeSpecialist?: ActiveSpecialist
+type RoutingCandidateResolution = {
   domainHint: Domain
   selectedAgents: AgentProfile[]
   decisionTrace: DecisionTraceEvent[]
 }
 
-export function resolveRoutingContext(params: ResolveRoutingParams): RoutingResolution {
-  const { team, message, detectedDomain, allDomains, activeSpecialistId } = params
-  const decisionTrace: DecisionTraceEvent[] = []
+export function resolveRoutingCandidates(params: {
+  team: AgentProfile[]
+  message: string
+  detectedDomain: Domain
+  allDomains: Domain[]
+  currentSpeakerId?: string
+}): RoutingCandidateResolution {
+  const { team, message, detectedDomain, allDomains, currentSpeakerId } = params
+  const clusterMatch = detectMultiSpecialistNeed(message, team)
+  const domainHint = detectedDomain
 
-  let lockedAgentId = activeSpecialistId ?? null
-  const requestedSpecialistId = detectSpecialistRequest(message, team)
-  const exitSpecialistMode = Boolean(lockedAgentId && shouldExitSpecialistMode(message))
-
-  if (exitSpecialistMode) {
-    lockedAgentId = null
-  }
-
-  if (!lockedAgentId) {
-    if (requestedSpecialistId) lockedAgentId = requestedSpecialistId
-  }
-
-  let activeSpecialist: ActiveSpecialist | undefined
-  if (lockedAgentId) {
-    const agent = team.find((candidate) => candidate.id === lockedAgentId)
-    if (agent) {
-      activeSpecialist = {
-        id: agent.id,
-        displayName: agent.displayName,
-        domain: (agent.domainTags[0] ?? detectedDomain) as Domain,
-        domains: agent.domainTags,
-      }
-    }
-  }
-
-  const domainHint = pickSpecialistEffectiveDomain(activeSpecialist, detectedDomain)
-
-  // 3A — Multi-specialist cluster routing (only when no specialist is locked)
-  const clusterMatch = !activeSpecialist ? detectMultiSpecialistNeed(message, team) : null
-
-  const selectedAgents = activeSpecialist
+  const selectedAgents = currentSpeakerId
     ? (() => {
         const base = selectAgentsForRequest(team, domainHint, 6, allDomains, message).filter(
           (agent) => agent.id !== 'orchestratore',
         )
         const ordered = [
-          team.find((agent) => agent.id === activeSpecialist?.id),
-          ...base.filter((agent) => agent.id !== activeSpecialist?.id),
+          team.find((agent) => agent.id === currentSpeakerId),
+          ...base.filter((agent) => agent.id !== currentSpeakerId),
         ].filter((agent): agent is AgentProfile => Boolean(agent))
         return ordered.slice(0, 3)
       })()
     : clusterMatch
       ? (() => {
-          // Cluster specialists go first, then domain-scored agents fill remaining slots
           const domainScored = selectAgentsForRequest(team, domainHint, 6, allDomains, message)
           const clusterIds = new Set(clusterMatch.specialists.map((s) => s.id))
           const clusterFirst: AgentProfile[] =
@@ -804,43 +757,23 @@ export function resolveRoutingContext(params: ResolveRoutingParams): RoutingReso
         })()
       : selectAgentsForRequest(team, domainHint, 4, allDomains, message)
 
-  const specialistReason = exitSpecialistMode
-    ? 'explicit_exit_request'
-    : requestedSpecialistId
-      ? 'explicit_specialist_request'
-      : activeSpecialistId && activeSpecialist
-        ? 'keep_previous_specialist'
-        : 'no_specialist_lock'
-
-  decisionTrace.push(
-    buildSpecialistModeResolvedTraceEvent({
-      step: 2,
-      requestedSpecialistId,
-      previousActiveSpecialistId: activeSpecialistId ?? null,
-      activeSpecialist,
-      exitSpecialistMode,
-      reason: specialistReason,
-    }),
-  )
-
-  decisionTrace.push(
-    buildAgentsSelectedTraceEvent({
-      step: 3,
-      domainHint,
-      selectedAgentIds: selectedAgents.map((agent) => agent.id),
-      collaborationCap: activeSpecialist ? 3 : clusterMatch ? 6 : 4,
-      reason: activeSpecialist
-        ? 'specialist_first_collaboration'
-        : clusterMatch
-          ? `symptom_cluster_routing_urgency_${clusterMatch.urgency}`
-          : 'domain_based_selection',
-    }),
-  )
-
   return {
-    activeSpecialist,
     domainHint,
     selectedAgents,
-    decisionTrace,
+    decisionTrace: [
+      buildAgentsSelectedTraceEvent({
+        step: 3,
+        domainHint,
+        selectedAgentIds: selectedAgents.map((agent) => agent.id),
+        collaborationCap: currentSpeakerId ? 3 : clusterMatch ? 6 : 4,
+        reason: currentSpeakerId
+          ? 'case_state_speaker_first'
+          : clusterMatch
+            ? `symptom_cluster_routing_urgency_${clusterMatch.urgency}`
+            : 'domain_based_selection',
+      }),
+    ],
   }
 }
+
+export { resolveRoutingContext } from './routingLegacy'

@@ -1,4 +1,5 @@
 import { AgentProfile, AgentProposal, ConsensusResult, ContextPack, Domain } from '../types'
+import { collectGovernedArtifacts } from '../artifacts/governance'
 import { uniq, mergeToolCalls } from './merger'
 import { enforceDomainIsolation, pickPrimaryDomain } from './domainResolver'
 import { collectGatingQuestions, detectConflicts, composeFinalMarkdown } from './synthesizer'
@@ -49,10 +50,10 @@ export function runConsensus(params: {
 
   const finalMessageMarkdown = composeFinalMarkdown(domain, effectiveProposals, params.contextPack)
 
-  const artifactsToSave = effectiveProposals
-    .flatMap((p) => (p.recommendations ?? []).flatMap((r) => r.artifactsToSave ?? []))
-    .slice(0, 5)
-    .map((a) => ({ type: a.type, title: a.title, contentMarkdown: a.contentMarkdown }))
+  const artifactsToSave = collectGovernedArtifacts({
+    team: params.team,
+    proposals: effectiveProposals,
+  })
 
   return {
     domain,

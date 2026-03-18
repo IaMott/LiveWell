@@ -50,4 +50,14 @@ describe('TEAM domain registry hardening', () => {
 
     expect(team.length).toBe(profiles.length)
   })
+
+  it('loads runtime capability contracts for discovered specialists', () => {
+    const teamDir = path.resolve(process.cwd(), 'TEAM')
+    const team = loadTeam({ teamDirAbsolute: teamDir, allowEmpty: false })
+    const dietista = team.find((agent) => agent.id === 'dietista')
+
+    expect(dietista?.runtimeCapabilities).toBeDefined()
+    expect(dietista?.runtimeCapabilities?.allowedTools).toContain('artifacts.saveRecommendation')
+    expect((dietista?.runtimeCapabilities?.artifacts.length ?? 0) > 0).toBe(true)
+  })
 })

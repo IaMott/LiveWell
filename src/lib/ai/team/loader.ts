@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { parseCapabilityContract } from '../capabilities/contracts'
 import { AgentProfile, AgentProfile as AgentProfileType } from '../types'
 import { AgentProfileSchema, type AgentProfileFile } from './schema'
 
@@ -23,16 +24,25 @@ function loadOneAgent(agentDir: string): AgentProfileType {
 
   const promptPath = path.join(agentDir, parsed.systemPromptPath)
   const systemPrompt = readUtf8(promptPath)
+  const capabilitiesPath = path.join(agentDir, 'capabilities.md')
+  const runtimeCapabilities = fs.existsSync(capabilitiesPath)
+    ? parseCapabilityContract(parsed.id, readUtf8(capabilitiesPath))
+    : undefined
 
   const profile: AgentProfile = {
     id: parsed.id,
     displayName: parsed.displayName,
     domainTags: parsed.domainTags,
     systemPrompt,
-    toolsAllowed: parsed.toolsAllowed ?? [],
-    escalationRules: parsed.escalationRules ?? [],
+    toolsAllowed: runtimeCapabilities?.allowedTools.length
+      ? runtimeCapabilities.allowedTools
+      : parsed.toolsAllowed ?? [],
+    escalationRules: runtimeCapabilities?.escalationRules.length
+      ? runtimeCapabilities.escalationRules
+      : parsed.escalationRules ?? [],
     disclaimerStyle: parsed.disclaimerStyle ?? 'standard',
     decisionStyle: 'team-led',
+    runtimeCapabilities,
   }
 
   return profile
@@ -109,6 +119,26 @@ export function getGenericFallbackAgent(): AgentProfile {
       'If the user requests medical diagnosis/prescriptions, refuse and recommend a licensed professional.',
       'If urgent self-harm or severe symptoms, recommend emergency services.',
     ],
+    runtimeCapabilities: {
+      canDo: ['General safe orientation'],
+      cannotDo: ['Medical diagnosis', 'Irreversible actions without confirmation'],
+      consultTriggers: ['Specialist request outside general scope'],
+      handoffTriggers: ['Domain shift outside general orientation'],
+      minimumInput: ['User request'],
+      outputContracts: ['General recommendation note'],
+      escalationRules: [
+        'If the user requests medical diagnosis/prescriptions, refuse and recommend a licensed professional.',
+        'If urgent self-harm or severe symptoms, recommend emergency services.',
+      ],
+      allowedTools: [],
+      artifacts: [
+        {
+          kind: 'recommendation-note',
+          storageType: 'other',
+          description: 'General recommendation note',
+        },
+      ],
+    },
     systemPrompt: [
       'You are a competent specialist agent.',
       'You follow team-led decision making: gather data, ask gating questions, propose safe, evidence-based steps.',

@@ -155,3 +155,20 @@ export function buildThinkingEvents(
 
   return []
 }
+
+export function mergeThinkingEvents<
+  T extends { specialistName: string; title: string; domain?: Domain; thought?: string },
+>(primary: T[], secondary: T[], limit = 5): T[] {
+  const merged: T[] = []
+  const seen = new Set<string>()
+
+  for (const event of [...primary, ...secondary]) {
+    const key = `${event.specialistName}:${event.title}:${event.thought ?? ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(event)
+    if (merged.length >= limit) break
+  }
+
+  return merged
+}

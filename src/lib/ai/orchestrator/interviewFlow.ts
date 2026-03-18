@@ -240,12 +240,19 @@ function buildInterviewQueue(
     personalForBaseline.weight
   )
   const isEarlyConversation = contextPack.history.recentMessages.length < 8
+  const isContinuationMessage =
+    /\b(continuiamo|continua|proseguiamo|prosegui|riprendiamo|riprendi)\b/i.test(userMessage)
 
   // B-A fix: allow batching 3 questions in team mode when L1 baseline is still incomplete.
   // Previously maxAskNow=1 in team mode always, making the F4 batching unreachable.
   // isFirstInteractionInDomain covers specialist mode; isL1BaselinePending covers team mode.
   const isL1BaselinePending = !activeSpecialist && !hasCompletedBaseline && isEarlyConversation
-  const maxAskNow = isFirstInteractionInDomain || isL1BaselinePending ? 3 : 1
+  const maxAskNow =
+    fromWorkspace.length > 0 || isContinuationMessage
+      ? 1
+      : isFirstInteractionInDomain || isL1BaselinePending
+        ? 3
+        : 1
 
   // 2A — PRIORITY QUEUE: workspace pending → L1 → L2 → L3 domain-specific
   // Workspace pending questions are computed first because they take absolute priority

@@ -4,6 +4,8 @@ import { checkRateLimit, getClientIp } from '@/lib/security/httpGuards'
 import { getAuthUserId, getAuthRole, getAuthOwnerMode } from '@/lib/auth'
 import { errorResponse } from '@/lib/security/errorSchema'
 import { logApiErrorEvent } from '@/lib/monitoring/apiErrorEvents'
+import { deriveActiveSpecialistFromCaseState } from '@/lib/ai/case/compat'
+import { buildCaseThinkingEvents } from '@/lib/ai/case/events'
 import { orchestrate } from '@/lib/ai/orchestrator/orchestrator'
 import { detectDomainFromText } from '@/lib/ai/domain/domainDetection'
 import { createLlmWithFallback } from '@/lib/ai/llmFactory'
@@ -14,7 +16,7 @@ import { createToolExecutor, type MutationAuditEvent } from '@/lib/tools/toolExe
 import { realToolHandlers, stubToolHandlers } from '@/lib/tools/handlers'
 import { logChatFallbackEvent, buildSafeFallbackResponse } from './chatFallback'
 import { moderateText, persistModerationLog } from '@/lib/ai/contentModeration'
-import { toSse, buildThinkingEvents } from './chatStream'
+import { toSse, buildThinkingEvents, mergeThinkingEvents } from './chatStream'
 import {
   isDbPersistenceEnabled,
   createDbPersistenceDeps,
@@ -27,7 +29,6 @@ export { buildDefaultContextPack } from './chatPersistence'
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(4000),
   conversationId: z.string().min(1).optional(),
-  activeSpecialistId: z.string().trim().min(1).optional(),
   confirmedByUser: z.boolean().optional(),
   confirmToken: z.string().trim().min(1).optional(),
 })
@@ -237,6 +238,10 @@ export async function POST(request: Request): Promise<Response> {
     conversationId,
     role,
   })
+  const storedCaseState = await persistence.getCaseState({ conversationId })
+  const teamDirAbsolute = path.resolve(process.cwd(), 'TEAM')
+  const team = loadTeam({ teamDirAbsolute, allowEmpty: true })
+  const caseActiveSpecialist = deriveActiveSpecialistFromCaseState(storedCaseState, team)
 
   const agentInput: AgentInput = {
     requestId,
@@ -244,11 +249,9 @@ export async function POST(request: Request): Promise<Response> {
     conversationId,
     message: parsedBody.message,
     contextPack,
-    activeSpecialistId: parsedBody.activeSpecialistId,
+    caseState: storedCaseState,
   }
 
-  const teamDirAbsolute = path.resolve(process.cwd(), 'TEAM')
-  const team = loadTeam({ teamDirAbsolute, allowEmpty: true })
   const llm =
     requestedToolCalls.length > 0
       ? buildDeterministicLlm(requestedToolCalls)
@@ -256,11 +259,7 @@ export async function POST(request: Request): Promise<Response> {
 
   // Quick domain for immediate thinking events (no LLM needed)
   const quickDomain = detectDomainFromText(parsedBody.message)
-  const immediateAgents = getImmediateThinkingAgents(
-    team,
-    quickDomain,
-    parsedBody.activeSpecialistId,
-  )
+  const immediateAgents = getImmediateThinkingAgents(team, quickDomain, caseActiveSpecialist?.id)
   const msgPreviewImmediate = parsedBody.message.slice(0, 48).trim()
 
   const encoder = new TextEncoder()
@@ -316,6 +315,9 @@ export async function POST(request: Request): Promise<Response> {
             domain: fallbackDomain,
             finalMessageMarkdown: fallbackText,
             toolCallsToExecute: [],
+            caseState: storedCaseState ?? undefined,
+            protocolEvents: [],
+            activeSpecialist: caseActiveSpecialist,
             ui: {
               domainIcon: fallbackDomain,
               moodScore: contextPack.ui.moodScore,
@@ -336,8 +338,7 @@ export async function POST(request: Request): Promise<Response> {
           consensus.toolCallsToExecute.length > 0
             ? consensus.toolCallsToExecute
             : requestedToolCalls
-        const isDirectToolDirective =
-          consensus.toolCallsToExecute.length === 0 && requestedToolCalls.length > 0
+        const isDirectToolDirective = requestedToolCalls.length > 0
         const capabilityAgentId =
           consensus.activeSpecialist?.id ?? consensus.debug?.selectedAgents?.[0] ?? 'orchestratore'
         const capabilityTools = (
@@ -436,11 +437,31 @@ export async function POST(request: Request): Promise<Response> {
             metadata: { conversationId },
           })
         }
+        if (consensus.caseState) {
+          try {
+            await persistence.persistCaseState({
+              userId,
+              conversationId,
+              caseState: consensus.caseState,
+            })
+          } catch (error) {
+            console.error('[chat/send] persistCaseState failed, continuing in fallback mode', error)
+            await logChatFallbackEvent({
+              phase: 'PERSIST_CHAT_TURN',
+              requestId,
+              userId,
+              message: 'persistCaseState failed, response still streamed',
+              error,
+              metadata: { conversationId, layer: 'case_state' },
+            })
+          }
+        }
 
         // ── Step 5: Real thinking events (proposal-based, fast) ───────────
         const cpUserName = (contextPack.user?.profile as Record<string, unknown> | undefined)
           ?.name as string | undefined
-        const thinkingEvents = buildThinkingEvents(
+        const protocolThinkingEvents = buildCaseThinkingEvents(consensus.protocolEvents ?? [], team)
+        const proposalThinkingEvents = buildThinkingEvents(
           {
             debug: {
               round1Proposals: consensus.debug?.round1Proposals,
@@ -451,6 +472,7 @@ export async function POST(request: Request): Promise<Response> {
           parsedBody.message,
           cpUserName ?? null,
         )
+        const thinkingEvents = mergeThinkingEvents(protocolThinkingEvents, proposalThinkingEvents)
 
         if (thinkingEvents.length > 0) {
           for (let i = 0; i < thinkingEvents.length; i += 1) {

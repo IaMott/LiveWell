@@ -1,5 +1,7 @@
 import { Prisma } from '@prisma/client'
+import { normalizeCaseState, type CaseState } from '@/lib/ai/case/state'
 import { buildContextPack } from '@/lib/ai/context/contextPackBuilder'
+import { toStoredCaseState } from '@/lib/ai/case/persistence'
 import { prisma } from '@/lib/prisma'
 import { upsertConversationSummary } from '@/lib/ai/longTermMemory'
 import type { AgentProposal, ContextPack, Role } from '@/lib/ai/types'
@@ -27,6 +29,12 @@ export type RoutePersistenceDeps = {
     userId: string
     title: string
   }) => Promise<{ id: string }>
+  getCaseState: (input: { conversationId: string }) => Promise<CaseState | null>
+  persistCaseState: (input: {
+    userId: string
+    conversationId: string
+    caseState: CaseState
+  }) => Promise<void>
   persistChatTurn: (input: {
     userId: string
     conversationId: string
@@ -59,17 +67,26 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
     return {
       findConversationById: async () => null,
       createConversation: async ({ id }) => ({ id: id ?? crypto.randomUUID() }),
+      getCaseState: async () => null,
+      persistCaseState: async () => undefined,
       persistChatTurn: async () => undefined,
       buildContextPack: async ({ userId, role }) => buildDefaultContextPack(userId, role),
     }
   }
 
   type GenericFindUnique = (args: Record<string, unknown>) => Promise<unknown>
+  type GenericUpsert = (args: Record<string, unknown>) => Promise<unknown>
 
   function getFindUnique(modelName: string): GenericFindUnique | null {
     const prismaRecord = prisma as unknown as Record<string, unknown>
     const delegate = prismaRecord[modelName] as { findUnique?: GenericFindUnique } | undefined
     return delegate?.findUnique ?? null
+  }
+
+  function getUpsert(modelName: string): GenericUpsert | null {
+    const prismaRecord = prisma as unknown as Record<string, unknown>
+    const delegate = prismaRecord[modelName] as { upsert?: GenericUpsert } | undefined
+    return delegate?.upsert ?? null
   }
 
   async function findUniqueIfAvailable<T>(
@@ -96,6 +113,26 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
         data: { ...(id ? { id } : {}), userId, title },
         select: { id: true },
       }),
+    getCaseState: async ({ conversationId }) => {
+      const row = await findUniqueIfAvailable<Record<string, unknown>>('caseState', {
+        where: { conversationId },
+      })
+      return normalizeCaseState(row)
+    },
+    persistCaseState: async ({ userId, conversationId, caseState }) => {
+      const upsert = getUpsert('caseState')
+      if (!upsert) return
+      const payload = toStoredCaseState(caseState)
+      await upsert({
+        where: { conversationId },
+        create: {
+          userId,
+          conversationId,
+          ...payload,
+        },
+        update: payload,
+      })
+    },
     persistChatTurn: async ({
       userId,
       conversationId,

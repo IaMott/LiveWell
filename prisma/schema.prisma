@@ -32,6 +32,7 @@ model User {
   geoPreference           GeoPreference?
   userAttributes          UserAttribute[]
   agentWorkspaces         AgentWorkspace[]
+  caseStates              CaseState[]
   appointments            Appointment[]
   reminders               Reminder[]
 
@@ -112,6 +113,7 @@ model Conversation {
   fileAssets              FileAsset[]
   recommendationArtifacts RecommendationArtifact[]
   agentWorkspaces         AgentWorkspace[]
+  caseState               CaseState?
 
   @@index([userId])
   @@map("conversations")
@@ -132,6 +134,30 @@ model AgentWorkspace {
   @@unique([conversationId, agentId])
   @@index([userId, conversationId, updatedAt])
   @@map("agent_workspaces")
+}
+
+model CaseState {
+  id                   String       @id @default(cuid())
+  userId               String       @map("user_id")
+  user                 User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId       String       @unique @map("conversation_id")
+  conversation         Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  ownerAgentId         String       @map("owner_agent_id")
+  activeSpeakerAgentId String       @map("active_speaker_agent_id")
+  protocolState        String       @map("protocol_state")
+  consultTargetAgentId String?      @map("consult_target_agent_id")
+  returnTargetAgentId  String?      @map("return_target_agent_id")
+  consultReason        String?      @map("consult_reason")
+  pendingHandoffAgentId String?     @map("pending_handoff_agent_id")
+  checkpointReason     String?      @map("checkpoint_reason")
+  takeoverTurns        Int          @default(0) @map("takeover_turns")
+  loopCount            Int          @default(0) @map("loop_count")
+  handoffCount         Int          @default(0) @map("handoff_count")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  @@index([userId, updatedAt])
+  @@map("case_states")
 }
 
 model Message {
