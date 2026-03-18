@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentProfile } from '@/lib/ai/types'
-import { resolveRoutingContext } from '@/lib/ai/orchestrator/routing'
+import { resolveRoutingContext } from '@/lib/ai/orchestrator/routingLegacy'
 
 const team: AgentProfile[] = [
   {

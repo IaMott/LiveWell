@@ -2,7 +2,6 @@ import { ActiveSpecialist, AgentProposal, ContextPack } from '../types'
 import { buildProfessionalOutputInstructions } from '../artifacts/contracts'
 import { LlmClient } from './agentExecution'
 import {
-  buildActiveSpecialistNote,
   buildCrossConversationContext,
   buildRecentHistory,
   buildStructuredProfileBlock,
@@ -198,7 +197,6 @@ function buildSystemPrompt(
 
   // Team mode — anti-pattern block applies to all variants
   const teamAntiPattern = `NON iniziare MAI con: "Il team LiveWell", "Siamo il team LiveWell", "Caro utente", "Gentile utente", "Il team LiveWell ti ringrazia", "Il team LiveWell comprende". Varia sempre l'apertura — rispondi come persone reali, non come un'istituzione formale.`
-  const activeSpecialistNote = buildActiveSpecialistNote(proposals)
 
   if (isFirstMessage) {
     return [
@@ -206,7 +204,6 @@ function buildSystemPrompt(
       `Parla in italiano, tono caldo e diretto — come persone reali, non come un chatbot aziendale.${imageNote}`,
       `Rispondi a nome del gruppo usando "noi". NON presentarti come singolo specialista.`,
       teamAntiPattern,
-      activeSpecialistNote,
       ``,
       `Primo contatto: il tuo obiettivo è CONOSCERE ${nameRef}, non dare consigli.`,
       `Fai UNA sola domanda aperta — quella che ti permette di capire cosa sta cercando.`,
@@ -230,7 +227,6 @@ function buildSystemPrompt(
       `Rispondi a nome del gruppo usando "noi". Se l'utente chiede esplicitamente chi sta analizzando il suo caso, cita i nomi degli specialisti attivi.`,
       teamAntiPattern,
       teamNoRepetitionRule,
-      activeSpecialistNote,
       ``,
       `Stai raccogliendo le informazioni per costruire un percorso personalizzato per ${nameRef}.`,
       teamQuestionInstruction,
@@ -245,7 +241,6 @@ function buildSystemPrompt(
     `Rispondi a nome del gruppo usando "noi". Se l'utente chiede esplicitamente chi sta analizzando il suo caso, cita i nomi degli specialisti attivi.`,
     teamAntiPattern,
     teamNoRepetitionRule,
-    activeSpecialistNote,
     ``,
     `Hai informazioni sufficienti su ${nameRef}. Fornisci analisi e consigli concreti, personali, basati sui dati reali.`,
     `Sii diretto. Se ${nameRef} ha bisogno di qualcosa di specifico, affrontalo.`,

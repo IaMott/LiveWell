@@ -79,12 +79,7 @@ function buildToolExecutor(
 function getImmediateThinkingAgents(
   team: AgentProfile[],
   quickDomain: Domain,
-  activeSpecialistId?: string,
 ): Array<{ displayName: string; domainTags: Domain[] }> {
-  if (activeSpecialistId) {
-    const active = team.find((a) => a.id === activeSpecialistId)
-    if (active) return [active]
-  }
   const domainMatches = team.filter(
     (a) =>
       a.domainTags.includes(quickDomain) &&
@@ -259,7 +254,7 @@ export async function POST(request: Request): Promise<Response> {
 
   // Quick domain for immediate thinking events (no LLM needed)
   const quickDomain = detectDomainFromText(parsedBody.message)
-  const immediateAgents = getImmediateThinkingAgents(team, quickDomain, caseActiveSpecialist?.id)
+  const immediateAgents = getImmediateThinkingAgents(team, quickDomain)
   const msgPreviewImmediate = parsedBody.message.slice(0, 48).trim()
 
   const encoder = new TextEncoder()

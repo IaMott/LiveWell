@@ -71,6 +71,7 @@ describe('synthesis boundary', () => {
     expect(call?.system).toContain('team LiveWell')
     expect(call?.user).toContain('CONVERSAZIONE RECENTE:')
     expect(call?.user).toContain('ANALISI DEL TEAM SPECIALISTICO:')
+    expect(call?.system).not.toContain('SPECIALISTI ATTIVI IN QUESTA CONVERSAZIONE')
     // recommendations and missing data labels updated in new prompt design
     expect(call?.user).toContain('Hai allergie?')
     expect(call?.user.indexOf('Seconda summary')).toBeLessThan(call?.user.indexOf('Prima summary'))

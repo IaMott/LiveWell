@@ -80,19 +80,3 @@ export function buildStructuredProfileBlock(contextPack: ContextPack): string {
   if (lines.length === 0) return ''
   return `DATI PROFILO UTENTE (conferme già raccolte):\n${lines.join('\n')}`
 }
-
-export function buildActiveSpecialistNote(proposals: AgentProposal[]): string {
-  const active = proposals
-    .filter((p) => (p.confidence ?? 0) > 0 && !p.summary.toLowerCase().includes('[unavailable]'))
-    .map((p) => p.agentId)
-  if (active.length === 0) return ''
-  const formatted = active
-    .map((id) =>
-      id
-        .split('-')
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' '),
-    )
-    .join(', ')
-  return `\nSPECIALISTI ATTIVI IN QUESTA CONVERSAZIONE: ${formatted}. Se l'utente chiede esplicitamente chi ha analizzato il suo caso o chi sta rispondendo, cita questi specialisti per nome.`
-}

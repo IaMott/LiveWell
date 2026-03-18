@@ -775,5 +775,3 @@ export function resolveRoutingCandidates(params: {
     ],
   }
 }
-
-export { resolveRoutingContext } from './routingLegacy'
