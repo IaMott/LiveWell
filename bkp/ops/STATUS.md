@@ -2,31 +2,29 @@ Stato progetto
 
 Obiettivo
 
-Chiudere completamente il residuo B4 con un micro-fix in `src/lib/ai/artifacts/contracts.ts`, allineando l'istruzione di professional output al gating prudente gia presente in `synthesis.ts`, senza toccare UI o altri moduli.
+Confermare il publish del micro-fix B4 gia rilasciato, verificando che non esistano ulteriori file da commit/push/deploy oltre alla memoria operativa di questo step.
 
 Fatto
 
-Micro-fix B4 applicato in `src/lib/ai/artifacts/contracts.ts`:
-- rimossa la permissivita residua che invitava ad assumere valori ragionevoli quando mancano dati;
-- sostituita con una regola coerente col gating prudente: se mancano dati essenziali, chiedere i dati mancanti oppure fornire solo una struttura preliminare chiaramente incompleta.
-Il test esistente di synthesis e stato rafforzato in modo minimo per verificare anche la coerenza di `buildProfessionalOutputInstructions()`.
-Verifiche eseguite:
-- `npm run typecheck` verde
-- `npm run test -- tests/api/orchestrator-synthesis.test.ts` verde (5/5)
+Verifica finale completata:
+- `HEAD` locale e `origin/main` sono allineati sul commit `927c823`;
+- non ci sono modifiche tracked pendenti da pubblicare;
+- resta solo `.claude/` non tracciato e fuori publish;
+- nessun nuovo commit o deploy necessario per il codice applicativo.
 
 In corso
 
-Nessuna modifica in corso; micro-fix chiuso localmente e pronto alla pubblicazione remota.
+Nessuna modifica in corso.
 
 Prossimo
 
-Commit, push e deploy del micro-fix B4.
+Nessun passo obbligatorio aperto; solo eventuali verifiche aggiuntive su richiesta.
 
 Rischi
 
-Nessun rischio nuovo nel perimetro del micro-fix.
-Rimangono solo i rischi gia noti fuori da questo step: enforcement dei prerequisiti artifact ancora minimo-equivalente, parser capability dipendente da heading markdown coerenti, `activeSpecialist` ancora compatibilita di output.
+Nessun rischio nuovo emerso da questo controllo finale.
+Rimangono solo i debiti gia noti fuori da questo step: `activeSpecialist` come compatibilita di output e `routingLegacy.ts` come legacy confinato.
 
 Ultimo aggiornamento
 
-2026-03-19 01:17
+2026-03-19 01:28
