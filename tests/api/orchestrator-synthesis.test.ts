@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { buildProfessionalOutputInstructions } from '@/lib/ai/artifacts/contracts'
 import { synthesizeRawResponse } from '@/lib/ai/orchestrator/synthesis'
 import type { AgentProposal, ContextPack } from '@/lib/ai/types'
 
@@ -116,6 +117,38 @@ describe('synthesis boundary', () => {
     expect(call?.system).toContain('NON produrre un piano definitivo')
     expect(call?.user).toContain('NON produrre un documento definitivo')
     expect(call?.user).not.toContain('NON chiedere altre informazioni')
+  })
+
+  it('aligns professional output instructions with the prudent missing-data gate', () => {
+    const instructions = buildProfessionalOutputInstructions({
+      id: 'dietista',
+      displayName: 'Dietista',
+      domainTags: ['nutrition'],
+      systemPrompt: 'x',
+      toolsAllowed: [],
+      decisionStyle: 'team-led',
+      runtimeCapabilities: {
+        canDo: [],
+        cannotDo: [],
+        consultTriggers: [],
+        handoffTriggers: [],
+        minimumInput: ['Allergie', 'Obiettivo'],
+        outputContracts: [],
+        escalationRules: [],
+        allowedTools: [],
+        artifacts: [
+          {
+            kind: 'meal-plan',
+            storageType: 'nutrition',
+            description: 'Piano nutrizionale strutturato',
+          },
+        ],
+      },
+    })
+
+    expect(instructions).toContain('Se mancano dati essenziali')
+    expect(instructions).toContain('struttura preliminare chiaramente incompleta')
+    expect(instructions).not.toContain('assumi valori ragionevoli')
   })
 
   it('falls back to the first available proposal summary when model returns json-like text', async () => {

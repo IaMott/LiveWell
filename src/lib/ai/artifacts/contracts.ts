@@ -33,6 +33,6 @@ export function buildProfessionalOutputInstructions(agent: AgentProfile | undefi
     ``,
     `REGOLE OUTPUT — OBBLIGATORIE QUANDO L'UTENTE CHIEDE UN PIANO/DOCUMENTO:`,
     ...lines,
-    `NON dare solo linee guida generiche. Se mancano dati, assumi valori ragionevoli dichiarandoli.`,
+    `NON dare solo linee guida generiche. Se mancano dati essenziali, chiedi i dati mancanti oppure fornisci solo una struttura preliminare chiaramente incompleta.`,
   ].join('\n')
 }
