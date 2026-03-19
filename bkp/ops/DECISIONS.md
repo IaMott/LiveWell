@@ -1,5 +1,10 @@
 Decision log (ADR light)
 
+2026-03-19 21:22 | ADR-0021 | review mirata del commit `442523a`
+- I fix del commit `442523a` meritano conferma solo parziale.
+- I test dichiarati dimostrano bene consulti impliciti e handoff same-domain, ma non coprono in modo sufficiente tutto il cluster del monodominio implicito.
+- Il prossimo passo corretto, se richiesto, e un micro-fix mirato su owner impliciti residui e takeover same-domain troppo aggressivo; non una campagna sistemica piu ampia.
+
 2026-03-19 20:54 | ADR-0020 | micro-fix residui impliciti post-validazione avanzata
 - `chooseInitialOwner()` resta il punto giusto per la selezione implicita del primo specialista quando il dominio e gia forte.
 - `registry.ts` resta il punto giusto per ranking consult/handoff impliciti specialistici.
