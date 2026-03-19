@@ -30,6 +30,27 @@ const team: AgentProfile[] = [
     },
   },
   {
+    id: 'chef',
+    displayName: 'Chef',
+    domainTags: ['nutrition'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Dieta clinica o vincoli nutrizionali -> dietista del team'],
+      handoffTriggers: [
+        'Quando la pianificazione nutrizionale clinica diventa prevalente -> handoff',
+      ],
+      minimumInput: ['Preferenze'],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
     id: 'fisioterapista',
     displayName: 'Fisioterapista',
     domainTags: ['training', 'health'],
@@ -52,6 +73,63 @@ const team: AgentProfile[] = [
           description: 'Programmazione motoria',
         },
       ],
+    },
+  },
+  {
+    id: 'cardiologo',
+    displayName: 'Cardiologo',
+    domainTags: ['health'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Dolore toracico, tachicardia o pressione alta -> cardiologo del team'],
+      handoffTriggers: ['Caso cardiologico dominante -> handoff health'],
+      minimumInput: ['Sintomi cardiologici'],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
+    id: 'gastroenterologo',
+    displayName: 'Gastroenterologo',
+    domainTags: ['health'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Gonfiore, gastrite o digestione difficile -> gastroenterologo del team'],
+      handoffTriggers: ['Caso gastroenterologico dominante -> handoff health'],
+      minimumInput: ['Sintomi digestivi'],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
+    id: 'dermatologo',
+    displayName: 'Dermatologo',
+    domainTags: ['health'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Sfoghi cutanei persistenti o prurito -> dermatologo del team'],
+      handoffTriggers: ['Caso dermatologico dominante -> handoff health'],
+      minimumInput: ['Sintomi cutanei'],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
     },
   },
   {
@@ -120,6 +198,25 @@ const team: AgentProfile[] = [
     },
   },
   {
+    id: 'financial-planner',
+    displayName: 'Financial Planner',
+    domainTags: ['inspiration'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Debiti, mutuo o spese fuori controllo -> financial planner del team'],
+      handoffTriggers: ['Caso economico dominante -> handoff inspiration'],
+      minimumInput: ['Contesto economico'],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
     id: 'orchestratore',
     displayName: 'Orchestratore',
     domainTags: ['coordination'],
@@ -170,6 +267,59 @@ describe('case protocol vertical slice', () => {
     expect(out.caseState.ownerAgentId).toBe('orchestratore')
     expect(out.caseState.activeSpeakerAgentId).toBe('orchestratore')
     expect(out.caseState.protocolState).toBe('owner_active')
+  })
+
+  it('picks the dietista for implicit nutrition monodomain cases', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'implicit-nutrition-1',
+      message: 'piano alimentare per dimagrire',
+      detectedDomain: 'nutrition',
+      allDomains: ['nutrition'],
+      team,
+    })
+
+    expect(out.caseState.ownerAgentId).toBe('dietista')
+    expect(out.caseState.activeSpeakerAgentId).toBe('dietista')
+  })
+
+  it('picks the cardiologo for implicit critical health monodomain cases', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'implicit-health-1',
+      message: 'tachicardia e pressione alta da stamattina',
+      detectedDomain: 'health',
+      allDomains: ['health'],
+      team,
+    })
+
+    expect(out.caseState.ownerAgentId).toBe('cardiologo')
+  })
+
+  it('picks the legal consultant for implicit legal inspiration cases', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'implicit-legal-1',
+      message: "mi sto separando e servono accordi per l'affido",
+      detectedDomain: 'inspiration',
+      allDomains: ['inspiration'],
+      team,
+    })
+
+    expect(out.caseState.ownerAgentId).toBe('consulente-legale')
+  })
+
+  it('picks financial planning for implicit debt and anxiety inspiration cases', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'implicit-finance-1',
+      message: 'ho debiti, rate e sto andando in ansia',
+      detectedDomain: 'inspiration',
+      allDomains: ['inspiration'],
+      team,
+    })
+
+    expect(out.caseState.ownerAgentId).toBe('financial-planner')
   })
 
   it('opens a real consult with temporary takeover while preserving owner', () => {
@@ -402,9 +552,9 @@ describe('case protocol vertical slice', () => {
 
     expect(out.caseState.protocolState).toBe('consult_active_takeover')
     expect(out.caseState.ownerAgentId).toBe('dietista')
-    expect(out.caseState.activeSpeakerAgentId).toBe('fisioterapista')
+    expect(out.caseState.activeSpeakerAgentId).toBe('cardiologo')
     expect(out.events.map((e) => e.kind)).toEqual(['consult_requested', 'takeover_started'])
-    expect(out.events[0]?.reason).toContain('health')
+    expect(out.events[0]?.reason.toLowerCase()).toMatch(/toracic|tachic|pressione/)
   })
 
   it('keeps the consult target active on natural continuity phrases', () => {
@@ -489,6 +639,34 @@ describe('case protocol vertical slice', () => {
 
     expect(out.caseState.protocolState).toBe('handoff_pending_user')
     expect(out.caseState.pendingHandoffAgentId).toBe('consulente-legale')
+    expect(out.events.map((e) => e.kind)).toEqual(['handoff_requested'])
+  })
+
+  it('opens a same-domain handoff from chef to dietista on natural continuity phrasing', () => {
+    const consultState = {
+      conversationId: 'c-handoff-nutrition',
+      ownerAgentId: 'chef',
+      activeSpeakerAgentId: 'dietista',
+      protocolState: 'consult_active_takeover' as const,
+      consultTargetAgentId: 'dietista',
+      returnTargetAgentId: 'chef',
+      consultReason: 'Dieta clinica o vincoli nutrizionali -> dietista del team',
+      takeoverTurns: 1,
+      loopCount: 1,
+      handoffCount: 0,
+    }
+
+    const out = advanceCaseState({
+      current: consultState,
+      conversationId: 'c-handoff-nutrition',
+      message: 'restiamo su questa parte e andiamo avanti con questo percorso',
+      detectedDomain: 'nutrition',
+      allDomains: ['nutrition'],
+      team,
+    })
+
+    expect(out.caseState.protocolState).toBe('handoff_pending_user')
+    expect(out.caseState.pendingHandoffAgentId).toBe('dietista')
     expect(out.events.map((e) => e.kind)).toEqual(['handoff_requested'])
   })
 

@@ -16,8 +16,11 @@ const KEYWORDS: Record<Domain, string[]> = {
     'peso',
     'allergie alimentari',
     'intolleranze alimentari',
+    'mangiare meglio',
+    'alimentazione',
     'gastrite',
     'digestiv',
+    'addominal',
     'macro',
     'kcal',
     'calorie',
@@ -65,6 +68,10 @@ const KEYWORDS: Record<Domain, string[]> = {
     'allergia',
     'condizione',
     'salute',
+    'torac',
+    'petto',
+    'tachic',
+    'palpit',
     'misure',
     'bf',
     'body fat',
@@ -77,6 +84,9 @@ const KEYWORDS: Record<Domain, string[]> = {
     'vertigini',
     'sfoghi',
     'sfogo',
+    'pelle',
+    'rash',
+    'prurito',
     'cutanei',
     'eczema',
     'pressione alta',
@@ -107,9 +117,16 @@ const KEYWORDS: Record<Domain, string[]> = {
     'progetto',
     'separando',
     'separazione',
+    'affido',
+    'accordi',
+    'avvocato',
     'problemi legali',
     'legale',
     'debiti',
+    'mutuo',
+    'rate',
+    'bollette',
+    'spese',
     'fisco',
     'tasse',
     'sopraffatto',
@@ -134,6 +151,10 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
       pattern: /\b(voglio|vorrei|mi serve|dammi|fammi)\b.{0,30}\b(dieta|piano alimentare|menu)\b/i,
       score: 4,
     },
+    {
+      pattern: /\b(voglio|vorrei|mi serve)\b.{0,30}\b(mangiare meglio|alimentazione)\b/i,
+      score: 4,
+    },
     { pattern: /\b(perdere peso|dimagrire|mangiare meglio)\b/i, score: 3 },
     {
       pattern:
@@ -151,8 +172,17 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
   ],
   health: [
     { pattern: /\b(pressione alta|giramenti|vertigini)\b/i, score: 4 },
-    { pattern: /\b(gonfiore|problemi digestivi|reflusso|nausea|vomito)\b/i, score: 3 },
-    { pattern: /\b(sfoghi cutanei|sfogo cutaneo|eruzione|eczema)\b/i, score: 4 },
+    { pattern: /\b(tachicardia|palpitazioni|pressione alta|giramenti|vertigini)\b/i, score: 5 },
+    {
+      pattern:
+        /\b(gonfiore|problemi digestivi|digestione difficile|dolore addominale|crampi addominali|reflusso|nausea|vomito)\b/i,
+      score: 4,
+    },
+    {
+      pattern:
+        /\b(sfoghi cutanei|sfogo cutaneo|eruzione|eczema|rash|prurito|dermatite|acne persistente)\b/i,
+      score: 5,
+    },
     { pattern: /\b(dolore|sintomi?)\b/i, score: 2 },
   ],
   mindfulness: [
@@ -161,15 +191,24 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
     { pattern: /\b(burnout|sopraffatt[oa]|non riesco a concentrarmi|blocco mentale)\b/i, score: 5 },
   ],
   inspiration: [
-    { pattern: /\b(mi sto separando|separazione)\b.{0,40}\b(problemi legali|legale)\b/i, score: 5 },
-    { pattern: /\b(debiti|spese|soldi|tasse)\b.{0,40}\b(ansia|stress)\b/i, score: 4 },
-    { pattern: /\b(non riesco pi[uù] a gestire tutto|sopraffatt[oa])\b/i, score: 4 },
+    {
+      pattern:
+        /\b(mi sto separando|separazione)\b.{0,50}\b(problemi legali|legale|accordi|tutela|affido|avvocat)\b/i,
+      score: 6,
+    },
+    {
+      pattern:
+        /\b(debiti|mutuo|spese|soldi|rate|bollette|tasse)\b.{0,40}\b(ansia|stress|sopraffatt)\b/i,
+      score: 5,
+    },
+    { pattern: /\b(non riesco pi[uù] a gestire tutto|sopraffatt[oa])\b/i, score: 2 },
     { pattern: /\b(bloccato nel lavoro|bloccata nel lavoro|carriera|lavoro)\b/i, score: 3 },
   ],
   coordination: [
     {
-      pattern: /\b(non riesco pi[uù] a gestire tutto|mi serve organizzarmi|ho troppe cose)\b/i,
-      score: 4,
+      pattern:
+        /\b(non riesco pi[uù] a gestire tutto|mi serve organizzarmi|ho troppe cose|non riesco a organizzarmi|devo incastrare tutto)\b/i,
+      score: 5,
     },
   ],
 }

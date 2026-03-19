@@ -46,13 +46,43 @@ const AGENT_SEMANTIC_SIGNALS: Record<string, string[]> = {
   psicologo: ['ansia', 'stress', 'burnout', 'trauma', 'relazione', 'pensieri', 'psicolog'],
   'mental-coach': ['blocco mentale', 'performance', 'pre gara', 'concentrazione', 'mental'],
   'sleep-coach': ['sonno', 'insonnia', 'russamento', 'apnee', 'osas', 'dormo male'],
-  'consulente-legale': ['legale', 'separazione', 'causa', 'contratto', 'avvocato', 'tutela'],
-  'financial-planner': ['debiti', 'spese', 'bilancio', 'risparmi', 'soldi', 'finanza', 'mutuo'],
+  'consulente-legale': [
+    'legale',
+    'separazione',
+    'causa',
+    'contratto',
+    'avvocato',
+    'tutela',
+    'affido',
+    'accordi',
+  ],
+  'financial-planner': [
+    'debiti',
+    'spese',
+    'bilancio',
+    'risparmi',
+    'soldi',
+    'finanza',
+    'mutuo',
+    'rate',
+    'bollette',
+    'prestiti',
+  ],
   commercialista: ['tasse', 'fisco', 'dichiarazione', 'partita iva', 'tributi'],
   'life-organizer': ['organizzarmi', 'gestire tutto', 'routine', 'organizzazione', 'agenda'],
   dietista: ['dieta', 'alimentare', 'mangiare', 'peso', 'dimagrire', 'allergie alimentari'],
   chef: ['ricette', 'cucinare', 'pasti', 'menu', 'spesa'],
-  gastroenterologo: ['gastrite', 'reflusso', 'digestivi', 'gonfiore', 'intestino', 'nausea'],
+  gastroenterologo: [
+    'gastrite',
+    'reflusso',
+    'digestivi',
+    'gonfiore',
+    'intestino',
+    'nausea',
+    'dolore addominale',
+    'digestione',
+    'crampi',
+  ],
   cardiologo: [
     'cuore',
     'petto',
@@ -61,6 +91,7 @@ const AGENT_SEMANTIC_SIGNALS: Record<string, string[]> = {
     'fiato corto',
     'toracico',
     'tachicardia',
+    'giramenti',
   ],
   mmg: ['sintomi', 'pressione', 'giramenti', 'farmaci', 'medico'],
   fisioterapista: ['dolore', 'riabilitazione', 'recupero', 'mobilità', 'ginocchio', 'schiena'],
@@ -68,7 +99,7 @@ const AGENT_SEMANTIC_SIGNALS: Record<string, string[]> = {
   chinesologo: ['movimento', 'postura', 'esercizi', 'dolore', 'rieducazione'],
   'medico-dello-sport': ['sport', 'performance', 'idoneità', 'infortunio'],
   'persona-trainer': ['allenamento', 'scheda', 'workout', 'forza', 'cardio'],
-  dermatologo: ['pelle', 'sfoghi', 'eczema', 'acne', 'dermat'],
+  dermatologo: ['pelle', 'sfoghi', 'eczema', 'acne', 'dermat', 'rash', 'prurito', 'orticaria'],
   endocrinologo: ['ormoni', 'tiroide', 'insulina', 'metabolismo'],
 }
 
@@ -80,6 +111,7 @@ const SAME_DOMAIN_HANDOFF_GENERALISTS = new Set([
   'career-coach',
   'executive-coach',
   'commercialista',
+  'chef',
   'mmg',
   'gastroenterologo',
   'dermatologo',
@@ -309,6 +341,30 @@ function scoreConsultTarget(params: {
 
   if (params.detectedDomain === 'health') {
     if (
+      params.agent.id === 'cardiologo' &&
+      /\bdolore\s+toracic|\bdolore\s+al\s+petto|\bfiato\s+corto|\bdispnea|\btachicardia|\bpalpitazioni|\bpressione\s+alta|\bgirament/i.test(
+        lowerMessage,
+      )
+    ) {
+      score += 10
+    }
+    if (
+      params.agent.id === 'dermatologo' &&
+      /\bsfoghi?\b|\brash\b|\bprurito\b|\beczema\b|\bdermatit|\bacne\b|\bpelle\b/i.test(
+        lowerMessage,
+      )
+    ) {
+      score += 10
+    }
+    if (
+      params.agent.id === 'gastroenterologo' &&
+      /\bgonfiore\b|\bproblemi?\s+digestiv|\bdigestione\b|\bdolore\s+addominale|\bcrampi?\b|\breflusso\b|\bnausea\b|\bvomito\b/i.test(
+        lowerMessage,
+      )
+    ) {
+      score += 10
+    }
+    if (
       /\bdolore\s+toracic|\bdolore\s+al\s+petto|\bfiato\s+corto|\bdispnea|\bpressione\s+alta|\bgirament/i.test(
         lowerMessage,
       ) &&
@@ -337,12 +393,22 @@ function scoreConsultTarget(params: {
   if (params.detectedDomain === 'inspiration') {
     if (
       params.agent.id === 'consulente-legale' &&
-      /\blegale|separaz|causa|contratto|avvocat/i.test(lowerMessage)
+      /\blegale|separaz|causa|contratto|avvocat|accordi|affido|tutela/i.test(lowerMessage)
+    )
+      score += 10
+    if (
+      params.agent.id === 'financial-planner' &&
+      /\bdebiti|soldi|spese|tasse|fisco|bilancio|mutuo|rate|bollette|prestiti/i.test(lowerMessage)
+    )
+      score += 10
+    if (
+      params.agent.id === 'career-coach' &&
+      /\blavoro|carriera|colloquio|ruolo|burnout\b/i.test(lowerMessage)
     )
       score += 6
     if (
-      params.agent.id === 'financial-planner' &&
-      /\bdebiti|soldi|spese|tasse|fisco|bilancio/i.test(lowerMessage)
+      params.agent.id === 'life-organizer' &&
+      /\bgestire tutto|organizzarmi|troppe cose|incastrare tutto\b/i.test(lowerMessage)
     )
       score += 6
   }
@@ -490,8 +556,18 @@ export function findPermanentHandoffTriggerReason(params: {
   const contractsConfigured =
     (ownerContract?.handoffTriggers.length ?? 0) > 0 ||
     (targetContract?.handoffTriggers.length ?? 0) > 0
+  const targetSemanticHits = countTextSignals(
+    normalizeText(params.message),
+    AGENT_SEMANTIC_SIGNALS[consultTarget.id] ?? [],
+  )
 
-  if (contractsConfigured && !ownerReason && !targetReason) return null
+  if (
+    contractsConfigured &&
+    !ownerReason &&
+    !targetReason &&
+    !(sameDomainSpecializationShift && targetSemanticHits >= 2)
+  )
+    return null
 
   const lowerMessage = normalizeText(params.message)
   if (
@@ -502,7 +578,13 @@ export function findPermanentHandoffTriggerReason(params: {
     return ownerReason && /psicolog/i.test(ownerReason) ? ownerReason : null
   }
 
-  return targetReason ?? ownerReason ?? `capability_handoff:${params.detectedDomain}`
+  return (
+    targetReason ??
+    ownerReason ??
+    (sameDomainSpecializationShift && targetSemanticHits >= 2
+      ? `capability_handoff:${params.detectedDomain}:${consultTarget.id}`
+      : null)
+  )
 }
 
 export function agentSupportsArtifactStorageType(

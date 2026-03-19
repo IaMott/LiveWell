@@ -175,6 +175,46 @@ const team: AgentProfile[] = [
     },
   },
   {
+    id: 'dermatologo',
+    displayName: 'Dermatologo',
+    domainTags: ['health'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Sfoghi cutanei persistenti, rash o prurito -> dermatologo del team.'],
+      handoffTriggers: ['Caso dermatologico dominante -> handoff health.'],
+      minimumInput: [],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
+    id: 'gastroenterologo',
+    displayName: 'Gastroenterologo',
+    domainTags: ['health'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: [
+        'Gonfiore, dolore addominale, digestione difficile o reflusso -> gastroenterologo del team.',
+      ],
+      handoffTriggers: ['Caso gastroenterologico dominante -> handoff health.'],
+      minimumInput: [],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
     id: 'persona-trainer',
     displayName: 'Persona Trainer',
     domainTags: ['training'],
@@ -291,5 +331,27 @@ describe('runtime trigger guards', () => {
 
     expect(out).toMatchObject({ agentId: 'cardiologo' })
     expect(out?.reason.toLowerCase()).toMatch(/torac|tachic|fiato/)
+  })
+
+  it('routes persistent skin eruptions to dermatology instead of a generic health fallback', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'life-organizer',
+      detectedDomain: 'health',
+      message: 'ho sfoghi cutanei persistenti con prurito e rash sulle braccia',
+    })
+
+    expect(out).toMatchObject({ agentId: 'dermatologo' })
+  })
+
+  it('routes digestive pain and bloating to gastroenterology', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'life-organizer',
+      detectedDomain: 'health',
+      message: 'ho gonfiore, dolore addominale e digestione difficile dopo i pasti',
+    })
+
+    expect(out).toMatchObject({ agentId: 'gastroenterologo' })
   })
 })

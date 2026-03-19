@@ -1,5 +1,11 @@
 Decision log (ADR light)
 
+2026-03-19 20:54 | ADR-0020 | micro-fix residui impliciti post-validazione avanzata
+- `chooseInitialOwner()` resta il punto giusto per la selezione implicita del primo specialista quando il dominio e gia forte.
+- `registry.ts` resta il punto giusto per ranking consult/handoff impliciti specialistici.
+- `protocol.ts` gestisce solo la continuita conversazionale same-domain, senza introdurre nuovi stati o refactor del `CaseState`.
+- Sostituisce l'idea di toccare `agentSelection.ts` o introdurre un ranking engine piu grande.
+
 2026-03-18 21:08 | ADR-2026-03-18-2108 | Decisione: usare `llm-architect` come ruolo implicito per questo task. Motivo: richiesta centrata su architettura LLM multi-agent, governance runtime, state model, artifact generation e refactoring strutturale. Stato: attiva.
 
 2026-03-18 21:08 | ADR-2026-03-18-2108-B | Decisione: trattare `capabilities.md` come documentazione non eseguita dal runtime fino a prova contraria. Motivo: `src/lib/ai/team/loader.ts` carica solo `profile.json` + `prompt.md`; nessun path runtime risolve o valida `capabilities.md`. Stato: attiva.

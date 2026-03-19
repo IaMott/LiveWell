@@ -66,16 +66,23 @@ const TAKEOVER_CONTINUITY_PATTERNS = [
 const HANDOFF_CONTINUITY_PATTERNS = [
   /\bcontinuiamo\s+su\b/i,
   /\bproseguiamo\s+su\b/i,
+  /\brestiamo\s+su\s+questa\s+parte\b/i,
+  /\brestiamo\s+su\s+questo\s+tema\b/i,
   /\bvorrei\s+che\s+mi\s+seguisse\b/i,
   /\bvorrei\s+proseguire\s+con\b/i,
   /\bmi\s+segua\s+lui\b/i,
   /\bmi\s+segua\s+lei\b/i,
   /\brestiamo\s+su\s+questo\s+percorso\b/i,
   /\bandiamo\s+avanti\s+su\s+questa\s+parte\b/i,
+  /\bandiamo\s+avanti\s+con\s+questo\s+percorso\b/i,
   /\bcontinuiamo\s+con\s+il\s+recupero\b/i,
   /\bcontinuiamo\s+con\s+la\s+terapia\b/i,
   /\bcontinuiamo\s+su\s+questo\s+tema\b/i,
   /\bparliamo\s+ancora\s+di\s+questo\s+con\b/i,
+  /\bparliamo\s+ancora\s+di\s+questo\s+con\s+lui\b/i,
+  /\bparliamo\s+ancora\s+di\s+questo\s+con\s+lei\b/i,
+  /\bproseguiamo\s+con\s+lui\b/i,
+  /\bproseguiamo\s+con\s+lei\b/i,
 ]
 
 type AdvanceCaseStateParams = {
@@ -132,6 +139,131 @@ function isMeaningfulHandoffContinuation(message: string): boolean {
   return trimmed.split(/\s+/).length > 3 || HANDOFF_CONTINUITY_PATTERNS.some((p) => p.test(trimmed))
 }
 
+function scoreImplicitOwnerCandidate(
+  agent: AgentProfile,
+  detectedDomain: Domain,
+  message: string,
+): number {
+  const lower = message.toLowerCase()
+  if (!agentSupportsDetectedDomain(agent, detectedDomain)) return -1
+
+  const matches = (patterns: RegExp[]): number =>
+    patterns.reduce((acc, pattern) => (pattern.test(lower) ? acc + 1 : acc), 0)
+
+  let score = 0
+  switch (agent.id) {
+    case 'dietista':
+      score +=
+        matches([
+          /\bdieta\b/i,
+          /\bpiano alimentare\b/i,
+          /\bdimagr/i,
+          /\bmangiare meglio\b/i,
+          /\ballergie?\s+alimentari\b/i,
+        ]) * 3
+      break
+    case 'chef':
+      score += matches([/\bricett/i, /\bcucin/i, /\bmenu\b/i, /\bspesa\b/i]) * 3
+      break
+    case 'persona-trainer':
+      score +=
+        matches([/\bscheda\b/i, /\bricominciare\b/i, /\ballenarmi\b/i, /\ballenarmi meglio\b/i]) * 3
+      break
+    case 'fisioterapista':
+      score += matches([/\bdolore\b/i, /\brecupero\b/i, /\briabilit/i, /\beserciz/i]) * 3
+      break
+    case 'cardiologo':
+      score +=
+        matches([
+          /\bdolore\s+toracic/i,
+          /\bdolore\s+al\s+petto/i,
+          /\bfiato\s+corto\b/i,
+          /\bdispnea\b/i,
+          /\btachicardia\b/i,
+          /\bpressione\s+alta\b/i,
+        ]) * 4
+      break
+    case 'dermatologo':
+      score +=
+        matches([/\bsfoghi?\b/i, /\brash\b/i, /\bprurito\b/i, /\beczema\b/i, /\bpelle\b/i]) * 4
+      break
+    case 'gastroenterologo':
+      score +=
+        matches([
+          /\bgonfiore\b/i,
+          /\bproblemi?\s+digestiv/i,
+          /\bdigestione\b/i,
+          /\bdolore\s+addominale\b/i,
+          /\bgastrite\b/i,
+          /\breflusso\b/i,
+        ]) * 4
+      break
+    case 'psicologo':
+      score += matches([/\bansia\b/i, /\bstress\b/i, /\bburnout\b/i, /\bconcentrarmi\b/i]) * 3
+      break
+    case 'sleep-coach':
+      score += matches([/\bdormo\b/i, /\bsonno\b/i, /\binsonnia\b/i, /\brussamento\b/i]) * 3
+      break
+    case 'mental-coach':
+      score += matches([/\bblocco mentale\b/i, /\bpre-gara\b/i, /\bperformance\b/i]) * 3
+      break
+    case 'consulente-legale':
+      score +=
+        matches([
+          /\bseparaz/i,
+          /\blegal/i,
+          /\baccordi\b/i,
+          /\btutela\b/i,
+          /\baffido\b/i,
+          /\bavvocat/i,
+        ]) * 4
+      break
+    case 'financial-planner':
+      score +=
+        matches([
+          /\bdebiti\b/i,
+          /\bmutuo\b/i,
+          /\brate\b/i,
+          /\bspese\b/i,
+          /\bbollette\b/i,
+          /\bsoldi\b/i,
+        ]) * 4
+      break
+    case 'career-coach':
+      score += matches([/\blavoro\b/i, /\bcarriera\b/i, /\bbloccato\b/i, /\bsopraffatt/i]) * 3
+      break
+    case 'life-organizer':
+      score +=
+        matches([
+          /\bgestire tutto\b/i,
+          /\borganizzarmi\b/i,
+          /\btroppe cose\b/i,
+          /\bincastrare tutto\b/i,
+        ]) * 3
+      break
+  }
+
+  return score
+}
+
+function findImplicitOwnerByMessage(
+  team: AgentProfile[],
+  detectedDomain: Domain,
+  message: string,
+): string | null {
+  if (detectedDomain === 'general') return null
+  const ranked = team
+    .filter((agent) => agent.id !== 'orchestratore')
+    .map((agent) => ({
+      agent,
+      score: scoreImplicitOwnerCandidate(agent, detectedDomain, message),
+    }))
+    .filter((entry) => entry.score >= 6)
+    .sort((a, b) => b.score - a.score || a.agent.id.localeCompare(b.agent.id))
+
+  return ranked[0]?.agent.id ?? null
+}
+
 function chooseInitialOwner(params: {
   message: string
   detectedDomain: Domain
@@ -150,6 +282,13 @@ function chooseInitialOwner(params: {
       )
     return neutralOwner?.id ?? 'orchestratore'
   }
+
+  const implicitOwner = findImplicitOwnerByMessage(
+    params.team,
+    params.detectedDomain,
+    params.message,
+  )
+  if (implicitOwner) return implicitOwner
 
   const selected = selectAgentsForRequest(
     params.team.filter((agent) => agent.id !== 'orchestratore'),
@@ -302,6 +441,13 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
     const naturalHandoffContinuation = HANDOFF_CONTINUITY_PATTERNS.some((pattern) =>
       pattern.test(message),
     )
+    const consultTargetProfile = team.find((agent) => agent.id === consultTarget)
+    const ownerProfile = team.find((agent) => agent.id === current.ownerAgentId)
+    const sameDomainShift =
+      consultTargetProfile != null &&
+      ownerProfile != null &&
+      consultTargetProfile.domainTags.includes(detectedDomain) &&
+      ownerProfile.domainTags.includes(detectedDomain)
     const handoffReason =
       consultTarget != null
         ? findPermanentHandoffTriggerReason({
@@ -331,7 +477,9 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
       isMeaningfulHandoffContinuation(message) &&
       Boolean(implicitHandoffReason) &&
       (Boolean(handoffReason) ||
-        naturalHandoffContinuation ||
+        (sameDomainShift
+          ? current.takeoverTurns >= 1 && naturalHandoffContinuation
+          : naturalHandoffContinuation) ||
         shouldTriggerPermanentHandoff({
           team,
           ownerAgentId: current.ownerAgentId,

@@ -18,6 +18,7 @@ describe('critical domain detection', () => {
   it('classifies implicit nutrition requests without naming the specialist', () => {
     expect(detectDomainFromText('voglio una dieta')).toBe('nutrition')
     expect(detectDomainFromText('piano alimentare per dimagrire')).toBe('nutrition')
+    expect(detectDomainFromText('voglio mangiare meglio')).toBe('nutrition')
     expect(detectDomainFromText('ho gastrite e non so cosa mangiare')).toBe('nutrition')
   })
 
@@ -30,7 +31,13 @@ describe('critical domain detection', () => {
   it('classifies inspiration and health implicit cases across distant domains', () => {
     expect(detectDomainFromText('mi sto separando e ci sono problemi legali')).toBe('inspiration')
     expect(detectDomainFromText('ho debiti e sto andando in ansia')).toBe('inspiration')
+    expect(detectDomainFromText("mi sto separando e servono accordi per l'affido")).toBe(
+      'inspiration',
+    )
     expect(detectDomainFromText('ho sfoghi cutanei strani')).toBe('health')
+    expect(detectDomainFromText('ho sfoghi cutanei persistenti con prurito')).toBe('health')
     expect(detectDomainFromText('gonfiore e problemi digestivi continui')).toBe('health')
+    expect(detectDomainFromText('tachicardia e pressione alta da stamattina')).toBe('health')
+    expect(detectDomainFromText('non riesco più a gestire tutto')).toBe('coordination')
   })
 })
