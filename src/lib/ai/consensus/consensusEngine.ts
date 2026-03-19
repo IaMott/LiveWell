@@ -53,6 +53,7 @@ export function runConsensus(params: {
   const artifactsToSave = collectGovernedArtifacts({
     team: params.team,
     proposals: effectiveProposals,
+    contextPack: params.contextPack,
   })
 
   return {

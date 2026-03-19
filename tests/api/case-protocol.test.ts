@@ -11,6 +11,23 @@ const team: AgentProfile[] = [
     systemPrompt: 'x',
     toolsAllowed: [],
     decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: ['Fuori competenza clinica -> specialista health'],
+      consultTriggers: ['Sintomi clinici o dominio health -> specialista health'],
+      handoffTriggers: ['Se il dominio health/training diventa prevalente -> handoff'],
+      minimumInput: ['Obiettivo', 'Abitudini'],
+      outputContracts: [],
+      escalationRules: ['Sintomi clinici -> invio'],
+      allowedTools: [],
+      artifacts: [
+        {
+          kind: 'meal-plan',
+          storageType: 'nutrition',
+          description: 'Piano nutrizionale strutturato',
+        },
+      ],
+    },
   },
   {
     id: 'fisioterapista',
@@ -19,6 +36,23 @@ const team: AgentProfile[] = [
     systemPrompt: 'x',
     toolsAllowed: [],
     decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Dolore o sintomi health/training -> posso prendere in carico il consulto'],
+      handoffTriggers: ['Quando il caso diventa health/training prevalente -> handoff'],
+      minimumInput: ['Sintomi', 'Durata'],
+      outputContracts: [],
+      escalationRules: ['Red flag cliniche -> valutazione medica'],
+      allowedTools: [],
+      artifacts: [
+        {
+          kind: 'training-plan',
+          storageType: 'training',
+          description: 'Programmazione motoria',
+        },
+      ],
+    },
   },
   {
     id: 'psicologo',
@@ -27,6 +61,23 @@ const team: AgentProfile[] = [
     systemPrompt: 'x',
     toolsAllowed: [],
     decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Stress o sonno -> specialista mindfulness'],
+      handoffTriggers: ['Domini mindfulness prevalenti -> handoff'],
+      minimumInput: ['Stress'],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [
+        {
+          kind: 'mindfulness-plan',
+          storageType: 'mindfulness',
+          description: 'Percorso mindfulness',
+        },
+      ],
+    },
   },
 ]
 
@@ -156,6 +207,7 @@ describe('case protocol vertical slice', () => {
     expect(out.caseState.protocolState).toBe('handoff_pending_user')
     expect(out.caseState.pendingHandoffAgentId).toBe('fisioterapista')
     expect(out.events.map((e) => e.kind)).toEqual(['handoff_requested'])
+    expect(out.events[0]?.reason).toContain('handoff')
   })
 
   it('completes permanent handoff on the next checkpoint turn', () => {
@@ -212,5 +264,31 @@ describe('case protocol vertical slice', () => {
       displayName: 'Fisioterapista',
       domains: ['training', 'health'],
     })
+  })
+
+  it('opens a consult automatically when runtime consult triggers detect a domain shift', () => {
+    const current = advanceCaseState({
+      current: null,
+      conversationId: 'c6',
+      message: 'vorrei migliorare la dieta',
+      detectedDomain: 'nutrition',
+      allDomains: ['nutrition'],
+      team,
+    }).caseState
+
+    const out = advanceCaseState({
+      current,
+      conversationId: 'c6',
+      message: 'ho dolore toracico e fiato corto durante gli esercizi',
+      detectedDomain: 'health',
+      allDomains: ['health', 'training'],
+      team,
+    })
+
+    expect(out.caseState.protocolState).toBe('consult_active_takeover')
+    expect(out.caseState.ownerAgentId).toBe('dietista')
+    expect(out.caseState.activeSpeakerAgentId).toBe('fisioterapista')
+    expect(out.events.map((e) => e.kind)).toEqual(['consult_requested', 'takeover_started'])
+    expect(out.events[0]?.reason).toContain('health')
   })
 })

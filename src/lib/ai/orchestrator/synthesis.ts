@@ -111,8 +111,7 @@ function buildSystemPrompt(
     ? `\nHai ricevuto un'immagine allegata da ${nameRef}. Analizzala e integra le informazioni visive nella tua risposta.`
     : ''
 
-  // When user explicitly asks for a plan, override hasMissingData so we don't block output
-  const effectivelyHasMissingData = hasMissingData && !planRequest
+  const effectivelyHasMissingData = hasMissingData
 
   if (activeSpecialist) {
     const firstPersonRule = `Parla SEMPRE in prima persona singolare (io, mi, ti consiglio, penso). NON usare MAI "noi", "il team", "siamo", "il nostro team" o qualsiasi altra forma plurale — sei un singolo specialista.`
@@ -149,6 +148,9 @@ function buildSystemPrompt(
         gatingQuestionCount > 1
           ? `Fai le domande indicate nel prompt (${gatingQuestionCount} dati fondamentali mancanti) in modo naturale — puoi porle insieme come breve scheda di presentazione, in modo colloquiale.`
           : `Fai la domanda indicata nel prompt — in modo naturale, come parte della conversazione.`
+      const missingDataRule = planRequest
+        ? `NON produrre un piano definitivo finché mancano questi dati. Al massimo puoi anticipare solo una struttura parziale, dichiarando chiaramente che non è ancora finalizzabile.`
+        : `NON dare altri consigli finché non hai i dati fondamentali.`
 
       return [
         `Sei ${activeSpecialist.displayName}. Stai seguendo ${nameRef}.`,
@@ -161,7 +163,7 @@ function buildSystemPrompt(
         `Stai ancora raccogliendo le informazioni essenziali per personalizzare il percorso di ${nameRef}.`,
         questionInstruction,
         `Se il messaggio di ${nameRef} contiene già dati utili, riconoscili brevemente PRIMA di fare la prossima domanda.`,
-        `NON dare altri consigli finché non hai i dati fondamentali.`,
+        missingDataRule,
         domainBoundaryRule,
       ].join('\n')
     }
@@ -231,7 +233,9 @@ function buildSystemPrompt(
       `Stai raccogliendo le informazioni per costruire un percorso personalizzato per ${nameRef}.`,
       teamQuestionInstruction,
       `Se il messaggio di ${nameRef} contiene già dati utili, riconoscili brevemente prima di fare le prossime domande.`,
-      `Se ${nameRef} vuole consigli senza rispondere: dai consigli con le assunzioni che hai, esplicitandole.`,
+      planRequest
+        ? `Se ${nameRef} vuole un piano completo subito, NON finalizzarlo: raccogli prima i dati mancanti o al massimo anticipa una struttura parziale dichiarata come incompleta.`
+        : `Se ${nameRef} vuole consigli senza rispondere: dai consigli con le assunzioni che hai, esplicitandole.`,
     ].join('\n')
   }
 
@@ -291,13 +295,16 @@ function buildUserPrompt(params: {
         : ''
 
   // BUG-A + BUG-G: Bottom instruction adapts to batch size
-  const closingInstruction = planRequest
-    ? `L'utente chiede esplicitamente un piano/output definitivo. Produci un documento professionale COMPLETO con dati specifici (grammature, kcal, esercizi, serie, ripetizioni, ecc.). NON chiedere altre informazioni — usa i dati disponibili e specifica le assunzioni fatte.`
-    : missingQuestions.length > 1
-      ? `Fai le domande indicate sopra in modo naturale e colloquiale — sono i dati fondamentali del profilo ancora mancanti. Puoi porle insieme brevemente. Non dare altri consigli in questo messaggio.`
-      : missingQuestions.length === 1
-        ? `Fai la domanda indicata sopra in modo naturale. Non dare consigli in questo messaggio.`
-        : `Dai una risposta diretta, concreta e personalizzata basandoti sui dati disponibili.`
+  const closingInstruction =
+    planRequest && missingQuestions.length > 0
+      ? `L'utente chiede un piano/output definitivo, ma mancano dati fondamentali. NON produrre un documento definitivo. Raccogli prima i dati indicati sopra; se utile, anticipa solo una struttura parziale chiaramente incompleta.`
+      : planRequest
+        ? `L'utente chiede esplicitamente un piano/output definitivo. Produci un documento professionale completo con dati specifici, ma solo usando dati realmente presenti. Non inventare dettagli mancanti.`
+        : missingQuestions.length > 1
+          ? `Fai le domande indicate sopra in modo naturale e colloquiale — sono i dati fondamentali del profilo ancora mancanti. Puoi porle insieme brevemente. Non dare altri consigli in questo messaggio.`
+          : missingQuestions.length === 1
+            ? `Fai la domanda indicata sopra in modo naturale. Non dare consigli in questo messaggio.`
+            : `Dai una risposta diretta, concreta e personalizzata basandoti sui dati disponibili.`
 
   return [
     // C1: long-term memory from past sessions shown first so model has full context

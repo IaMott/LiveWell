@@ -339,7 +339,7 @@ describe('/api/chat/send persistence integration', () => {
     })
   })
 
-  it('streams agent.thinking events with specialist switch titles before response deltas', async () => {
+  it('prioritizes protocol agent.thinking events over proposal-only theatrical steps', async () => {
     vi.resetModules()
     vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
       orchestrate: vi.fn(async () => ({
@@ -353,6 +353,10 @@ describe('/api/chat/send persistence integration', () => {
           domain: 'training',
           domains: ['training', 'health'],
         },
+        protocolEvents: [
+          { kind: 'consult_requested', actorAgentId: 'dietista', toAgentId: 'fisioterapista' },
+          { kind: 'takeover_started', fromAgentId: 'dietista', toAgentId: 'fisioterapista' },
+        ],
         ui: { domainIcon: 'training', moodScore: 50, sectionScores: { training: 60, general: 50 } },
         safety: { escalation: 'none' },
         debug: {
@@ -392,8 +396,10 @@ describe('/api/chat/send persistence integration', () => {
 
     expect(res.status).toBe(200)
     expect(body).toContain('"type":"agent.thinking"')
-    expect(body).toContain('Valuto pattern del dolore')
-    expect(body).toContain('Escludo red flags cliniche')
+    expect(body).toContain('consulto richiesto a Fisioterapista')
+    expect(body).toContain('prendo temporaneamente il testimone')
+    expect(body).not.toContain('Valuto pattern del dolore')
+    expect(body).not.toContain('Escludo red flags cliniche')
     expect(body).toContain('"type":"message.complete"')
   })
 

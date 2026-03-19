@@ -59,5 +59,10 @@ describe('TEAM domain registry hardening', () => {
     expect(dietista?.runtimeCapabilities).toBeDefined()
     expect(dietista?.runtimeCapabilities?.allowedTools).toContain('artifacts.saveRecommendation')
     expect((dietista?.runtimeCapabilities?.artifacts.length ?? 0) > 0).toBe(true)
+    expect(
+      dietista?.runtimeCapabilities?.artifacts.some(
+        (artifact) => artifact.storageType === 'mindfulness',
+      ),
+    ).toBe(false)
   })
 })

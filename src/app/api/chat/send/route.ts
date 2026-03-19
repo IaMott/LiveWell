@@ -467,7 +467,10 @@ export async function POST(request: Request): Promise<Response> {
           parsedBody.message,
           cpUserName ?? null,
         )
-        const thinkingEvents = mergeThinkingEvents(protocolThinkingEvents, proposalThinkingEvents)
+        const thinkingEvents =
+          protocolThinkingEvents.length > 0
+            ? protocolThinkingEvents
+            : mergeThinkingEvents(protocolThinkingEvents, proposalThinkingEvents)
 
         if (thinkingEvents.length > 0) {
           for (let i = 0; i < thinkingEvents.length; i += 1) {

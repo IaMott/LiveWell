@@ -19,6 +19,58 @@ export type RuntimeCapabilityContract = {
   artifacts: ArtifactContract[]
 }
 
+const DOMAIN_ARTIFACT_MAP: Record<string, ArtifactContract[]> = {
+  nutrition: [
+    {
+      kind: 'meal-plan',
+      storageType: 'nutrition',
+      description: 'Piani alimentari, menu o schede nutrizionali strutturate',
+    },
+  ],
+  training: [
+    {
+      kind: 'training-plan',
+      storageType: 'training',
+      description: 'Schede allenamento, riabilitazione o programmazione motoria',
+    },
+  ],
+  mindfulness: [
+    {
+      kind: 'mindfulness-plan',
+      storageType: 'mindfulness',
+      description: 'Percorsi di mindfulness, supporto psicologico o coaching strutturato',
+    },
+  ],
+  health: [
+    {
+      kind: 'professional-report',
+      storageType: 'other',
+      description: 'Report, valutazioni strutturate o orientamenti professionali',
+    },
+  ],
+  inspiration: [
+    {
+      kind: 'professional-report',
+      storageType: 'other',
+      description: 'Report, valutazioni strutturate o orientamenti professionali',
+    },
+  ],
+  general: [
+    {
+      kind: 'recommendation-note',
+      storageType: 'other',
+      description: 'Raccomandazioni specialistiche strutturate',
+    },
+  ],
+  coordination: [
+    {
+      kind: 'recommendation-note',
+      storageType: 'other',
+      description: 'Raccomandazioni specialistiche strutturate',
+    },
+  ],
+}
+
 function stripIndentation(markdown: string): string[] {
   return markdown.split('\n').map((line) => line.replace(/^\s{4}/, '').trimEnd())
 }
@@ -57,9 +109,18 @@ function collectBulletValues(lines: string[]): string[] {
     .filter((line) => line.length > 0)
 }
 
-function inferArtifactContracts(agentId: string, markdown: string): ArtifactContract[] {
-  const lowerAgentId = agentId.toLowerCase()
-  const lower = markdown.toLowerCase()
+function collectDeclaredDomains(markdown: string): string[] {
+  const missionBlock = collectSection(stripIndentation(markdown), '## Missione')
+  const mission = missionBlock.join(' ').toLowerCase()
+  const domains = Object.keys(DOMAIN_ARTIFACT_MAP).filter((domain) => mission.includes(domain))
+  return domains.length > 0 ? domains : ['general']
+}
+
+function inferArtifactContracts(
+  _agentId: string,
+  markdown: string,
+  allowedTools: string[],
+): ArtifactContract[] {
   const contracts: ArtifactContract[] = []
 
   const push = (contract: ArtifactContract) => {
@@ -67,47 +128,20 @@ function inferArtifactContracts(agentId: string, markdown: string): ArtifactCont
     contracts.push(contract)
   }
 
-  if (
-    lower.includes('ricett') ||
-    lower.includes('menu') ||
-    lowerAgentId.includes('chef') ||
-    lowerAgentId.includes('diet')
-  ) {
-    push({
-      kind: 'meal-plan',
-      storageType: 'nutrition',
-      description: 'Piani alimentari, menu o schede nutrizionali strutturate',
-    })
+  for (const domain of collectDeclaredDomains(markdown)) {
+    for (const contract of DOMAIN_ARTIFACT_MAP[domain] ?? []) push(contract)
   }
 
-  if (lower.includes('allenamento') || lower.includes('riabilit') || lower.includes('workout')) {
-    push({
-      kind: 'training-plan',
-      storageType: 'training',
-      description: 'Schede allenamento, riabilitazione o programmazione motoria',
-    })
-  }
-
-  if (lower.includes('mindfulness') || lower.includes('psicolog') || lower.includes('mental')) {
-    push({
-      kind: 'mindfulness-plan',
-      storageType: 'mindfulness',
-      description: 'Percorsi di mindfulness, supporto psicologico o coaching strutturato',
-    })
-  }
-
-  if (
-    lower.includes('report') ||
-    lower.includes('analisi') ||
-    lower.includes('valutazione') ||
-    lower.includes('summary') ||
-    lower.includes('orientamento')
-  ) {
-    push({
-      kind: 'professional-report',
-      storageType: 'other',
-      description: 'Report, summary professionali, valutazioni strutturate o orientamenti',
-    })
+  for (const tool of allowedTools) {
+    if (tool.startsWith('nutrition.')) {
+      for (const contract of DOMAIN_ARTIFACT_MAP.nutrition) push(contract)
+    }
+    if (tool.startsWith('training.')) {
+      for (const contract of DOMAIN_ARTIFACT_MAP.training) push(contract)
+    }
+    if (tool.startsWith('mindfulness.')) {
+      for (const contract of DOMAIN_ARTIFACT_MAP.mindfulness) push(contract)
+    }
   }
 
   if (contracts.length === 0) {
@@ -165,6 +199,7 @@ export function parseCapabilityContract(
       '## Output contract verso il team',
     ]),
   )
+  const artifacts = inferArtifactContracts(agentId, markdown, tools)
 
   return {
     summary: mission.join(' ').trim() || undefined,
@@ -176,6 +211,6 @@ export function parseCapabilityContract(
     outputContracts,
     escalationRules,
     allowedTools: tools,
-    artifacts: inferArtifactContracts(agentId, markdown),
+    artifacts,
   }
 }

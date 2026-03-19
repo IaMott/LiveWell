@@ -4,7 +4,7 @@ const DEFAULT_OUTPUT_INSTRUCTIONS = [
   `OUTPUT PROFESSIONALE COMPLETO:`,
   `Quando l'utente chiede un piano o documento, produce un output professionale dettagliato,`,
   `strutturato, con dati specifici (numeri, date, quantità) — non linee guida generiche.`,
-  `Se mancano dati, usa assunzioni ragionevoli dichiarandole esplicitamente.`,
+  `Se mancano dati essenziali, NON finalizzare il documento: chiedi i dati mancanti oppure fornisci solo una bozza parziale chiaramente marcata come incompleta.`,
 ]
 
 function buildArtifactSpecificLines(agent: AgentProfile): string[] {
@@ -21,7 +21,7 @@ function buildArtifactSpecificLines(agent: AgentProfile): string[] {
   }
 
   lines.push(
-    `Dichiara esplicitamente eventuali assunzioni se i dati disponibili non sono completi.`,
+    `Se i dati essenziali non sono completi, NON trasformare la risposta in un piano definitivo e NON inventare numeri specifici mancanti.`,
   )
   return lines
 }

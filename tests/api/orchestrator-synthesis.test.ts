@@ -77,6 +77,47 @@ describe('synthesis boundary', () => {
     expect(call?.user.indexOf('Seconda summary')).toBeLessThan(call?.user.indexOf('Prima summary'))
   })
 
+  it('does not ask for a definitive plan when critical data are still missing', async () => {
+    const complete = vi.fn().mockResolvedValue({ text: 'Serve prima qualche dato in piu.' })
+
+    await synthesizeRawResponse({
+      llm: { complete },
+      userMessage: 'voglio una dieta completa',
+      proposals,
+      gatingQuestions: ['Hai allergie o intolleranze?'],
+      criticalQuestions: ['Hai allergie o intolleranze?'],
+      contextPack,
+      activeSpecialist: {
+        id: 'dietista',
+        displayName: 'Dietista',
+        domain: 'nutrition',
+        domains: ['nutrition'],
+        runtimeCapabilities: {
+          canDo: [],
+          cannotDo: [],
+          consultTriggers: [],
+          handoffTriggers: [],
+          minimumInput: ['Allergie', 'Obiettivo'],
+          outputContracts: [],
+          escalationRules: [],
+          allowedTools: [],
+          artifacts: [
+            {
+              kind: 'meal-plan',
+              storageType: 'nutrition',
+              description: 'Piano nutrizionale strutturato',
+            },
+          ],
+        },
+      },
+    })
+
+    const call = complete.mock.calls[0]?.[0]
+    expect(call?.system).toContain('NON produrre un piano definitivo')
+    expect(call?.user).toContain('NON produrre un documento definitivo')
+    expect(call?.user).not.toContain('NON chiedere altre informazioni')
+  })
+
   it('falls back to the first available proposal summary when model returns json-like text', async () => {
     const result = await synthesizeRawResponse({
       llm: {

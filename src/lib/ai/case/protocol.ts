@@ -1,5 +1,9 @@
 import type { AgentProfile, Domain } from '../types'
-import { shouldTriggerPermanentHandoff } from '../capabilities/registry'
+import {
+  findCapabilityConsultTarget,
+  findPermanentHandoffTriggerReason,
+  shouldTriggerPermanentHandoff,
+} from '../capabilities/registry'
 import { selectAgentsForRequest } from '../orchestrator/agentSelection'
 import { CaseProtocolEvent, CaseState } from './state'
 
@@ -143,6 +147,15 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
   }
 
   const requestedAgentId = detectRequestedAgentId(message, team)
+  const capabilityConsult =
+    current.protocolState === 'owner_active' && !requestedAgentId
+      ? findCapabilityConsultTarget({
+          team,
+          ownerAgentId: current.ownerAgentId,
+          detectedDomain,
+          message,
+        })
+      : null
 
   if (current.protocolState === 'handoff_pending_user') {
     const pendingHandoffAgentId = current.pendingHandoffAgentId ?? current.activeSpeakerAgentId
@@ -188,17 +201,29 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
   if (current.protocolState === 'consult_active_takeover') {
     const consultTarget = current.consultTargetAgentId
     const returnTarget = current.returnTargetAgentId ?? current.ownerAgentId
+    const handoffReason =
+      consultTarget != null
+        ? findPermanentHandoffTriggerReason({
+            team,
+            ownerAgentId: current.ownerAgentId,
+            consultTargetAgentId: consultTarget,
+            detectedDomain,
+            message,
+          })
+        : null
     const shouldRequestHandoff =
       consultTarget != null &&
       current.handoffCount < MAX_HANDOFFS &&
       !shouldReturnToOwner(message, current.ownerAgentId) &&
       requestedAgentId !== current.ownerAgentId &&
       isMeaningfulHandoffContinuation(message) &&
+      Boolean(handoffReason) &&
       shouldTriggerPermanentHandoff({
         team,
         ownerAgentId: current.ownerAgentId,
         consultTargetAgentId: consultTarget,
         detectedDomain,
+        message,
       })
     const continueTakeover =
       consultTarget != null &&
@@ -211,13 +236,13 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
         protocolState: 'handoff_pending_user',
         activeSpeakerAgentId: consultTarget,
         pendingHandoffAgentId: consultTarget,
-        checkpointReason: 'domain_shift_confirmed_by_runtime',
+        checkpointReason: handoffReason ?? 'domain_shift_confirmed_by_runtime',
       }
       events.push({
         kind: 'handoff_requested',
         actorAgentId: current.ownerAgentId,
         toAgentId: consultTarget,
-        reason: 'domain_shift_confirmed_by_runtime',
+        reason: handoffReason ?? 'domain_shift_confirmed_by_runtime',
       })
       return { caseState: next, events }
     }
@@ -264,14 +289,17 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
 
   if (
     current.protocolState === 'owner_active' &&
-    requestedAgentId &&
-    requestedAgentId !== current.ownerAgentId
+    ((requestedAgentId && requestedAgentId !== current.ownerAgentId) || capabilityConsult)
   ) {
+    const nextSpeaker = capabilityConsult?.agentId ?? requestedAgentId
+    if (!nextSpeaker || nextSpeaker === current.ownerAgentId) {
+      return { caseState: current, events }
+    }
     if (current.loopCount >= MAX_CONSULT_LOOPS) {
       events.push({
         kind: 'consult_blocked',
         actorAgentId: current.ownerAgentId,
-        toAgentId: requestedAgentId,
+        toAgentId: nextSpeaker,
         reason: 'consult_loop_guard',
       })
       return { caseState: current, events }
@@ -280,11 +308,11 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
     const next: CaseState = {
       conversationId,
       ownerAgentId: current.ownerAgentId,
-      activeSpeakerAgentId: requestedAgentId,
+      activeSpeakerAgentId: nextSpeaker,
       protocolState: 'consult_active_takeover',
-      consultTargetAgentId: requestedAgentId,
+      consultTargetAgentId: nextSpeaker,
       returnTargetAgentId: current.ownerAgentId,
-      consultReason: 'user_requested_specialist',
+      consultReason: capabilityConsult?.reason ?? 'user_requested_specialist',
       takeoverTurns: 1,
       loopCount: current.loopCount + 1,
       handoffCount: current.handoffCount,
@@ -292,14 +320,14 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
     events.push({
       kind: 'consult_requested',
       actorAgentId: current.ownerAgentId,
-      toAgentId: requestedAgentId,
-      reason: 'user_requested_specialist',
+      toAgentId: nextSpeaker,
+      reason: capabilityConsult?.reason ?? 'user_requested_specialist',
     })
     events.push({
       kind: 'takeover_started',
       fromAgentId: current.ownerAgentId,
-      toAgentId: requestedAgentId,
-      reason: 'user_requested_specialist',
+      toAgentId: nextSpeaker,
+      reason: capabilityConsult?.reason ?? 'user_requested_specialist',
     })
     return { caseState: next, events }
   }
