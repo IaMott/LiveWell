@@ -80,6 +80,46 @@ const team: AgentProfile[] = [
     },
   },
   {
+    id: 'consulente-legale',
+    displayName: 'Consulente Legale',
+    domainTags: ['inspiration'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Separazione o accordi legali -> consulente legale del team'],
+      handoffTriggers: ['Caso legale dominante -> handoff inspiration'],
+      minimumInput: ['Contesto legale'],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
+    id: 'relationship-coach',
+    displayName: 'Relationship Coach',
+    domainTags: ['mindfulness', 'inspiration'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: [
+        'Separazione complessa o conflitti con implicazioni legali -> consulente legale del team',
+      ],
+      handoffTriggers: ['Quando la componente legale diventa dominante -> handoff inspiration'],
+      minimumInput: ['Obiettivo relazionale'],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
     id: 'orchestratore',
     displayName: 'Orchestratore',
     domainTags: ['coordination'],
@@ -421,5 +461,62 @@ describe('case protocol vertical slice', () => {
     expect(out.caseState.protocolState).toBe('handoff_pending_user')
     expect(out.caseState.pendingHandoffAgentId).toBe('fisioterapista')
     expect(out.events.map((e) => e.kind)).toEqual(['handoff_requested'])
+  })
+
+  it('opens an implicit handoff for same-domain legal continuity when the consultato is clearly taking over', () => {
+    const consultState = {
+      conversationId: 'c-handoff-legal',
+      ownerAgentId: 'relationship-coach',
+      activeSpeakerAgentId: 'consulente-legale',
+      protocolState: 'consult_active_takeover' as const,
+      consultTargetAgentId: 'consulente-legale',
+      returnTargetAgentId: 'relationship-coach',
+      consultReason:
+        'Separazione complessa o conflitti con implicazioni legali -> consulente legale del team',
+      takeoverTurns: 1,
+      loopCount: 1,
+      handoffCount: 0,
+    }
+
+    const out = advanceCaseState({
+      current: consultState,
+      conversationId: 'c-handoff-legal',
+      message: 'vorrei proseguire con lui sugli accordi legali e restiamo su questo percorso',
+      detectedDomain: 'inspiration',
+      allDomains: ['inspiration'],
+      team,
+    })
+
+    expect(out.caseState.protocolState).toBe('handoff_pending_user')
+    expect(out.caseState.pendingHandoffAgentId).toBe('consulente-legale')
+    expect(out.events.map((e) => e.kind)).toEqual(['handoff_requested'])
+  })
+
+  it('does not open an implicit handoff on a vague follow-up that does not justify ownership transfer', () => {
+    const consultState = {
+      conversationId: 'c-handoff-no',
+      ownerAgentId: 'dietista',
+      activeSpeakerAgentId: 'fisioterapista',
+      protocolState: 'consult_active_takeover' as const,
+      consultTargetAgentId: 'fisioterapista',
+      returnTargetAgentId: 'dietista',
+      consultReason: 'user_requested_specialist',
+      takeoverTurns: 1,
+      loopCount: 1,
+      handoffCount: 0,
+    }
+
+    const out = advanceCaseState({
+      current: consultState,
+      conversationId: 'c-handoff-no',
+      message: 'ok capito',
+      detectedDomain: 'training',
+      allDomains: ['training'],
+      team,
+    })
+
+    expect(out.caseState.protocolState).toBe('owner_active')
+    expect(out.caseState.activeSpeakerAgentId).toBe('dietista')
+    expect(out.events.map((e) => e.kind)).toEqual(['return_baton'])
   })
 })

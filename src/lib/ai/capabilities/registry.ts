@@ -47,13 +47,21 @@ const AGENT_SEMANTIC_SIGNALS: Record<string, string[]> = {
   'mental-coach': ['blocco mentale', 'performance', 'pre gara', 'concentrazione', 'mental'],
   'sleep-coach': ['sonno', 'insonnia', 'russamento', 'apnee', 'osas', 'dormo male'],
   'consulente-legale': ['legale', 'separazione', 'causa', 'contratto', 'avvocato', 'tutela'],
-  'financial-planner': ['debiti', 'spese', 'bilancio', 'risparmi', 'soldi', 'finanza'],
+  'financial-planner': ['debiti', 'spese', 'bilancio', 'risparmi', 'soldi', 'finanza', 'mutuo'],
   commercialista: ['tasse', 'fisco', 'dichiarazione', 'partita iva', 'tributi'],
   'life-organizer': ['organizzarmi', 'gestire tutto', 'routine', 'organizzazione', 'agenda'],
   dietista: ['dieta', 'alimentare', 'mangiare', 'peso', 'dimagrire', 'allergie alimentari'],
   chef: ['ricette', 'cucinare', 'pasti', 'menu', 'spesa'],
   gastroenterologo: ['gastrite', 'reflusso', 'digestivi', 'gonfiore', 'intestino', 'nausea'],
-  cardiologo: ['cuore', 'petto', 'pressione', 'palpitazioni', 'fiato corto', 'toracico'],
+  cardiologo: [
+    'cuore',
+    'petto',
+    'pressione',
+    'palpitazioni',
+    'fiato corto',
+    'toracico',
+    'tachicardia',
+  ],
   mmg: ['sintomi', 'pressione', 'giramenti', 'farmaci', 'medico'],
   fisioterapista: ['dolore', 'riabilitazione', 'recupero', 'mobilità', 'ginocchio', 'schiena'],
   fisiatra: ['dolore', 'funzionale', 'riabilitazione', 'limitazioni', 'diagnosi'],
@@ -63,6 +71,19 @@ const AGENT_SEMANTIC_SIGNALS: Record<string, string[]> = {
   dermatologo: ['pelle', 'sfoghi', 'eczema', 'acne', 'dermat'],
   endocrinologo: ['ormoni', 'tiroide', 'insulina', 'metabolismo'],
 }
+
+const SAME_DOMAIN_HANDOFF_GENERALISTS = new Set([
+  'orchestratore',
+  'analista-contesto',
+  'life-organizer',
+  'relationship-coach',
+  'career-coach',
+  'executive-coach',
+  'commercialista',
+  'mmg',
+  'gastroenterologo',
+  'dermatologo',
+])
 
 const GENERIC_TRIGGER_PATTERN =
   /(fuori competenza|specialista|specialisti|co-gestione|invio|medico|psicologo|valutazione medica|stop e valutazione)/i
@@ -329,6 +350,18 @@ function scoreConsultTarget(params: {
   return score
 }
 
+function allowsSameDomainHandoff(
+  owner: AgentProfile | undefined,
+  consultTarget: AgentProfile,
+): boolean {
+  if (!owner) return false
+  return (
+    owner.domainTags.includes('coordination') ||
+    SAME_DOMAIN_HANDOFF_GENERALISTS.has(owner.id) ||
+    owner.domainTags.length > consultTarget.domainTags.length
+  )
+}
+
 export function findCapabilityConsultTarget(params: {
   team: AgentProfile[]
   ownerAgentId: string
@@ -403,7 +436,8 @@ export function findCapabilityConsultTarget(params: {
     contractsConfigured &&
     !ownerReason &&
     targetMatches.length === 0 &&
-    (rankedTargets[0]?.score ?? 0) < 9
+    (rankedTargets[0]?.score ?? 0) <
+      (params.detectedDomain === 'health' || params.detectedDomain === 'inspiration' ? 8 : 9)
   ) {
     return null
   }
@@ -433,7 +467,11 @@ export function findPermanentHandoffTriggerReason(params: {
   const domainShift =
     !agentSupportsDomain(owner, params.detectedDomain) &&
     agentSupportsDomain(consultTarget, params.detectedDomain)
-  if (!domainShift) return null
+  const sameDomainSpecializationShift =
+    agentSupportsDomain(owner, params.detectedDomain) &&
+    agentSupportsDomain(consultTarget, params.detectedDomain) &&
+    allowsSameDomainHandoff(owner, consultTarget)
+  if (!domainShift && !sameDomainSpecializationShift) return null
 
   const ownerContract = getAgentRuntimeContract(params.team, params.ownerAgentId)
   const targetContract = getAgentRuntimeContract(params.team, consultTarget.id)

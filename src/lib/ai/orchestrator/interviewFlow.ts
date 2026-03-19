@@ -269,23 +269,29 @@ function buildInterviewQueue(
     return true
   })
 
+  // Persisted workspace queues must be drained deterministically before introducing
+  // new domain-specific prompts, otherwise we re-inflate the queue every turn.
+  if (orderedWorkspace.length > 0) {
+    return {
+      askNow: orderedWorkspace.slice(0, 1),
+      pendingNext: orderedWorkspace.slice(1),
+    }
+  }
+
   // L1 baseline — fires when core personal data is still missing.
   // Unlike a simple "first conversation" gate, we check actual data completeness so that:
   // - L1 continues across early messages of the SAME conversation (collecting data step by step)
   // - L1 stops once all baseline data is collected (across any conversation)
   // - L1 stops mid-conversation after too many exchanges (>= 8 messages) to avoid being intrusive
   const l1Questions =
-    !hasCompletedBaseline &&
-    isEarlyConversation &&
-    orderedWorkspace.length === 0 &&
-    !activeSpecialist
+    !hasCompletedBaseline && isEarlyConversation && !activeSpecialist
       ? buildL1BaselineQuestions(contextPack, userMessage)
       : []
 
   // L2 triage (only in team mode — not in locked-specialist mode)
   // Specialist mode uses its own intake questions; L2 would compete for slots.
   const l2Questions =
-    l1Questions.length === 0 && orderedWorkspace.length === 0 && !activeSpecialist
+    l1Questions.length === 0 && !activeSpecialist
       ? buildL2TriageQuestions(contextPack, userMessage)
       : []
 

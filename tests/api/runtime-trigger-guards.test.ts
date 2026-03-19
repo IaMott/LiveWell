@@ -95,6 +95,48 @@ const team: AgentProfile[] = [
     },
   },
   {
+    id: 'relationship-coach',
+    displayName: 'Relationship Coach',
+    domainTags: ['mindfulness', 'inspiration'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: [
+        'Separazione complessa o conflitti con implicazioni legali -> consulente legale del team.',
+      ],
+      handoffTriggers: ['Caso relazionale con dominanza legale -> handoff inspiration.'],
+      minimumInput: [],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
+    id: 'career-coach',
+    displayName: 'Career Coach',
+    domainTags: ['inspiration'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: [
+        'Debiti, ansia finanziaria o blocchi economici concreti -> financial planner.',
+      ],
+      handoffTriggers: ['Caso economico dominante -> handoff inspiration.'],
+      minimumInput: [],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
     id: 'financial-planner',
     displayName: 'Financial Planner',
     domainTags: ['inspiration'],
@@ -125,6 +167,27 @@ const team: AgentProfile[] = [
       cannotDo: [],
       consultTriggers: ['Dolore toracico, fiato corto o palpitazioni -> cardiologo del team.'],
       handoffTriggers: ['Sintomi cardiologici dominanti -> handoff health.'],
+      minimumInput: [],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
+    id: 'persona-trainer',
+    displayName: 'Persona Trainer',
+    domainTags: ['training'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: [
+        'Dolore toracico, fiato corto o tachicardia in allenamento -> cardiologo del team.',
+      ],
+      handoffTriggers: ['Sintomi health dominanti in allenamento -> handoff health.'],
       minimumInput: [],
       outputContracts: [],
       escalationRules: [],
@@ -194,5 +257,39 @@ describe('runtime trigger guards', () => {
 
     expect(out).toMatchObject({ agentId: 'cardiologo' })
     expect(out?.reason.toLowerCase()).toContain('torac')
+  })
+
+  it('routes implicit legal separation cases from relationship coaching to the legal consultant', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'relationship-coach',
+      detectedDomain: 'inspiration',
+      message: 'mi sto separando e dobbiamo rivedere accordi, tutela e parte legale',
+    })
+
+    expect(out).toMatchObject({ agentId: 'consulente-legale' })
+  })
+
+  it('routes implicit financial stress cases from career coaching to financial planning', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'career-coach',
+      detectedDomain: 'inspiration',
+      message: 'tra debiti, mutuo e spese fuori controllo sto andando in ansia',
+    })
+
+    expect(out).toMatchObject({ agentId: 'financial-planner' })
+  })
+
+  it('routes chest symptoms from a training owner to a health specialist', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'persona-trainer',
+      detectedDomain: 'health',
+      message: 'mentre correvo ho avuto dolore al petto, tachicardia e fiato corto',
+    })
+
+    expect(out).toMatchObject({ agentId: 'cardiologo' })
+    expect(out?.reason.toLowerCase()).toMatch(/torac|tachic|fiato/)
   })
 })

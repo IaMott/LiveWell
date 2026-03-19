@@ -44,26 +44,38 @@ const RETURN_PATTERNS = [
 const TAKEOVER_CONTINUITY_PATTERNS = [
   /\bcontinuiamo\s+con\b/i,
   /\bcontinua(?:re)?\s+con\b/i,
+  /\bproseguiamo\s+con\b/i,
+  /\bprosegui(?:amo)?\s+con\b/i,
   /\brestiamo\s+su\s+questo\s+tema\b/i,
   /\brestiamo\s+su\s+questa\s+parte\b/i,
+  /\brestiamo\s+su\s+questo\s+percorso\b/i,
   /\bapprofondiamo\s+questa\s+parte\b/i,
   /\bapprofondiamo\b/i,
   /\bcontinuiamo\s+su\s+questo\b/i,
+  /\bandiamo\s+avanti\s+su\s+questa\s+parte\b/i,
+  /\bparliamo\s+ancora\s+di\s+questo\s+con\b/i,
+  /\bvorrei\s+proseguire\s+con\b/i,
   /\bvorrei\s+che\s+fosse\s+lui\s+a\s+seguirmi\b/i,
   /\bvorrei\s+che\s+fosse\s+lei\s+a\s+seguirmi\b/i,
   /\bcontinuiamo\s+con\s+lui\b/i,
   /\bcontinuiamo\s+con\s+lei\b/i,
+  /\bproseguiamo\s+con\s+lui\b/i,
+  /\bproseguiamo\s+con\s+lei\b/i,
 ]
 
 const HANDOFF_CONTINUITY_PATTERNS = [
   /\bcontinuiamo\s+su\b/i,
+  /\bproseguiamo\s+su\b/i,
   /\bvorrei\s+che\s+mi\s+seguisse\b/i,
+  /\bvorrei\s+proseguire\s+con\b/i,
   /\bmi\s+segua\s+lui\b/i,
   /\bmi\s+segua\s+lei\b/i,
   /\brestiamo\s+su\s+questo\s+percorso\b/i,
+  /\bandiamo\s+avanti\s+su\s+questa\s+parte\b/i,
   /\bcontinuiamo\s+con\s+il\s+recupero\b/i,
   /\bcontinuiamo\s+con\s+la\s+terapia\b/i,
   /\bcontinuiamo\s+su\s+questo\s+tema\b/i,
+  /\bparliamo\s+ancora\s+di\s+questo\s+con\b/i,
 ]
 
 type AdvanceCaseStateParams = {

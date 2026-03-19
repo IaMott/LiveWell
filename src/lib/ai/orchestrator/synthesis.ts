@@ -57,6 +57,9 @@ function isPlanRequest(userMessage: string): boolean {
 function isPlanRequestInSpecialistDomain(userMessage: string, specialistId: string): boolean {
   if (!isPlanRequest(userMessage)) return false
   const lower = userMessage.toLowerCase()
+  const genericStructuredRequest = /\b(programma|protocollo|report|strategia|valutazione)\b/i.test(
+    lower,
+  )
 
   // Training specialists only respond to training-specific plan requests
   const trainingSpecialists = new Set([
@@ -67,17 +70,39 @@ function isPlanRequestInSpecialistDomain(userMessage: string, specialistId: stri
     'fisiatra',
   ])
   if (trainingSpecialists.has(specialistId)) {
-    return /\b(allenamento|training|palestra|esercizi|workout|scheda|muscol|forza|cardio|corsa|sport|attività fisica|movimento fisico|sessione)\b/i.test(
-      lower,
-    )
+    const ownSignal =
+      /\b(allenamento|training|palestra|esercizi|workout|scheda|muscol|forza|cardio|corsa|sport|attività fisica|movimento fisico|sessione|recupero)\b/i.test(
+        lower,
+      )
+    const conflictingSignal =
+      /\b(dieta|alimentar|nutriz|menu|mangiare|psicolog|mindfulness|legale|debiti|soldi)\b/i.test(
+        lower,
+      )
+    return ownSignal || (genericStructuredRequest && !conflictingSignal)
   }
 
   // Nutrition specialists only respond to nutrition-specific plan requests
   const nutritionSpecialists = new Set(['dietista', 'chef', 'gastroenterologo'])
   if (nutritionSpecialists.has(specialistId)) {
-    return /\b(dieta|alimentar|nutriz|calorie|pasto|mangiare|cibo|ricett|menu|peso|dimagrire|deficit|macros)\b/i.test(
+    const ownSignal =
+      /\b(dieta|alimentar|nutriz|calorie|pasto|mangiare|cibo|ricett|menu|peso|dimagrire|deficit|macros)\b/i.test(
+        lower,
+      )
+    const conflictingSignal =
+      /\b(allenamento|workout|esercizi|psicolog|mindfulness|legale|debiti|soldi)\b/i.test(lower)
+    return ownSignal || (genericStructuredRequest && !conflictingSignal)
+  }
+
+  const mindfulnessSpecialists = new Set(['psicologo', 'mental-coach', 'sleep-coach'])
+  if (mindfulnessSpecialists.has(specialistId)) {
+    const ownSignal =
+      /\b(stress|ansia|burnout|sonno|insonnia|mindfulness|concentrazione|blocco mentale)\b/i.test(
+        lower,
+      )
+    const conflictingSignal = /\b(dieta|alimentar|allenamento|workout|legale|debiti|soldi)\b/i.test(
       lower,
     )
+    return ownSignal || (genericStructuredRequest && !conflictingSignal)
   }
 
   // All other specialists: any recognised plan request is valid
