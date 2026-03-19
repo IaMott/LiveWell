@@ -7,7 +7,7 @@ import { logApiErrorEvent } from '@/lib/monitoring/apiErrorEvents'
 import { deriveActiveSpecialistFromCaseState } from '@/lib/ai/case/compat'
 import { buildCaseThinkingEvents } from '@/lib/ai/case/events'
 import { orchestrate } from '@/lib/ai/orchestrator/orchestrator'
-import { detectDomainFromText } from '@/lib/ai/domain/domainDetection'
+import { detectDomainFromText, detectDomainsMulti } from '@/lib/ai/domain/domainDetection'
 import { createLlmWithFallback } from '@/lib/ai/llmFactory'
 import { loadTeam } from '@/lib/ai/team/loader'
 import type { AgentInput, AgentProfile, Domain, ToolCall, ToolResult } from '@/lib/ai/types'
@@ -79,7 +79,18 @@ function buildToolExecutor(
 function getImmediateThinkingAgents(
   team: AgentProfile[],
   quickDomain: Domain,
+  message: string,
 ): Array<{ displayName: string; domainTags: Domain[] }> {
+  const trimmed = message.trim()
+  const multiDomains = detectDomainsMulti(message)
+  const isAmbiguousMultiDomain = multiDomains.length > 1
+  const isTooGeneric =
+    quickDomain === 'general' ||
+    trimmed.split(/\s+/).length < 4 ||
+    /^((ciao|hey|ehi|salve|buongiorno|buonasera|voglio stare meglio)[!.,\s]*)$/i.test(trimmed)
+
+  if (isTooGeneric || isAmbiguousMultiDomain) return []
+
   const domainMatches = team.filter(
     (a) =>
       a.domainTags.includes(quickDomain) &&
@@ -88,8 +99,6 @@ function getImmediateThinkingAgents(
       a.id !== 'analista-contesto',
   )
   if (domainMatches.length > 0) return domainMatches.slice(0, 2)
-  // Don't show a random specialist for generic/greeting messages — no immediate thinking
-  if (quickDomain === 'general') return []
   return team.filter((a) => a.id !== 'orchestratore' && a.id !== 'intervistatore').slice(0, 1)
 }
 
@@ -254,7 +263,7 @@ export async function POST(request: Request): Promise<Response> {
 
   // Quick domain for immediate thinking events (no LLM needed)
   const quickDomain = detectDomainFromText(parsedBody.message)
-  const immediateAgents = getImmediateThinkingAgents(team, quickDomain)
+  const immediateAgents = getImmediateThinkingAgents(team, quickDomain, parsedBody.message)
   const msgPreviewImmediate = parsedBody.message.slice(0, 48).trim()
 
   const encoder = new TextEncoder()

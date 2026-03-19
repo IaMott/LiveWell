@@ -10,15 +10,66 @@ const ARTIFACT_DOMAIN_MAP: Partial<Record<ArtifactStorageType, Domain[]>> = {
 const DOMAIN_TRIGGER_KEYWORDS: Record<Domain, string[]> = {
   general: [],
   nutrition: ['nutrition', 'nutriz', 'dieta', 'dietista', 'chef', 'gastro'],
-  health: ['health', 'salute', 'medic', 'sintomi', 'clin', 'fisiatra', 'mmg', 'cardi'],
+  health: [
+    'health',
+    'salute',
+    'medic',
+    'sintomi',
+    'clin',
+    'fisiatra',
+    'mmg',
+    'cardi',
+    'dolore',
+    'toracic',
+    'petto',
+    'fiato corto',
+    'dispnea',
+    'palpit',
+  ],
   training: ['training', 'allen', 'workout', 'eserciz', 'fisioterap', 'chinesiolog'],
-  mindfulness: ['mindfulness', 'stress', 'sonno', 'psicolog', 'mental', 'coach'],
+  mindfulness: [
+    'mindfulness',
+    'stress',
+    'sonno',
+    'ansia',
+    'burnout',
+    'insonnia',
+    'psicolog',
+    'mental',
+    'coach',
+  ],
   inspiration: ['inspiration', 'carriera', 'finanz', 'legale', 'organizz'],
   coordination: ['coordin', 'team', 'orchestr'],
 }
 
 const GENERIC_TRIGGER_PATTERN =
   /(fuori competenza|specialista|specialisti|co-gestione|invio|medico|psicologo|valutazione medica|stop e valutazione)/i
+
+const TRIGGER_STOPWORDS = new Set([
+  'della',
+  'dello',
+  'delle',
+  'degli',
+  'della',
+  'delle',
+  'della',
+  'team',
+  'caso',
+  'utente',
+  'specialista',
+  'specialisti',
+  'valutazione',
+  'invio',
+  'fuori',
+  'competenza',
+  'dominio',
+  'quando',
+  'diventa',
+  'prevalente',
+  'posso',
+  'prendere',
+  'carico',
+])
 
 function hasRuntimeContract(agent: AgentProfile): agent is AgentProfile & {
   runtimeCapabilities: RuntimeCapabilityContract
@@ -57,6 +108,50 @@ function normalizeText(value: string): string {
   return value.toLowerCase()
 }
 
+function tokenizeMeaningfulTerms(value: string): string[] {
+  return normalizeText(value)
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 4)
+    .filter((token) => !TRIGGER_STOPWORDS.has(token))
+}
+
+function hasTextSignal(text: string, signals: string[]): boolean {
+  const tokens = normalizeText(text)
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean)
+
+  return signals.some((signal) => {
+    if (signal.length === 0) return false
+    if (signal.includes(' ')) return text.includes(signal)
+    return tokens.some((token) => token.startsWith(signal))
+  })
+}
+
+function getDetectedDomainSignals(
+  detectedDomain: Domain,
+  supportingAgents: AgentProfile[],
+): string[] {
+  const signals = [
+    detectedDomain,
+    ...DOMAIN_TRIGGER_KEYWORDS[detectedDomain],
+    ...supportingAgents.flatMap((agent) => [
+      normalizeText(agent.id),
+      normalizeText(agent.displayName),
+    ]),
+  ]
+
+  return [...new Set(signals.filter((signal) => signal.length >= 4))]
+}
+
+function getSharedMeaningfulTokens(trigger: string, message: string): string[] {
+  const messageTokens = new Set(tokenizeMeaningfulTerms(message))
+  return tokenizeMeaningfulTerms(trigger).filter((token) => messageTokens.has(token))
+}
+
 function findMatchingTrigger(
   triggers: string[],
   detectedDomain: Domain,
@@ -66,24 +161,19 @@ function findMatchingTrigger(
   if (detectedDomain === 'general') return null
   const lowerMessage = normalizeText(message)
   const supportingAgents = getSupportingAgentsForDomain(team, detectedDomain)
-  const keywords = [
-    ...DOMAIN_TRIGGER_KEYWORDS[detectedDomain],
-    ...supportingAgents.flatMap((agent) => [
-      normalizeText(agent.id),
-      normalizeText(agent.displayName),
-      ...agent.domainTags.flatMap((tag) => DOMAIN_TRIGGER_KEYWORDS[tag] ?? [tag]),
-    ]),
-  ]
+  const domainSignals = getDetectedDomainSignals(detectedDomain, supportingAgents)
+  const messageMentionsDomain = hasTextSignal(lowerMessage, domainSignals)
 
   for (const trigger of triggers) {
     const lowerTrigger = normalizeText(trigger)
-    const mentionsDomain = keywords.some((keyword) => keyword && lowerTrigger.includes(keyword))
-    const mentionsMessageSignal = keywords.some(
-      (keyword) => keyword && lowerMessage.includes(keyword),
-    )
-    if (mentionsDomain && mentionsMessageSignal) return trigger
-    if (mentionsDomain) return trigger
-    if (GENERIC_TRIGGER_PATTERN.test(lowerTrigger)) return trigger
+    const triggerMentionsDomain = hasTextSignal(lowerTrigger, domainSignals)
+    const sharedTokens = getSharedMeaningfulTokens(trigger, message)
+    const hasGenericConsultLanguage = GENERIC_TRIGGER_PATTERN.test(lowerTrigger)
+
+    if (triggerMentionsDomain && messageMentionsDomain) return trigger
+    if (sharedTokens.length > 0 && messageMentionsDomain && hasGenericConsultLanguage)
+      return trigger
+    if (sharedTokens.length >= 2) return trigger
   }
 
   return null
@@ -110,34 +200,57 @@ export function findCapabilityConsultTarget(params: {
     return null
   }
 
-  const consultTarget = getSupportingAgentsForDomain(params.team, params.detectedDomain).find(
+  const consultTargets = getSupportingAgentsForDomain(params.team, params.detectedDomain).filter(
     (agent) => agent.id !== params.ownerAgentId,
   )
-  if (!consultTarget) return null
+  if (consultTargets.length === 0) return null
 
   const ownerContract = getAgentRuntimeContract(params.team, params.ownerAgentId)
-  const targetContract = getAgentRuntimeContract(params.team, consultTarget.id)
   const ownerReason = findMatchingTrigger(
     ownerContract?.consultTriggers ?? [],
     params.detectedDomain,
     params.message,
     params.team,
   )
-  const targetReason = findMatchingTrigger(
-    targetContract?.consultTriggers ?? [],
-    params.detectedDomain,
-    params.message,
-    params.team,
-  )
+  const targetMatches = consultTargets
+    .map((agent) => {
+      const targetContract = getAgentRuntimeContract(params.team, agent.id)
+      const reason = findMatchingTrigger(
+        targetContract?.consultTriggers ?? [],
+        params.detectedDomain,
+        params.message,
+        params.team,
+      )
+      return { agent, reason }
+    })
+    .filter((match) => Boolean(match.reason))
   const contractsConfigured =
     (ownerContract?.consultTriggers.length ?? 0) > 0 ||
-    (targetContract?.consultTriggers.length ?? 0) > 0
+    consultTargets.some(
+      (agent) => (getAgentRuntimeContract(params.team, agent.id)?.consultTriggers.length ?? 0) > 0,
+    )
 
-  if (contractsConfigured && !ownerReason && !targetReason) return null
+  if (contractsConfigured && !ownerReason && targetMatches.length === 0) return null
+
+  const ownerDirectedTarget =
+    ownerReason == null
+      ? null
+      : consultTargets.find((agent) => {
+          const lowerReason = normalizeText(ownerReason)
+          return (
+            lowerReason.includes(normalizeText(agent.id)) ||
+            lowerReason.includes(normalizeText(agent.displayName))
+          )
+        })
+  const selectedTarget = targetMatches[0]?.agent ?? ownerDirectedTarget ?? consultTargets[0]
+  const selectedReason =
+    targetMatches.find((match) => match.agent.id === selectedTarget.id)?.reason ??
+    ownerReason ??
+    `capability_consult:${params.detectedDomain}`
 
   return {
-    agentId: consultTarget.id,
-    reason: ownerReason ?? targetReason ?? `capability_consult:${params.detectedDomain}`,
+    agentId: selectedTarget.id,
+    reason: selectedReason,
   }
 }
 

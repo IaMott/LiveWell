@@ -91,6 +91,16 @@ function chooseInitialOwner(params: {
   const requested = detectRequestedAgentId(params.message, params.team)
   if (requested) return requested
 
+  if (params.detectedDomain === 'general') {
+    const neutralOwner =
+      params.team.find((agent) => agent.id === 'orchestratore') ??
+      params.team.find(
+        (agent) =>
+          agent.domainTags.includes('coordination') || agent.domainTags.includes('general'),
+      )
+    return neutralOwner?.id ?? 'orchestratore'
+  }
+
   const selected = selectAgentsForRequest(
     params.team.filter((agent) => agent.id !== 'orchestratore'),
     params.detectedDomain,
@@ -116,6 +126,7 @@ export function getCaseRoutingDomain(
 ): Domain {
   if (!caseState) return fallbackDomain
   const current = team.find((agent) => agent.id === caseState.activeSpeakerAgentId)
+  if (fallbackDomain === 'general' && current?.domainTags.includes('coordination')) return 'general'
   if (current?.domainTags.includes(fallbackDomain)) return fallbackDomain
   if (fallbackDomain !== 'general') return fallbackDomain
   const preferred = current?.domainTags.find(

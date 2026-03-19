@@ -79,6 +79,25 @@ const team: AgentProfile[] = [
       ],
     },
   },
+  {
+    id: 'orchestratore',
+    displayName: 'Orchestratore',
+    domainTags: ['coordination'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: [],
+      handoffTriggers: [],
+      minimumInput: ['Richiesta utente'],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
 ]
 
 describe('case protocol vertical slice', () => {
@@ -96,6 +115,21 @@ describe('case protocol vertical slice', () => {
     expect(out.caseState.activeSpeakerAgentId).toBe('dietista')
     expect(out.caseState.protocolState).toBe('owner_active')
     expect(out.events[0]?.kind).toBe('initialized')
+  })
+
+  it('uses a neutral owner for generic messages instead of assigning the first specialist arbitrarily', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'generic-1',
+      message: 'ciao',
+      detectedDomain: 'general',
+      allDomains: ['general'],
+      team,
+    })
+
+    expect(out.caseState.ownerAgentId).toBe('orchestratore')
+    expect(out.caseState.activeSpeakerAgentId).toBe('orchestratore')
+    expect(out.caseState.protocolState).toBe('owner_active')
   })
 
   it('opens a real consult with temporary takeover while preserving owner', () => {
@@ -208,6 +242,31 @@ describe('case protocol vertical slice', () => {
     expect(out.caseState.pendingHandoffAgentId).toBe('fisioterapista')
     expect(out.events.map((e) => e.kind)).toEqual(['handoff_requested'])
     expect(out.events[0]?.reason).toContain('handoff')
+  })
+
+  it('does not use unrelated owner triggers as consult reason when the target trigger is the real match', () => {
+    const initial = advanceCaseState({
+      current: null,
+      conversationId: 'c-trigger',
+      message: 'voglio parlare con il dietista',
+      detectedDomain: 'general',
+      allDomains: ['general'],
+      team,
+    }).caseState
+
+    const consult = advanceCaseState({
+      current: initial,
+      conversationId: 'c-trigger',
+      message: 'ho dolore al ginocchio durante esercizio',
+      detectedDomain: 'training',
+      allDomains: ['training'],
+      team,
+    })
+
+    expect(consult.caseState.protocolState).toBe('consult_active_takeover')
+    expect(consult.caseState.consultTargetAgentId).toBe('fisioterapista')
+    expect(consult.caseState.consultReason).toContain('Dolore')
+    expect(consult.caseState.consultReason).not.toContain('clinica')
   })
 
   it('completes permanent handoff on the next checkpoint turn', () => {

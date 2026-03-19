@@ -2,16 +2,19 @@ Stato progetto
 
 Obiettivo
 
-Eseguire una nuova campagna massiva di simulazioni comportamentali post-fix per verificare protocollo, capability contracts, artifact governance, gating prudente, recovery e stream semantics del sistema multi-agente.
+Applicare micro-fix mirati sui residui emersi dalla validazione massiva: trigger matching troppo permissivo, owner arbitrario su input generici, domain detection critica insufficiente e immediate thinking events cosmetici.
 
 Fatto
 
-Campagna massiva completata:
-- 73 scenari classificati con mix di test repository, harness locali e inspection dei path runtime reali;
-- suite mirata eseguita con 47 test verdi su protocollo, persistence, synthesis, stream e recovery;
-- `typecheck` verde;
-- confermati progressi reali su B1-B5 (trigger consult/handoff, artifact gating, gating prudente, stream piu protocol-first);
-- emersi ancora residui reali su matching troppo permissivo dei trigger testuali, owner arbitrario su input generici, detection insufficiente di alcuni casi critici e presenza di immediate thinking events cosmetici pre-orchestrazione.
+Micro-fix applicati:
+- `registry.ts`: matcher trigger reso token-aware e piu rigoroso; aggiunti segnali health/mindfulness necessari ai casi reali.
+- `protocol.ts`: input `general` ora inizializza un owner neutro (`orchestratore`) invece del primo specialista disponibile; il routing conserva `general` se il current speaker e solo di coordinamento.
+- `domainDetection.ts`: dolore toracico, dolore al petto, fiato corto e dispnea rinforzano/forzano `health`.
+- `route.ts`: gli immediate thinking events non partono piu su messaggi troppo generici o multi-dominio ambigui.
+- test mirati aggiunti o aggiornati.
+Verifiche eseguite:
+- `npm run test -- tests/api/runtime-trigger-guards.test.ts tests/api/domain-detection-critical.test.ts tests/api/case-protocol.test.ts tests/api/chat-send-persistence.test.ts` -> 25/25 verdi
+- `npm run typecheck` -> verde
 
 In corso
 
@@ -19,16 +22,13 @@ Nessuna modifica in corso.
 
 Prossimo
 
-Eventuali micro-fix mirati sui residui emersi dalla validazione massiva, senza riaprire il refactor generale.
+Nessun passo obbligatorio aperto in questo perimetro; eventuali fix successivi solo su residui fuori scope.
 
 Rischi
 
-Rischi residui principali:
-- trigger consult/handoff troppo permissivi o semanticamente imprecisi su alcuni domini (`registry.ts`);
-- owner iniziale arbitrario su messaggi troppo generici (`protocol.ts`);
-- domain detection insufficiente per alcuni sintomi critici (`domainDetection.ts`);
-- stream ancora non completamente semantico per la presenza di immediate thinking events cosmetici (`route.ts`).
+Nessun rischio nuovo nel perimetro dei quattro micro-fix.
+Restano solo residui fuori scope di questo step: ranking del consult target ancora semplice in alcuni domini complessi e presenza deliberata di `activeSpecialist` come compatibilita di output.
 
 Ultimo aggiornamento
 
-2026-03-19 01:33
+2026-03-19 08:25

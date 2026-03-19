@@ -403,6 +403,39 @@ describe('/api/chat/send persistence integration', () => {
     expect(body).toContain('"type":"message.complete"')
   })
 
+  it('does not emit immediate thinking events for ambiguous multi-domain messages before protocol evidence exists', async () => {
+    vi.resetModules()
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: vi.fn(async () => ({
+        domain: 'general',
+        finalMessageMarkdown: 'Prima raccolgo meglio il contesto.',
+        toolCallsToExecute: [],
+        protocolEvents: [],
+        ui: { domainIcon: 'general', moodScore: 50, sectionScores: { general: 50 } },
+        safety: { escalation: 'none' },
+        debug: { selectedAgents: [], conflicts: [] },
+      })),
+    }))
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const req = new Request('http://localhost/api/chat/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': 'u-db',
+      },
+      body: JSON.stringify({ message: 'mi alleno male, ho ansia e dolore' }),
+    })
+
+    const res = await POST(req)
+    const body = await res.text()
+
+    expect(res.status).toBe(200)
+    expect(body).not.toContain('"Analisi del messaggio in corso"')
+    expect(body).not.toContain('"type":"agent.thinking"')
+    expect(body).toContain('"type":"message.complete"')
+  })
+
   it('ignores legacy activeSpecialistId in request body and relies on canonical case state only', async () => {
     vi.resetModules()
     const orchestrateMock = vi.fn(async (_deps, input) => ({

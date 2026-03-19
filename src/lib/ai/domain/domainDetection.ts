@@ -79,13 +79,30 @@ const KEYWORDS: Record<Domain, string[]> = {
   general: [],
 }
 
+const CRITICAL_HEALTH_PATTERNS = [
+  /\bdolore\s+toracic/i,
+  /\bdolore\s+al\s+petto/i,
+  /\bfiato\s+corto\b/i,
+  /\bdispnea\b/i,
+  /\bshortness\s+of\s+breath\b/i,
+  /\bsenso\s+di\s+oppressione\s+al\s+petto/i,
+]
+
+function getCriticalHealthScore(text: string): number {
+  return CRITICAL_HEALTH_PATTERNS.some((pattern) => pattern.test(text)) ? 5 : 0
+}
+
 export function detectDomainFromText(text: string): Domain {
   const t = text.toLowerCase()
+  const criticalHealthScore = getCriticalHealthScore(t)
+  if (criticalHealthScore > 0) return 'health'
   let best: { d: Domain; score: number } = { d: 'general', score: 0 }
 
   ;(Object.keys(KEYWORDS) as Domain[]).forEach((d) => {
     if (d === 'general') return
-    const score = KEYWORDS[d].reduce((acc, kw) => (t.includes(kw) ? acc + 1 : acc), 0)
+    const score =
+      KEYWORDS[d].reduce((acc, kw) => (t.includes(kw) ? acc + 1 : acc), 0) +
+      (d === 'health' ? criticalHealthScore : 0)
     if (score > best.score) best = { d, score }
   })
 
@@ -94,11 +111,14 @@ export function detectDomainFromText(text: string): Domain {
 
 export function detectDomainsMulti(text: string): Array<{ domain: Domain; score: number }> {
   const t = text.toLowerCase()
+  const criticalHealthScore = getCriticalHealthScore(t)
   return (Object.keys(KEYWORDS) as Domain[])
     .filter((d) => d !== 'general')
     .map((d) => ({
       domain: d,
-      score: KEYWORDS[d].reduce((acc, kw) => (t.includes(kw) ? acc + 1 : acc), 0),
+      score:
+        KEYWORDS[d].reduce((acc, kw) => (t.includes(kw) ? acc + 1 : acc), 0) +
+        (d === 'health' ? criticalHealthScore : 0),
     }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
