@@ -2,18 +2,21 @@ Stato progetto
 
 Obiettivo
 
-Verificare in review finale i micro-fix pubblicati nel commit `8ee6da1` su trigger matching, owner neutro per input `general`, detection health critica e stream meno cosmetico.
+Eseguire una campagna estesa di validazione comportamentale del sistema multi-agente gia rifattorizzato e pubblicato, con almeno 100 scenari su owner, triage, consulto, handoff, artifact, gating e casi sporchi.
 
 Fatto
 
-Review finale del commit `8ee6da1` completata:
-- `registry.ts`: trigger matching piu rigoroso confermato nel path runtime e nei test mirati.
-- `protocol.ts`: owner neutro per input `general` confermato; niente assegnazione arbitraria del primo specialista.
-- `domainDetection.ts`: red flag health critiche confermate con priorita su `health`.
-- `route.ts`: immediate thinking events soppressi nei casi generici o multi-dominio ambigui.
-- test mirati rieseguiti con esito verde.
+Campagna massiva di validazione completata:
+- harness locale disciplinato con 100 scenari classificati
+- esito scenari: 59 PASS, 25 FAIL, 16 PARTIAL
+- saluti/input generici: stabili e senza owner arbitrario
+- monodominio esplicito: stabile
+- artifact governance: solida nei casi testati
+- gating prudente: buono ma non uniforme su alcuni path di synthesis
+- triage nutrizionale implicito: ancora debole e spesso non specialistico
+- consulti e handoff impliciti: ancora fragili su target ranking e dominio dominante
 Verifiche eseguite:
-- `npm run test -- tests/api/runtime-trigger-guards.test.ts tests/api/domain-detection-critical.test.ts tests/api/case-protocol.test.ts tests/api/chat-send-persistence.test.ts` -> 25/25 verdi
+- `npm run test -- tests/api/case-protocol.test.ts tests/api/artifact-governance.test.ts tests/api/team-domain-schema.test.ts tests/api/orchestrator-synthesis.test.ts tests/api/chat-send-persistence.test.ts tests/api/orchestrator-domain-persistence.test.ts tests/api/orchestrator-interview-flow.test.ts tests/api/orchestrator-multiround.test.ts tests/api/orchestrator-tool-call-plan.test.ts tests/api/orchestrator-consensus-flow.test.ts tests/api/domain-detection-critical.test.ts tests/api/runtime-trigger-guards.test.ts` -> 55/55 verdi
 - `npm run typecheck` -> verde
 
 In corso
@@ -22,13 +25,16 @@ Nessuna modifica in corso.
 
 Prossimo
 
-Nessun passo obbligatorio aperto in questo perimetro; eventuali step successivi solo su review o fix fuori scope.
+Eventuali micro-fix successivi solo su residui emersi dalla validazione: triage nutrizionale implicito, target ranking dei consulti, trigger di handoff troppo deboli, alcuni path di gating ancora non uniformi.
 
 Rischi
 
-Nessun finding nuovo o bloccante nel perimetro verificato.
-Restano solo residui fuori scope di questo step: ranking del consult target ancora semplice in alcuni domini complessi e presenza deliberata di `activeSpecialist` come compatibilita di output.
+Il sistema non puo ancora essere dichiarato corretto nei casi testati:
+- forte debolezza sul triage nutrizionale implicito
+- consulti/handoff impliciti ancora poco credibili in piu scenari reali
+- alcuni casi health critici vengono consultati verso target poco coerenti
+- qualche path di gating resta meno prudente del previsto
 
 Ultimo aggiornamento
 
-2026-03-19 09:19
+2026-03-19 10:03
