@@ -2,16 +2,16 @@ Stato progetto
 
 Obiettivo
 
-Applicare micro-fix mirati sui residui emersi dalla validazione massiva: trigger matching troppo permissivo, owner arbitrario su input generici, domain detection critica insufficiente e immediate thinking events cosmetici.
+Verificare in review finale i micro-fix pubblicati nel commit `8ee6da1` su trigger matching, owner neutro per input `general`, detection health critica e stream meno cosmetico.
 
 Fatto
 
-Micro-fix applicati:
-- `registry.ts`: matcher trigger reso token-aware e piu rigoroso; aggiunti segnali health/mindfulness necessari ai casi reali.
-- `protocol.ts`: input `general` ora inizializza un owner neutro (`orchestratore`) invece del primo specialista disponibile; il routing conserva `general` se il current speaker e solo di coordinamento.
-- `domainDetection.ts`: dolore toracico, dolore al petto, fiato corto e dispnea rinforzano/forzano `health`.
-- `route.ts`: gli immediate thinking events non partono piu su messaggi troppo generici o multi-dominio ambigui.
-- test mirati aggiunti o aggiornati.
+Review finale del commit `8ee6da1` completata:
+- `registry.ts`: trigger matching piu rigoroso confermato nel path runtime e nei test mirati.
+- `protocol.ts`: owner neutro per input `general` confermato; niente assegnazione arbitraria del primo specialista.
+- `domainDetection.ts`: red flag health critiche confermate con priorita su `health`.
+- `route.ts`: immediate thinking events soppressi nei casi generici o multi-dominio ambigui.
+- test mirati rieseguiti con esito verde.
 Verifiche eseguite:
 - `npm run test -- tests/api/runtime-trigger-guards.test.ts tests/api/domain-detection-critical.test.ts tests/api/case-protocol.test.ts tests/api/chat-send-persistence.test.ts` -> 25/25 verdi
 - `npm run typecheck` -> verde
@@ -22,13 +22,13 @@ Nessuna modifica in corso.
 
 Prossimo
 
-Nessun passo obbligatorio aperto in questo perimetro; eventuali fix successivi solo su residui fuori scope.
+Nessun passo obbligatorio aperto in questo perimetro; eventuali step successivi solo su review o fix fuori scope.
 
 Rischi
 
-Nessun rischio nuovo nel perimetro dei quattro micro-fix.
+Nessun finding nuovo o bloccante nel perimetro verificato.
 Restano solo residui fuori scope di questo step: ranking del consult target ancora semplice in alcuni domini complessi e presenza deliberata di `activeSpecialist` come compatibilita di output.
 
 Ultimo aggiornamento
 
-2026-03-19 08:25
+2026-03-19 09:19
