@@ -276,6 +276,17 @@ describe('runtime trigger guards', () => {
     expect(out).toMatchObject({ agentId: 'consulente-legale' })
   })
 
+  it('does not open a legal consult on a purely emotional separation message', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'relationship-coach',
+      detectedDomain: 'inspiration',
+      message: 'mi sto separando e sto molto male emotivamente',
+    })
+
+    expect(out?.agentId).not.toBe('consulente-legale')
+  })
+
   it('routes debt plus anxiety cases to financial planning instead of a weak fallback', () => {
     const out = findCapabilityConsultTarget({
       team,
@@ -305,6 +316,17 @@ describe('runtime trigger guards', () => {
       ownerAgentId: 'relationship-coach',
       detectedDomain: 'inspiration',
       message: 'mi sto separando e dobbiamo rivedere accordi, tutela e parte legale',
+    })
+
+    expect(out).toMatchObject({ agentId: 'consulente-legale' })
+  })
+
+  it('routes family-law separation cases with affido to the legal consultant', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'relationship-coach',
+      detectedDomain: 'inspiration',
+      message: "mi sto separando e servono accordi per l'affido",
     })
 
     expect(out).toMatchObject({ agentId: 'consulente-legale' })

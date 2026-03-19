@@ -283,6 +283,20 @@ describe('case protocol vertical slice', () => {
     expect(out.caseState.activeSpeakerAgentId).toBe('dietista')
   })
 
+  it('picks the dietista for softer implicit nutrition requests', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'implicit-nutrition-2',
+      message: 'vorrei mangiare meglio',
+      detectedDomain: 'nutrition',
+      allDomains: ['nutrition'],
+      team,
+    })
+
+    expect(out.caseState.ownerAgentId).toBe('dietista')
+    expect(out.caseState.activeSpeakerAgentId).toBe('dietista')
+  })
+
   it('picks the cardiologo for implicit critical health monodomain cases', () => {
     const out = advanceCaseState({
       current: null,
@@ -294,6 +308,19 @@ describe('case protocol vertical slice', () => {
     })
 
     expect(out.caseState.ownerAgentId).toBe('cardiologo')
+  })
+
+  it('picks the dermatologo for persistent skin eruptions', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'implicit-health-derma-1',
+      message: 'sfoghi cutanei persistenti con rash e prurito',
+      detectedDomain: 'health',
+      allDomains: ['health'],
+      team,
+    })
+
+    expect(out.caseState.ownerAgentId).toBe('dermatologo')
   })
 
   it('picks the legal consultant for implicit legal inspiration cases', () => {
@@ -313,7 +340,7 @@ describe('case protocol vertical slice', () => {
     const out = advanceCaseState({
       current: null,
       conversationId: 'implicit-finance-1',
-      message: 'ho debiti, rate e sto andando in ansia',
+      message: 'ho debiti e sto andando in ansia',
       detectedDomain: 'inspiration',
       allDomains: ['inspiration'],
       team,
@@ -585,6 +612,38 @@ describe('case protocol vertical slice', () => {
     expect(out.events.map((e) => e.kind)).toEqual(['takeover_continued'])
   })
 
+  it('keeps same-domain takeover active on softer continuity phrasing', () => {
+    const consultState = {
+      conversationId: 'c-takeover-soft',
+      ownerAgentId: 'chef',
+      activeSpeakerAgentId: 'dietista',
+      protocolState: 'consult_active_takeover' as const,
+      consultTargetAgentId: 'dietista',
+      returnTargetAgentId: 'chef',
+      consultReason: 'Dieta clinica o vincoli nutrizionali -> dietista del team',
+      takeoverTurns: 1,
+      loopCount: 1,
+      handoffCount: 0,
+    }
+
+    const softPhrases = ['restiamo su questa parte', 'proseguiamo con lui']
+
+    for (const phrase of softPhrases) {
+      const out = advanceCaseState({
+        current: consultState,
+        conversationId: 'c-takeover-soft',
+        message: phrase,
+        detectedDomain: 'nutrition',
+        allDomains: ['nutrition'],
+        team,
+      })
+
+      expect(out.caseState.protocolState).toBe('consult_active_takeover')
+      expect(out.caseState.activeSpeakerAgentId).toBe('dietista')
+      expect(out.events.map((e) => e.kind)).toEqual(['takeover_continued'])
+    }
+  })
+
   it('opens an implicit handoff checkpoint on natural continuity without explicit handoff wording', () => {
     const consultState = {
       conversationId: 'c-handoff-implicit',
@@ -696,5 +755,35 @@ describe('case protocol vertical slice', () => {
     expect(out.caseState.protocolState).toBe('owner_active')
     expect(out.caseState.activeSpeakerAgentId).toBe('dietista')
     expect(out.events.map((e) => e.kind)).toEqual(['return_baton'])
+  })
+
+  it('does not open same-domain handoff on short acknowledgements', () => {
+    const consultState = {
+      conversationId: 'c-handoff-short',
+      ownerAgentId: 'chef',
+      activeSpeakerAgentId: 'dietista',
+      protocolState: 'consult_active_takeover' as const,
+      consultTargetAgentId: 'dietista',
+      returnTargetAgentId: 'chef',
+      consultReason: 'Dieta clinica o vincoli nutrizionali -> dietista del team',
+      takeoverTurns: 1,
+      loopCount: 1,
+      handoffCount: 0,
+    }
+
+    for (const phrase of ['ok', 'grazie', 'capito']) {
+      const out = advanceCaseState({
+        current: consultState,
+        conversationId: 'c-handoff-short',
+        message: phrase,
+        detectedDomain: 'nutrition',
+        allDomains: ['nutrition'],
+        team,
+      })
+
+      expect(out.caseState.protocolState).toBe('owner_active')
+      expect(out.caseState.activeSpeakerAgentId).toBe('chef')
+      expect(out.events.map((e) => e.kind)).toEqual(['return_baton'])
+    }
   })
 })

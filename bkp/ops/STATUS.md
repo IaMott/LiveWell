@@ -2,35 +2,34 @@ Stato progetto
 
 Obiettivo
 
-Validare in modo mirato il commit `442523a` sui residui dichiarati: monodominio implicito, consulti impliciti specialistici e same-domain takeover/handoff naturale.
+Chiudere con micro-fix stretti i residui emersi dalla review finale del commit `442523a`: owner implicito su nutrition/financial/dermatologia, consulto implicito legal e same-domain takeover troppo aggressivo.
 
 Fatto
 
-Validazione mirata del commit `442523a` completata:
-- file runtime e test dichiarati verificati nel repository reale
-- 36/36 test dichiarati verdi
-- 18/18 suite adiacenti su queue/gating/artifact verdi
-- harness runtime con team reale su 38 scenari mirati + 3 controlli extra
-- miglioramenti reali confermati su consulti impliciti e handoff same-domain
-- miglioramento solo parziale confermato su monodominio implicito e takeover naturale
-- nessuna regressione reale trovata nei path forti adiacenti
+Micro-fix post-review applicati e verificati:
+- `protocol.ts` corretto per mantenere piu spesso `consult_active_takeover` sui phrasing same-domain morbidi
+- `registry.ts` corretto per rafforzare owner/consult target impliciti su legal, financial e cutaneo
+- test mirati aggiornati su owner implicito, consulto legal positivo/negativo e same-domain takeover
+- `42/42` test mirati verdi
+- `28/28` suite adiacenti verdi su persistence, synthesis, artifact governance e chat persistence
+- `typecheck` verde
+- `build` verde
 
 In corso
 
-Nessuna modifica applicativa in corso; step di review chiuso e memoria operativa aggiornata.
+Nessuna modifica applicativa in corso; step backend chiuso e pronto per publish remoto.
 
 Prossimo
 
-Se richiesto, eseguire un altro micro-fix mirato su monodominio implicito residuo e su alcuni consulti impliciti ancora semanticamente deboli.
+Eseguire una nuova validazione mirata post-fix sui tre cluster corretti, senza riaprire il refactor.
 
 Rischi
 
-Residui ancora emersi in review:
-- monodominio implicito ancora debole su `vorrei mangiare meglio`, `ho debiti e sto andando in ansia`, `sfoghi cutanei persistenti`
-- alcuni consulti impliciti hanno target corretto ma `reason` semanticamente debole o troppo generica
-- same-domain takeover ancora troppo aggressivo su alcuni phrasing naturali, che aprono handoff prima del necessario
+Residui fuori scope ancora possibili:
+- serve una nuova validazione mirata per misurare l'effetto sistemico dei fix su team reale
+- alcuni casi impliciti borderline potrebbero restare semanticamente deboli fuori dai phrasing coperti qui
 - warning noto Next.js sui lockfile multipli resta non bloccante
 
 Ultimo aggiornamento
 
-2026-03-19 21:22
+2026-03-19 22:13

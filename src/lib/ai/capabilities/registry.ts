@@ -253,18 +253,29 @@ function scoreTriggerMatch(
 ): number {
   if (detectedDomain === 'general') return 0
   const lowerMessage = normalizeText(message)
+  const lowerTrigger = normalizeText(trigger)
   const supportingAgents = getSupportingAgentsForDomain(team, detectedDomain)
   const domainSignals = getDetectedDomainSignals(detectedDomain, supportingAgents)
   const triggerMentionsDomain = hasTextSignal(trigger, domainSignals)
   const messageMentionsDomain = hasTextSignal(lowerMessage, domainSignals)
   const sharedTokens = getSharedMeaningfulTokens(trigger, message)
   const hasGenericConsultLanguage = GENERIC_TRIGGER_PATTERN.test(trigger)
+  const hasStrongFamilyLegalSignal = /\blegale|avvocat|affido|accordi|tutela|causa|giurid/i.test(
+    lowerMessage,
+  )
+  const triggerIsFamilyLegal = /\blegale|avvocat|affido|accordi|tutela|causa|giurid/i.test(
+    lowerTrigger,
+  )
+  const messageIsOnlyRelationalSeparation =
+    /\bsepar(?:az|and)/i.test(lowerMessage) && !hasStrongFamilyLegalSignal
+  if (triggerIsFamilyLegal && messageIsOnlyRelationalSeparation) return 0
 
   let score = 0
   if (triggerMentionsDomain) score += 3
   if (messageMentionsDomain) score += 3
   score += Math.min(sharedTokens.length, 3) * 2
   if (hasGenericConsultLanguage && messageMentionsDomain) score += 1
+  if (triggerIsFamilyLegal && hasStrongFamilyLegalSignal) score += 4
   if (/dolore torac|fiato corto|dispnea|petto|pressione alta|girament/i.test(lowerMessage)) {
     if (/medic|cardi|mmg|health|clin/i.test(trigger)) score += 4
   }
@@ -391,16 +402,29 @@ function scoreConsultTarget(params: {
   }
 
   if (params.detectedDomain === 'inspiration') {
+    const strongLegalFamilySignal = /\blegale|avvocat|affido|accordi|tutela|giurid|familia/i.test(
+      lowerMessage,
+    )
+    const relationalSeparationOnly =
+      /\bsepar(?:az|and)/i.test(lowerMessage) && !strongLegalFamilySignal
     if (
       params.agent.id === 'consulente-legale' &&
       /\blegale|separaz|causa|contratto|avvocat|accordi|affido|tutela/i.test(lowerMessage)
     )
       score += 10
+    if (params.agent.id === 'consulente-legale' && strongLegalFamilySignal) score += 6
+    if (params.agent.id === 'consulente-legale' && relationalSeparationOnly) score -= 14
     if (
       params.agent.id === 'financial-planner' &&
       /\bdebiti|soldi|spese|tasse|fisco|bilancio|mutuo|rate|bollette|prestiti/i.test(lowerMessage)
     )
       score += 10
+    if (
+      strongLegalFamilySignal &&
+      ['career-coach', 'relationship-coach', 'life-organizer'].includes(params.agent.id)
+    ) {
+      score -= 5
+    }
     if (
       params.agent.id === 'career-coach' &&
       /\blavoro|carriera|colloquio|ruolo|burnout\b/i.test(lowerMessage)
