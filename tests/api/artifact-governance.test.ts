@@ -198,4 +198,62 @@ describe('artifact governance', () => {
 
     expect(collectGovernedArtifacts({ team, proposals, contextPack })).toEqual([])
   })
+
+  it('allows a hybrid gastroenterologo role to persist a nutrition artifact when runtime capabilities support it', () => {
+    const team: AgentProfile[] = [
+      {
+        id: 'gastroenterologo',
+        displayName: 'Gastroenterologo',
+        domainTags: ['health'],
+        systemPrompt: 'x',
+        toolsAllowed: ['artifacts.saveRecommendation', 'nutrition.logMeal'],
+        decisionStyle: 'team-led',
+        runtimeCapabilities: {
+          canDo: [],
+          cannotDo: [],
+          consultTriggers: [],
+          handoffTriggers: [],
+          minimumInput: ['Sintomi digestivi'],
+          outputContracts: [],
+          escalationRules: [],
+          allowedTools: ['artifacts.saveRecommendation', 'nutrition.logMeal'],
+          artifacts: [
+            {
+              kind: 'meal-plan',
+              storageType: 'nutrition',
+              description: 'Indicazioni nutrizionali digestive strutturate',
+            },
+          ],
+        },
+      },
+    ]
+
+    const proposals: AgentProposal[] = [
+      {
+        agentId: 'gastroenterologo',
+        domain: 'health',
+        summary: 'summary',
+        reasoning: 'reasoning',
+        confidence: 0.9,
+        recommendations: [
+          {
+            title: 'Piano digestivo',
+            steps: ['x'],
+            rationale: 'y',
+            artifactsToSave: [
+              {
+                type: 'nutrition',
+                title: 'Menu digestivo iniziale',
+                contentMarkdown: 'ok',
+              },
+            ],
+          },
+        ],
+      },
+    ]
+
+    expect(collectGovernedArtifacts({ team, proposals, contextPack: baseContextPack })).toEqual([
+      { type: 'nutrition', title: 'Menu digestivo iniziale', contentMarkdown: 'ok' },
+    ])
+  })
 })

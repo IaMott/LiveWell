@@ -75,6 +75,63 @@ const team: AgentProfile[] = [
       artifacts: [],
     },
   },
+  {
+    id: 'consulente-legale',
+    displayName: 'Consulente Legale',
+    domainTags: ['inspiration'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Separazione, causa o contratto -> consulente legale del team.'],
+      handoffTriggers: ['Caso legale dominante -> handoff inspiration.'],
+      minimumInput: [],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
+    id: 'financial-planner',
+    displayName: 'Financial Planner',
+    domainTags: ['inspiration'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Debiti, spese fuori controllo o ansia finanziaria -> financial planner.'],
+      handoffTriggers: ['Gestione finanziaria dominante -> handoff inspiration.'],
+      minimumInput: [],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
+    id: 'cardiologo',
+    displayName: 'Cardiologo',
+    domainTags: ['health'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Dolore toracico, fiato corto o palpitazioni -> cardiologo del team.'],
+      handoffTriggers: ['Sintomi cardiologici dominanti -> handoff health.'],
+      minimumInput: [],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
 ]
 
 describe('runtime trigger guards', () => {
@@ -103,5 +160,39 @@ describe('runtime trigger guards', () => {
       agentId: 'psicologo',
     })
     expect(out?.reason).toContain('psicologo')
+  })
+
+  it('routes implicit legal separation cases to the legal consultant', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'life-organizer',
+      detectedDomain: 'inspiration',
+      message: 'mi sto separando e ci sono problemi legali con gli accordi',
+    })
+
+    expect(out).toMatchObject({ agentId: 'consulente-legale' })
+  })
+
+  it('routes debt plus anxiety cases to financial planning instead of a weak fallback', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'life-organizer',
+      detectedDomain: 'inspiration',
+      message: 'ho debiti, spese fuori controllo e sto andando in ansia',
+    })
+
+    expect(out).toMatchObject({ agentId: 'financial-planner' })
+  })
+
+  it('prefers a health specialist for critical chest symptoms', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'life-organizer',
+      detectedDomain: 'health',
+      message: 'ho dolore toracico e fiato corto da stamattina',
+    })
+
+    expect(out).toMatchObject({ agentId: 'cardiologo' })
+    expect(out?.reason.toLowerCase()).toContain('torac')
   })
 })

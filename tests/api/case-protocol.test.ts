@@ -325,6 +325,22 @@ describe('case protocol vertical slice', () => {
     })
   })
 
+  it('treats an implicit specialist-led owner as activeSpecialist when the domain is strong', () => {
+    const current = advanceCaseState({
+      current: null,
+      conversationId: 'c5b',
+      message: 'voglio una dieta',
+      detectedDomain: 'nutrition',
+      allDomains: ['nutrition'],
+      team,
+    }).caseState
+
+    const active = deriveActiveSpecialistFromCaseState(current, team)
+
+    expect(current.ownerAgentId).toBe('dietista')
+    expect(active).toMatchObject({ id: 'dietista' })
+  })
+
   it('opens a consult automatically when runtime consult triggers detect a domain shift', () => {
     const current = advanceCaseState({
       current: null,
@@ -349,5 +365,61 @@ describe('case protocol vertical slice', () => {
     expect(out.caseState.activeSpeakerAgentId).toBe('fisioterapista')
     expect(out.events.map((e) => e.kind)).toEqual(['consult_requested', 'takeover_started'])
     expect(out.events[0]?.reason).toContain('health')
+  })
+
+  it('keeps the consult target active on natural continuity phrases', () => {
+    const consultState = {
+      conversationId: 'c-takeover',
+      ownerAgentId: 'dietista',
+      activeSpeakerAgentId: 'fisioterapista',
+      protocolState: 'consult_active_takeover' as const,
+      consultTargetAgentId: 'fisioterapista',
+      returnTargetAgentId: 'dietista',
+      consultReason: 'user_requested_specialist',
+      takeoverTurns: 1,
+      loopCount: 1,
+      handoffCount: 0,
+    }
+
+    const out = advanceCaseState({
+      current: consultState,
+      conversationId: 'c-takeover',
+      message: 'continuiamo con lui sul recupero del ginocchio',
+      detectedDomain: 'training',
+      allDomains: ['training'],
+      team,
+    })
+
+    expect(out.caseState.protocolState).toBe('consult_active_takeover')
+    expect(out.caseState.activeSpeakerAgentId).toBe('fisioterapista')
+    expect(out.events.map((e) => e.kind)).toEqual(['takeover_continued'])
+  })
+
+  it('opens an implicit handoff checkpoint on natural continuity without explicit handoff wording', () => {
+    const consultState = {
+      conversationId: 'c-handoff-implicit',
+      ownerAgentId: 'dietista',
+      activeSpeakerAgentId: 'fisioterapista',
+      protocolState: 'consult_active_takeover' as const,
+      consultTargetAgentId: 'fisioterapista',
+      returnTargetAgentId: 'dietista',
+      consultReason: 'user_requested_specialist',
+      takeoverTurns: 1,
+      loopCount: 1,
+      handoffCount: 0,
+    }
+
+    const out = advanceCaseState({
+      current: consultState,
+      conversationId: 'c-handoff-implicit',
+      message: 'vorrei che fosse lui a seguirmi su questa parte e continuiamo con il recupero',
+      detectedDomain: 'training',
+      allDomains: ['training', 'health'],
+      team,
+    })
+
+    expect(out.caseState.protocolState).toBe('handoff_pending_user')
+    expect(out.caseState.pendingHandoffAgentId).toBe('fisioterapista')
+    expect(out.events.map((e) => e.kind)).toEqual(['handoff_requested'])
   })
 })

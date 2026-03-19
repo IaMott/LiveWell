@@ -42,6 +42,28 @@ const DOMAIN_TRIGGER_KEYWORDS: Record<Domain, string[]> = {
   coordination: ['coordin', 'team', 'orchestr'],
 }
 
+const AGENT_SEMANTIC_SIGNALS: Record<string, string[]> = {
+  psicologo: ['ansia', 'stress', 'burnout', 'trauma', 'relazione', 'pensieri', 'psicolog'],
+  'mental-coach': ['blocco mentale', 'performance', 'pre gara', 'concentrazione', 'mental'],
+  'sleep-coach': ['sonno', 'insonnia', 'russamento', 'apnee', 'osas', 'dormo male'],
+  'consulente-legale': ['legale', 'separazione', 'causa', 'contratto', 'avvocato', 'tutela'],
+  'financial-planner': ['debiti', 'spese', 'bilancio', 'risparmi', 'soldi', 'finanza'],
+  commercialista: ['tasse', 'fisco', 'dichiarazione', 'partita iva', 'tributi'],
+  'life-organizer': ['organizzarmi', 'gestire tutto', 'routine', 'organizzazione', 'agenda'],
+  dietista: ['dieta', 'alimentare', 'mangiare', 'peso', 'dimagrire', 'allergie alimentari'],
+  chef: ['ricette', 'cucinare', 'pasti', 'menu', 'spesa'],
+  gastroenterologo: ['gastrite', 'reflusso', 'digestivi', 'gonfiore', 'intestino', 'nausea'],
+  cardiologo: ['cuore', 'petto', 'pressione', 'palpitazioni', 'fiato corto', 'toracico'],
+  mmg: ['sintomi', 'pressione', 'giramenti', 'farmaci', 'medico'],
+  fisioterapista: ['dolore', 'riabilitazione', 'recupero', 'mobilità', 'ginocchio', 'schiena'],
+  fisiatra: ['dolore', 'funzionale', 'riabilitazione', 'limitazioni', 'diagnosi'],
+  chinesologo: ['movimento', 'postura', 'esercizi', 'dolore', 'rieducazione'],
+  'medico-dello-sport': ['sport', 'performance', 'idoneità', 'infortunio'],
+  'persona-trainer': ['allenamento', 'scheda', 'workout', 'forza', 'cardio'],
+  dermatologo: ['pelle', 'sfoghi', 'eczema', 'acne', 'dermat'],
+  endocrinologo: ['ormoni', 'tiroide', 'insulina', 'metabolismo'],
+}
+
 const GENERIC_TRIGGER_PATTERN =
   /(fuori competenza|specialista|specialisti|co-gestione|invio|medico|psicologo|valutazione medica|stop e valutazione)/i
 
@@ -131,6 +153,15 @@ function hasTextSignal(text: string, signals: string[]): boolean {
   })
 }
 
+function countTextSignals(text: string, signals: string[]): number {
+  const normalized = normalizeText(text)
+  return signals.reduce((acc, signal) => {
+    if (signal.length === 0) return acc
+    if (signal.includes(' ')) return normalized.includes(signal) ? acc + 1 : acc
+    return normalized.includes(signal) ? acc + 1 : acc
+  }, 0)
+}
+
 function getDetectedDomainSignals(
   detectedDomain: Domain,
   supportingAgents: AgentProfile[],
@@ -148,8 +179,43 @@ function getDetectedDomainSignals(
 }
 
 function getSharedMeaningfulTokens(trigger: string, message: string): string[] {
-  const messageTokens = new Set(tokenizeMeaningfulTerms(message))
-  return tokenizeMeaningfulTerms(trigger).filter((token) => messageTokens.has(token))
+  const messageTokens = tokenizeMeaningfulTerms(message)
+  const overlaps = (left: string, right: string): boolean => {
+    if (left === right) return true
+    const leftPrefix = left.slice(0, Math.min(left.length, 5))
+    const rightPrefix = right.slice(0, Math.min(right.length, 5))
+    return left.startsWith(rightPrefix) || right.startsWith(leftPrefix)
+  }
+
+  return tokenizeMeaningfulTerms(trigger).filter((token) =>
+    messageTokens.some((messageToken) => overlaps(token, messageToken)),
+  )
+}
+
+function scoreTriggerMatch(
+  trigger: string,
+  detectedDomain: Domain,
+  message: string,
+  team: AgentProfile[],
+): number {
+  if (detectedDomain === 'general') return 0
+  const lowerMessage = normalizeText(message)
+  const supportingAgents = getSupportingAgentsForDomain(team, detectedDomain)
+  const domainSignals = getDetectedDomainSignals(detectedDomain, supportingAgents)
+  const triggerMentionsDomain = hasTextSignal(trigger, domainSignals)
+  const messageMentionsDomain = hasTextSignal(lowerMessage, domainSignals)
+  const sharedTokens = getSharedMeaningfulTokens(trigger, message)
+  const hasGenericConsultLanguage = GENERIC_TRIGGER_PATTERN.test(trigger)
+
+  let score = 0
+  if (triggerMentionsDomain) score += 3
+  if (messageMentionsDomain) score += 3
+  score += Math.min(sharedTokens.length, 3) * 2
+  if (hasGenericConsultLanguage && messageMentionsDomain) score += 1
+  if (/dolore torac|fiato corto|dispnea|petto|pressione alta|girament/i.test(lowerMessage)) {
+    if (/medic|cardi|mmg|health|clin/i.test(trigger)) score += 4
+  }
+  return score
 }
 
 function findMatchingTrigger(
@@ -159,30 +225,108 @@ function findMatchingTrigger(
   team: AgentProfile[],
 ): string | null {
   if (detectedDomain === 'general') return null
-  const lowerMessage = normalizeText(message)
-  const supportingAgents = getSupportingAgentsForDomain(team, detectedDomain)
-  const domainSignals = getDetectedDomainSignals(detectedDomain, supportingAgents)
-  const messageMentionsDomain = hasTextSignal(lowerMessage, domainSignals)
+  const ranked = triggers
+    .map((trigger) => ({
+      trigger,
+      score: scoreTriggerMatch(trigger, detectedDomain, message, team),
+    }))
+    .filter((entry) => entry.score >= 5)
+    .sort((a, b) => b.score - a.score)
 
-  for (const trigger of triggers) {
-    const lowerTrigger = normalizeText(trigger)
-    const triggerMentionsDomain = hasTextSignal(lowerTrigger, domainSignals)
-    const sharedTokens = getSharedMeaningfulTokens(trigger, message)
-    const hasGenericConsultLanguage = GENERIC_TRIGGER_PATTERN.test(lowerTrigger)
-
-    if (triggerMentionsDomain && messageMentionsDomain) return trigger
-    if (sharedTokens.length > 0 && messageMentionsDomain && hasGenericConsultLanguage)
-      return trigger
-    if (sharedTokens.length >= 2) return trigger
-  }
-
-  return null
+  return ranked[0]?.trigger ?? null
 }
 
 function supportsArtifactDomain(agent: AgentProfile, storageType: ArtifactStorageType): boolean {
   const allowedDomains = ARTIFACT_DOMAIN_MAP[storageType]
   if (!allowedDomains) return true
+  const runtime = agent.runtimeCapabilities
+  if (runtime) {
+    const toolPrefix =
+      storageType === 'nutrition'
+        ? 'nutrition.'
+        : storageType === 'training'
+          ? 'training.'
+          : storageType === 'mindfulness'
+            ? 'mindfulness.'
+            : null
+    if (
+      toolPrefix &&
+      runtime.artifacts.some((artifact) => artifact.storageType === storageType) &&
+      runtime.allowedTools.some((tool) => tool.startsWith(toolPrefix))
+    ) {
+      return true
+    }
+  }
   return agent.domainTags.some((domain) => allowedDomains.includes(domain))
+}
+
+function scoreConsultTarget(params: {
+  agent: AgentProfile
+  ownerAgentId: string
+  detectedDomain: Domain
+  message: string
+  ownerReason: string | null
+  targetReason: string | null
+}): number {
+  const lowerMessage = normalizeText(params.message)
+  const lowerAgentName = normalizeText(params.agent.displayName)
+  const lowerAgentId = normalizeText(params.agent.id)
+  const semanticSignals = AGENT_SEMANTIC_SIGNALS[params.agent.id] ?? []
+
+  let score = 0
+  if (params.agent.id === params.ownerAgentId) return -100
+  if (agentSupportsDomain(params.agent, params.detectedDomain)) score += 6
+  if (params.targetReason) score += 5
+  if (params.ownerReason) {
+    const lowerOwnerReason = normalizeText(params.ownerReason)
+    if (lowerOwnerReason.includes(lowerAgentId) || lowerOwnerReason.includes(lowerAgentName)) {
+      score += 8
+    }
+  }
+  if (lowerMessage.includes(lowerAgentId) || lowerMessage.includes(lowerAgentName)) score += 8
+  score += Math.min(countTextSignals(lowerMessage, semanticSignals), 3) * 3
+
+  if (params.detectedDomain === 'health') {
+    if (
+      /\bdolore\s+toracic|\bdolore\s+al\s+petto|\bfiato\s+corto|\bdispnea|\bpressione\s+alta|\bgirament/i.test(
+        lowerMessage,
+      ) &&
+      params.agent.domainTags.includes('health')
+    ) {
+      score += 6
+    }
+    if (
+      params.agent.id === 'sleep-coach' &&
+      !/\bsonno|insonnia|russamento|apnee|osas\b/i.test(lowerMessage)
+    ) {
+      score -= 6
+    }
+  }
+
+  if (params.detectedDomain === 'mindfulness') {
+    if (
+      params.agent.id === 'psicologo' &&
+      /\bansia|burnout|sopraffatt|trauma\b/i.test(lowerMessage)
+    )
+      score += 5
+    if (params.agent.id === 'sleep-coach' && !/\bsonno|insonnia|dorm/i.test(lowerMessage))
+      score -= 5
+  }
+
+  if (params.detectedDomain === 'inspiration') {
+    if (
+      params.agent.id === 'consulente-legale' &&
+      /\blegale|separaz|causa|contratto|avvocat/i.test(lowerMessage)
+    )
+      score += 6
+    if (
+      params.agent.id === 'financial-planner' &&
+      /\bdebiti|soldi|spese|tasse|fisco|bilancio/i.test(lowerMessage)
+    )
+      score += 6
+  }
+
+  return score
 }
 
 export function findCapabilityConsultTarget(params: {
@@ -192,11 +336,7 @@ export function findCapabilityConsultTarget(params: {
   message: string
 }): { agentId: string; reason: string } | null {
   const owner = params.team.find((agent) => agent.id === params.ownerAgentId)
-  if (
-    !owner ||
-    params.detectedDomain === 'general' ||
-    agentSupportsDomain(owner, params.detectedDomain)
-  ) {
+  if (!owner || params.detectedDomain === 'general') {
     return null
   }
 
@@ -230,8 +370,6 @@ export function findCapabilityConsultTarget(params: {
       (agent) => (getAgentRuntimeContract(params.team, agent.id)?.consultTriggers.length ?? 0) > 0,
     )
 
-  if (contractsConfigured && !ownerReason && targetMatches.length === 0) return null
-
   const ownerDirectedTarget =
     ownerReason == null
       ? null
@@ -242,7 +380,35 @@ export function findCapabilityConsultTarget(params: {
             lowerReason.includes(normalizeText(agent.displayName))
           )
         })
-  const selectedTarget = targetMatches[0]?.agent ?? ownerDirectedTarget ?? consultTargets[0]
+  const rankedTargets = consultTargets
+    .map((agent) => {
+      const targetReason =
+        targetMatches.find((match) => match.agent.id === agent.id)?.reason ?? null
+      return {
+        agent,
+        reason: targetReason,
+        score: scoreConsultTarget({
+          agent,
+          ownerAgentId: params.ownerAgentId,
+          detectedDomain: params.detectedDomain,
+          message: params.message,
+          ownerReason,
+          targetReason,
+        }),
+      }
+    })
+    .sort((a, b) => b.score - a.score)
+
+  if (
+    contractsConfigured &&
+    !ownerReason &&
+    targetMatches.length === 0 &&
+    (rankedTargets[0]?.score ?? 0) < 9
+  ) {
+    return null
+  }
+
+  const selectedTarget = ownerDirectedTarget ?? rankedTargets[0]?.agent ?? consultTargets[0]
   const selectedReason =
     targetMatches.find((match) => match.agent.id === selectedTarget.id)?.reason ??
     ownerReason ??
@@ -288,6 +454,15 @@ export function findPermanentHandoffTriggerReason(params: {
     (targetContract?.handoffTriggers.length ?? 0) > 0
 
   if (contractsConfigured && !ownerReason && !targetReason) return null
+
+  const lowerMessage = normalizeText(params.message)
+  if (
+    consultTarget.id === 'sleep-coach' &&
+    /\bansia|burnout|sopraffatt/i.test(lowerMessage) &&
+    !/\bsonno|insonnia|russamento|apnee|osas\b/i.test(lowerMessage)
+  ) {
+    return ownerReason && /psicolog/i.test(ownerReason) ? ownerReason : null
+  }
 
   return targetReason ?? ownerReason ?? `capability_handoff:${params.detectedDomain}`
 }

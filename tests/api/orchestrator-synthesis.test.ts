@@ -151,6 +151,46 @@ describe('synthesis boundary', () => {
     expect(instructions).not.toContain('assumi valori ragionevoli')
   })
 
+  it('applies the prudent gate to structured requests beyond classic piano/protocollo wording', async () => {
+    const complete = vi.fn().mockResolvedValue({ text: 'Serve prima qualche dato in piu.' })
+
+    await synthesizeRawResponse({
+      llm: { complete },
+      userMessage: 'fammi una scheda completa e una valutazione dettagliata',
+      proposals,
+      gatingQuestions: ['Hai infortuni o limitazioni attive?'],
+      criticalQuestions: ['Hai infortuni o limitazioni attive?'],
+      contextPack,
+      activeSpecialist: {
+        id: 'persona-trainer',
+        displayName: 'Persona Trainer',
+        domain: 'training',
+        domains: ['training'],
+        runtimeCapabilities: {
+          canDo: [],
+          cannotDo: [],
+          consultTriggers: [],
+          handoffTriggers: [],
+          minimumInput: ['Infortuni', 'Goal'],
+          outputContracts: [],
+          escalationRules: [],
+          allowedTools: [],
+          artifacts: [
+            {
+              kind: 'training-plan',
+              storageType: 'training',
+              description: 'Scheda allenamento strutturata',
+            },
+          ],
+        },
+      },
+    })
+
+    const call = complete.mock.calls[0]?.[0]
+    expect(call?.system).toContain('NON produrre un piano definitivo')
+    expect(call?.user).toContain('NON produrre un documento definitivo')
+  })
+
   it('falls back to the first available proposal summary when model returns json-like text', async () => {
     const result = await synthesizeRawResponse({
       llm: {

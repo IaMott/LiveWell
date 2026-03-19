@@ -6,16 +6,23 @@ export function deriveActiveSpecialistFromCaseState(
   team: AgentProfile[],
 ): ActiveSpecialist | undefined {
   if (!caseState) return undefined
+  const agent = team.find((candidate) => candidate.id === caseState.activeSpeakerAgentId)
+  if (!agent) return undefined
+
+  const specialistLedOwnerState =
+    caseState.protocolState === 'owner_active' &&
+    agent.id !== 'orchestratore' &&
+    !agent.domainTags.includes('coordination')
+
   if (
     caseState.protocolState !== 'consult_active_takeover' &&
     caseState.protocolState !== 'handoff_pending_user' &&
     caseState.consultReason !== 'explicit_initial_owner' &&
-    caseState.consultReason !== 'permanent_handoff'
+    caseState.consultReason !== 'permanent_handoff' &&
+    !specialistLedOwnerState
   ) {
     return undefined
   }
-  const agent = team.find((candidate) => candidate.id === caseState.activeSpeakerAgentId)
-  if (!agent) return undefined
 
   return {
     id: agent.id,

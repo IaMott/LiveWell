@@ -36,10 +36,13 @@ export type SynthesisResult = {
 function isPlanRequest(userMessage: string): boolean {
   const lower = userMessage.toLowerCase()
   return (
-    /\b(dammi|dai|crea|genera|prepara|elabora|scrivi|fai|producimi|voglio|ho bisogno di|puoi darmi|fornisci)\b.{0,30}\b(piano|programma|schema|dieta|menu|protocollo|percorso|calendario|settimane|mese|giornate)\b/i.test(
+    /\b(dammi|dai|crea|genera|prepara|elabora|scrivi|fai|producimi|voglio|ho bisogno di|puoi darmi|fornisci|fammi)\b.{0,40}\b(piano|programma|schema|scheda|dieta|menu|protocollo|percorso|calendario|settimane|mese|giornate|strategia|valutazione|report)\b/i.test(
       lower,
     ) ||
-    /\b(piano|programma|dieta|menu|protocollo)\b.{0,20}\b(nutrizionale|alimentare|di allenamento|fitness|psicologico|terapeutico|di recupero|dettagliato|completo)\b/i.test(
+    /\b(piano|programma|dieta|menu|protocollo|scheda|strategia|valutazione|report|percorso)\b.{0,30}\b(nutrizionale|alimentare|di allenamento|fitness|psicologico|terapeutico|di recupero|dettagliato|completo|completa|strutturato|strutturata|professionale)\b/i.test(
+      lower,
+    ) ||
+    /\b(scheda completa|programma dettagliato|protocollo completo|strategia completa|valutazione dettagliata|report dettagliato|menu completo|percorso dettagliato)\b/i.test(
       lower,
     )
   )

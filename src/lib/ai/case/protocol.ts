@@ -15,6 +15,7 @@ const REQUEST_VERBS = [
   'parlami con',
   'parla con',
   'voglio parlare con',
+  'voglio parlare ancora con',
   'voglio parlare al',
   'voglio il',
   'voglio la',
@@ -22,6 +23,12 @@ const REQUEST_VERBS = [
   'passami la',
   'fammi parlare con',
   'vorrei parlare con',
+  'continuiamo con',
+  'restiamo con',
+  'approfondiamo con',
+  'seguimi tu',
+  'mi segua lui',
+  'mi segua lei',
   'speak to',
   'talk to',
 ]
@@ -32,6 +39,31 @@ const RETURN_PATTERNS = [
   /torna\s+allo?\s+specialista\s+iniziale/i,
   /restituisci\s+il\s+testimone/i,
   /torna\s+a\s+chi\s+seguiva\s+il\s+caso/i,
+]
+
+const TAKEOVER_CONTINUITY_PATTERNS = [
+  /\bcontinuiamo\s+con\b/i,
+  /\bcontinua(?:re)?\s+con\b/i,
+  /\brestiamo\s+su\s+questo\s+tema\b/i,
+  /\brestiamo\s+su\s+questa\s+parte\b/i,
+  /\bapprofondiamo\s+questa\s+parte\b/i,
+  /\bapprofondiamo\b/i,
+  /\bcontinuiamo\s+su\s+questo\b/i,
+  /\bvorrei\s+che\s+fosse\s+lui\s+a\s+seguirmi\b/i,
+  /\bvorrei\s+che\s+fosse\s+lei\s+a\s+seguirmi\b/i,
+  /\bcontinuiamo\s+con\s+lui\b/i,
+  /\bcontinuiamo\s+con\s+lei\b/i,
+]
+
+const HANDOFF_CONTINUITY_PATTERNS = [
+  /\bcontinuiamo\s+su\b/i,
+  /\bvorrei\s+che\s+mi\s+seguisse\b/i,
+  /\bmi\s+segua\s+lui\b/i,
+  /\bmi\s+segua\s+lei\b/i,
+  /\brestiamo\s+su\s+questo\s+percorso\b/i,
+  /\bcontinuiamo\s+con\s+il\s+recupero\b/i,
+  /\bcontinuiamo\s+con\s+la\s+terapia\b/i,
+  /\bcontinuiamo\s+su\s+questo\s+tema\b/i,
 ]
 
 type AdvanceCaseStateParams = {
@@ -75,11 +107,17 @@ function shouldReturnToOwner(message: string, ownerAgentId: string): boolean {
   )
 }
 
+function isNaturalTakeoverContinuation(message: string): boolean {
+  const trimmed = message.trim()
+  if (!trimmed) return false
+  return TAKEOVER_CONTINUITY_PATTERNS.some((pattern) => pattern.test(trimmed))
+}
+
 function isMeaningfulHandoffContinuation(message: string): boolean {
   const trimmed = message.trim()
   if (!trimmed) return false
   if (/^(ok|okay|va bene|perfetto|grazie|thanks|thank you)[!.,\s]*$/i.test(trimmed)) return false
-  return trimmed.split(/\s+/).length > 3
+  return trimmed.split(/\s+/).length > 3 || HANDOFF_CONTINUITY_PATTERNS.some((p) => p.test(trimmed))
 }
 
 function chooseInitialOwner(params: {
@@ -133,6 +171,43 @@ export function getCaseRoutingDomain(
     (domain) => domain !== 'general' && domain !== 'coordination',
   )
   return (preferred ?? current?.domainTags[0] ?? fallbackDomain) as Domain
+}
+
+function shouldKeepConsultTargetActive(params: {
+  message: string
+  consultTargetId?: string
+  requestedAgentId: string | null
+  currentOwnerAgentId: string
+  detectedDomain: Domain
+  team: AgentProfile[]
+  takeoverTurns: number
+}): boolean {
+  const { consultTargetId, requestedAgentId, team, message, detectedDomain, takeoverTurns } = params
+  if (!consultTargetId || takeoverTurns >= MAX_TAKEOVER_TURNS) return false
+  if (requestedAgentId === consultTargetId) return true
+  if (requestedAgentId && requestedAgentId !== consultTargetId) return false
+
+  const consultTarget = team.find((agent) => agent.id === consultTargetId)
+  if (!consultTarget) return false
+  const lower = message.toLowerCase()
+  const mentionsConsultTarget =
+    lower.includes(normalizeAgentName(consultTarget.id)) ||
+    lower.includes(normalizeAgentName(consultTarget.displayName))
+
+  return (
+    mentionsConsultTarget ||
+    (isNaturalTakeoverContinuation(message) &&
+      agentSupportsDetectedDomain(consultTarget, detectedDomain))
+  )
+}
+
+function agentSupportsDetectedDomain(
+  agent: AgentProfile | undefined,
+  detectedDomain: Domain,
+): boolean {
+  if (!agent) return false
+  if (detectedDomain === 'general') return true
+  return agent.domainTags.includes(detectedDomain)
 }
 
 export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseStateResult {
@@ -212,6 +287,9 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
   if (current.protocolState === 'consult_active_takeover') {
     const consultTarget = current.consultTargetAgentId
     const returnTarget = current.returnTargetAgentId ?? current.ownerAgentId
+    const naturalHandoffContinuation = HANDOFF_CONTINUITY_PATTERNS.some((pattern) =>
+      pattern.test(message),
+    )
     const handoffReason =
       consultTarget != null
         ? findPermanentHandoffTriggerReason({
@@ -222,51 +300,71 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
             message,
           })
         : null
+    const implicitHandoffReason =
+      handoffReason ??
+      (consultTarget != null &&
+      naturalHandoffContinuation &&
+      consultTarget !== current.ownerAgentId &&
+      agentSupportsDetectedDomain(
+        team.find((agent) => agent.id === consultTarget),
+        detectedDomain,
+      )
+        ? `capability_handoff:${detectedDomain}`
+        : null)
     const shouldRequestHandoff =
       consultTarget != null &&
       current.handoffCount < MAX_HANDOFFS &&
       !shouldReturnToOwner(message, current.ownerAgentId) &&
       requestedAgentId !== current.ownerAgentId &&
       isMeaningfulHandoffContinuation(message) &&
-      Boolean(handoffReason) &&
-      shouldTriggerPermanentHandoff({
-        team,
-        ownerAgentId: current.ownerAgentId,
-        consultTargetAgentId: consultTarget,
-        detectedDomain,
-        message,
-      })
-    const continueTakeover =
-      consultTarget != null &&
-      requestedAgentId === consultTarget &&
-      current.takeoverTurns < MAX_TAKEOVER_TURNS
+      Boolean(implicitHandoffReason) &&
+      (Boolean(handoffReason) ||
+        naturalHandoffContinuation ||
+        shouldTriggerPermanentHandoff({
+          team,
+          ownerAgentId: current.ownerAgentId,
+          consultTargetAgentId: consultTarget,
+          detectedDomain,
+          message,
+        }))
+    const continueTakeover = shouldKeepConsultTargetActive({
+      message,
+      consultTargetId: consultTarget,
+      requestedAgentId,
+      currentOwnerAgentId: current.ownerAgentId,
+      detectedDomain,
+      team,
+      takeoverTurns: current.takeoverTurns,
+    })
 
     if (shouldRequestHandoff && consultTarget) {
+      const targetId = consultTarget
       const next: CaseState = {
         ...current,
         protocolState: 'handoff_pending_user',
-        activeSpeakerAgentId: consultTarget,
-        pendingHandoffAgentId: consultTarget,
-        checkpointReason: handoffReason ?? 'domain_shift_confirmed_by_runtime',
+        activeSpeakerAgentId: targetId,
+        pendingHandoffAgentId: targetId,
+        checkpointReason: implicitHandoffReason ?? 'domain_shift_confirmed_by_runtime',
       }
       events.push({
         kind: 'handoff_requested',
         actorAgentId: current.ownerAgentId,
-        toAgentId: consultTarget,
-        reason: handoffReason ?? 'domain_shift_confirmed_by_runtime',
+        toAgentId: targetId,
+        reason: implicitHandoffReason ?? 'domain_shift_confirmed_by_runtime',
       })
       return { caseState: next, events }
     }
 
     if (continueTakeover) {
+      const targetId = consultTarget!
       const next: CaseState = {
         ...current,
-        activeSpeakerAgentId: consultTarget,
+        activeSpeakerAgentId: targetId,
         takeoverTurns: current.takeoverTurns + 1,
       }
       events.push({
         kind: 'takeover_continued',
-        actorAgentId: consultTarget,
+        actorAgentId: targetId,
         reason: current.consultReason,
       })
       return { caseState: next, events }
@@ -274,9 +372,9 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
 
     if (
       shouldReturnToOwner(message, current.ownerAgentId) ||
-      requestedAgentId == null ||
+      (!continueTakeover && !shouldRequestHandoff && requestedAgentId == null) ||
       requestedAgentId === current.ownerAgentId ||
-      requestedAgentId !== consultTarget ||
+      (requestedAgentId != null && requestedAgentId !== consultTarget) ||
       current.takeoverTurns >= MAX_TAKEOVER_TURNS
     ) {
       const next: CaseState = {
