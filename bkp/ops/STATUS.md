@@ -2,27 +2,37 @@ Stato progetto
 
 Obiettivo
 
-Salvare un checkpoint completo del repository e della memoria operativa dopo la chiusura del cluster CI sul commit applicativo `8705b97`.
+Eseguire una validazione mirata e severa del comportamento conversazionale su casi specialistici già avviati, con focus su continuità del problema attivo, intake fuori timing e credibilità dei follow-up.
 
 Fatto
 
-- cluster CI sul transcript interview flow chiuso sul commit `8705b97`
-- memoria operativa aggiornata con stato, worklog, journal e chatlog del checkpoint
-- snapshot Git richiesto in preparazione dal branch `main` pulito lato tracked files
+- review conversazionale mirata completata su 30 scenari multi-turno / specialistici
+- eseguite 8 suite repository (`75/75` test verdi) come guardie su protocollo/interview/synthesis/persistence/runtime triggers
+- harness temporaneo eseguito sul team reale e rimosso; output strutturato scritto in `/tmp/livewell_conversation_focus_audit.json`
+- verdetto principale:
+  - protocollo tecnico regge
+  - continuità conversazionale regge solo parzialmente
+  - intake baseline / goal generici ricompaiono troppo spesso anche quando il caso è già attivo
+- pattern peggiori osservati:
+  - ritorno a domande “dati fondamentali” in casi specialistici già aperti
+  - cambio dominio/consulto non credibile su burnout, sonno, finanza e separazione pratica
+  - consulti attivi che ricadono su domande generiche o addirittura tornano all’owner sbagliato
 
 In corso
 
-Creazione snapshot Git di checkpoint e consolidamento dello stato corrente.
+Solo salvataggio memoria operativa della review; nessuna modifica applicativa in corso.
 
 Prossimo
 
-Dopo il checkpoint, nessun altro fix immediato su questo cluster; il passo corretto successivo resta una review mirata del commit `8705b97` o una nuova validazione comportamentale, non altri interventi casuali.
+Se richiesto, il passo corretto successivo è un micro-fix stretto sui moduli del cluster conversazionale (`interviewFlow.ts`, `domainDetection.ts`, `registry.ts`, `protocol.ts`, `synthesis.ts`), non un refactor generale.
 
 Rischi
 
-Rischio residuo basso:
-- il test transcript continua a non estrarre attributi anagrafici dai `recentMessages`; al momento è coerente con il runtime vivo e non è il bug di questo step
-- checkpoint Git creato su repository con `.claude/` non tracciato fuori scope
+Rischi reali aperti:
+- intake generico fuori timing nei follow-up specialistici
+- perdita del focus attivo su burnout/sonno/finanza/separazione pratica
+- consulti specialistici che ricadono nel generico o passano allo specialista sbagliato
+- uso ancora troppo debole della memoria conversazionale in alcuni resume specialistici
 
 Rischi non riaperti:
 - queue / `pendingQuestions`
@@ -34,4 +44,4 @@ Rischi non riaperti:
 
 Ultimo aggiornamento
 
-2026-03-20 18:59
+2026-03-20 22:01
