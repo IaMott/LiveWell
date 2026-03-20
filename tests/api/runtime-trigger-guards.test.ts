@@ -332,6 +332,17 @@ describe('runtime trigger guards', () => {
     expect(out).toMatchObject({ agentId: 'consulente-legale' })
   })
 
+  it('routes generic legal separation cases to the legal consultant when the legal signal is explicit', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'relationship-coach',
+      detectedDomain: 'inspiration',
+      message: 'ci sono problemi legali con la separazione',
+    })
+
+    expect(out).toMatchObject({ agentId: 'consulente-legale' })
+  })
+
   it('routes implicit financial stress cases from career coaching to financial planning', () => {
     const out = findCapabilityConsultTarget({
       team,

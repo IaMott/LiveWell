@@ -72,8 +72,6 @@ const HANDOFF_CONTINUITY_PATTERNS = [
   /\bandiamo\s+avanti\s+con\s+questo\s+percorso\b/i,
   /\bcontinuiamo\s+con\s+il\s+recupero\b/i,
   /\bcontinuiamo\s+con\s+la\s+terapia\b/i,
-  /\bparliamo\s+ancora\s+di\s+questo\s+con\s+lui\b/i,
-  /\bparliamo\s+ancora\s+di\s+questo\s+con\s+lei\b/i,
 ]
 
 type AdvanceCaseStateParams = {

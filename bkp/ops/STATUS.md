@@ -2,34 +2,33 @@ Stato progetto
 
 Obiettivo
 
-Validare in modo mirato il commit `c9b21d2` sui tre residui dichiarati corretti: owner implicito, consulto implicito legal e same-domain takeover.
+Chiudere i due residui confermati dalla review del commit `c9b21d2`: consulto implicito legal ancora troppo debole e same-domain takeover ancora troppo aggressivo.
 
 Fatto
 
-Validazione mirata del commit `c9b21d2` completata:
-- inspection dei file runtime `registry.ts` e `protocol.ts`
-- test dichiarati rieseguiti: `42/42` verdi
-- suite adiacenti rieseguite: `18/18` verdi
-- mini harness runtime con team reale eseguito sui casi owner implicito, consulto legal e same-domain takeover
-- miglioramenti reali confermati su owner implicito e su parte del same-domain takeover
-- residui ancora reali trovati su consulto implicito legal generico e su un phrasing di takeover (`parliamo ancora di questo con lui`)
-- nessuna regressione rilevata su persistence, synthesis o artifact governance
+Micro-fix finale post-review applicato e verificato:
+- `registry.ts` corretto per aprire consulto implicito `consulente-legale` anche su `problemi legali con la separazione`, senza riaprire falsi positivi emotivi
+- `protocol.ts` corretto per trattare `parliamo ancora di questo con lui` come continuità di takeover, non come handoff prematuro
+- test stretti aggiornati su legal positivo e takeover same-domain residuo
+- `37/37` test mirati verdi
+- `24/24` suite di guardia verdi
+- `typecheck` verde
+- `build` verde
 
 In corso
 
-Nessuna modifica applicativa in corso; review chiusa e memoria operativa aggiornata.
+Nessuna modifica applicativa in corso; step backend chiuso e pronto per publish remoto.
 
 Prossimo
 
-Applicare, solo se richiesto, un ulteriore micro-fix stretto su consulto legal generico e takeover ancora troppo aggressivo su un phrasing residuo.
+Eseguire una nuova validazione mirata post-fix sui due casi corretti, senza riaprire il refactor.
 
 Rischi
 
-Residui confermati dalla review:
-- `ci sono problemi legali con la separazione` non apre ancora consulto legal implicito
-- `parliamo ancora di questo con lui` apre ancora `handoff_pending_user` invece di restare takeover
-- i test dichiarati dimostrano bene owner implicito e legal family-law forte, ma solo parzialmente il cluster takeover naturale
+Residui fuori scope ancora possibili:
+- serve una nuova review mirata per confermare il comportamento sul team reale dopo l'ultimo micro-fix
+- warning noto Next.js sui lockfile multipli resta non bloccante
 
 Ultimo aggiornamento
 
-2026-03-20 11:39
+2026-03-20 11:59

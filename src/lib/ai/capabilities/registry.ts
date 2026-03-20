@@ -47,7 +47,7 @@ const AGENT_SEMANTIC_SIGNALS: Record<string, string[]> = {
   'mental-coach': ['blocco mentale', 'performance', 'pre gara', 'concentrazione', 'mental'],
   'sleep-coach': ['sonno', 'insonnia', 'russamento', 'apnee', 'osas', 'dormo male'],
   'consulente-legale': [
-    'legale',
+    'legal',
     'separazione',
     'causa',
     'contratto',
@@ -260,10 +260,10 @@ function scoreTriggerMatch(
   const messageMentionsDomain = hasTextSignal(lowerMessage, domainSignals)
   const sharedTokens = getSharedMeaningfulTokens(trigger, message)
   const hasGenericConsultLanguage = GENERIC_TRIGGER_PATTERN.test(trigger)
-  const hasStrongFamilyLegalSignal = /\blegale|avvocat|affido|accordi|tutela|causa|giurid/i.test(
+  const hasStrongFamilyLegalSignal = /\blegal|avvocat|affido|accordi|tutela|causa|giurid/i.test(
     lowerMessage,
   )
-  const triggerIsFamilyLegal = /\blegale|avvocat|affido|accordi|tutela|causa|giurid/i.test(
+  const triggerIsFamilyLegal = /\blegal|avvocat|affido|accordi|tutela|causa|giurid/i.test(
     lowerTrigger,
   )
   const messageIsOnlyRelationalSeparation =
@@ -402,14 +402,14 @@ function scoreConsultTarget(params: {
   }
 
   if (params.detectedDomain === 'inspiration') {
-    const strongLegalFamilySignal = /\blegale|avvocat|affido|accordi|tutela|giurid|familia/i.test(
+    const strongLegalFamilySignal = /\blegal|avvocat|affido|accordi|tutela|giurid|familia/i.test(
       lowerMessage,
     )
     const relationalSeparationOnly =
       /\bsepar(?:az|and)/i.test(lowerMessage) && !strongLegalFamilySignal
     if (
       params.agent.id === 'consulente-legale' &&
-      /\blegale|separaz|causa|contratto|avvocat|accordi|affido|tutela/i.test(lowerMessage)
+      /\blegal|separaz|causa|contratto|avvocat|accordi|affido|tutela/i.test(lowerMessage)
     )
       score += 10
     if (params.agent.id === 'consulente-legale' && strongLegalFamilySignal) score += 6

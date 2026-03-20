@@ -626,7 +626,11 @@ describe('case protocol vertical slice', () => {
       handoffCount: 0,
     }
 
-    const softPhrases = ['restiamo su questa parte', 'proseguiamo con lui']
+    const softPhrases = [
+      'restiamo su questa parte',
+      'proseguiamo con lui',
+      'parliamo ancora di questo con lui',
+    ]
 
     for (const phrase of softPhrases) {
       const out = advanceCaseState({
