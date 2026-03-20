@@ -2,34 +2,34 @@ Stato progetto
 
 Obiettivo
 
-Chiudere con micro-fix stretti i residui emersi dalla review finale del commit `442523a`: owner implicito su nutrition/financial/dermatologia, consulto implicito legal e same-domain takeover troppo aggressivo.
+Validare in modo mirato il commit `c9b21d2` sui tre residui dichiarati corretti: owner implicito, consulto implicito legal e same-domain takeover.
 
 Fatto
 
-Micro-fix post-review applicati e verificati:
-- `protocol.ts` corretto per mantenere piu spesso `consult_active_takeover` sui phrasing same-domain morbidi
-- `registry.ts` corretto per rafforzare owner/consult target impliciti su legal, financial e cutaneo
-- test mirati aggiornati su owner implicito, consulto legal positivo/negativo e same-domain takeover
-- `42/42` test mirati verdi
-- `28/28` suite adiacenti verdi su persistence, synthesis, artifact governance e chat persistence
-- `typecheck` verde
-- `build` verde
+Validazione mirata del commit `c9b21d2` completata:
+- inspection dei file runtime `registry.ts` e `protocol.ts`
+- test dichiarati rieseguiti: `42/42` verdi
+- suite adiacenti rieseguite: `18/18` verdi
+- mini harness runtime con team reale eseguito sui casi owner implicito, consulto legal e same-domain takeover
+- miglioramenti reali confermati su owner implicito e su parte del same-domain takeover
+- residui ancora reali trovati su consulto implicito legal generico e su un phrasing di takeover (`parliamo ancora di questo con lui`)
+- nessuna regressione rilevata su persistence, synthesis o artifact governance
 
 In corso
 
-Nessuna modifica applicativa in corso; step backend chiuso e pronto per publish remoto.
+Nessuna modifica applicativa in corso; review chiusa e memoria operativa aggiornata.
 
 Prossimo
 
-Eseguire una nuova validazione mirata post-fix sui tre cluster corretti, senza riaprire il refactor.
+Applicare, solo se richiesto, un ulteriore micro-fix stretto su consulto legal generico e takeover ancora troppo aggressivo su un phrasing residuo.
 
 Rischi
 
-Residui fuori scope ancora possibili:
-- serve una nuova validazione mirata per misurare l'effetto sistemico dei fix su team reale
-- alcuni casi impliciti borderline potrebbero restare semanticamente deboli fuori dai phrasing coperti qui
-- warning noto Next.js sui lockfile multipli resta non bloccante
+Residui confermati dalla review:
+- `ci sono problemi legali con la separazione` non apre ancora consulto legal implicito
+- `parliamo ancora di questo con lui` apre ancora `handoff_pending_user` invece di restare takeover
+- i test dichiarati dimostrano bene owner implicito e legal family-law forte, ma solo parzialmente il cluster takeover naturale
 
 Ultimo aggiornamento
 
-2026-03-19 22:13
+2026-03-20 11:39
