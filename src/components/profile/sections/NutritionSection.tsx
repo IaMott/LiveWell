@@ -155,7 +155,6 @@ export function NutritionSection({ data }: Props) {
   const dailyKcal =
     (typeof attrKcal === 'number' ? attrKcal : null) ??
     (nutritionProfile?.dailyKcal != null ? Number(nutritionProfile.dailyKcal) : null)
-  const kcalGoal = dailyKcal ?? 2000
 
   // C2 + M5: Group recent meals by type.
   // Normalize DB English values ('breakfast' → 'colazione') before comparing.

@@ -2,47 +2,50 @@ Stato progetto
 
 Obiettivo
 
-Validare in modo mirato e severo il commit applicativo `67db453` sui cluster residui impliciti: monodominio implicito cross-domain, consulti impliciti residui, dirty cases rappresentativi e non-regressioni su persistence/gating/artifact governance.
+Chiudere il fail CI reale su `tests/api/interview-flow-transcript-2026-03-11.test.ts` e pulire i warning lint localizzati senza riaprire runtime o UI fuori scope.
 
 Fatto
 
-Validazione mirata del commit `67db453` completata:
-- verificato che `HEAD` coincide con il baseline applicativo `67db453`
-- inspection di `src/lib/ai/domain/domainDetection.ts`, `src/lib/ai/case/protocol.ts`, `src/lib/ai/capabilities/registry.ts`
-- `53/53` test dichiarati verdi
-- `18/18` guardie verdi
-- mini harness runtime con team reale eseguito e rimosso
-- miglioramenti reali confermati su:
-  - owner implicito nutrition / gastro / burnout / coordination / training pain
-  - consulti impliciti `training pain`, `executive burnout`, `coordination overload`, `legal`, `debt+ansia`
-- residui reali trovati:
-  - `mi sto separando e ci sono problemi pratici` -> owner `career-coach` troppo debole
-  - dirty cases ad alta entropia ancora solo parzialmente credibili su target e reason
-  - alcune reason restano semanticamente scorrelate dal target effettivo nel team reale
+- verificato che il fail CI (`expected 3 to be less than or equal to 1`) deriva da un test non più allineato al runtime attuale
+- confermato in `interviewFlow.ts` che il batching fino a 3 domande baseline L1 è intenzionale e già documentato nel codice vivo
+- aggiornato `tests/api/interview-flow-transcript-2026-03-11.test.ts` per accettare fino a 3 domande baseline mirate e continuare a bloccare follow-up generici
+- puliti i warning lint localizzati in:
+  - `src/lib/tools/handlers.ts`
+  - `src/lib/cache/contextCache.ts`
+  - `src/components/profile/sections/NutritionSection.tsx`
+  - `src/components/profile/ProfileNav.tsx`
+- verifiche eseguite con esito verde:
+  - `tests/api/interview-flow-transcript-2026-03-11.test.ts`
+  - `tests/api/orchestrator-interview-flow.test.ts`
+  - `tests/api/orchestrator-domain-persistence.test.ts`
+  - `tests/api/orchestrator-synthesis.test.ts`
+  - `tests/api/artifact-governance.test.ts`
+  - `tests/api/chat-send-persistence.test.ts`
+  - targeted eslint sui file warning
+  - `npm run typecheck`
 
 In corso
 
-Nessuna modifica applicativa in corso; memoria operativa della review da pubblicare.
+Publish remoto del fix CI/lint e verifica post-deploy.
 
 Prossimo
 
-Se richiesto, il passo corretto successivo è un altro micro-fix stretto su practical separation e su alcune reason/target dei dirty cases, non una campagna più ampia.
+Se il publish va a buon fine, nessun altro fix immediato su questo cluster; il passo successivo corretto è una nuova validazione mirata solo se emergono altri fail reali da CI o review.
 
 Rischi
 
-Residui confermati dalla review:
-- owner implicito ancora debole su practical separation senza segnale legal forte
-- dirty cases multi-tema ancora parziali su reasoning/target nei casi con lavoro+ansia+organizzazione e separazione+figli+soldi
-- fallback/trigger di capabilities nel team reale ancora talvolta producono reason semanticamente deboli
+Rischio residuo basso:
+- il test transcript continua a non estrarre attributi anagrafici dai `recentMessages`; al momento è coerente con il runtime vivo e non è il bug di questo step
+- warning lint locali chiusi senza impatto comportamentale
 
 Rischi non riaperti:
 - queue / `pendingQuestions`
+- persistence runtime
 - gating strutturato
 - artifact governance
-- consulti espliciti
-- takeover/handoff già validati
+- consulti/takeover/handoff già validati
 - upload/backend file support di base
 
 Ultimo aggiornamento
 
-2026-03-20 16:35
+2026-03-20 17:50

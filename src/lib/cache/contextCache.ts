@@ -101,11 +101,11 @@ export function invalidateContextPack(userId: string, conversationId: string): v
 }
 
 /** @internal — use only in tests or cache invalidation utilities */
-function clearContextCache(): void {
+function _clearContextCache(): void {
   contextPackCache.clear()
 }
 
 /** @internal — use only in tests */
-function getContextCacheSize(): number {
+function _getContextCacheSize(): number {
   return contextPackCache.size
 }

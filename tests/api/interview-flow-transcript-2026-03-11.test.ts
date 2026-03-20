@@ -50,7 +50,7 @@ const transcriptLikeContext: ContextPack = {
 }
 
 describe('interview flow hardening — transcript 2026-03-11', () => {
-  it('asks at most one targeted missing question and never generic follow-ups', async () => {
+  it('asks only targeted baseline questions and never generic follow-ups', async () => {
     const llm = {
       complete: async ({ format }: { system: string; user: string; format?: 'json' | 'text' }) => {
         // Simulate weak generic behavior from model: orchestrator must harden output.
@@ -88,9 +88,10 @@ describe('interview flow hardening — transcript 2026-03-11', () => {
       },
     )
 
-    // Must ask only one targeted question.
-    expect((result.gatingQuestions ?? []).length).toBeLessThanOrEqual(1)
-    expect((result.gatingQuestions?.[0] ?? '').length).toBeGreaterThan(8)
+    // Runtime now batches up to 3 baseline fields in one turn when L1 is still incomplete.
+    expect((result.gatingQuestions ?? []).length).toBeGreaterThan(0)
+    expect((result.gatingQuestions ?? []).length).toBeLessThanOrEqual(3)
+    expect((result.gatingQuestions ?? []).every((q) => q.length > 8)).toBe(true)
 
     // Generic chatty follow-up should not dominate.
     expect(result.gatingQuestions?.some((q) => /qualcos['’]altro|aggiungere/i.test(q))).toBe(false)

@@ -854,7 +854,7 @@ export const stubToolHandlers: HandlerMap = {
   'artifacts.saveRecommendation': async () => ({ saved: true }),
   'notifications.createInApp': async () => ({ saved: true }),
   'share.createLink': async (args) => {
-    const a = args as { resourceType: string; resourceId: string }
+    void (args as { resourceType: string; resourceId: string })
     const token = `stub-${Math.random().toString(36).slice(2)}`
     return { shareUrl: `https://livewell.local/share/${token}`, token, expiresAt: null }
   },
