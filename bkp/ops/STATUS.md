@@ -2,33 +2,36 @@ Stato progetto
 
 Obiettivo
 
-Chiudere i due residui confermati dalla review del commit `c9b21d2`: consulto implicito legal ancora troppo debole e same-domain takeover ancora troppo aggressivo.
+Validare in modo finale il commit `f8093cb` solo sui due micro-fix appena pubblicati: consulto implicito legal e same-domain takeover.
 
 Fatto
 
-Micro-fix finale post-review applicato e verificato:
-- `registry.ts` corretto per aprire consulto implicito `consulente-legale` anche su `problemi legali con la separazione`, senza riaprire falsi positivi emotivi
-- `protocol.ts` corretto per trattare `parliamo ancora di questo con lui` come continuità di takeover, non come handoff prematuro
-- test stretti aggiornati su legal positivo e takeover same-domain residuo
-- `37/37` test mirati verdi
-- `24/24` suite di guardia verdi
-- `typecheck` verde
-- `build` verde
+Validazione finale del commit `f8093cb` completata:
+- inspection di `registry.ts` e `protocol.ts`
+- test dichiarati rieseguiti: `37/37` verdi
+- suite di guardia rieseguite: `24/24` verdi
+- mini harness runtime con team reale eseguito sui casi legal positivi/negativi e takeover/handoff richiesti
+- consulto legal positivo confermato su `ci sono problemi legali con la separazione`
+- nessun falso positivo legal su separazione emotiva
+- takeover corretto su `parliamo ancora di questo con lui`
+- handoff ancora attivo su `andiamo avanti con questo percorso con lui`
+- residuo ancora osservato: `vorrei che fosse lui a seguirmi da ora` resta takeover invece di handoff
+- nessuna regressione reale su persistence, synthesis o artifact governance
 
 In corso
 
-Nessuna modifica applicativa in corso; step backend chiuso e pronto per publish remoto.
+Nessuna modifica applicativa in corso; review chiusa e memoria operativa aggiornata.
 
 Prossimo
 
-Eseguire una nuova validazione mirata post-fix sui due casi corretti, senza riaprire il refactor.
+Se richiesto, applicare un ultimo micro-fix stretto sul phrasing handoff `vorrei che fosse lui a seguirmi da ora`; altrimenti non serve ancora una campagna più ampia.
 
 Rischi
 
-Residui fuori scope ancora possibili:
-- serve una nuova review mirata per confermare il comportamento sul team reale dopo l'ultimo micro-fix
-- warning noto Next.js sui lockfile multipli resta non bloccante
+Residuo confermato dalla review:
+- il phrasing forte `vorrei che fosse lui a seguirmi da ora` non apre ancora `handoff_pending_user`
+- il target legal è corretto ma la `reason` del team reale resta semanticamente debole in un caso
 
 Ultimo aggiornamento
 
-2026-03-20 11:59
+2026-03-20 12:35
