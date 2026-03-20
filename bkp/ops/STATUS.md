@@ -2,34 +2,34 @@ Stato progetto
 
 Obiettivo
 
-Chiudere l'ultimo residuo same-domain confermato dalla review del commit `f8093cb`: promuovere a `handoff_pending_user` i phrasing forti di ownership stabile come `vorrei che fosse lui a seguirmi da ora`, senza regressioni sui takeover morbidi e sui path già forti.
+Validare in modo finale il commit `1a2101d` solo sul cluster same-domain handoff/takeover corretto dall'ultimo micro-fix, con controllo stretto delle non-regressioni immediate.
 
 Fatto
 
-Micro-fix finale sul phrasing forte di handoff completato:
-- modificato solo `src/lib/ai/case/protocol.ts`
-- aggiunti test mirati in `tests/api/case-protocol.test.ts`
-- `vorrei che fosse lui a seguirmi da ora` ora apre `handoff_pending_user`
-- phrasing equivalente `vorrei continuare con lui come riferimento principale` ora apre `handoff_pending_user`
+Validazione finale del commit `1a2101d` completata:
+- inspection di `src/lib/ai/case/protocol.ts` e `tests/api/case-protocol.test.ts`
+- test dichiarati rieseguiti: `39/39` verdi
+- suite di guardia rieseguite: `24/24` verdi
+- mini harness runtime con team reale eseguito sui casi richiesti
+- `vorrei che fosse lui a seguirmi da ora` apre `handoff_pending_user`
+- il phrasing equivalente `vorrei continuare con lui come riferimento principale` apre `handoff_pending_user`
 - `parliamo ancora di questo con lui`, `restiamo su questa parte` e `proseguiamo con lui` restano `consult_active_takeover`
-- `ok`, `grazie`, `capito` continuano a tornare all'owner
-- test mirati verdi: `39/39`
-- suite di guardia verdi: `24/24`
-- `typecheck` e `build` verdi
-- commit/push/deploy in corso di finalizzazione
+- `ok`, `grazie`, `capito` tornano all'owner
+- nessuna regressione reale su persistence, synthesis, artifact governance, consulti impliciti o path espliciti forti
+- verdict: conferma piena del cluster finale corretto dal commit `1a2101d`
 
 In corso
 
-Nessuna modifica applicativa aggiuntiva in corso; il fix è completato e validato localmente.
+Nessuna modifica applicativa in corso; review chiusa e memoria operativa in aggiornamento.
 
 Prossimo
 
-Nuova validazione mirata post-fix sul team reale del commit che contiene questo ultimo micro-fix.
+Se richiesto, si può finalmente passare a una validazione più ampia del sistema; non emerge alcun ulteriore micro-fix obbligatorio in questo cluster.
 
 Rischi
 
-Nessun residuo confermato nel perimetro di questo phrasing fix; resta solo da verificare il comportamento runtime con review mirata post-publish.
+Nessun residuo confermato nel perimetro di questo fix. Resta solo il normale rischio di edge case non coperti fuori da questo cluster stretto.
 
 Ultimo aggiornamento
 
-2026-03-20 12:42
+2026-03-20 12:51
