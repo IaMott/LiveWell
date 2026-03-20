@@ -65,7 +65,11 @@ const TAKEOVER_CONTINUITY_PATTERNS = [
 
 const HANDOFF_CONTINUITY_PATTERNS = [
   /\bvorrei\s+che\s+mi\s+seguisse\b/i,
+  /\bvorrei\s+che\s+fosse\s+lui\s+a\s+seguirmi(?:\s+da\s+ora)?\b/i,
+  /\bvorrei\s+che\s+fosse\s+lei\s+a\s+seguirmi(?:\s+da\s+ora)?\b/i,
   /\bvorrei\s+proseguire\s+con\b/i,
+  /\bvorrei\s+continuare\s+con\s+lui\b.*\b(stabile|stabilmente|riferimento\s+principale)\b/i,
+  /\bvorrei\s+continuare\s+con\s+lei\b.*\b(stabile|stabilmente|riferimento\s+principale)\b/i,
   /\bmi\s+segua\s+lui\b/i,
   /\bmi\s+segua\s+lei\b/i,
   /\brestiamo\s+su\s+questo\s+percorso\b/i,
