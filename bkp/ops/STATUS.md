@@ -2,34 +2,48 @@ Stato progetto
 
 Obiettivo
 
-Validare in modo finale il commit `1a2101d` solo sul cluster same-domain handoff/takeover corretto dall'ultimo micro-fix, con controllo stretto delle non-regressioni immediate.
+Eseguire una campagna sistemica finale, ampia e severa, del sistema multi-agente sul baseline applicativo `1a2101d`, coprendo protocollo, routing implicito, consulti, takeover/handoff, memoria, artifact, gating, SSE e allegati.
 
 Fatto
 
-Validazione finale del commit `1a2101d` completata:
-- inspection di `src/lib/ai/case/protocol.ts` e `tests/api/case-protocol.test.ts`
-- test dichiarati rieseguiti: `39/39` verdi
-- suite di guardia rieseguite: `24/24` verdi
-- mini harness runtime con team reale eseguito sui casi richiesti
-- `vorrei che fosse lui a seguirmi da ora` apre `handoff_pending_user`
-- il phrasing equivalente `vorrei continuare con lui come riferimento principale` apre `handoff_pending_user`
-- `parliamo ancora di questo con lui`, `restiamo su questa parte` e `proseguiamo con lui` restano `consult_active_takeover`
-- `ok`, `grazie`, `capito` tornano all'owner
-- nessuna regressione reale su persistence, synthesis, artifact governance, consulti impliciti o path espliciti forti
-- verdict: conferma piena del cluster finale corretto dal commit `1a2101d`
+Campagna sistemica finale completata sul baseline `1a2101d`:
+- verificato che `HEAD` successivo contiene solo memoria operativa (`git diff --name-only 1a2101d..HEAD`)
+- 24 professionisti reali coperti dal repository
+- 7 domini/runtime buckets coperti (`general`, `nutrition`, `training`, `health`, `mindfulness`, `inspiration`, `coordination`)
+- 525 scenari distinti eseguiti/derivati con evidenza reale
+- conteggi finali: `462 PASS`, `45 FAIL`, `18 PARTIAL`, `0 NON VERIFICABILI`
+- 385 scenari da harness runtime su `protocol.ts`, `registry.ts`, `domainDetection.ts`
+- 103 test repository principali verdi
+- 27 test repository extra verdi
+- 1 test aggiuntivo su profile dynamic DB verde
+- 9 scenari upload route verdi
+- famiglia forte: aperture generiche, monodominio esplicito, consulti espliciti, takeover, return baton, handoff, gating, memory, artifacts, SSE/upload
+- famiglia debole residua: monodominio implicito cross-domain; secondariamente alcuni consulti impliciti e casi sporchi/ambigui
+- matrice completa salvata in `bkp/ops/journal/2026-03-20/1549_systemic_final_scenarios.json`
 
 In corso
 
-Nessuna modifica applicativa in corso; review chiusa e memoria operativa in aggiornamento.
+Nessuna modifica applicativa in corso; review chiusa e memoria operativa in aggiornamento/publish.
 
 Prossimo
 
-Se richiesto, si può finalmente passare a una validazione più ampia del sistema; non emerge alcun ulteriore micro-fix obbligatorio in questo cluster.
+Se richiesto, il passo corretto successivo non è un altro micro-fix immediato ma uno step diverso di prodotto o una validazione più ampia focalizzata solo sui residui impliciti ancora aperti.
 
 Rischi
 
-Nessun residuo confermato nel perimetro di questo fix. Resta solo il normale rischio di edge case non coperti fuori da questo cluster stretto.
+Residui reali ancora aperti:
+- monodominio implicito cross-domain ancora troppo fragile su endocrino, chinesiologia, sleep, relazione, executive, commercialista e coordination
+- alcuni consulti impliciti ancora deboli o assenti su `training pain`, executive burnout e coordination
+- alcuni casi sporchi lunghi restano plausibili ma non abbastanza credibili
+
+Rischi chiusi nella campagna:
+- queue / `pendingQuestions`
+- gating strutturato
+- artifact governance
+- consulti espliciti
+- same-domain takeover/handoff finale
+- upload/backend file support di base
 
 Ultimo aggiornamento
 
-2026-03-20 12:51
+2026-03-20 15:50
