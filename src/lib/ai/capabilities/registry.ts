@@ -43,11 +43,24 @@ const DOMAIN_TRIGGER_KEYWORDS: Record<Domain, string[]> = {
 }
 
 const AGENT_SEMANTIC_SIGNALS: Record<string, string[]> = {
+  'analista-contesto': [
+    'non so da dove partire',
+    'quadro confuso',
+    'troppe aree',
+    'troppe cose',
+    'priorità',
+    'fare ordine',
+  ],
   psicologo: ['ansia', 'stress', 'burnout', 'trauma', 'relazione', 'pensieri', 'psicolog'],
   'mental-coach': ['blocco mentale', 'performance', 'pre gara', 'concentrazione', 'mental'],
   'sleep-coach': ['sonno', 'insonnia', 'russamento', 'apnee', 'osas', 'dormo male'],
+  'relationship-coach': ['separazione', 'relazione', 'coppia', 'partner', 'conflitto'],
+  'executive-coach': ['leadership', 'manager', 'team', 'ruolo', 'decisioni', 'focus'],
   'consulente-legale': [
     'legal',
+    'problemi legali',
+    'aspetti legali',
+    'questione legale',
     'separazione',
     'causa',
     'contratto',
@@ -69,7 +82,15 @@ const AGENT_SEMANTIC_SIGNALS: Record<string, string[]> = {
     'prestiti',
   ],
   commercialista: ['tasse', 'fisco', 'dichiarazione', 'partita iva', 'tributi'],
-  'life-organizer': ['organizzarmi', 'gestire tutto', 'routine', 'organizzazione', 'agenda'],
+  'life-organizer': [
+    'organizzarmi',
+    'gestire tutto',
+    'routine',
+    'organizzazione',
+    'agenda',
+    'priorità',
+    'fare ordine',
+  ],
   dietista: ['dieta', 'alimentare', 'mangiare', 'peso', 'dimagrire', 'allergie alimentari'],
   chef: ['ricette', 'cucinare', 'pasti', 'menu', 'spesa'],
   gastroenterologo: [
@@ -94,10 +115,19 @@ const AGENT_SEMANTIC_SIGNALS: Record<string, string[]> = {
     'giramenti',
   ],
   mmg: ['sintomi', 'pressione', 'giramenti', 'farmaci', 'medico'],
-  fisioterapista: ['dolore', 'riabilitazione', 'recupero', 'mobilità', 'ginocchio', 'schiena'],
-  fisiatra: ['dolore', 'funzionale', 'riabilitazione', 'limitazioni', 'diagnosi'],
-  chinesologo: ['movimento', 'postura', 'esercizi', 'dolore', 'rieducazione'],
-  'medico-dello-sport': ['sport', 'performance', 'idoneità', 'infortunio'],
+  fisioterapista: [
+    'dolore',
+    'riabilitazione',
+    'recupero',
+    'mobilità',
+    'ginocchio',
+    'schiena',
+    'spalla',
+    'caviglia',
+  ],
+  fisiatra: ['dolore', 'funzionale', 'riabilitazione', 'limitazioni', 'diagnosi', 'cronico'],
+  chinesologo: ['movimento', 'postura', 'esercizi', 'dolore', 'rieducazione', 'schema motorio'],
+  'medico-dello-sport': ['sport', 'performance', 'idoneità', 'infortunio', 'corsa', 'correre'],
   'persona-trainer': ['allenamento', 'scheda', 'workout', 'forza', 'cardio'],
   dermatologo: ['pelle', 'sfoghi', 'eczema', 'acne', 'dermat', 'rash', 'prurito', 'orticaria'],
   endocrinologo: ['ormoni', 'tiroide', 'insulina', 'metabolismo'],
@@ -384,10 +414,62 @@ function scoreConsultTarget(params: {
       score += 6
     }
     if (
+      params.agent.id === 'fisioterapista' &&
+      /\b(dolore|male|infortunio)\b/i.test(lowerMessage) &&
+      /\b(ginocchio|schiena|spalla|caviglia|corro|correndo|allenamento|mi alleno)\b/i.test(
+        lowerMessage,
+      )
+    ) {
+      score += 9
+    }
+    if (
+      params.agent.id === 'fisiatra' &&
+      /\b(dolore persistente|limitazioni|cronico|funzionale)\b/i.test(lowerMessage)
+    ) {
+      score += 8
+    }
+    if (
+      params.agent.id === 'medico-dello-sport' &&
+      /\b(sport|corsa|corro|performance|idoneit)\b/i.test(lowerMessage) &&
+      /\b(dolore|infortunio|male)\b/i.test(lowerMessage)
+    ) {
+      score += 8
+    }
+    if (
       params.agent.id === 'sleep-coach' &&
       !/\bsonno|insonnia|russamento|apnee|osas\b/i.test(lowerMessage)
     ) {
       score -= 6
+    }
+  }
+
+  if (params.detectedDomain === 'training') {
+    if (
+      params.agent.id === 'fisioterapista' &&
+      /\b(dolore|male|infortunio)\b/i.test(lowerMessage) &&
+      /\b(alleno|allenamento|corro|corsa|ginocchio|schiena|spalla|caviglia)\b/i.test(lowerMessage)
+    ) {
+      score += 10
+    }
+    if (
+      params.agent.id === 'fisiatra' &&
+      /\b(dolore persistente|limitazioni|cronico|recidiva)\b/i.test(lowerMessage)
+    ) {
+      score += 7
+    }
+    if (
+      params.agent.id === 'medico-dello-sport' &&
+      /\b(corro|corsa|sport|gara|performance|idoneit)\b/i.test(lowerMessage) &&
+      /\b(dolore|infortunio|male)\b/i.test(lowerMessage)
+    ) {
+      score += 8
+    }
+    if (
+      params.agent.id === 'persona-trainer' &&
+      /\b(scheda|programma|allenamento|workout)\b/i.test(lowerMessage) &&
+      !/\b(dolore|male|infortunio)\b/i.test(lowerMessage)
+    ) {
+      score += 5
     }
   }
 
@@ -397,8 +479,35 @@ function scoreConsultTarget(params: {
       /\bansia|burnout|sopraffatt|trauma\b/i.test(lowerMessage)
     )
       score += 5
+    if (
+      params.agent.id === 'psicologo' &&
+      /\b(lavoro|focus|concentrarmi|decisioni)\b/i.test(lowerMessage) &&
+      /\b(burnout|ansia|stress)\b/i.test(lowerMessage)
+    ) {
+      score += 4
+    }
     if (params.agent.id === 'sleep-coach' && !/\bsonno|insonnia|dorm/i.test(lowerMessage))
       score -= 5
+    if (
+      params.agent.id === 'mental-coach' &&
+      /\b(performance|prestazione|pre.?gara|focus)\b/i.test(lowerMessage)
+    ) {
+      score += 5
+    }
+    if (
+      params.agent.id === 'mental-coach' &&
+      /\b(burnout|ansia|stress)\b/i.test(lowerMessage) &&
+      !/\b(performance|prestazione|pre.?gara|focus)\b/i.test(lowerMessage)
+    ) {
+      score -= 3
+    }
+    if (
+      params.agent.id === 'life-organizer' &&
+      /\b(organizzarmi|gestire tutto|troppe cose|priorit[àa])\b/i.test(lowerMessage) &&
+      /\b(burnout|stress|sopraffatt)\b/i.test(lowerMessage)
+    ) {
+      score += 4
+    }
   }
 
   if (params.detectedDomain === 'inspiration') {
@@ -409,7 +518,9 @@ function scoreConsultTarget(params: {
       /\bsepar(?:az|and)/i.test(lowerMessage) && !strongLegalFamilySignal
     if (
       params.agent.id === 'consulente-legale' &&
-      /\blegal|separaz|causa|contratto|avvocat|accordi|affido|tutela/i.test(lowerMessage)
+      /\b(problemi?\s+legali|aspetti?\s+legali|questioni?\s+legali|legale|separaz|causa|contratto|avvocat|accordi|affido|tutela)\b/i.test(
+        lowerMessage,
+      )
     )
       score += 10
     if (params.agent.id === 'consulente-legale' && strongLegalFamilySignal) score += 6
@@ -420,10 +531,24 @@ function scoreConsultTarget(params: {
     )
       score += 10
     if (
+      params.agent.id === 'financial-planner' &&
+      /\b(debiti|mutuo|rate|spese|bollette|soldi)\b/i.test(lowerMessage) &&
+      /\b(ansia|stress|sopraffatt)\b/i.test(lowerMessage)
+    ) {
+      score += 4
+    }
+    if (
       strongLegalFamilySignal &&
       ['career-coach', 'relationship-coach', 'life-organizer'].includes(params.agent.id)
     ) {
       score -= 5
+    }
+    if (
+      params.agent.id === 'relationship-coach' &&
+      /\b(separaz|relazione|coppia|partner)\b/i.test(lowerMessage) &&
+      !strongLegalFamilySignal
+    ) {
+      score += 6
     }
     if (
       params.agent.id === 'career-coach' &&
@@ -431,10 +556,44 @@ function scoreConsultTarget(params: {
     )
       score += 6
     if (
+      params.agent.id === 'executive-coach' &&
+      /\b(lavoro|team|manager|leadership|decisioni|focus)\b/i.test(lowerMessage) &&
+      /\b(stress|burnout|blocco)\b/i.test(lowerMessage)
+    ) {
+      score += 8
+    }
+    if (
+      params.agent.id === 'commercialista' &&
+      /\b(tasse|fisco|partita iva|iva|tributi|contabil)\b/i.test(lowerMessage)
+    ) {
+      score += 9
+    }
+    if (
       params.agent.id === 'life-organizer' &&
-      /\bgestire tutto|organizzarmi|troppe cose|incastrare tutto\b/i.test(lowerMessage)
+      /\bgestire tutto|organizzarmi|troppe cose|incastrare tutto|problemi pratici|priorit[àa]|fare ordine\b/i.test(
+        lowerMessage,
+      )
     )
       score += 6
+  }
+
+  if (params.detectedDomain === 'coordination') {
+    if (
+      params.agent.id === 'analista-contesto' &&
+      /\b(non so da dove partire|quadro confuso|troppe aree|fare ordine|priorit[àa])\b/i.test(
+        lowerMessage,
+      )
+    ) {
+      score += 10
+    }
+    if (
+      params.agent.id === 'life-organizer' &&
+      /\b(organizzarmi|gestire tutto|routine|agenda|incastrare tutto|priorit[àa])\b/i.test(
+        lowerMessage,
+      )
+    ) {
+      score += 10
+    }
   }
 
   return score
@@ -536,7 +695,7 @@ export function findCapabilityConsultTarget(params: {
   const selectedReason =
     targetMatches.find((match) => match.agent.id === selectedTarget.id)?.reason ??
     ownerReason ??
-    `capability_consult:${params.detectedDomain}`
+    `semantic_consult:${params.detectedDomain}:${selectedTarget.id}`
 
   return {
     agentId: selectedTarget.id,

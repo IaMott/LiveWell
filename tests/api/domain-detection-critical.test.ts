@@ -26,6 +26,9 @@ describe('critical domain detection', () => {
     expect(detectDomainFromText('mi serve una scheda per ricominciare')).toBe('training')
     expect(detectDomainFromText('sono stressato e dormo male')).toBe('mindfulness')
     expect(detectDomainFromText('ansia alta e non riesco a concentrarmi')).toBe('mindfulness')
+    expect(detectDomainFromText('mi sento in burnout e non riesco a concentrarmi')).toBe(
+      'mindfulness',
+    )
   })
 
   it('classifies inspiration and health implicit cases across distant domains', () => {
@@ -38,6 +41,11 @@ describe('critical domain detection', () => {
     expect(detectDomainFromText('ho sfoghi cutanei persistenti con prurito')).toBe('health')
     expect(detectDomainFromText('gonfiore e problemi digestivi continui')).toBe('health')
     expect(detectDomainFromText('tachicardia e pressione alta da stamattina')).toBe('health')
+    expect(detectDomainFromText('insulina alta e metabolismo lento')).toBe('health')
+    expect(detectDomainFromText('mi fa male il ginocchio quando corro')).toBe('health')
     expect(detectDomainFromText('non riesco più a gestire tutto')).toBe('coordination')
+    expect(detectDomainFromText('devo rimettere in ordine vita, soldi e priorità')).toBe(
+      'coordination',
+    )
   })
 })

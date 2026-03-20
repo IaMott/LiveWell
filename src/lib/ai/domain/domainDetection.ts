@@ -35,6 +35,9 @@ const KEYWORDS: Record<Domain, string[]> = {
     'pranzo',
     'cena',
     'spuntino',
+    'gastrite',
+    'reflusso',
+    'salto i pasti',
   ],
   training: [
     'allenamento',
@@ -56,6 +59,10 @@ const KEYWORDS: Record<Domain, string[]> = {
     'recupero',
     'protocollo di recupero',
     'timer',
+    'correre',
+    'corsa',
+    'ricominciare',
+    'riprendere ad allenarmi',
   ],
   health: [
     'peso',
@@ -90,6 +97,15 @@ const KEYWORDS: Record<Domain, string[]> = {
     'cutanei',
     'eczema',
     'pressione alta',
+    'ginocchio',
+    'schiena',
+    'spalla',
+    'caviglia',
+    'ormoni',
+    'tiroide',
+    'insulina',
+    'metabolismo',
+    'glicemia',
   ],
   mindfulness: [
     'ansia',
@@ -109,6 +125,9 @@ const KEYWORDS: Record<Domain, string[]> = {
     'psicologo',
     'terapia',
     'emozioni',
+    'focus',
+    'burn out',
+    'esaurito',
   ],
   inspiration: [
     'idea',
@@ -130,6 +149,11 @@ const KEYWORDS: Record<Domain, string[]> = {
     'fisco',
     'tasse',
     'sopraffatto',
+    'problemi pratici',
+    'figli',
+    'priorità',
+    'priorita',
+    'ordine',
     'lavoro',
     'carriera',
     'gestire tutto',
@@ -140,7 +164,16 @@ const KEYWORDS: Record<Domain, string[]> = {
     'career',
     'obiettivo professionale',
   ],
-  coordination: ['coordina', 'coordinamento'],
+  coordination: [
+    'coordina',
+    'coordinamento',
+    'organizzarmi',
+    'organizzazione',
+    'priorità',
+    'priorita',
+    'gestire tutto',
+    'ordine',
+  ],
   general: [],
 }
 
@@ -163,10 +196,16 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
     },
     { pattern: /\b(allergie|intolleranze)\b.{0,30}\b(alimentari|cibo|mangiare)\b/i, score: 4 },
     { pattern: /\b(turni|pasti saltati|salto i pasti)\b/i, score: 2 },
+    {
+      pattern:
+        /\b(non so cosa mangiare|cosa mangiare)\b.{0,20}\b(gastrite|reflusso|gonfiore)\b|\b(gastrite|reflusso|gonfiore)\b.{0,20}\b(non so cosa mangiare|cosa mangiare)\b/i,
+      score: 5,
+    },
   ],
   training: [
     { pattern: /\b(mi serve|voglio|dammi|fammi)\b.{0,30}\b(scheda|programma)\b/i, score: 4 },
     { pattern: /\b(ricominciare ad allenarmi|allenarmi meglio|allenarmi)\b/i, score: 3 },
+    { pattern: /\b(riprendere ad allenarmi|riprendere a correre|voglio riprendere)\b/i, score: 4 },
     { pattern: /\b(protocollo di recupero|recupero)\b/i, score: 3 },
     { pattern: /\b(mi alleno male|eseguo male gli esercizi)\b/i, score: 4 },
   ],
@@ -183,12 +222,31 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
         /\b(sfoghi cutanei|sfogo cutaneo|eruzione|eczema|rash|prurito|dermatite|acne persistente)\b/i,
       score: 5,
     },
+    {
+      pattern: /\b(ormoni|tiroide|insulina|metabolismo|glicemia)\b/i,
+      score: 4,
+    },
+    {
+      pattern:
+        /\b(mi fa male|dolore)\b.{0,25}\b(ginocchio|schiena|spalla|caviglia)\b|\b(ginocchio|schiena|spalla|caviglia)\b.{0,25}\b(mi fa male|dolore)\b/i,
+      score: 4,
+    },
+    {
+      pattern:
+        /\b(corro|correndo|corsa|allenamento|mi alleno)\b.{0,30}\b(dolore|male|infortunio)\b|\b(dolore|male|infortunio)\b.{0,30}\b(corro|correndo|corsa|allenamento|mi alleno)\b/i,
+      score: 4,
+    },
     { pattern: /\b(dolore|sintomi?)\b/i, score: 2 },
   ],
   mindfulness: [
     { pattern: /\b(stressato|stressata|stress|ansia alta|ansia intensa)\b/i, score: 4 },
     { pattern: /\b(dormo male|dormo malissimo|insonnia)\b/i, score: 4 },
     { pattern: /\b(burnout|sopraffatt[oa]|non riesco a concentrarmi|blocco mentale)\b/i, score: 5 },
+    {
+      pattern:
+        /\b(lavoro|focus|concentrarmi)\b.{0,30}\b(stress|ansia|burnout)\b|\b(stress|ansia|burnout)\b.{0,30}\b(lavoro|focus|concentrarmi)\b/i,
+      score: 4,
+    },
   ],
   inspiration: [
     {
@@ -201,6 +259,15 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
         /\b(debiti|mutuo|spese|soldi|rate|bollette|tasse)\b.{0,40}\b(ansia|stress|sopraffatt)\b/i,
       score: 5,
     },
+    {
+      pattern: /\b(debiti|mutuo|spese|soldi|rate|bollette|tasse)\b/i,
+      score: 3,
+    },
+    {
+      pattern:
+        /\b(mi sto separando|separazione)\b.{0,50}\b(problemi pratici|figli|soldi|gestire|cosa fare)\b/i,
+      score: 4,
+    },
     { pattern: /\b(non riesco pi[uù] a gestire tutto|sopraffatt[oa])\b/i, score: 2 },
     { pattern: /\b(bloccato nel lavoro|bloccata nel lavoro|carriera|lavoro)\b/i, score: 3 },
   ],
@@ -209,6 +276,15 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
       pattern:
         /\b(non riesco pi[uù] a gestire tutto|mi serve organizzarmi|ho troppe cose|non riesco a organizzarmi|devo incastrare tutto)\b/i,
       score: 5,
+    },
+    {
+      pattern:
+        /\b(rimettere in ordine|fare ordine|mettere ordine)\b.{0,40}\b(vita|soldi|priorit[àa])\b|\b(vita|soldi|priorit[àa])\b.{0,40}\b(rimettere in ordine|fare ordine|mettere ordine)\b/i,
+      score: 5,
+    },
+    {
+      pattern: /\b(non so da dove partire|troppi fronti|troppe aree|quadro confuso)\b/i,
+      score: 4,
     },
   ],
 }

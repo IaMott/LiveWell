@@ -7,6 +7,25 @@ import type { AgentProfile } from '@/lib/ai/types'
 
 const team: AgentProfile[] = [
   {
+    id: 'analista-contesto',
+    displayName: 'Analista Contesto',
+    domainTags: ['coordination', 'inspiration'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Sovraccarico trasversale con caos operativo -> life-organizer del team.'],
+      handoffTriggers: ['Caso di coordinamento dominante -> handoff coordination.'],
+      minimumInput: [],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
     id: 'life-organizer',
     displayName: 'Life Organizer',
     domainTags: ['coordination', 'inspiration'],
@@ -116,6 +135,27 @@ const team: AgentProfile[] = [
     },
   },
   {
+    id: 'executive-coach',
+    displayName: 'Executive Coach',
+    domainTags: ['inspiration'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: [
+        'Burnout lavorativo, stress dirigenziale o focus collassato -> psicologo del team.',
+      ],
+      handoffTriggers: ['Caso executive dominante -> handoff inspiration.'],
+      minimumInput: [],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
     id: 'career-coach',
     displayName: 'Career Coach',
     domainTags: ['inspiration'],
@@ -207,6 +247,25 @@ const team: AgentProfile[] = [
         'Gonfiore, dolore addominale, digestione difficile o reflusso -> gastroenterologo del team.',
       ],
       handoffTriggers: ['Caso gastroenterologico dominante -> handoff health.'],
+      minimumInput: [],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
+    id: 'fisioterapista',
+    displayName: 'Fisioterapista',
+    domainTags: ['training', 'health'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Dolore in allenamento o recupero funzionale -> fisioterapista del team.'],
+      handoffTriggers: ['Caso dolore training dominante -> handoff training.'],
       minimumInput: [],
       outputContracts: [],
       escalationRules: [],
@@ -366,6 +425,18 @@ describe('runtime trigger guards', () => {
     expect(out?.reason.toLowerCase()).toMatch(/torac|tachic|fiato/)
   })
 
+  it('routes training pain cases to fisioterapia instead of keeping a weak training fallback', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'persona-trainer',
+      detectedDomain: 'training',
+      message: 'mi alleno e ho dolore al ginocchio mentre corro',
+    })
+
+    expect(out).toMatchObject({ agentId: 'fisioterapista' })
+    expect(out?.reason.toLowerCase()).toMatch(/dolore|semantic_consult/)
+  })
+
   it('routes persistent skin eruptions to dermatology instead of a generic health fallback', () => {
     const out = findCapabilityConsultTarget({
       team,
@@ -386,5 +457,27 @@ describe('runtime trigger guards', () => {
     })
 
     expect(out).toMatchObject({ agentId: 'gastroenterologo' })
+  })
+
+  it('routes executive burnout with collapsing focus to a mindfulness specialist', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'executive-coach',
+      detectedDomain: 'mindfulness',
+      message: 'sono in burnout al lavoro e non riesco a concentrarmi',
+    })
+
+    expect(out).toMatchObject({ agentId: 'psicologo' })
+  })
+
+  it('routes broad coordination overload to life-organizer instead of a weak inspiration fallback', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'analista-contesto',
+      detectedDomain: 'coordination',
+      message: 'devo rimettere in ordine vita, soldi e priorità perché non riesco a gestire tutto',
+    })
+
+    expect(out).toMatchObject({ agentId: 'life-organizer' })
   })
 })

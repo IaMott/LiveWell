@@ -155,6 +155,9 @@ function scoreImplicitOwnerCandidate(
           /\bmangiare meglio\b/i,
           /\balimentazione\b/i,
           /\ballergie?\s+alimentari\b/i,
+          /\bnon so cosa mangiare\b/i,
+          /\bgastrite\b/i,
+          /\breflusso\b/i,
         ]) * 3
       if (
         /\b(mangiare meglio|piano alimentare|piano nutrizionale|dimagrire|perdere peso|alimentazione)\b/i.test(
@@ -169,10 +172,56 @@ function scoreImplicitOwnerCandidate(
       break
     case 'persona-trainer':
       score +=
-        matches([/\bscheda\b/i, /\bricominciare\b/i, /\ballenarmi\b/i, /\ballenarmi meglio\b/i]) * 3
+        matches([
+          /\bscheda\b/i,
+          /\bricominciare\b/i,
+          /\ballenarmi\b/i,
+          /\ballenarmi meglio\b/i,
+          /\briprendere ad allenarmi\b/i,
+        ]) * 3
       break
     case 'fisioterapista':
-      score += matches([/\bdolore\b/i, /\brecupero\b/i, /\briabilit/i, /\beserciz/i]) * 3
+      score +=
+        matches([
+          /\bdolore\b/i,
+          /\brecupero\b/i,
+          /\briabilit/i,
+          /\beserciz/i,
+          /\bginocchio\b/i,
+          /\bschiena\b/i,
+          /\bspalla\b/i,
+          /\bcaviglia\b/i,
+          /\bcorro\b/i,
+        ]) * 3
+      if (/\b(dolore|male)\b/i.test(lower) && /\b(alleno|allenamento|corro|corsa)\b/i.test(lower)) {
+        score += 4
+      }
+      break
+    case 'fisiatra':
+      score +=
+        matches([/\bdolore\b/i, /\blimitazioni\b/i, /\bfunzional/i, /\bcronich/i, /\briabilit/i]) *
+        3
+      break
+    case 'chinesiologo':
+      score +=
+        matches([
+          /\bpostura\b/i,
+          /\bmovimento\b/i,
+          /\brieduc/i,
+          /\bschema motorio\b/i,
+          /\bmobilit/i,
+        ]) * 3
+      break
+    case 'medico-dello-sport':
+      score +=
+        matches([
+          /\bsport\b/i,
+          /\bcorro\b/i,
+          /\bcorsa\b/i,
+          /\bperformance\b/i,
+          /\binfortun/i,
+          /\bidoneit/i,
+        ]) * 3
       break
     case 'cardiologo':
       score +=
@@ -206,16 +255,60 @@ function scoreImplicitOwnerCandidate(
           /\bdolore\s+addominale\b/i,
           /\bgastrite\b/i,
           /\breflusso\b/i,
+          /\bnausea\b/i,
+          /\bvomito\b/i,
         ]) * 4
       break
+    case 'endocrinologo':
+      score +=
+        matches([
+          /\bormoni\b/i,
+          /\btiroide\b/i,
+          /\binsulina\b/i,
+          /\bmetabolismo\b/i,
+          /\bglicemia\b/i,
+        ]) * 4
+      break
+    case 'mmg':
+      score +=
+        matches([/\bfarmaci\b/i, /\bpressione\b/i, /\bsintomi\b/i, /\besami\b/i, /\bmedico\b/i]) * 2
+      break
     case 'psicologo':
-      score += matches([/\bansia\b/i, /\bstress\b/i, /\bburnout\b/i, /\bconcentrarmi\b/i]) * 3
+      score +=
+        matches([
+          /\bansia\b/i,
+          /\bstress\b/i,
+          /\bburnout\b/i,
+          /\bconcentrarmi\b/i,
+          /\bmale emotivamente\b/i,
+          /\bdormo male\b/i,
+        ]) * 3
       break
     case 'sleep-coach':
       score += matches([/\bdormo\b/i, /\bsonno\b/i, /\binsonnia\b/i, /\brussamento\b/i]) * 3
       break
     case 'mental-coach':
-      score += matches([/\bblocco mentale\b/i, /\bpre-gara\b/i, /\bperformance\b/i]) * 3
+      score +=
+        matches([
+          /\bblocco mentale\b/i,
+          /\bpre-gara\b/i,
+          /\bperformance\b/i,
+          /\bfocus\b/i,
+          /\bprestazione\b/i,
+        ]) * 3
+      break
+    case 'relationship-coach':
+      score +=
+        matches([
+          /\bseparaz/i,
+          /\brelazione\b/i,
+          /\bcoppia\b/i,
+          /\bpartner\b/i,
+          /\bmale emotivamente\b/i,
+        ]) * 3
+      if (/\bseparaz/i.test(lower) && !/\blegal|accordi|affido|tutela|avvocat/i.test(lower)) {
+        score += 4
+      }
       break
     case 'consulente-legale':
       score +=
@@ -241,7 +334,35 @@ function scoreImplicitOwnerCandidate(
       if (/\bdebiti\b/i.test(lower) && /\bansia\b/i.test(lower)) score += 4
       break
     case 'career-coach':
-      score += matches([/\blavoro\b/i, /\bcarriera\b/i, /\bbloccato\b/i, /\bsopraffatt/i]) * 3
+      score += matches([/\blavoro\b/i, /\bcarriera\b/i, /\bbloccato\b/i]) * 3
+      break
+    case 'executive-coach':
+      score +=
+        matches([
+          /\bleadership\b/i,
+          /\bteam\b/i,
+          /\bmanager\b/i,
+          /\bruolo\b/i,
+          /\bdecisioni\b/i,
+          /\blavoro\b/i,
+        ]) * 3
+      if (
+        /\b(burnout|stress|focus|concentrarmi)\b/i.test(lower) &&
+        /\b(lavoro|team|manager|ruolo)\b/i.test(lower)
+      ) {
+        score += 3
+      }
+      break
+    case 'commercialista':
+      score +=
+        matches([
+          /\btasse\b/i,
+          /\bfisco\b/i,
+          /\bpartita iva\b/i,
+          /\biva\b/i,
+          /\bcontabil/i,
+          /\btribut/i,
+        ]) * 4
       break
     case 'life-organizer':
       score +=
@@ -250,7 +371,34 @@ function scoreImplicitOwnerCandidate(
           /\borganizzarmi\b/i,
           /\btroppe cose\b/i,
           /\bincastrare tutto\b/i,
+          /\bpriorit[àa]\b/i,
+          /\broutine\b/i,
         ]) * 3
+      if (
+        /\b(gestire tutto|organizzarmi|incastrare tutto|fare ordine|problemi pratici)\b/i.test(
+          lower,
+        )
+      ) {
+        score += 3
+      }
+      break
+    case 'analista-contesto':
+      score +=
+        matches([
+          /\bnon so da dove partire\b/i,
+          /\btroppi fronti\b/i,
+          /\bquadro confuso\b/i,
+          /\brimettere in ordine\b/i,
+          /\bpriorit[àa]\b/i,
+          /\bgestire tutto\b/i,
+        ]) * 3
+      if (
+        /\b(non so da dove partire|rimettere in ordine|fare ordine|quadro confuso|troppi fronti)\b/i.test(
+          lower,
+        )
+      ) {
+        score += 4
+      }
       break
   }
 

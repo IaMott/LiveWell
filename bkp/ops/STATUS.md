@@ -2,48 +2,43 @@ Stato progetto
 
 Obiettivo
 
-Eseguire una campagna sistemica finale, ampia e severa, del sistema multi-agente sul baseline applicativo `1a2101d`, coprendo protocollo, routing implicito, consulti, takeover/handoff, memoria, artifact, gating, SSE e allegati.
+Applicare micro-fix mirati ai residui impliciti cross-domain emersi dalla campagna sistemica finale sul baseline applicativo `1a2101d`, migliorando dominio implicito, owner implicito, consulti impliciti residui e dirty cases ad alta entropia senza riaprire il refactor.
 
 Fatto
 
-Campagna sistemica finale completata sul baseline `1a2101d`:
-- verificato che `HEAD` successivo contiene solo memoria operativa (`git diff --name-only 1a2101d..HEAD`)
-- 24 professionisti reali coperti dal repository
-- 7 domini/runtime buckets coperti (`general`, `nutrition`, `training`, `health`, `mindfulness`, `inspiration`, `coordination`)
-- 525 scenari distinti eseguiti/derivati con evidenza reale
-- conteggi finali: `462 PASS`, `45 FAIL`, `18 PARTIAL`, `0 NON VERIFICABILI`
-- 385 scenari da harness runtime su `protocol.ts`, `registry.ts`, `domainDetection.ts`
-- 103 test repository principali verdi
-- 27 test repository extra verdi
-- 1 test aggiuntivo su profile dynamic DB verde
-- 9 scenari upload route verdi
-- famiglia forte: aperture generiche, monodominio esplicito, consulti espliciti, takeover, return baton, handoff, gating, memory, artifacts, SSE/upload
-- famiglia debole residua: monodominio implicito cross-domain; secondariamente alcuni consulti impliciti e casi sporchi/ambigui
-- matrice completa salvata in `bkp/ops/journal/2026-03-20/1549_systemic_final_scenarios.json`
+Micro-fix impliciti cross-domain applicati:
+- `src/lib/ai/domain/domainDetection.ts` rafforzato su nutrizione implicita, training implicito, burnout/focus, endocrino, coordination e dirty phrases ad alta entropia
+- `src/lib/ai/case/protocol.ts` rafforzato su owner implicito per specialisti health/training/inspiration/coordination, riducendo fallback deboli
+- `src/lib/ai/capabilities/registry.ts` rafforzato su consulti impliciti `training pain`, executive burnout, coordination, financial/legal edge cases e reason semantiche
+- test aggiornati in `tests/api/domain-detection-critical.test.ts`, `tests/api/runtime-trigger-guards.test.ts`, `tests/api/case-protocol.test.ts`
+- verifiche verdi:
+  - `53/53` test mirati
+  - `18/18` suite di guardia
+  - `typecheck` verde
+  - `build` verde
 
 In corso
 
-Nessuna modifica applicativa in corso; review chiusa e memoria operativa in aggiornamento/publish.
+Nessuna modifica applicativa in corso; memoria operativa in aggiornamento e publish remoto del diff applicativo da completare.
 
 Prossimo
 
-Se richiesto, il passo corretto successivo non è un altro micro-fix immediato ma uno step diverso di prodotto o una validazione più ampia focalizzata solo sui residui impliciti ancora aperti.
+Eseguire una nuova validazione mirata post-fix sui cluster impliciti cross-domain e dirty cases, senza riaprire il refactor.
 
 Rischi
 
-Residui reali ancora aperti:
-- monodominio implicito cross-domain ancora troppo fragile su endocrino, chinesiologia, sleep, relazione, executive, commercialista e coordination
-- alcuni consulti impliciti ancora deboli o assenti su `training pain`, executive burnout e coordination
-- alcuni casi sporchi lunghi restano plausibili ma non abbastanza credibili
+Residui da riverificare dopo il fix:
+- copertura implicita di alcuni ruoli rari (`endocrinologo`, `chinesiologo`, `medico-dello-sport`, `executive-coach`, `commercialista`) nel team reale
+- alcuni dirty cases molto lunghi e multi-tema vanno misurati di nuovo sul runtime completo
 
-Rischi chiusi nella campagna:
+Rischi non riaperti:
 - queue / `pendingQuestions`
 - gating strutturato
 - artifact governance
 - consulti espliciti
-- same-domain takeover/handoff finale
+- takeover/handoff già validati
 - upload/backend file support di base
 
 Ultimo aggiornamento
 
-2026-03-20 15:50
+2026-03-20 16:07

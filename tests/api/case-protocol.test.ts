@@ -114,6 +114,25 @@ const team: AgentProfile[] = [
     },
   },
   {
+    id: 'medico-dello-sport',
+    displayName: 'Medico dello Sport',
+    domainTags: ['training', 'health'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Infortunio o dolore sport-specific -> medico dello sport del team'],
+      handoffTriggers: ['Caso sportivo dominante -> handoff training'],
+      minimumInput: ['Contesto sportivo'],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
     id: 'dermatologo',
     displayName: 'Dermatologo',
     domainTags: ['health'],
@@ -210,6 +229,44 @@ const team: AgentProfile[] = [
       consultTriggers: ['Debiti, mutuo o spese fuori controllo -> financial planner del team'],
       handoffTriggers: ['Caso economico dominante -> handoff inspiration'],
       minimumInput: ['Contesto economico'],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
+    id: 'life-organizer',
+    displayName: 'Life Organizer',
+    domainTags: ['coordination', 'inspiration'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Sovraccarico pratico o organizzativo -> life-organizer del team'],
+      handoffTriggers: ['Caso coordination dominante -> handoff coordination'],
+      minimumInput: ['Contesto pratico'],
+      outputContracts: [],
+      escalationRules: [],
+      allowedTools: [],
+      artifacts: [],
+    },
+  },
+  {
+    id: 'analista-contesto',
+    displayName: 'Analista Contesto',
+    domainTags: ['coordination', 'inspiration'],
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+    runtimeCapabilities: {
+      canDo: [],
+      cannotDo: [],
+      consultTriggers: ['Caso trasversale e confuso -> life-organizer del team'],
+      handoffTriggers: ['Caso trasversale dominante -> handoff coordination'],
+      minimumInput: ['Panoramica caso'],
       outputContracts: [],
       escalationRules: [],
       allowedTools: [],
@@ -347,6 +404,78 @@ describe('case protocol vertical slice', () => {
     })
 
     expect(out.caseState.ownerAgentId).toBe('financial-planner')
+  })
+
+  it('picks gastroenterology for implicit digestive symptom cases', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'implicit-health-gastro-1',
+      message: 'gonfiore e problemi digestivi',
+      detectedDomain: 'health',
+      allDomains: ['health'],
+      team,
+    })
+
+    expect(out.caseState.ownerAgentId).toBe('gastroenterologo')
+  })
+
+  it('picks a mindfulness specialist for implicit burnout and focus collapse', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'implicit-mindfulness-1',
+      message: 'mi sento in burnout e non riesco a concentrarmi',
+      detectedDomain: 'mindfulness',
+      allDomains: ['mindfulness', 'inspiration'],
+      team,
+    })
+
+    expect(out.caseState.ownerAgentId).toBe('psicologo')
+  })
+
+  it('picks a coordination specialist for broad overload instead of a weak inspiration fallback', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'implicit-coordination-1',
+      message: 'non riesco più a gestire tutto',
+      detectedDomain: 'coordination',
+      allDomains: ['coordination', 'mindfulness'],
+      team,
+    })
+
+    expect(['analista-contesto', 'life-organizer']).toContain(out.caseState.ownerAgentId)
+  })
+
+  it('avoids absurd implicit owners on practical separation cases', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'implicit-separation-practical-1',
+      message: 'mi sto separando e ci sono problemi pratici',
+      detectedDomain: 'inspiration',
+      allDomains: ['inspiration', 'coordination'],
+      team,
+    })
+
+    expect([
+      'relationship-coach',
+      'life-organizer',
+      'analista-contesto',
+      'consulente-legale',
+    ]).toContain(out.caseState.ownerAgentId)
+  })
+
+  it('keeps a coherent health owner on training pain dirty cases', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'implicit-health-training-pain-1',
+      message: 'mi fa male il ginocchio quando corro',
+      detectedDomain: 'health',
+      allDomains: ['health', 'training'],
+      team,
+    })
+
+    expect(['fisioterapista', 'medico-dello-sport', 'fisiatra']).toContain(
+      out.caseState.ownerAgentId,
+    )
   })
 
   it('opens a real consult with temporary takeover while preserving owner', () => {
