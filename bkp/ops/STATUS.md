@@ -2,32 +2,37 @@ Stato progetto
 
 Obiettivo
 
-Applicare micro-fix stretti al cluster conversazionale reale dei follow-up specialistici già avviati, con focus su continuità del problema attivo, resume con memoria e intake fuori timing.
+Validare in modo severo il commit applicativo `1b64da1` sul cluster conversazionale dei follow-up specialistici già avviati.
 
 Fatto
 
-- micro-fix conversazionali applicati in `interviewFlow.ts`, `domainDetection.ts`, `protocol.ts`, `registry.ts`, `synthesis.ts`
-- follow-up specialistici stretti ora prioritizzati rispetto a intake L1/L2 quando il problema attivo è già chiaro o viene ripreso da memoria
-- corrette deviazioni rumorose su sonno/alimentazione e burnout/career con penalizzazioni di dominio negative
-- impedito il return baton prematuro nei consulti legal/financial quando il messaggio resta semanticamente nel consulto attivo
-- prompt di synthesis rafforzato per vietare intake generale quando esiste già contesto di caso attivo
-- test aggiornati su cluster conversazionale: `53/53` verdi
-- guardie di non regressione: `37/37` verdi
-- `typecheck` e `build` verdi
+- review mirata completata sul baseline applicativo `1b64da1`
+- commit successivo `36bfc2c` verificato come sola memoria (`bkp/ops/**`)
+- rieseguite 9 suite repository: `90/90` test verdi
+- mini harness sul team reale eseguito su 12 scenari mirati; output salvato in `/tmp/livewell_review_1b64da1_conversation_focus.json`
+- miglioramenti reali confermati su:
+  - niente intake baseline fuori timing su reflusso attivo, dirty nutrition e dirty coordination
+  - niente return baton prematuro nei consulti legal/financial attivi
+  - burnout/focus non deviato su career
+  - resume reflusso con summary usato davvero
+- finding reali residui:
+  - separazione pratica/figli/soldi resta owner `career-coach`
+  - resume sonno con summary devia ancora a `relationship-coach` con domanda relazionale fuori focus
 
 In corso
 
-Solo salvataggio memoria operativa del fix e publish remoto finale.
+Solo salvataggio memoria operativa della review.
 
 Prossimo
 
-Se richiesto, il passo corretto successivo è una nuova validazione mirata del cluster conversazionale post-fix, non un altro refactor o una campagna ampia.
+Se richiesto, il passo corretto successivo è un micro-fix strettissimo su separazione pratica e resume sonno, non una campagna più ampia.
 
 Rischi
 
 Rischi reali aperti:
-- da riverificare sul team reale i dirty cases più densi e i resume specialistici più lunghi
-- possibile residuo semantico su reason/ordine delle domande in casi molto ambigui, non ancora rimisurato dopo il fix
+- owner debole su separazione pratica/figli/soldi
+- resume con memoria sul sonno ancora deviato verso relazione
+- alcuni follow-up restano solo parzialmente credibili anche se non ricadono più in intake baseline
 
 Rischi non riaperti:
 - queue / `pendingQuestions`
@@ -39,4 +44,4 @@ Rischi non riaperti:
 
 Ultimo aggiornamento
 
-2026-03-21 09:16
+2026-03-21 09:36
