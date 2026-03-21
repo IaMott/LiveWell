@@ -32,7 +32,7 @@ export const AGENT_PROGRAM_DEFAULTS: Record<
   fisioterapista: { durationDays: 21, checkpointDays: [7, 14, 21] },
   fisiatra: { durationDays: 60, checkpointDays: [30, 60] },
   'medico-dello-sport': { durationDays: 30, checkpointDays: [14, 30] },
-  'coach-del-sonno': { durationDays: 21, checkpointDays: [7, 14, 21] },
+  'sleep-coach': { durationDays: 21, checkpointDays: [7, 14, 21] },
   mmg: { durationDays: 90, checkpointDays: [30, 90] },
   cardiologo: { durationDays: 90, checkpointDays: [30, 60, 90] },
   dermatologo: { durationDays: 30, checkpointDays: [14, 30] },

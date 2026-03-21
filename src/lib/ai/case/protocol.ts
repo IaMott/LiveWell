@@ -222,7 +222,7 @@ function scoreImplicitOwnerCandidate(
         matches([/\bdolore\b/i, /\blimitazioni\b/i, /\bfunzional/i, /\bcronich/i, /\briabilit/i]) *
         3
       break
-    case 'chinesiologo':
+    case 'chinesologo':
       score +=
         matches([
           /\bpostura\b/i,

@@ -9,6 +9,13 @@ export type TeamLoaderOptions = {
   allowEmpty?: boolean
 }
 
+// ---------------------------------------------------------------------------
+// Module-level cache — survives across calls within the same warm container.
+// On serverless cold starts the cache resets automatically (no stale risk).
+// Key: teamDirAbsolute, Value: loaded team snapshot.
+// ---------------------------------------------------------------------------
+const teamCache = new Map<string, AgentProfile[]>()
+
 function readUtf8(filePath: string): string {
   return fs.readFileSync(filePath, 'utf-8')
 }
@@ -77,6 +84,11 @@ function collectAgentDirs(teamDir: string): string[] {
 
 export function loadTeam(opts: TeamLoaderOptions): AgentProfile[] {
   const teamDir = opts.teamDirAbsolute
+
+  // Return cached snapshot if available (same warm container invocation).
+  const cached = teamCache.get(teamDir)
+  if (cached) return cached
+
   if (!fs.existsSync(teamDir)) {
     if (opts.allowEmpty) return []
     throw new Error(`TEAM directory not found: ${teamDir}`)
@@ -104,6 +116,7 @@ export function loadTeam(opts: TeamLoaderOptions): AgentProfile[] {
     throw new Error(`No valid TEAM agents. Errors: ${errors.join(' | ')}`)
   }
 
+  teamCache.set(teamDir, agents)
   return agents
 }
 

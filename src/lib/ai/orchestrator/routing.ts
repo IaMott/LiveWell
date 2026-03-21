@@ -135,7 +135,7 @@ const SYMPTOM_CLUSTER_RULES: SymptomCluster[] = [
         'non perdo peso',
       ],
     ],
-    specialists: ['endocrinologo', 'coach-del-sonno'],
+    specialists: ['endocrinologo', 'sleep-coach'],
     urgency: 'media',
   },
 

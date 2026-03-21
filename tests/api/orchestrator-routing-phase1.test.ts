@@ -1,94 +1,153 @@
+/**
+ * orchestrator-routing-phase1.test.ts
+ *
+ * Tests the PRODUCTION routing path: resolveRoutingCandidates() from routing.ts.
+ * This is the function actually called by orchestrate() on every chat request.
+ *
+ * Replaced legacy test that covered routingLegacy.ts (dead code, now deleted).
+ */
+
 import { describe, expect, it } from 'vitest'
 import type { AgentProfile } from '@/lib/ai/types'
-import { resolveRoutingContext } from '@/lib/ai/orchestrator/routingLegacy'
+import { resolveRoutingCandidates } from '@/lib/ai/orchestrator/routing'
+
+// ─── Minimal team fixture ────────────────────────────────────────────────────
+
+function agent(
+  id: string,
+  displayName: string,
+  domainTags: AgentProfile['domainTags'],
+): AgentProfile {
+  return {
+    id,
+    displayName,
+    domainTags,
+    systemPrompt: 'x',
+    toolsAllowed: [],
+    decisionStyle: 'team-led',
+  }
+}
 
 const team: AgentProfile[] = [
-  {
-    id: 'mmg',
-    displayName: 'MMG',
-    domainTags: ['health'],
-    systemPrompt: 'x',
-    toolsAllowed: [],
-    decisionStyle: 'team-led',
-  },
-  {
-    id: 'fisioterapista',
-    displayName: 'Fisioterapista',
-    domainTags: ['training', 'health'],
-    systemPrompt: 'x',
-    toolsAllowed: [],
-    decisionStyle: 'team-led',
-  },
-  {
-    id: 'fisiatra',
-    displayName: 'Fisiatra',
-    domainTags: ['health'],
-    systemPrompt: 'x',
-    toolsAllowed: [],
-    decisionStyle: 'team-led',
-  },
-  {
-    id: 'medico-dello-sport',
-    displayName: 'Medico dello Sport',
-    domainTags: ['training', 'health'],
-    systemPrompt: 'x',
-    toolsAllowed: [],
-    decisionStyle: 'team-led',
-  },
-  {
-    id: 'dietista',
-    displayName: 'Dietista',
-    domainTags: ['nutrition'],
-    systemPrompt: 'x',
-    toolsAllowed: [],
-    decisionStyle: 'team-led',
-  },
+  agent('mmg', 'Medico di Base', ['health']),
+  agent('fisioterapista', 'Fisioterapista', ['training', 'health']),
+  agent('fisiatra', 'Fisiatra', ['health']),
+  agent('medico-dello-sport', 'Medico dello Sport', ['training', 'health']),
+  agent('dietista', 'Dietista', ['nutrition']),
+  agent('endocrinologo', 'Endocrinologo', ['health']),
+  agent('sleep-coach', 'Sleep Coach', ['health', 'mindfulness']),
+  agent('psicologo', 'Psicologo', ['mindfulness']),
+  agent('mental-coach', 'Mental Coach', ['mindfulness', 'training']),
+  agent('chinesologo', 'Chinesologo', ['training']),
+  agent('persona-trainer', 'Personal Trainer', ['training']),
 ]
 
-describe('orchestrator routing phase1 extraction', () => {
-  it('locks the requested specialist and keeps it first in selectedAgents', () => {
-    const out = resolveRoutingContext({
+// ─── Specialist request (explicit) ───────────────────────────────────────────
+
+describe('resolveRoutingCandidates — production path', () => {
+  it('selects fisioterapista first when user requests it explicitly', () => {
+    const { selectedAgents } = resolveRoutingCandidates({
       team,
       message: 'voglio parlare con il fisioterapista',
-      detectedDomain: 'general',
-      allDomains: ['general'],
-    })
-
-    expect(out.activeSpecialist?.id).toBe('fisioterapista')
-    expect(out.domainHint).toBe('training')
-    expect(out.selectedAgents[0]?.id).toBe('fisioterapista')
-  })
-
-  it('exits specialist mode when the user explicitly asks to return to the team', () => {
-    const out = resolveRoutingContext({
-      team,
-      message: 'torna al team',
       detectedDomain: 'health',
       allDomains: ['health'],
-      activeSpecialistId: 'fisioterapista',
+      currentSpeakerId: 'fisioterapista',
     })
 
-    expect(out.activeSpecialist).toBeUndefined()
-    expect(out.domainHint).toBe('health')
-    expect(out.selectedAgents.length).toBe(4)
+    expect(selectedAgents[0]?.id).toBe('fisioterapista')
+    expect(selectedAgents.length).toBeLessThanOrEqual(3)
   })
 
-  it('keeps the locked specialist first and caps collaboration to three agents', () => {
-    const out = resolveRoutingContext({
+  it('caps collaboration to 3 when currentSpeakerId is set', () => {
+    const { selectedAgents } = resolveRoutingCandidates({
       team,
       message: 'ho mal di schiena e vorrei capire come allenarmi',
       detectedDomain: 'health',
       allDomains: ['health', 'training'],
-      activeSpecialistId: 'fisioterapista',
+      currentSpeakerId: 'fisioterapista',
     })
 
-    expect(out.activeSpecialist?.id).toBe('fisioterapista')
-    expect(out.selectedAgents[0]?.id).toBe('fisioterapista')
-    expect(out.selectedAgents.length).toBeLessThanOrEqual(3)
-    expect(out.selectedAgents.map((agent) => agent.id)).toEqual([
-      'fisioterapista',
-      'fisiatra',
-      'medico-dello-sport',
-    ])
+    expect(selectedAgents[0]?.id).toBe('fisioterapista')
+    expect(selectedAgents.length).toBeLessThanOrEqual(3)
+  })
+
+  // ─── Domain-based selection (no active speaker) ─────────────────────────
+
+  it('selects nutrition agents for a nutrition query', () => {
+    const { selectedAgents } = resolveRoutingCandidates({
+      team,
+      message: 'voglio un piano alimentare per dimagrire',
+      detectedDomain: 'nutrition',
+      allDomains: ['nutrition'],
+    })
+
+    expect(selectedAgents.some((a) => a.id === 'dietista')).toBe(true)
+  })
+
+  it('selects mindfulness agents for a stress/sleep query', () => {
+    const { selectedAgents } = resolveRoutingCandidates({
+      team,
+      message: 'sono molto stressato e dormo male',
+      detectedDomain: 'mindfulness',
+      allDomains: ['mindfulness'],
+    })
+
+    const ids = selectedAgents.map((a) => a.id)
+    expect(ids.some((id) => ['psicologo', 'mental-coach', 'sleep-coach'].includes(id))).toBe(true)
+  })
+
+  // ─── Symptom cluster routing ─────────────────────────────────────────────
+
+  it('includes sleep-coach when sleep-metabolism cluster fires', () => {
+    // Message triggers Sleep-metabolism cluster:
+    // group1: "dormo male" (sonno), group2: "stanco" (stanc), group3: "peso" (peso)
+    const { selectedAgents } = resolveRoutingCandidates({
+      team,
+      message: 'dormo male, sono sempre stanco e non perdo peso',
+      detectedDomain: 'health',
+      allDomains: ['health', 'mindfulness'],
+    })
+
+    const ids = selectedAgents.map((a) => a.id)
+    expect(ids).toContain('sleep-coach')
+  })
+
+  it('includes endocrinologo when sleep-metabolism cluster fires', () => {
+    const { selectedAgents } = resolveRoutingCandidates({
+      team,
+      message: 'dormo male, sono sempre stanco e non perdo peso',
+      detectedDomain: 'health',
+      allDomains: ['health'],
+    })
+
+    const ids = selectedAgents.map((a) => a.id)
+    expect(ids).toContain('endocrinologo')
+  })
+
+  // ─── Chinesologo scoring ────────────────────────────────────────────────
+
+  it('includes chinesologo for posture/movement queries', () => {
+    const { selectedAgents } = resolveRoutingCandidates({
+      team,
+      message: 'ho problemi di postura e voglio migliorare il mio schema motorio',
+      detectedDomain: 'training',
+      allDomains: ['training'],
+    })
+
+    const ids = selectedAgents.map((a) => a.id)
+    expect(ids).toContain('chinesologo')
+  })
+
+  // ─── Decision trace ─────────────────────────────────────────────────────
+
+  it('returns a non-empty decisionTrace for every routing call', () => {
+    const { decisionTrace } = resolveRoutingCandidates({
+      team,
+      message: 'come posso migliorare il mio allenamento?',
+      detectedDomain: 'training',
+      allDomains: ['training'],
+    })
+
+    expect(decisionTrace.length).toBeGreaterThan(0)
   })
 })

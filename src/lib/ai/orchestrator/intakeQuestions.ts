@@ -55,7 +55,7 @@ export const AGENT_INTAKE_KEYS: Record<string, { required: string[]; optional: s
     required: ['sport', 'training_frequency_per_week', 'injury', 'goal'],
     optional: ['supplements'],
   },
-  'coach-del-sonno': {
+  'sleep-coach': {
     required: ['sleep_hours', 'sleep_latency', 'night_wakings', 'sleep_quality'],
     optional: ['evening_routine'],
   },
@@ -334,11 +334,11 @@ export const FIELD_PRIMARY_OWNER: Record<string, string> = {
   weight: 'dietista',
   height: 'dietista',
 
-  // Sleep — coach-del-sonno owns all sleep data
-  sleep_hours: 'coach-del-sonno',
-  sleep_latency: 'coach-del-sonno',
-  night_wakings: 'coach-del-sonno',
-  sleep_quality: 'coach-del-sonno',
+  // Sleep — sleep-coach owns all sleep data
+  sleep_hours: 'sleep-coach',
+  sleep_latency: 'sleep-coach',
+  night_wakings: 'sleep-coach',
+  sleep_quality: 'sleep-coach',
 
   // General health — mmg owns general complaints and medications
   medications: 'mmg',

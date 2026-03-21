@@ -32,7 +32,7 @@ const SPECIALIST_DISPLAY_NAMES: Record<string, string> = {
   fisioterapista: 'Fisioterapista',
   fisiatra: 'Fisiatra',
   'medico-dello-sport': 'Medico dello Sport',
-  'coach-del-sonno': 'Coach del Sonno',
+  'sleep-coach': 'Coach del Sonno',
   mmg: 'Medico di Base',
   cardiologo: 'Cardiologo',
   dermatologo: 'Dermatologo',

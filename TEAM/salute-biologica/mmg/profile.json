@@ -1,6 +1,6 @@
 {
   "id": "mmg",
-  "displayName": "Mmg",
+  "displayName": "Medico di Base",
   "domainTags": ["health"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [

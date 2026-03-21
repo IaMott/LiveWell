@@ -1,6 +1,6 @@
 {
   "id": "medico-dello-sport",
-  "displayName": "Medico Dello Sport",
+  "displayName": "Medico dello Sport",
   "domainTags": ["health", "training"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [

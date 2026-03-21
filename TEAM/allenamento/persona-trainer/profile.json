@@ -1,6 +1,6 @@
 {
   "id": "persona-trainer",
-  "displayName": "Persona Trainer",
+  "displayName": "Personal Trainer",
   "domainTags": ["training"],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
