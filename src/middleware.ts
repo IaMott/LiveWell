@@ -8,7 +8,7 @@ import { authConfig } from '@/lib/auth.config'
  * The `authorized` callback in auth.config.ts decides which paths
  * require a session and which are public (login, register, /api/auth/*).
  */
-export const { auth: middleware } = NextAuth(authConfig)
+export default NextAuth(authConfig).auth
 
 export const config = {
   /**
