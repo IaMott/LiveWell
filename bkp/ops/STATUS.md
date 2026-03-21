@@ -2,37 +2,39 @@ Stato progetto
 
 Obiettivo
 
-Validare in modo severo il commit applicativo `1b64da1` sul cluster conversazionale dei follow-up specialistici già avviati.
+Chiudere i due finding conversazionali residui post-review sul baseline applicativo `1b64da1`, senza regressioni sui path già forti.
 
 Fatto
 
-- review mirata completata sul baseline applicativo `1b64da1`
-- commit successivo `36bfc2c` verificato come sola memoria (`bkp/ops/**`)
-- rieseguite 9 suite repository: `90/90` test verdi
-- mini harness sul team reale eseguito su 12 scenari mirati; output salvato in `/tmp/livewell_review_1b64da1_conversation_focus.json`
-- miglioramenti reali confermati su:
-  - niente intake baseline fuori timing su reflusso attivo, dirty nutrition e dirty coordination
-  - niente return baton prematuro nei consulti legal/financial attivi
-  - burnout/focus non deviato su career
-  - resume reflusso con summary usato davvero
-- finding reali residui:
-  - separazione pratica/figli/soldi resta owner `career-coach`
-  - resume sonno con summary devia ancora a `relationship-coach` con domanda relazionale fuori focus
+- checkpoint Git creato prima delle modifiche su branch `backup/2026-03-21_1015_two-conversation-residuals`
+- micro-fix applicati in `domainDetection.ts`, `protocol.ts`, `registry.ts`
+- practical separation `mi sto separando, ci sono figli, soldi e problemi pratici da gestire` ora instradata su `coordination` con owner `life-organizer`
+- resume sonno `torniamo al sonno, sai già che dormo 5 ore e bevo caffè tardi` ora resta su `sleep-coach`
+- test mirati aggiornati in `domain-detection-critical.test.ts`, `case-protocol.test.ts`, `runtime-trigger-guards.test.ts`
+- rieseguite 8 suite richieste: `94/94` test verdi
+- `typecheck` verde
+- `build` verde
+- mini harness runtime col team reale eseguito e salvato in `/tmp/livewell_review_conversation_residuals_postfix.json`
+- nessuna regressione osservata su:
+  - follow-up specialistici già avviati
+  - consulti legal/financial attivi
+  - persistence / `pendingQuestions`
+  - gating strutturato
+  - artifact governance
 
 In corso
 
-Solo salvataggio memoria operativa della review.
+Salvataggio memoria operativa del fix e publish remoto.
 
 Prossimo
 
-Se richiesto, il passo corretto successivo è un micro-fix strettissimo su separazione pratica e resume sonno, non una campagna più ampia.
+Se richiesto, il passo corretto successivo è una nuova validazione mirata post-fix, non un altro refactor o una campagna ampia.
 
 Rischi
 
 Rischi reali aperti:
-- owner debole su separazione pratica/figli/soldi
-- resume con memoria sul sonno ancora deviato verso relazione
-- alcuni follow-up restano solo parzialmente credibili anche se non ricadono più in intake baseline
+- nessun blocco confermato nel perimetro di questi due finding
+- da rimisurare solo il comportamento su transcript reali più lunghi post-fix
 
 Rischi non riaperti:
 - queue / `pendingQuestions`
@@ -44,4 +46,4 @@ Rischi non riaperti:
 
 Ultimo aggiornamento
 
-2026-03-21 09:36
+2026-03-21 09:45
