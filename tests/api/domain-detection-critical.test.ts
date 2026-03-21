@@ -29,6 +29,14 @@ describe('critical domain detection', () => {
     expect(detectDomainFromText('mi sento in burnout e non riesco a concentrarmi')).toBe(
       'mindfulness',
     )
+    expect(detectDomainFromText('ho risvegli notturni e non voglio parlare di alimentazione')).toBe(
+      'mindfulness',
+    )
+    expect(
+      detectDomainFromText(
+        'il problema principale è il focus, non la carriera: sono in burnout al lavoro',
+      ),
+    ).toBe('mindfulness')
   })
 
   it('classifies inspiration and health implicit cases across distant domains', () => {

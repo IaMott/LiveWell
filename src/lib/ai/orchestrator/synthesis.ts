@@ -132,6 +132,7 @@ function buildSystemPrompt(
   gatingQuestionCount: number,
   /** BUG-B: whether the plan request is in the active specialist's domain */
   planRequest: boolean,
+  hasKnownCaseContext: boolean,
 ): string {
   const nameRef = userName ? `${userName}` : "l'utente"
 
@@ -188,7 +189,9 @@ function buildSystemPrompt(
         antiGatekeeperRule,
         noRepetitionRule,
         ``,
-        `Stai ancora raccogliendo le informazioni essenziali per personalizzare il percorso di ${nameRef}.`,
+        hasKnownCaseContext
+          ? `Il problema attivo è già chiaro: NON tornare a intake generale, non ripartire da goal astratti e non chiedere dati baseline fuori fuoco.`
+          : `Stai ancora raccogliendo le informazioni essenziali per personalizzare il percorso di ${nameRef}.`,
         questionInstruction,
         `Se il messaggio di ${nameRef} contiene già dati utili, riconoscili brevemente PRIMA di fare la prossima domanda.`,
         missingDataRule,
@@ -401,6 +404,10 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
   // messages and never receive proper onboarding questions.
   const hasMissingData = conversationLength < 12 ? rawHasMissingData : false
   const userName = getUserName(input.contextPack)
+  const hasKnownCaseContext =
+    conversationLength > 1 ||
+    (input.contextPack.history.crossConversationMessages?.length ?? 0) > 0 ||
+    (input.contextPack.history.recentConversationSummaries?.length ?? 0) > 0
 
   // BUG-B: Domain-aware plan request — prevents PT from producing a training plan on a diet request
   const planRequest = input.activeSpecialist
@@ -427,6 +434,7 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
     input.proposals,
     missingQuestions.length, // BUG-A: count for singular/plural instruction
     planRequest, // BUG-B: domain-aware flag
+    hasKnownCaseContext,
   )
   const user = buildUserPrompt({
     userMessage: input.userMessage,

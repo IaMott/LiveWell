@@ -119,6 +119,43 @@ describe('synthesis boundary', () => {
     expect(call?.user).not.toContain('NON chiedere altre informazioni')
   })
 
+  it('tells the active specialist not to restart generic intake when case context is already known', async () => {
+    const complete = vi.fn().mockResolvedValue({ text: 'Procediamo sul problema attivo.' })
+
+    await synthesizeRawResponse({
+      llm: { complete },
+      userMessage: 'riprendiamo dal reflusso: sai già che peggiora dopo i pasti',
+      proposals,
+      gatingQuestions: [
+        'Hai notato alimenti, bevande o orari dei pasti che peggiorano i sintomi digestivi?',
+      ],
+      criticalQuestions: [],
+      contextPack: {
+        ...contextPack,
+        history: {
+          ...contextPack.history,
+          recentConversationSummaries: [
+            {
+              conversationId: 'prev-1',
+              summary: 'Caso reflusso già avviato, trigger principali dopo i pasti serali.',
+              domain: 'health',
+              updatedAt: '2026-03-20T10:00:00.000Z',
+            },
+          ],
+        },
+      },
+      activeSpecialist: {
+        id: 'gastroenterologo',
+        displayName: 'Gastroenterologo',
+        domain: 'health',
+        domains: ['health', 'nutrition'],
+      },
+    })
+
+    const call = complete.mock.calls[0]?.[0]
+    expect(call?.system).toContain('NON tornare a intake generale')
+  })
+
   it('aligns professional output instructions with the prudent missing-data gate', () => {
     const instructions = buildProfessionalOutputInstructions({
       id: 'dietista',

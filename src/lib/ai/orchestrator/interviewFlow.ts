@@ -3,6 +3,125 @@ import { ActiveSpecialist, AgentProposal, ContextPack, Domain } from '../types'
 import { isAgeQuestion, readPersonalSnapshot } from './inputInference'
 import { getMissingRequiredFields, getQuestionForField } from './intakeQuestions'
 
+const CONTINUATION_PATTERN =
+  /\b(continuiamo|continua|proseguiamo|prosegui|riprendiamo|riprendi|torniamo|torniamo al|ripartiamo|restiamo|parliamo ancora)\b/i
+
+const SPECIFIC_CASE_PATTERN =
+  /\b(gastrite|reflusso|gonfiore|digestiv|nausea|rutti|dolore|farmac|ibuprofene|tachicardia|pressione alta|sfoghi|rash|prurito|ginocchio|schiena|spalla|caviglia|insonnia|risvegli|dormo male|sonno|caff[eè]|burnout|ansia|stress|concentrarmi|debiti|mutuo|rate|bollette|soldi|separaz|figli|accordi|legali|problemi pratici|organizzarmi|gestire tutto)\b/i
+
+function buildConversationFocusText(contextPack: ContextPack, userMessage: string): string {
+  const recent = contextPack.history.recentMessages
+    .slice(-8)
+    .map((m) => m.content)
+    .join(' ')
+  const summaries = (contextPack.history.recentConversationSummaries ?? [])
+    .slice(-3)
+    .map((s) => s.summary)
+    .join(' ')
+  const files = (contextPack.files ?? [])
+    .map((file) => `${file.filename} ${file.extractedText ?? ''}`.slice(0, 300))
+    .join(' ')
+  return `${userMessage} ${recent} ${summaries} ${files}`.toLowerCase()
+}
+
+function hasSpecificCaseSignals(text: string): boolean {
+  return (
+    /\b\d{2,3}\s*(?:kg|cm|bpm|mmhg|m\/s)\b/i.test(text) ||
+    SPECIFIC_CASE_PATTERN.test(text) ||
+    /\b(non voglio parlare di|non la carriera|non la relazione|non l'alimentazione)\b/i.test(text)
+  )
+}
+
+function hasResumeOrContinuationSignal(userMessage: string, contextPack: ContextPack): boolean {
+  return (
+    CONTINUATION_PATTERN.test(userMessage) ||
+    ((contextPack.history.recentConversationSummaries?.length ?? 0) > 0 &&
+      /\b(riprendiamo|torniamo|ripartiamo|da dove eravamo rimasti|sai gi[aà])\b/i.test(userMessage))
+  )
+}
+
+function shouldPrioritizeActiveProblem(params: {
+  domain: Domain
+  contextPack: ContextPack
+  userMessage: string
+  activeSpecialist?: ActiveSpecialist
+}): boolean {
+  const conversationText = buildConversationFocusText(params.contextPack, params.userMessage)
+  const hasMemory =
+    (params.contextPack.history.recentConversationSummaries?.length ?? 0) > 0 ||
+    (params.contextPack.history.crossConversationMessages?.length ?? 0) > 0
+
+  if (params.activeSpecialist && hasSpecificCaseSignals(conversationText)) return true
+  if (hasResumeOrContinuationSignal(params.userMessage, params.contextPack) && hasMemory)
+    return true
+  if (params.domain !== 'general' && hasSpecificCaseSignals(params.userMessage.toLowerCase()))
+    return true
+  return false
+}
+
+function isFocusedFollowUpQuestion(question: string): boolean {
+  return /\b(dolore|problema fisico|sintomo|diagnosi|esami|farmaci|ore dormi|stress|sintomi digestivi|frequenza|alimenti|food|questione|urgenza|spese|debiti|vincoli|trigger|zona del corpo|relazione)\b/i.test(
+    question,
+  )
+}
+
+function buildFocusedQuestion(
+  domain: Domain,
+  conversationText: string,
+  userMessage: string,
+): string | null {
+  const lower = `${conversationText} ${userMessage}`.toLowerCase()
+
+  if (
+    /\b(reflusso|gastrite|gonfiore|nausea|rutti|digestiv)\b/i.test(lower) &&
+    (domain === 'nutrition' || domain === 'health')
+  ) {
+    return 'Hai notato alimenti, bevande o orari dei pasti che peggiorano i sintomi digestivi?'
+  }
+
+  if (
+    /\b(ginocchio|schiena|spalla|caviglia|dolore|male)\b/i.test(lower) &&
+    /\b(corro|corsa|alleno|allenamento|sport)\b/i.test(lower)
+  ) {
+    return 'Il dolore compare durante il gesto sportivo, subito dopo, o resta anche a riposo?'
+  }
+
+  if (
+    domain === 'mindfulness' &&
+    /\b(sonno|insonnia|risvegli|mi sveglio|dormo male|caff[eè])\b/i.test(lower)
+  ) {
+    return 'Quante volte ti svegli durante la notte e in quali fasce orarie succede più spesso?'
+  }
+
+  if (domain === 'mindfulness' && /\b(burnout|stress|ansia|focus|concentrarmi)\b/i.test(lower)) {
+    return 'Da quanto tempo senti questo calo di concentrazione e quanto impatta il lavoro quotidiano?'
+  }
+
+  if (domain === 'inspiration' && /\b(debiti|mutuo|rate|spese|bollette|soldi)\b/i.test(lower)) {
+    return 'Qual è la pressione economica più urgente adesso tra rate, spese essenziali e debiti già aperti?'
+  }
+
+  if (
+    (domain === 'inspiration' || domain === 'coordination') &&
+    /\b(separaz|figli|soldi|problemi pratici|questioni pratiche)\b/i.test(lower)
+  ) {
+    return 'Quali sono le due questioni più urgenti da gestire adesso tra figli, soldi e organizzazione pratica?'
+  }
+
+  if (
+    domain === 'coordination' &&
+    /\b(organizzarmi|gestire tutto|priorit|fare ordine)\b/i.test(lower)
+  ) {
+    return 'Qual è il fronte che oggi ti sta facendo perdere più controllo: tempo, soldi, famiglia o lavoro?'
+  }
+
+  if (domain === 'health' && /\b(sfoghi|rash|prurito|pelle|cutane)\b/i.test(lower)) {
+    return 'Da quanto tempo è presente il problema cutaneo e in quali zone si concentra di più?'
+  }
+
+  return null
+}
+
 // ---------------------------------------------------------------------------
 // 2A — L1 Baseline questions (who is the user)
 // ---------------------------------------------------------------------------
@@ -10,14 +129,12 @@ import { getMissingRequiredFields, getQuestionForField } from './intakeQuestions
 function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string): string[] {
   const personal = readPersonalSnapshot(contextPack)
   const attrs = contextPack.user.attributes ?? {}
-  const lower = userMessage.toLowerCase()
+  const lower = buildConversationFocusText(contextPack, userMessage)
 
   // Skip L1 if the message already carries specific health/numeric data (measurements, symptoms).
   const hasSpecificData =
-    /\b\d{2,3}\s*(?:kg|cm|bpm|mmhg|m\/s)\b/i.test(lower) ||
+    hasSpecificCaseSignals(lower) ||
     lower.includes('soffro') ||
-    lower.includes('dolore') ||
-    lower.includes('sintomo') ||
     lower.includes('alleno') ||
     lower.includes('sono nato') ||
     lower.includes('sono nata') ||
@@ -77,16 +194,14 @@ function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string)
 
 function buildL2TriageQuestions(contextPack: ContextPack, userMessage: string): string[] {
   const attrs = contextPack.user.attributes ?? {}
-  const lower = userMessage.toLowerCase()
+  const lower = buildConversationFocusText(contextPack, userMessage)
 
   // S1 + M4: Skip L2 only when message contains specific health/metric data.
   // Was using bare /\d/ (any digit) which wrongly skipped on "ho 30 anni", "piano 4", etc.
   // Fixed to measurement-specific pattern matching L1's guard.
   // Removed 'ho la' which was too broad (matched "ho la pizza", "ho la macchina", etc.).
   const hasSpecificContext =
-    /\b\d{2,3}\s*(?:kg|cm|bpm|mmhg|m\/s)\b/i.test(lower) ||
-    lower.includes('dolore') ||
-    lower.includes('sintomo') ||
+    hasSpecificCaseSignals(lower) ||
     lower.includes('problema') ||
     lower.includes('sento') ||
     lower.includes('mangio') ||
@@ -132,9 +247,11 @@ function buildQuestionPlan(
   domain: Domain,
   contextPack: ContextPack,
   userMessage: string,
+  prioritizeActiveProblem = false,
 ): string[] {
   const attrs = contextPack.user.attributes ?? {}
   const lower = userMessage.toLowerCase()
+  const conversationText = buildConversationFocusText(contextPack, userMessage)
   const personal = readPersonalSnapshot(contextPack)
   const plan: string[] = []
 
@@ -145,6 +262,11 @@ function buildQuestionPlan(
 
   if (isAgeQuestion(userMessage) && !personal.birthDate) {
     plan.push('Per calcolare la tua età mi serve la tua data di nascita (gg/mm/aaaa).')
+  }
+
+  if (prioritizeActiveProblem) {
+    const focused = buildFocusedQuestion(domain, conversationText, userMessage)
+    if (focused) return [focused]
   }
 
   if (domain === 'nutrition' || lower.includes('dieta') || lower.includes('aliment')) {
@@ -240,15 +362,20 @@ function buildInterviewQueue(
     personalForBaseline.weight
   )
   const isEarlyConversation = contextPack.history.recentMessages.length < 8
-  const isContinuationMessage =
-    /\b(continuiamo|continua|proseguiamo|prosegui|riprendiamo|riprendi)\b/i.test(userMessage)
+  const isContinuationMessage = CONTINUATION_PATTERN.test(userMessage)
+  const prioritizeActiveProblem = shouldPrioritizeActiveProblem({
+    domain,
+    contextPack,
+    userMessage,
+    activeSpecialist,
+  })
 
   // B-A fix: allow batching 3 questions in team mode when L1 baseline is still incomplete.
   // Previously maxAskNow=1 in team mode always, making the F4 batching unreachable.
   // isFirstInteractionInDomain covers specialist mode; isL1BaselinePending covers team mode.
   const isL1BaselinePending = !activeSpecialist && !hasCompletedBaseline && isEarlyConversation
   const maxAskNow =
-    fromWorkspace.length > 0 || isContinuationMessage
+    fromWorkspace.length > 0 || isContinuationMessage || prioritizeActiveProblem
       ? 1
       : isFirstInteractionInDomain || isL1BaselinePending
         ? 3
@@ -284,20 +411,22 @@ function buildInterviewQueue(
   // - L1 stops once all baseline data is collected (across any conversation)
   // - L1 stops mid-conversation after too many exchanges (>= 8 messages) to avoid being intrusive
   const l1Questions =
-    !hasCompletedBaseline && isEarlyConversation && !activeSpecialist
+    !hasCompletedBaseline && isEarlyConversation && !activeSpecialist && !prioritizeActiveProblem
       ? buildL1BaselineQuestions(contextPack, userMessage)
       : []
 
   // L2 triage (only in team mode — not in locked-specialist mode)
   // Specialist mode uses its own intake questions; L2 would compete for slots.
   const l2Questions =
-    l1Questions.length === 0 && !activeSpecialist
+    l1Questions.length === 0 && !activeSpecialist && !prioritizeActiveProblem
       ? buildL2TriageQuestions(contextPack, userMessage)
       : []
 
   // L3 domain-specific: specialist completeness-gate questions first, then generic plan
-  const ownFieldQs = specialistOwnFieldQuestions ?? []
-  const fromPlan = buildQuestionPlan(domain, contextPack, userMessage)
+  const ownFieldQs = prioritizeActiveProblem
+    ? (specialistOwnFieldQuestions ?? []).filter((question) => isFocusedFollowUpQuestion(question))
+    : (specialistOwnFieldQuestions ?? [])
+  const fromPlan = buildQuestionPlan(domain, contextPack, userMessage, prioritizeActiveProblem)
   // Merge: missing required-field questions take precedence over generic plan questions
   const ownFieldSet = new Set(ownFieldQs.map((q) => q.trim().toLowerCase()))
   const combinedL3 = [

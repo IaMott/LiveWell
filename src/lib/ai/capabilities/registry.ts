@@ -508,6 +508,15 @@ function scoreConsultTarget(params: {
     ) {
       score += 4
     }
+    if (
+      ['career-coach', 'executive-coach', 'relationship-coach'].includes(params.agent.id) &&
+      /\b(burnout|stress|ansia|focus|concentrarmi)\b/i.test(lowerMessage) &&
+      /\bnon la carriera\b|\bnon voglio parlare di carriera\b|\bnon la relazione\b/i.test(
+        lowerMessage,
+      )
+    ) {
+      score -= 8
+    }
   }
 
   if (params.detectedDomain === 'inspiration') {
@@ -551,10 +560,24 @@ function scoreConsultTarget(params: {
       score += 6
     }
     if (
+      params.agent.id === 'relationship-coach' &&
+      /\bseparaz/i.test(lowerMessage) &&
+      /\b(figli|soldi|problemi pratici|organizz)\b/i.test(lowerMessage)
+    ) {
+      score -= 2
+    }
+    if (
       params.agent.id === 'career-coach' &&
       /\blavoro|carriera|colloquio|ruolo|burnout\b/i.test(lowerMessage)
     )
       score += 6
+    if (
+      params.agent.id === 'career-coach' &&
+      /\b(burnout|stress|focus|concentrarmi)\b/i.test(lowerMessage) &&
+      !/\b(obiettivo professionale|colloquio|carriera|ruolo)\b/i.test(lowerMessage)
+    ) {
+      score -= 6
+    }
     if (
       params.agent.id === 'executive-coach' &&
       /\b(lavoro|team|manager|leadership|decisioni|focus)\b/i.test(lowerMessage) &&
@@ -569,12 +592,26 @@ function scoreConsultTarget(params: {
       score += 9
     }
     if (
+      params.agent.id === 'commercialista' &&
+      /\b(debiti|mutuo|rate|spese|bollette|soldi)\b/i.test(lowerMessage) &&
+      !/\b(tasse|fisco|partita iva|iva|tributi|contabil)\b/i.test(lowerMessage)
+    ) {
+      score -= 8
+    }
+    if (
       params.agent.id === 'life-organizer' &&
       /\bgestire tutto|organizzarmi|troppe cose|incastrare tutto|problemi pratici|priorit[àa]|fare ordine\b/i.test(
         lowerMessage,
       )
     )
       score += 6
+    if (
+      params.agent.id === 'life-organizer' &&
+      /\bseparaz/i.test(lowerMessage) &&
+      /\b(figli|soldi|problemi pratici)\b/i.test(lowerMessage)
+    ) {
+      score += 4
+    }
   }
 
   if (params.detectedDomain === 'coordination') {

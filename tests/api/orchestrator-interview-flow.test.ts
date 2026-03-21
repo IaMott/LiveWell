@@ -97,4 +97,94 @@ describe('interview flow boundary', () => {
     // No pendingNext when all asked at once → no synthetic persistence proposal needed
     expect(result.round2ForPersistence).toEqual([])
   })
+
+  it('keeps digestive follow-ups focused during an active specialist case instead of reopening nutrition intake', () => {
+    const contextPack: ContextPack = {
+      ...baseContext,
+      history: {
+        ...baseContext.history,
+        recentMessages: [
+          {
+            role: 'user',
+            content: 'Ho gastrite, reflusso e rutti dopo i pasti',
+            createdAt: '2026-03-21T08:00:00.000Z',
+          },
+          {
+            role: 'assistant',
+            content: 'Capito, continuiamo sul problema digestivo.',
+            createdAt: '2026-03-21T08:00:10.000Z',
+          },
+        ],
+      },
+    }
+
+    const result = applyInterviewFlow({
+      domain: 'nutrition',
+      contextPack,
+      userMessage: 'vorrei capire come mangiare senza peggiorare il reflusso',
+      consensusGatingQuestions: [],
+      round2Proposals: baseRound2Proposals,
+      activeSpecialist: {
+        id: 'dietista',
+        displayName: 'Dietista',
+        domain: 'nutrition',
+      },
+    })
+
+    expect(result.finalInterviewQuestions).toEqual([
+      'Hai notato alimenti, bevande o orari dei pasti che peggiorano i sintomi digestivi?',
+    ])
+    expect(result.finalInterviewQuestions.join(' ')).not.toMatch(
+      /obiettivo nutrizionale|allergie|pasti nella giornata/i,
+    )
+  })
+
+  it('keeps pain follow-ups focused during sport-related cases instead of reopening training intake', () => {
+    const contextPack: ContextPack = {
+      ...baseContext,
+      history: {
+        ...baseContext.history,
+        recentMessages: [
+          {
+            role: 'user',
+            content: 'Mi fa male il ginocchio quando corro e sto prendendo ibuprofene',
+            createdAt: '2026-03-21T08:00:00.000Z',
+          },
+        ],
+      },
+    }
+
+    const result = applyInterviewFlow({
+      domain: 'health',
+      contextPack,
+      userMessage: 'mi alleno ancora ma il dolore torna sempre',
+      consensusGatingQuestions: [],
+      round2Proposals: [],
+      activeSpecialist: {
+        id: 'fisioterapista',
+        displayName: 'Fisioterapista',
+        domain: 'health',
+      },
+    })
+
+    expect(result.finalInterviewQuestions).toHaveLength(1)
+    expect(result.finalInterviewQuestions[0]).toMatch(/dolore|problema fisico/i)
+    expect(result.finalInterviewQuestions.join(' ')).not.toMatch(
+      /allenamenti a settimana|limitazioni fisiche/i,
+    )
+  })
+
+  it('does not reopen L1 baseline on a rich multi-signal dirty case', () => {
+    const result = applyInterviewFlow({
+      domain: 'coordination',
+      contextPack: baseContext,
+      userMessage: 'lavoro male, dormo poco, sono in ansia e non riesco a organizzarmi',
+      consensusGatingQuestions: [],
+      round2Proposals: [],
+    })
+
+    expect(result.finalInterviewQuestions.join(' ')).not.toMatch(
+      /come ti chiami|quanti anni|sesso biologico/i,
+    )
+  })
 })

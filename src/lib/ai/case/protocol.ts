@@ -132,6 +132,26 @@ function isMeaningfulHandoffContinuation(message: string): boolean {
   return trimmed.split(/\s+/).length > 3 || HANDOFF_CONTINUITY_PATTERNS.some((p) => p.test(trimmed))
 }
 
+function hasConsultFocusSignal(agentId: string | undefined, message: string): boolean {
+  if (!agentId) return false
+  const lower = message.toLowerCase()
+
+  switch (agentId) {
+    case 'consulente-legale':
+      return /\b(legale|accordi|affido|tutela|avvocat|separaz|causa|contratto)\b/i.test(lower)
+    case 'financial-planner':
+      return /\b(debiti|mutuo|rate|spese|bollette|soldi|bilancio|prestiti)\b/i.test(lower)
+    case 'gastroenterologo':
+      return /\b(reflusso|gastrite|gonfiore|digestiv|nausea|rutti|pasti)\b/i.test(lower)
+    case 'sleep-coach':
+      return /\b(sonno|insonnia|risvegli|dormo male|caff[eè])\b/i.test(lower)
+    case 'psicologo':
+      return /\b(ansia|stress|burnout|focus|concentrarmi|male emotivamente)\b/i.test(lower)
+    default:
+      return false
+  }
+}
+
 function scoreImplicitOwnerCandidate(
   agent: AgentProfile,
   detectedDomain: Domain,
@@ -283,6 +303,10 @@ function scoreImplicitOwnerCandidate(
           /\bmale emotivamente\b/i,
           /\bdormo male\b/i,
         ]) * 3
+      if (/\b(burnout|stress|ansia|focus|concentrarmi)\b/i.test(lower)) score += 4
+      if (/\b(lavoro|team|ruolo)\b/i.test(lower) && /\b(burnout|stress|focus)\b/i.test(lower)) {
+        score += 2
+      }
       break
     case 'sleep-coach':
       score += matches([/\bdormo\b/i, /\bsonno\b/i, /\binsonnia\b/i, /\brussamento\b/i]) * 3
@@ -308,6 +332,9 @@ function scoreImplicitOwnerCandidate(
         ]) * 3
       if (/\bseparaz/i.test(lower) && !/\blegal|accordi|affido|tutela|avvocat/i.test(lower)) {
         score += 4
+      }
+      if (/\b(figli|soldi|problemi pratici)\b/i.test(lower) && /\bseparaz/i.test(lower)) {
+        score += 3
       }
       break
     case 'consulente-legale':
@@ -335,6 +362,13 @@ function scoreImplicitOwnerCandidate(
       break
     case 'career-coach':
       score += matches([/\blavoro\b/i, /\bcarriera\b/i, /\bbloccato\b/i]) * 3
+      if (
+        /\b(burnout|stress|ansia|focus|concentrarmi)\b/i.test(lower) &&
+        !/\b(obiettivo professionale|carriera|colloquio|ruolo)\b/i.test(lower)
+      ) {
+        score -= 6
+      }
+      if (/\bseparaz|figli|accordi|problemi pratici\b/i.test(lower)) score -= 8
       break
     case 'executive-coach':
       score +=
@@ -380,6 +414,9 @@ function scoreImplicitOwnerCandidate(
         )
       ) {
         score += 3
+      }
+      if (/\bseparaz/i.test(lower) && /\b(figli|soldi|problemi pratici)\b/i.test(lower)) {
+        score += 4
       }
       break
     case 'analista-contesto':
@@ -506,6 +543,7 @@ function shouldKeepConsultTargetActive(params: {
 
   return (
     mentionsConsultTarget ||
+    hasConsultFocusSignal(consultTargetId, message) ||
     (isNaturalTakeoverContinuation(message) &&
       agentSupportsDetectedDomain(consultTarget, detectedDomain))
   )

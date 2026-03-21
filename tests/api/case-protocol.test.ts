@@ -461,6 +461,7 @@ describe('case protocol vertical slice', () => {
       'analista-contesto',
       'consulente-legale',
     ]).toContain(out.caseState.ownerAgentId)
+    expect(out.caseState.ownerAgentId).not.toBe('career-coach')
   })
 
   it('keeps a coherent health owner on training pain dirty cases', () => {
@@ -738,6 +739,62 @@ describe('case protocol vertical slice', () => {
 
     expect(out.caseState.protocolState).toBe('consult_active_takeover')
     expect(out.caseState.activeSpeakerAgentId).toBe('fisioterapista')
+    expect(out.events.map((e) => e.kind)).toEqual(['takeover_continued'])
+  })
+
+  it('keeps an active legal consult on follow-up messages that stay clearly legal', () => {
+    const consultState = {
+      conversationId: 'c-legal',
+      ownerAgentId: 'relationship-coach',
+      activeSpeakerAgentId: 'consulente-legale',
+      protocolState: 'consult_active_takeover' as const,
+      consultTargetAgentId: 'consulente-legale',
+      returnTargetAgentId: 'relationship-coach',
+      consultReason: 'semantic_consult:inspiration:consulente-legale',
+      takeoverTurns: 1,
+      loopCount: 1,
+      handoffCount: 0,
+    }
+
+    const out = advanceCaseState({
+      current: consultState,
+      conversationId: 'c-legal',
+      message: 'ci sono ancora problemi legali sugli accordi e sulla tutela',
+      detectedDomain: 'inspiration',
+      allDomains: ['inspiration'],
+      team,
+    })
+
+    expect(out.caseState.protocolState).toBe('consult_active_takeover')
+    expect(out.caseState.activeSpeakerAgentId).toBe('consulente-legale')
+    expect(out.events.map((e) => e.kind)).toEqual(['takeover_continued'])
+  })
+
+  it('keeps an active financial consult on follow-up messages that stay clearly economic', () => {
+    const consultState = {
+      conversationId: 'c-finance',
+      ownerAgentId: 'career-coach',
+      activeSpeakerAgentId: 'financial-planner',
+      protocolState: 'consult_active_takeover' as const,
+      consultTargetAgentId: 'financial-planner',
+      returnTargetAgentId: 'career-coach',
+      consultReason: 'semantic_consult:inspiration:financial-planner',
+      takeoverTurns: 1,
+      loopCount: 1,
+      handoffCount: 0,
+    }
+
+    const out = advanceCaseState({
+      current: consultState,
+      conversationId: 'c-finance',
+      message: 'il problema urgente restano debiti, mutuo e rate di questo mese',
+      detectedDomain: 'inspiration',
+      allDomains: ['inspiration'],
+      team,
+    })
+
+    expect(out.caseState.protocolState).toBe('consult_active_takeover')
+    expect(out.caseState.activeSpeakerAgentId).toBe('financial-planner')
     expect(out.events.map((e) => e.kind)).toEqual(['takeover_continued'])
   })
 

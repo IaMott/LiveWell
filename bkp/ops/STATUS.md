@@ -2,37 +2,32 @@ Stato progetto
 
 Obiettivo
 
-Eseguire una validazione mirata e severa del comportamento conversazionale su casi specialistici già avviati, con focus su continuità del problema attivo, intake fuori timing e credibilità dei follow-up.
+Applicare micro-fix stretti al cluster conversazionale reale dei follow-up specialistici già avviati, con focus su continuità del problema attivo, resume con memoria e intake fuori timing.
 
 Fatto
 
-- review conversazionale mirata completata su 30 scenari multi-turno / specialistici
-- eseguite 8 suite repository (`75/75` test verdi) come guardie su protocollo/interview/synthesis/persistence/runtime triggers
-- harness temporaneo eseguito sul team reale e rimosso; output strutturato scritto in `/tmp/livewell_conversation_focus_audit.json`
-- verdetto principale:
-  - protocollo tecnico regge
-  - continuità conversazionale regge solo parzialmente
-  - intake baseline / goal generici ricompaiono troppo spesso anche quando il caso è già attivo
-- pattern peggiori osservati:
-  - ritorno a domande “dati fondamentali” in casi specialistici già aperti
-  - cambio dominio/consulto non credibile su burnout, sonno, finanza e separazione pratica
-  - consulti attivi che ricadono su domande generiche o addirittura tornano all’owner sbagliato
+- micro-fix conversazionali applicati in `interviewFlow.ts`, `domainDetection.ts`, `protocol.ts`, `registry.ts`, `synthesis.ts`
+- follow-up specialistici stretti ora prioritizzati rispetto a intake L1/L2 quando il problema attivo è già chiaro o viene ripreso da memoria
+- corrette deviazioni rumorose su sonno/alimentazione e burnout/career con penalizzazioni di dominio negative
+- impedito il return baton prematuro nei consulti legal/financial quando il messaggio resta semanticamente nel consulto attivo
+- prompt di synthesis rafforzato per vietare intake generale quando esiste già contesto di caso attivo
+- test aggiornati su cluster conversazionale: `53/53` verdi
+- guardie di non regressione: `37/37` verdi
+- `typecheck` e `build` verdi
 
 In corso
 
-Solo salvataggio memoria operativa della review; nessuna modifica applicativa in corso.
+Solo salvataggio memoria operativa del fix e publish remoto finale.
 
 Prossimo
 
-Se richiesto, il passo corretto successivo è un micro-fix stretto sui moduli del cluster conversazionale (`interviewFlow.ts`, `domainDetection.ts`, `registry.ts`, `protocol.ts`, `synthesis.ts`), non un refactor generale.
+Se richiesto, il passo corretto successivo è una nuova validazione mirata del cluster conversazionale post-fix, non un altro refactor o una campagna ampia.
 
 Rischi
 
 Rischi reali aperti:
-- intake generico fuori timing nei follow-up specialistici
-- perdita del focus attivo su burnout/sonno/finanza/separazione pratica
-- consulti specialistici che ricadono nel generico o passano allo specialista sbagliato
-- uso ancora troppo debole della memoria conversazionale in alcuni resume specialistici
+- da riverificare sul team reale i dirty cases più densi e i resume specialistici più lunghi
+- possibile residuo semantico su reason/ordine delle domande in casi molto ambigui, non ancora rimisurato dopo il fix
 
 Rischi non riaperti:
 - queue / `pendingQuestions`
@@ -44,4 +39,4 @@ Rischi non riaperti:
 
 Ultimo aggiornamento
 
-2026-03-20 22:01
+2026-03-21 09:16

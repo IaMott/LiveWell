@@ -112,6 +112,8 @@ const KEYWORDS: Record<Domain, string[]> = {
     'stress',
     'umore',
     'sonno',
+    'risvegli',
+    'risvegli notturni',
     'dormo male',
     'dormo malissimo',
     'burnout',
@@ -241,6 +243,8 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
   mindfulness: [
     { pattern: /\b(stressato|stressata|stress|ansia alta|ansia intensa)\b/i, score: 4 },
     { pattern: /\b(dormo male|dormo malissimo|insonnia)\b/i, score: 4 },
+    { pattern: /\b(risvegli notturni|mi sveglio|mi risveglio)\b/i, score: 5 },
+    { pattern: /\b(caff[eè])\b.{0,25}\b(sera|tardi|18|19|20|notte)\b/i, score: 3 },
     { pattern: /\b(burnout|sopraffatt[oa]|non riesco a concentrarmi|blocco mentale)\b/i, score: 5 },
     {
       pattern:
@@ -302,6 +306,38 @@ function getCriticalHealthScore(text: string): number {
   return CRITICAL_HEALTH_PATTERNS.some((pattern) => pattern.test(text)) ? 8 : 0
 }
 
+function getNegativeDomainAdjustment(text: string, domain: Domain): number {
+  if (domain === 'nutrition') {
+    if (/\bnon voglio parlare di (alimentazione|cibo|dieta|nutrizione)\b/i.test(text)) return -8
+  }
+
+  if (domain === 'inspiration') {
+    if (
+      /\bnon la carriera\b|\bnon voglio parlare di carriera\b|\bnon è la carriera\b/i.test(text)
+    ) {
+      return -8
+    }
+    if (
+      /\b(burnout|stress|ansia|focus|concentrarmi)\b/i.test(text) &&
+      /\b(lavoro|carriera)\b/i.test(text) &&
+      /\bnon la carriera\b/i.test(text)
+    ) {
+      return -10
+    }
+  }
+
+  if (domain === 'health') {
+    if (
+      /\b(risvegli notturni|mi sveglio|mi risveglio|insonnia|dormo male)\b/i.test(text) &&
+      !/\b(dolore|tachicardia|pressione alta|rash|prurito|reflusso|gastrite)\b/i.test(text)
+    ) {
+      return -3
+    }
+  }
+
+  return 0
+}
+
 function scoreDomain(text: string, domain: Domain): number {
   if (domain === 'general') return 0
   const keywordScore = KEYWORDS[domain].reduce((acc, kw) => (text.includes(kw) ? acc + 1 : acc), 0)
@@ -310,7 +346,9 @@ function scoreDomain(text: string, domain: Domain): number {
     0,
   )
   const criticalHealthScore = domain === 'health' ? getCriticalHealthScore(text) : 0
-  return keywordScore + patternScore + criticalHealthScore
+  return (
+    keywordScore + patternScore + criticalHealthScore + getNegativeDomainAdjustment(text, domain)
+  )
 }
 
 export function detectDomainFromText(text: string): Domain {
