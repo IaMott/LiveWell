@@ -55,5 +55,20 @@ describe('critical domain detection', () => {
     expect(detectDomainFromText('devo rimettere in ordine vita, soldi e priorità')).toBe(
       'coordination',
     )
+    expect(
+      detectDomainFromText('mi sto separando, ci sono figli, soldi e problemi pratici da gestire'),
+    ).toBe('coordination')
+    expect(
+      detectDomainFromText('torniamo al sonno, sai già che dormo 5 ore e bevo caffè tardi'),
+    ).toBe('mindfulness')
+  })
+
+  it('keeps practical separation above career-style inspiration in multi-domain ranking', () => {
+    const out = detectDomainsMulti(
+      'mi sto separando, ci sono figli, soldi e problemi pratici da gestire',
+    )
+
+    expect(out[0]).toMatchObject({ domain: 'coordination' })
+    expect(out.some((entry) => entry.domain === 'inspiration')).toBe(true)
   })
 })

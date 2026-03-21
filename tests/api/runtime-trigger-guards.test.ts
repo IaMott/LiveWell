@@ -480,4 +480,26 @@ describe('runtime trigger guards', () => {
 
     expect(out).toMatchObject({ agentId: 'life-organizer' })
   })
+
+  it('does not open a relationship consult on sleep resumes that already have a sleep owner', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'sleep-coach',
+      detectedDomain: 'mindfulness',
+      message: 'torniamo al sonno, sai già che dormo 5 ore e bevo caffè tardi',
+    })
+
+    expect(out).toBeNull()
+  })
+
+  it('does not pick career fallback for practical separation orchestration cases', () => {
+    const out = findCapabilityConsultTarget({
+      team,
+      ownerAgentId: 'life-organizer',
+      detectedDomain: 'coordination',
+      message: 'mi sto separando, ci sono figli, soldi e problemi pratici da gestire',
+    })
+
+    expect(out).not.toMatchObject({ agentId: 'career-coach' })
+  })
 })

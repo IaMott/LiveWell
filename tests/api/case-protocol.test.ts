@@ -464,6 +464,22 @@ describe('case protocol vertical slice', () => {
     expect(out.caseState.ownerAgentId).not.toBe('career-coach')
   })
 
+  it('keeps practical separation with children and money away from career fallback owners', () => {
+    const out = advanceCaseState({
+      current: null,
+      conversationId: 'implicit-separation-practical-2',
+      message: 'mi sto separando, ci sono figli, soldi e problemi pratici da gestire',
+      detectedDomain: 'coordination',
+      allDomains: ['coordination', 'inspiration'],
+      team,
+    })
+
+    expect(['life-organizer', 'analista-contesto', 'relationship-coach']).toContain(
+      out.caseState.ownerAgentId,
+    )
+    expect(out.caseState.ownerAgentId).not.toBe('career-coach')
+  })
+
   it('keeps a coherent health owner on training pain dirty cases', () => {
     const out = advanceCaseState({
       current: null,
@@ -532,6 +548,31 @@ describe('case protocol vertical slice', () => {
     expect(out.caseState.protocolState).toBe('owner_active')
     expect(out.caseState.activeSpeakerAgentId).toBe('dietista')
     expect(out.events.map((e) => e.kind)).toEqual(['return_baton'])
+  })
+
+  it('keeps a sleep-focused owner active on resumes that mention sleep hours and late caffeine', () => {
+    const current = {
+      conversationId: 'sleep-resume-1',
+      ownerAgentId: 'sleep-coach',
+      activeSpeakerAgentId: 'sleep-coach',
+      protocolState: 'owner_active' as const,
+      takeoverTurns: 0,
+      loopCount: 0,
+      handoffCount: 0,
+    }
+
+    const out = advanceCaseState({
+      current,
+      conversationId: 'sleep-resume-1',
+      message: 'torniamo al sonno, sai già che dormo 5 ore e bevo caffè tardi',
+      detectedDomain: 'mindfulness',
+      allDomains: ['mindfulness', 'health'],
+      team,
+    })
+
+    expect(out.caseState.ownerAgentId).toBe('sleep-coach')
+    expect(out.caseState.activeSpeakerAgentId).toBe('sleep-coach')
+    expect(out.caseState.protocolState).toBe('owner_active')
   })
 
   it('does not allow a second active consult while a takeover is already active', () => {

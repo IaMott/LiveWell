@@ -486,8 +486,21 @@ function scoreConsultTarget(params: {
     ) {
       score += 4
     }
+    if (
+      params.agent.id === 'psicologo' &&
+      /\b(sonno|insonnia|risvegli|dormo\s+\d+\s+ore|caff[eè].{0,20}tardi)\b/i.test(lowerMessage) &&
+      !/\b(ansia|stress|burnout|sopraffatt|trauma|male emotivamente)\b/i.test(lowerMessage)
+    ) {
+      score -= 8
+    }
     if (params.agent.id === 'sleep-coach' && !/\bsonno|insonnia|dorm/i.test(lowerMessage))
       score -= 5
+    if (
+      params.agent.id === 'sleep-coach' &&
+      /\b(sonno|insonnia|risvegli|dormo\s+\d+\s+ore|caff[eè].{0,20}tardi)\b/i.test(lowerMessage)
+    ) {
+      score += 8
+    }
     if (
       params.agent.id === 'mental-coach' &&
       /\b(performance|prestazione|pre.?gara|focus)\b/i.test(lowerMessage)
@@ -516,6 +529,13 @@ function scoreConsultTarget(params: {
       )
     ) {
       score -= 8
+    }
+    if (
+      params.agent.id === 'relationship-coach' &&
+      /\b(sonno|insonnia|risvegli|dormo\s+\d+\s+ore|caff[eè])\b/i.test(lowerMessage) &&
+      !/\b(relazione|coppia|partner|conflitto)\b/i.test(lowerMessage)
+    ) {
+      score -= 10
     }
   }
 
@@ -561,10 +581,10 @@ function scoreConsultTarget(params: {
     }
     if (
       params.agent.id === 'relationship-coach' &&
-      /\bseparaz/i.test(lowerMessage) &&
+      /\bsepar(?:az|and)/i.test(lowerMessage) &&
       /\b(figli|soldi|problemi pratici|organizz)\b/i.test(lowerMessage)
     ) {
-      score -= 2
+      score -= 5
     }
     if (
       params.agent.id === 'career-coach' &&
@@ -607,10 +627,18 @@ function scoreConsultTarget(params: {
       score += 6
     if (
       params.agent.id === 'life-organizer' &&
-      /\bseparaz/i.test(lowerMessage) &&
+      /\bsepar(?:az|and)/i.test(lowerMessage) &&
       /\b(figli|soldi|problemi pratici)\b/i.test(lowerMessage)
     ) {
-      score += 4
+      score += 7
+    }
+    if (
+      params.agent.id === 'career-coach' &&
+      /\bsepar(?:az|and)\b/i.test(lowerMessage) &&
+      /\b(figli|soldi|problemi pratici|gestire)\b/i.test(lowerMessage) &&
+      !/\b(lavoro|carriera|colloquio|ruolo)\b/i.test(lowerMessage)
+    ) {
+      score -= 10
     }
   }
 
@@ -656,6 +684,17 @@ export function findCapabilityConsultTarget(params: {
 }): { agentId: string; reason: string } | null {
   const owner = params.team.find((agent) => agent.id === params.ownerAgentId)
   if (!owner || params.detectedDomain === 'general') {
+    return null
+  }
+  const lowerMessage = normalizeText(params.message)
+  const isSleepFocusedResume =
+    params.ownerAgentId === 'sleep-coach' &&
+    params.detectedDomain === 'mindfulness' &&
+    /\b(sonno|insonnia|risvegli|dormo\s+\d+\s+ore|caff[eè].{0,20}tardi)\b/i.test(lowerMessage) &&
+    !/\b(ansia|stress|burnout|sopraffatt|trauma|relazione|coppia|partner|conflitto)\b/i.test(
+      lowerMessage,
+    )
+  if (isSleepFocusedResume) {
     return null
   }
 

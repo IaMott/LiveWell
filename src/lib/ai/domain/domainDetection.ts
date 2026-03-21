@@ -290,6 +290,11 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
       pattern: /\b(non so da dove partire|troppi fronti|troppe aree|quadro confuso)\b/i,
       score: 4,
     },
+    {
+      pattern:
+        /\b(mi sto separando|separazione)\b.{0,60}\b(figli|soldi|problemi pratici|gestire)\b|\b(figli|soldi|problemi pratici|gestire)\b.{0,60}\b(mi sto separando|separazione)\b/i,
+      score: 9,
+    },
   ],
 }
 
@@ -323,6 +328,13 @@ function getNegativeDomainAdjustment(text: string, domain: Domain): number {
       /\bnon la carriera\b/i.test(text)
     ) {
       return -10
+    }
+    if (
+      /\b(mi sto separando|separazione)\b/i.test(text) &&
+      /\b(figli|soldi|problemi pratici|gestire)\b/i.test(text) &&
+      !/\b(legale|accordi|affido|tutela|avvocat|lavoro|carriera|colloquio|ruolo)\b/i.test(text)
+    ) {
+      return -3
     }
   }
 

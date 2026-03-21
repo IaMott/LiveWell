@@ -309,7 +309,22 @@ function scoreImplicitOwnerCandidate(
       }
       break
     case 'sleep-coach':
-      score += matches([/\bdormo\b/i, /\bsonno\b/i, /\binsonnia\b/i, /\brussamento\b/i]) * 3
+      score +=
+        matches([
+          /\bdormo\b/i,
+          /\bsonno\b/i,
+          /\binsonnia\b/i,
+          /\brussamento\b/i,
+          /\brisvegli\b/i,
+          /\bcaff[eè]\b/i,
+        ]) * 3
+      if (
+        /\b(torniamo al sonno|riprendiamo dal sonno|dormo\s+\d+\s+ore|caff[eè].{0,20}tardi|risvegli)\b/i.test(
+          lower,
+        )
+      ) {
+        score += 4
+      }
       break
     case 'mental-coach':
       score +=
@@ -324,17 +339,26 @@ function scoreImplicitOwnerCandidate(
     case 'relationship-coach':
       score +=
         matches([
-          /\bseparaz/i,
+          /\bsepar(?:az|and)/i,
           /\brelazione\b/i,
           /\bcoppia\b/i,
           /\bpartner\b/i,
           /\bmale emotivamente\b/i,
         ]) * 3
-      if (/\bseparaz/i.test(lower) && !/\blegal|accordi|affido|tutela|avvocat/i.test(lower)) {
+      if (
+        /\bsepar(?:az|and)/i.test(lower) &&
+        !/\blegal|accordi|affido|tutela|avvocat/i.test(lower)
+      ) {
         score += 4
       }
-      if (/\b(figli|soldi|problemi pratici)\b/i.test(lower) && /\bseparaz/i.test(lower)) {
-        score += 3
+      if (/\b(figli|soldi|problemi pratici)\b/i.test(lower) && /\bsepar(?:az|and)/i.test(lower)) {
+        score -= 2
+      }
+      if (
+        /\b(sonno|insonnia|risvegli|dormo\s+\d+\s+ore|caff[eè])\b/i.test(lower) &&
+        !/\b(relazione|coppia|partner|conflitto)\b/i.test(lower)
+      ) {
+        score -= 8
       }
       break
     case 'consulente-legale':
@@ -368,7 +392,7 @@ function scoreImplicitOwnerCandidate(
       ) {
         score -= 6
       }
-      if (/\bseparaz|figli|accordi|problemi pratici\b/i.test(lower)) score -= 8
+      if (/\bsepar(?:az|and)|figli|accordi|problemi pratici|soldi\b/i.test(lower)) score -= 10
       break
     case 'executive-coach':
       score +=
@@ -415,8 +439,8 @@ function scoreImplicitOwnerCandidate(
       ) {
         score += 3
       }
-      if (/\bseparaz/i.test(lower) && /\b(figli|soldi|problemi pratici)\b/i.test(lower)) {
-        score += 4
+      if (/\bsepar(?:az|and)/i.test(lower) && /\b(figli|soldi|problemi pratici)\b/i.test(lower)) {
+        score += 6
       }
       break
     case 'analista-contesto':
