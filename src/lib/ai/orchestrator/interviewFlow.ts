@@ -441,8 +441,16 @@ function buildInterviewQueue(
   // Previously maxAskNow=1 in team mode always, making the F4 batching unreachable.
   // isFirstInteractionInDomain covers specialist mode; isL1BaselinePending covers team mode.
   const isL1BaselinePending = !activeSpecialist && !hasCompletedBaseline && isEarlyConversation
+  // When the user explicitly requests output (plan, diet, schedule…):
+  //   - If ALL required specialist fields are already known → force output (maxAskNow = 0)
+  //   - If required fields are still missing → allow exactly 1 targeted question before producing
+  // This prevents the agent from generating a meal plan without knowing about allergies, but
+  // also prevents an infinite gating loop: after 1 question it must produce the output.
+  const hasMissingRequiredFields = (specialistOwnFieldQuestions ?? []).length > 0
   const maxAskNow = isOutputRequest
-    ? 0
+    ? hasMissingRequiredFields
+      ? 1
+      : 0
     : fromWorkspace.length > 0 || isContinuationMessage || prioritizeActiveProblem
       ? 1
       : isFirstInteractionInDomain || isL1BaselinePending
