@@ -6,27 +6,6 @@ import type React from 'react'
 
 // Custom SVG icons matching design/icons/ files exactly
 
-function IconOverview({ color }: { color: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="none"
-      stroke={color}
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-    </svg>
-  )
-}
-
 function IconFood({ color }: { color: string }) {
   return (
     <svg viewBox="0 0 800 800" width="18" height="18" fill={color} aria-hidden="true">
@@ -132,13 +111,12 @@ function IconCartella({ color }: { color: string }) {
 }
 
 const TABS: Array<{ slug: string; label: string; Icon: IconFC; color: string }> = [
-  { slug: 'overview', label: 'Overview', Icon: IconOverview, color: '#8E8E93' },
+  { slug: 'cartella', label: 'Cartella', Icon: IconCartella, color: '#FF3B30' },
   { slug: 'nutrizione', label: 'Nutrizione', Icon: IconFood, color: '#AF52DE' },
   { slug: 'allenamento', label: 'Allenamento', Icon: IconGym, color: '#007AFF' },
   { slug: 'salute', label: 'Salute', Icon: IconHealth, color: '#34C759' },
   { slug: 'mindfulness', label: 'Mindfulness', Icon: IconMental, color: '#5AC8FA' },
   { slug: 'idee', label: 'Idee', Icon: IconIdea, color: '#FF9F0A' },
-  { slug: 'cartella', label: 'Cartella', Icon: IconCartella, color: '#FF3B30' },
 ]
 
 export function ProfileNav() {
@@ -157,7 +135,7 @@ export function ProfileNav() {
     >
       {TABS.map(({ slug, label, Icon, color }) => {
         const isActive =
-          pathname === `/profile/${slug}` || (slug === 'overview' && pathname === '/profile')
+          pathname === `/profile/${slug}` || (slug === 'cartella' && pathname === '/profile')
         return (
           <Link
             key={slug}

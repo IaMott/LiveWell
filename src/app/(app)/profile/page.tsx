@@ -8,7 +8,7 @@ import { useEffect } from 'react'
 export default function ProfilePage() {
   const router = useRouter()
   useEffect(() => {
-    router.replace('/profile/overview')
+    router.replace('/profile/cartella')
   }, [router])
   return null
 }

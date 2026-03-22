@@ -255,11 +255,6 @@ export function OverviewSection({ data }: Props) {
 
       {/* Stats grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
-        <StatCard
-          label="Conversazioni"
-          value={stats.conversationCount}
-          color="var(--color-accent)"
-        />
         <StatCard label="Allenamenti (7gg)" value={stats.workoutSessions7d} color="#007AFF" />
         <StatCard label="Pasti (7gg)" value={stats.mealsLogged7d} color="#AF52DE" />
         {stats.avgMood7d != null && (

@@ -1,5 +1,3 @@
-'use client'
-
 import type { ProfileData } from '@/app/(app)/profile/[domain]/page'
 import type React from 'react'
 
@@ -241,7 +239,7 @@ function EventCard({ event }: { event: ClinicalEvent }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function CartellaSection({ data }: Props) {
-  const { clinicalEvents, attributesByDomain, profile } = data
+  const { clinicalEvents, attributesByDomain, profile, user } = data
 
   // Calcola completezza dai domini chiave
   const DOMAIN_COMPLETENESS = [
@@ -285,11 +283,102 @@ export function CartellaSection({ data }: Props) {
     return acc
   }, {})
 
-  const hasProfile = profile?.weight || profile?.height || profile?.gender || profile?.birthDate
   const hasEvents = clinicalEvents.length > 0
+
+  // Calcola età
+  const age = profile?.birthDate
+    ? Math.floor(
+        (new Date().getTime() - new Date(profile.birthDate).getTime()) /
+          (1000 * 60 * 60 * 24 * 365.25),
+      )
+    : null
+
+  // Iniziali per avatar
+  const initials = user?.name
+    ? user.name
+        .split(' ')
+        .map((p: string) => p[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    : '??'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      {/* ── Intestazione utente ── */}
+      <div
+        style={{
+          backgroundColor: 'var(--color-surface, #fff)',
+          borderRadius: '1rem',
+          padding: '1.25rem 1rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem',
+        }}
+      >
+        {/* Avatar */}
+        <div
+          style={{
+            width: '56px',
+            height: '56px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #FF3B30, #FF6B35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>{initials}</span>
+        </div>
+
+        {/* Info */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p
+            style={{
+              margin: '0 0 0.125rem',
+              fontSize: '1.0625rem',
+              fontWeight: 700,
+              color: 'var(--color-text-primary, #1C1C1E)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {user?.name ?? 'Utente'}
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.8125rem',
+              color: 'var(--color-text-secondary, #8E8E93)',
+            }}
+          >
+            {[
+              age ? `${age} anni` : null,
+              profile?.gender ?? null,
+              profile?.height ? `${profile.height} cm` : null,
+              profile?.weight ? `${profile.weight} kg` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'Completa il tuo profilo in chat'}
+          </p>
+          {profile?.weight && profile?.height && (
+            <p
+              style={{
+                margin: '0.125rem 0 0',
+                fontSize: '0.75rem',
+                color: '#007AFF',
+                fontWeight: 600,
+              }}
+            >
+              BMI {(profile.weight / Math.pow(profile.height / 100, 2)).toFixed(1)}
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* ── Header informativo ── */}
       <div
         style={{
@@ -314,28 +403,6 @@ export function CartellaSection({ data }: Props) {
           automaticamente durante le conversazioni.
         </p>
       </div>
-
-      {/* ── Profilo base ── */}
-      {hasProfile && (
-        <>
-          <h3 style={sectionHeaderStyle}>Anagrafica</h3>
-          <div style={cardStyle}>
-            {profile?.birthDate && (
-              <Row label="Data di nascita" value={formatDate(profile.birthDate)} />
-            )}
-            {profile?.gender && <Row label="Genere" value={profile.gender} />}
-            {profile?.height && <Row label="Altezza" value={`${profile.height} cm`} />}
-            {profile?.weight && <Row label="Peso" value={`${profile.weight} kg`} />}
-            {profile?.weight && profile?.height && (
-              <Row
-                label="BMI"
-                value={(profile.weight / Math.pow(profile.height / 100, 2)).toFixed(1)}
-                highlight
-              />
-            )}
-          </div>
-        </>
-      )}
 
       {/* ── Completezza cartella ── */}
       <h3 style={sectionHeaderStyle}>Completezza Cartella</h3>
@@ -429,34 +496,6 @@ export function CartellaSection({ data }: Props) {
           </p>
         </div>
       )}
-    </div>
-  )
-}
-
-// ── Shared styles ─────────────────────────────────────────────────────────────
-
-function Row({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        padding: '0.625rem 0',
-        borderBottom: '1px solid var(--color-separator, #E5E5EA)',
-      }}
-    >
-      <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
-        {label}
-      </span>
-      <span
-        style={{
-          fontSize: '0.875rem',
-          fontWeight: highlight ? 700 : 600,
-          color: highlight ? '#007AFF' : 'var(--color-text-primary, #1C1C1E)',
-        }}
-      >
-        {value}
-      </span>
     </div>
   )
 }

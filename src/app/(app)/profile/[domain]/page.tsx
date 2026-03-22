@@ -1,7 +1,6 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import { OverviewSection } from '@/components/profile/sections/OverviewSection'
 import { NutritionSection } from '@/components/profile/sections/NutritionSection'
 import { TrainingSection } from '@/components/profile/sections/TrainingSection'
 import { HealthSection } from '@/components/profile/sections/HealthSection'
@@ -18,13 +17,12 @@ import { CartellaSection } from '@/components/profile/sections/CartellaSection'
 // Settings are at /settings (separate route — not part of the profile)
 
 const VALID_DOMAINS = [
-  'overview',
+  'cartella',
   'nutrizione',
   'allenamento',
   'salute',
   'mindfulness',
   'idee',
-  'cartella',
 ] as const
 
 type Domain = (typeof VALID_DOMAINS)[number]
@@ -63,7 +61,6 @@ async function fetchProfileData(userId: string) {
     mealCount,
     lastWeight,
     artifacts,
-    convCount,
     recentWorkouts,
     recentMeals,
     recentMindfulness,
@@ -100,7 +97,6 @@ async function fetchProfileData(userId: string) {
       take: 6,
       select: { id: true, type: true, title: true, contentMarkdown: true, createdAt: true },
     }),
-    prisma.conversation.count({ where: { userId } }),
     prisma.workoutSession.findMany({
       where: { userId, date: { gte: since7d } },
       orderBy: { date: 'desc' },
@@ -245,7 +241,6 @@ async function fetchProfileData(userId: string) {
       lastWeightEntry: lastWeight
         ? { value: lastWeight.value, unit: lastWeight.unit ?? 'kg', date: lastWeight.recordedAt }
         : null,
-      conversationCount: convCount,
     },
     artifacts,
     recentWorkouts,
@@ -268,8 +263,12 @@ export type ProfileData = Awaited<ReturnType<typeof fetchProfileData>>
 export default async function DomainPage({ params }: { params: Promise<{ domain: string }> }) {
   const { domain } = await params
 
+  if (domain === 'overview') {
+    redirect('/profile/cartella')
+  }
+
   if (!VALID_DOMAINS.includes(domain as Domain)) {
-    redirect('/profile/overview')
+    redirect('/profile/cartella')
   }
 
   const session = await auth()
@@ -278,8 +277,6 @@ export default async function DomainPage({ params }: { params: Promise<{ domain:
   const data = await fetchProfileData(session.user.id)
 
   switch (domain as Domain) {
-    case 'overview':
-      return <OverviewSection data={data} />
     case 'nutrizione':
       return <NutritionSection data={data} />
     case 'allenamento':
