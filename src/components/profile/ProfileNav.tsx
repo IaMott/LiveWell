@@ -112,6 +112,25 @@ function IconIdea({ color }: { color: string }) {
 
 type IconFC = (props: { color: string }) => React.ReactNode
 
+function IconCartella({ color }: { color: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke={color}
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 12h6M9 16h6M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
+      <path d="M13 3v4a1 1 0 0 0 1 1h4" />
+    </svg>
+  )
+}
+
 const TABS: Array<{ slug: string; label: string; Icon: IconFC; color: string }> = [
   { slug: 'overview', label: 'Overview', Icon: IconOverview, color: '#8E8E93' },
   { slug: 'nutrizione', label: 'Nutrizione', Icon: IconFood, color: '#AF52DE' },
@@ -119,6 +138,7 @@ const TABS: Array<{ slug: string; label: string; Icon: IconFC; color: string }> 
   { slug: 'salute', label: 'Salute', Icon: IconHealth, color: '#34C759' },
   { slug: 'mindfulness', label: 'Mindfulness', Icon: IconMental, color: '#5AC8FA' },
   { slug: 'idee', label: 'Idee', Icon: IconIdea, color: '#FF9F0A' },
+  { slug: 'cartella', label: 'Cartella', Icon: IconCartella, color: '#FF3B30' },
 ]
 
 export function ProfileNav() {

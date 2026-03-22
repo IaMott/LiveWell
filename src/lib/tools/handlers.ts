@@ -644,18 +644,38 @@ const healthLogBloodwork: Handler = async (args, ctx) => {
     values: Record<string, number | undefined>
     notes?: string
   }
-  const row = await prisma.userAttribute.create({
-    data: {
-      userId: ctx.actor.userId,
-      domain: 'health',
-      key: 'bloodwork',
-      value: a.values as Prisma.InputJsonValue,
-      notes: a.notes ?? null,
-      source: 'agent',
-      conversationId: ctx.conversationId,
-      recordedAt: a.testDate ? new Date(a.testDate) : new Date(),
-    },
-  })
+  const eventDate = a.testDate ? new Date(a.testDate) : new Date()
+
+  const [row] = await Promise.all([
+    // Backward-compat: attribute key/value time-series
+    prisma.userAttribute.create({
+      data: {
+        userId: ctx.actor.userId,
+        domain: 'health',
+        key: 'bloodwork',
+        value: a.values as Prisma.InputJsonValue,
+        notes: a.notes ?? null,
+        source: 'agent',
+        conversationId: ctx.conversationId,
+        recordedAt: eventDate,
+      },
+    }),
+    // Cartella clinica: evento strutturato
+    prisma.clinicalEvent.create({
+      data: {
+        userId: ctx.actor.userId,
+        eventType: 'bloodwork',
+        title: 'Esame del sangue',
+        description: a.notes ?? null,
+        domain: 'health',
+        agentId: ctx.agent?.id ?? null,
+        conversationId: ctx.conversationId ?? null,
+        eventDate,
+        metadata: a.values as Prisma.InputJsonValue,
+      },
+    }),
+  ])
+
   return { saved: true, attributeId: row.id }
 }
 
@@ -667,23 +687,45 @@ const healthLogDiagnosis: Handler = async (args, ctx) => {
     status?: string
     notes?: string
   }
-  const row = await prisma.userAttribute.create({
-    data: {
-      userId: ctx.actor.userId,
-      domain: 'health',
-      key: 'conditions',
-      value: {
-        condition: a.condition,
-        severity: a.severity,
+  const eventDate = a.diagnosedAt ? new Date(a.diagnosedAt) : new Date()
+
+  const [row] = await Promise.all([
+    // Backward-compat: attribute key/value time-series
+    prisma.userAttribute.create({
+      data: {
+        userId: ctx.actor.userId,
+        domain: 'health',
+        key: 'conditions',
+        value: {
+          condition: a.condition,
+          severity: a.severity,
+          status: a.status ?? 'active',
+          diagnosedAt: a.diagnosedAt,
+        } as Prisma.InputJsonValue,
+        notes: a.notes ?? null,
+        source: 'agent',
+        conversationId: ctx.conversationId,
+        recordedAt: eventDate,
+      },
+    }),
+    // Cartella clinica: evento strutturato
+    prisma.clinicalEvent.create({
+      data: {
+        userId: ctx.actor.userId,
+        eventType: 'diagnosis',
+        title: a.condition,
+        description: a.notes ?? null,
+        domain: 'health',
+        agentId: ctx.agent?.id ?? null,
+        conversationId: ctx.conversationId ?? null,
+        eventDate,
+        severity: a.severity ?? null,
         status: a.status ?? 'active',
-        diagnosedAt: a.diagnosedAt,
-      } as Prisma.InputJsonValue,
-      notes: a.notes ?? null,
-      source: 'agent',
-      conversationId: ctx.conversationId,
-      recordedAt: a.diagnosedAt ? new Date(a.diagnosedAt) : new Date(),
-    },
-  })
+        metadata: { condition: a.condition, diagnosedAt: a.diagnosedAt } as Prisma.InputJsonValue,
+      },
+    }),
+  ])
+
   return { saved: true, attributeId: row.id }
 }
 

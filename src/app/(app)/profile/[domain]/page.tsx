@@ -7,6 +7,7 @@ import { TrainingSection } from '@/components/profile/sections/TrainingSection'
 import { HealthSection } from '@/components/profile/sections/HealthSection'
 import { MindfulnessSection } from '@/components/profile/sections/MindfulnessSection'
 import { IdeasSection } from '@/components/profile/sections/IdeasSection'
+import { CartellaSection } from '@/components/profile/sections/CartellaSection'
 
 // Profile domains map to TEAM agent groups:
 //   nutrizione  → TEAM/nutrizione  (dietista, chef, endocrinologo)
@@ -23,6 +24,7 @@ const VALID_DOMAINS = [
   'salute',
   'mindfulness',
   'idee',
+  'cartella',
 ] as const
 
 type Domain = (typeof VALID_DOMAINS)[number]
@@ -70,6 +72,7 @@ async function fetchProfileData(userId: string) {
     allAttributes,
     workoutPlan,
     allArtifacts,
+    clinicalEvents,
   ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -166,6 +169,26 @@ async function fetchProfileData(userId: string) {
       take: 20,
       select: { id: true, type: true, title: true, contentMarkdown: true, createdAt: true },
     }),
+    // Cartella clinica: eventi strutturati registrati dagli agenti
+    prisma.clinicalEvent.findMany({
+      where: { userId },
+      orderBy: { eventDate: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        eventType: true,
+        title: true,
+        description: true,
+        domain: true,
+        agentId: true,
+        eventDate: true,
+        validUntil: true,
+        severity: true,
+        status: true,
+        metadata: true,
+        createdAt: true,
+      },
+    }),
   ])
 
   // Build a merged profile: UserProfile takes precedence, dynamic attrs fill gaps
@@ -236,6 +259,7 @@ async function fetchProfileData(userId: string) {
     attributesByDomain: groupAttributesByDomain(allAttributes),
     workoutPlan,
     allArtifacts,
+    clinicalEvents,
   }
 }
 
@@ -266,5 +290,7 @@ export default async function DomainPage({ params }: { params: Promise<{ domain:
       return <MindfulnessSection data={data} />
     case 'idee':
       return <IdeasSection data={data} />
+    case 'cartella':
+      return <CartellaSection data={data} />
   }
 }
