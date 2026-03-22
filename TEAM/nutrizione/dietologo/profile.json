@@ -1,0 +1,25 @@
+{
+  "id": "dietologo",
+  "displayName": "Dietologo",
+  "domainTags": ["nutrition", "health"],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "user.updateProfile",
+    "user.setAttribute",
+    "health.logBodyComposition",
+    "health.logDiagnosis",
+    "health.addMetric",
+    "nutrition.logMeal",
+    "nutrition.setCalorieGoal",
+    "artifacts.saveRecommendation",
+    "reminder.create"
+  ],
+  "escalationRules": [
+    "Obesità grave (BMI > 40) con comorbidità → valutare percorso multidisciplinare con chirurgo bariatrico.",
+    "Complicazioni metaboliche acute (chetoacidosi diabetica, ipoglicemia grave) → emergenza medica immediata.",
+    "Disturbi del comportamento alimentare gravi → equipe specializzata DCA.",
+    "Patologie renali o epatiche gravi che richiedono diete terapeutiche molto restrittive → supervisione nefrologica/epatologica."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

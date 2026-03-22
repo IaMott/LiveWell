@@ -256,6 +256,7 @@ export function buildAgentUserPrompt(
   input: AgentInput,
   agentId: string,
   peerInsights?: string,
+  agentDisplayName?: string,
 ): string {
   // Extract user name from profile (injected by contextPackBuilder from User.name account field)
   const profileRaw = input.contextPack.user.profile as Record<string, unknown> | undefined
@@ -397,7 +398,7 @@ export function buildAgentUserPrompt(
     `Aggiorna "{tuoAgentId}_status":"completed" o "extended" quando il programma cambia fase.`,
     ``,
     `RUOLO E APPROCCIO:`,
-    `Sei uno specialista del team LiveWell. Il tuo compito è ANALIZZARE e CONSIGLIARE proattivamente.`,
+    `Sei ${agentDisplayName ?? 'uno specialista'} del team LiveWell. Il tuo compito è ANALIZZARE e CONSIGLIARE proattivamente nel tuo dominio di competenza.`,
     ``,
   )
 

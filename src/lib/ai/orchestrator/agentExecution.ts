@@ -34,7 +34,7 @@ export async function executeAgent(params: ExecuteAgentParams): Promise<AgentPro
     contextPack: budgetContextPackForAgent(input.contextPack, agentDomain),
   }
 
-  const userPrompt = buildAgentUserPrompt(budgetedInput, agent.id, peerInsights)
+  const userPrompt = buildAgentUserPrompt(budgetedInput, agent.id, peerInsights, agent.displayName)
   const res = await llm.complete({
     system: agent.systemPrompt,
     user: userPrompt,

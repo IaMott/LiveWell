@@ -1,0 +1,22 @@
+{
+  "id": "psichiatra",
+  "displayName": "Psichiatra",
+  "domainTags": ["health", "mindfulness"],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "user.setAttribute",
+    "health.updateMedications",
+    "health.logDiagnosis",
+    "artifacts.saveRecommendation",
+    "appointment.schedule",
+    "reminder.create"
+  ],
+  "escalationRules": [
+    "Ideazione suicidaria attiva o pianificazione di atti autolesivi → protocollo di sicurezza immediato: 118, Pronto Soccorso psichiatrico, numero crisi 800274274.",
+    "Episodio psicotico acuto (allucinazioni, deliri, disorientamento grave) → valutazione psichiatrica urgente e possibile TSO.",
+    "Mania grave con perdita del giudizio critico → ricovero urgente in unità psichiatrica.",
+    "Intossicazione acuta o overdose da farmaci psicotropi → emergenza medica immediata (118)."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

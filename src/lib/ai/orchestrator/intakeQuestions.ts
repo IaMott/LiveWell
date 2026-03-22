@@ -21,6 +21,14 @@ export const AGENT_INTAKE_KEYS: Record<string, { required: string[]; optional: s
     required: ['weight', 'height', 'goal', 'allergy', 'meal_pattern'],
     optional: ['budget_food', 'cooking_time'],
   },
+  'biologo-nutrizionista': {
+    required: ['weight', 'height', 'goal', 'allergy', 'meal_pattern'],
+    optional: ['supplements_current', 'functional_goal', 'lab_results_nutrition'],
+  },
+  dietologo: {
+    required: ['weight', 'height', 'goal', 'allergy', 'metabolic_condition', 'medications'],
+    optional: ['recent_exams', 'family_history_metabolic'],
+  },
   chef: {
     required: ['goal', 'cooking_experience', 'dietary_restrictions', 'cooking_time'],
     optional: ['equipment'],
@@ -74,6 +82,26 @@ export const AGENT_INTAKE_KEYS: Record<string, { required: string[]; optional: s
   gastroenterologo: {
     required: ['digestive_symptoms', 'symptom_frequency', 'food_triggers', 'medications'],
     optional: ['recent_exams'],
+  },
+  reumatologo: {
+    required: [
+      'joint_pain_location',
+      'joint_stiffness_duration',
+      'symptom_duration',
+      'autoimmune_markers',
+      'medications',
+    ],
+    optional: ['family_history_autoimmune', 'previous_treatments'],
+  },
+  psichiatra: {
+    required: [
+      'complaint',
+      'symptom_duration',
+      'distress_intensity',
+      'psychiatric_history',
+      'medications',
+    ],
+    optional: ['family_history_mental', 'substance_use'],
   },
   psicologo: {
     required: [
@@ -215,6 +243,35 @@ const FIELD_QUESTIONS: Record<string, string> = {
     'Con quale frequenza si presentano questi sintomi (quotidianamente, settimanalmente)?',
   food_triggers: 'Hai notato alimenti o bevande che scatenano o peggiorano i sintomi?',
 
+  // Biologo nutrizionista
+  supplements_current: 'Stai assumendo integratori alimentari? Se sì, quali e a quale dosaggio?',
+  functional_goal:
+    'Hai un obiettivo funzionale specifico (performance cognitiva, energia, longevità, microbiota, anti-infiammazione)?',
+  lab_results_nutrition:
+    'Hai eseguito di recente analisi che includono vitamine (D, B12, folati), ferro, zinco o altri micronutrienti?',
+
+  // Dietologo
+  metabolic_condition:
+    'Hai patologie metaboliche attive (diabete, dislipidemia, ipertensione, insufficienza renale, celiachia)?',
+  family_history_metabolic:
+    'In famiglia ci sono casi di diabete, obesità grave o malattie cardiovascolari?',
+
+  // Reumatologo
+  joint_pain_location: 'Quali articolazioni sono interessate dal dolore o dal gonfiore?',
+  joint_stiffness_duration:
+    'Al mattino, per quanto tempo le articolazioni sono rigide prima di sciogliersi?',
+  autoimmune_markers:
+    'Hai eseguito esami specifici come fattore reumatoide (FR), anti-CCP, ANA, VES o PCR?',
+  family_history_autoimmune:
+    'In famiglia ci sono casi di artrite reumatoide, lupus o altre malattie autoimmuni?',
+
+  // Psichiatra
+  psychiatric_history:
+    'Hai già ricevuto diagnosi o trattamenti psichiatrici in passato (farmaci, ricoveri, percorsi specialistici)?',
+  family_history_mental:
+    'In famiglia ci sono casi di disturbi psichiatrici (depressione, bipolare, schizofrenia)?',
+  substance_use: 'Consumi alcol, sostanze o farmaci al di fuori delle prescrizioni mediche?',
+
   // Psicologo
   relational_context:
     'Come descriveresti la qualità delle tue relazioni principali (partner, famiglia, amici)?',
@@ -312,6 +369,28 @@ const AGENT_FIELD_OVERRIDES: Record<string, Record<string, string>> = {
     complaint: 'Qual è il motivo principale della tua richiesta oggi?',
     symptom_duration: 'Da quanto tempo sono presenti questi sintomi?',
   },
+  'biologo-nutrizionista': {
+    goal: 'Qual è il tuo obiettivo nutrizionale-funzionale principale (performance, longevità, microbiota, anti-infiammazione)?',
+    allergy:
+      'Hai allergie alimentari certificate o intolleranze documentate da escludere nella pianificazione?',
+  },
+  dietologo: {
+    goal: 'Qual è il tuo obiettivo nutrizionale medico principale (perdita di peso, gestione del diabete, dislipidemia, altra patologia)?',
+    medications:
+      'Stai assumendo farmaci che possono interagire con la dieta (warfarin, metformina, diuretici, cortisonici)?',
+  },
+  reumatologo: {
+    symptom_duration: 'Da quanto tempo hai questi dolori o gonfiori articolari?',
+    medications: 'Stai assumendo farmaci per le articolazioni (FANS, cortisone, MTX, biologici)?',
+  },
+  psichiatra: {
+    complaint:
+      'Cosa ti ha portato a cercare supporto psichiatrico? Descrivi il problema principale.',
+    symptom_duration:
+      'Da quanto tempo sono presenti questi sintomi e come si sono evoluti nel tempo?',
+    distress_intensity:
+      'Su una scala da 1 a 10, quanto stanno compromettendo la tua vita quotidiana (lavoro, relazioni, cura di sé)?',
+  },
   'career-coach': {
     goal: 'Qual è il tuo obiettivo professionale a lungo termine?',
   },
@@ -360,6 +439,21 @@ export const FIELD_PRIMARY_OWNER: Record<string, string> = {
   // Pain — fisioterapista owns pain assessment
   pain_location: 'fisioterapista',
   pain_intensity: 'fisioterapista',
+
+  // Rheumatology — reumatologo owns autoimmune/joint data
+  joint_pain_location: 'reumatologo',
+  joint_stiffness_duration: 'reumatologo',
+  autoimmune_markers: 'reumatologo',
+
+  // Psychiatry — psichiatra owns psychiatric history and mental meds
+  psychiatric_history: 'psichiatra',
+  substance_use: 'psichiatra',
+
+  // Nutrition specialist — dietologo owns metabolic conditions
+  metabolic_condition: 'dietologo',
+
+  // Supplements — biologo-nutrizionista owns supplement data
+  supplements_current: 'biologo-nutrizionista',
 }
 
 // ---------------------------------------------------------------------------
