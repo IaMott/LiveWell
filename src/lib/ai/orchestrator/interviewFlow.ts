@@ -443,13 +443,13 @@ function buildInterviewQueue(
   const isL1BaselinePending = !activeSpecialist && !hasCompletedBaseline && isEarlyConversation
   // When the user explicitly requests output (plan, diet, schedule…):
   //   - If ALL required specialist fields are already known → force output (maxAskNow = 0)
-  //   - If required fields are still missing → allow exactly 1 targeted question before producing
-  // This prevents the agent from generating a meal plan without knowing about allergies, but
-  // also prevents an infinite gating loop: after 1 question it must produce the output.
-  const hasMissingRequiredFields = (specialistOwnFieldQuestions ?? []).length > 0
+  //   - If required fields are still missing → ask ALL of them (batched, max 5) before producing
+  // The agent must collect every piece of required information before generating the plan;
+  // producing an incomplete plan because some data was skipped is worse than asking up front.
+  const missingRequiredCount = (specialistOwnFieldQuestions ?? []).length
   const maxAskNow = isOutputRequest
-    ? hasMissingRequiredFields
-      ? 1
+    ? missingRequiredCount > 0
+      ? Math.min(missingRequiredCount, 5)
       : 0
     : fromWorkspace.length > 0 || isContinuationMessage || prioritizeActiveProblem
       ? 1
