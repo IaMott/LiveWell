@@ -6,6 +6,29 @@ import { getMissingRequiredFields, getQuestionForField } from './intakeQuestions
 const CONTINUATION_PATTERN =
   /\b(continuiamo|continua|proseguiamo|prosegui|riprendiamo|riprendi|torniamo|torniamo al|ripartiamo|restiamo|parliamo ancora)\b/i
 
+// ---------------------------------------------------------------------------
+// Fase 3 — Semantic associations for cross-conversation dedup
+// ---------------------------------------------------------------------------
+const SEMANTIC_ASSOCIATIONS: Record<string, string[]> = {
+  obiettivo: [
+    'dimagrire',
+    'perdere peso',
+    'mettere massa',
+    'tonificare',
+    'migliorare',
+    'ingrassare',
+    'definizione',
+  ],
+  allergie: ['allergico', 'intollerante', 'non posso mangiare', 'mi fa male'],
+  farmaci: ['prendo', 'assumo', 'terapia', 'prescrizione'],
+  peso: ['peso', 'chili', 'kg'],
+  altezza: ['alto', 'altezza', 'cm'],
+  stress: ['stressato', 'ansioso', 'ansia', 'nervoso', 'agitato'],
+  sonno: ['dormo', 'insonnia', 'risvegli', 'dormire', 'ore di sonno'],
+  allenamento: ['alleno', 'palestra', 'corsa', 'nuoto', 'sport', 'attività fisica'],
+  infortunio: ['infortunio', 'dolore', 'male', 'operazione', 'intervento'],
+}
+
 /**
  * Detect when the user is *demanding output* (a plan, a schedule, a recipe…)
  * rather than providing more data. When this fires, gating questions are
@@ -161,13 +184,17 @@ function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string)
   // This reduces the 6+ turn onboarding to 2-3 turns max.
   const missing: string[] = []
 
+  // Fase 3: Also check DB attributes for baseline fields so we don't re-ask
+  // questions already answered in a previous conversation.
+  const personalAttrs = attrs['personal'] as Record<string, { value?: unknown }> | undefined
+
   // Step 1 — Nome (solo se non viene dall'account)
-  if (!personal.name) {
+  if (!personal.name && personalAttrs?.['name']?.value == null) {
     missing.push('Come ti chiami?')
   }
 
   // Step 2 — Sesso
-  if (!personal.gender) {
+  if (!personal.gender && personalAttrs?.['gender']?.value == null) {
     const nameRef = personal.name ?? ''
     missing.push(
       `${nameRef ? `${nameRef}, q` : 'Q'}ual è il tuo sesso biologico? (M / F / Preferisco non specificare)`,
@@ -175,17 +202,17 @@ function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string)
   }
 
   // Step 3 — Età
-  if (!personal.birthDate) {
+  if (!personal.birthDate && personalAttrs?.['birthDate']?.value == null) {
     missing.push(`Quanti anni hai?`)
   }
 
   // Step 4 — Altezza
-  if (!personal.height) {
+  if (!personal.height && personalAttrs?.['height']?.value == null) {
     missing.push('Qual è la tua altezza in cm?')
   }
 
   // Step 5 — Peso
-  if (!personal.weight) {
+  if (!personal.weight && personalAttrs?.['weight']?.value == null) {
     missing.push('Qual è il tuo peso attuale in kg?')
   }
 
@@ -328,20 +355,49 @@ function buildQuestionPlan(
   return plan
 }
 
+// ---------------------------------------------------------------------------
+// Fase 3 — Check if a question maps to a DB field already filled
+// ---------------------------------------------------------------------------
+function isFieldAlreadyInDB(question: string, contextPack: ContextPack): boolean {
+  const QUESTION_TO_FIELD: Array<{ pattern: RegExp; domain: string; key: string }> = [
+    { pattern: /obiettivo/i, domain: 'nutrition', key: 'goal' },
+    { pattern: /obiettivo/i, domain: 'general', key: 'goal' },
+    { pattern: /allergi|intolleran/i, domain: 'nutrition', key: 'allergy' },
+    { pattern: /peso/i, domain: 'personal', key: 'weight' },
+    { pattern: /altezza/i, domain: 'personal', key: 'height' },
+    { pattern: /stress/i, domain: 'mindfulness', key: 'stress_level' },
+    { pattern: /sonno|dormi/i, domain: 'mindfulness', key: 'sleep_hours' },
+    { pattern: /allenament|frequenz/i, domain: 'training', key: 'training_frequency_per_week' },
+    { pattern: /infortun|limitazion/i, domain: 'training', key: 'injury' },
+    { pattern: /diagnos/i, domain: 'health', key: 'diagnosis' },
+    { pattern: /farmac|medicinale/i, domain: 'health', key: 'medications' },
+    { pattern: /sesso|genere/i, domain: 'personal', key: 'gender' },
+    { pattern: /nascita|anni|età/i, domain: 'personal', key: 'birthDate' },
+  ]
+
+  const attrs = contextPack.user.attributes ?? {}
+  for (const { pattern, domain, key } of QUESTION_TO_FIELD) {
+    if (!pattern.test(question)) continue
+    const bucket = (attrs as Record<string, Record<string, { value?: unknown }>>)[domain]
+    if (bucket?.[key]?.value != null) return true
+  }
+  return false
+}
+
 /**
  * Returns true if the given question was already asked AND the user replied
  * within the most recent N assistant→user message pairs in the conversation.
  * This prevents the orchestrator from repeating a question the user has
  * already answered in the same session.
+ *
+ * Fase 3: Also scans crossConversationMessages and uses semantic associations
+ * to catch cases where the user answered with different words.
  */
 function wasAlreadyAnsweredInHistory(
   question: string,
   contextPack: ContextPack,
   windowPairs = 6,
 ): boolean {
-  const messages = contextPack.history.recentMessages
-  if (messages.length < 2) return false
-
   const questionTokens = new Set(
     question
       .toLowerCase()
@@ -350,30 +406,61 @@ function wasAlreadyAnsweredInHistory(
       .filter((t) => t.length > 4),
   )
 
-  // Walk the history in reverse looking for assistant messages that contain
-  // enough tokens from the question (semantic overlap > 60%).
-  let pairsChecked = 0
-  for (let i = messages.length - 1; i >= 0 && pairsChecked < windowPairs; i--) {
-    const msg = messages[i]
-    if (msg.role !== 'assistant') continue
-    const assistantTokens = new Set(
-      msg.content
-        .toLowerCase()
-        .replace(/[?.,!]/g, '')
-        .split(/\s+/)
-        .filter((t) => t.length > 4),
-    )
-    const intersection = [...questionTokens].filter((t) => assistantTokens.has(t)).length
-    const union = new Set([...questionTokens, ...assistantTokens]).size
-    const overlap = union > 0 ? intersection / questionTokens.size : 0
+  // --- Helper: check token overlap between question and an assistant message ---
+  const checkOverlapInMessages = (
+    msgs: Array<{ role: 'user' | 'assistant'; content: string }>,
+    maxPairs: number,
+  ): boolean => {
+    let pairsChecked = 0
+    for (let i = msgs.length - 1; i >= 0 && pairsChecked < maxPairs; i--) {
+      const msg = msgs[i]
+      if (msg.role !== 'assistant') continue
+      const assistantTokens = new Set(
+        msg.content
+          .toLowerCase()
+          .replace(/[?.,!]/g, '')
+          .split(/\s+/)
+          .filter((t) => t.length > 4),
+      )
+      const intersection = [...questionTokens].filter((t) => assistantTokens.has(t)).length
+      const overlap = questionTokens.size > 0 ? intersection / questionTokens.size : 0
 
-    if (overlap >= 0.55) {
-      // Found the assistant asking something similar; check that the NEXT message
-      // is from the user (meaning they replied).
-      if (i + 1 < messages.length && messages[i + 1].role === 'user') return true
+      if (overlap >= 0.55) {
+        // Found the assistant asking something similar; check that the NEXT message
+        // is from the user (meaning they replied).
+        if (i + 1 < msgs.length && msgs[i + 1].role === 'user') return true
+      }
+      pairsChecked++
     }
-    pairsChecked++
+    return false
   }
+
+  // 1. Check current conversation history
+  const messages = contextPack.history.recentMessages
+  if (messages.length >= 2 && checkOverlapInMessages(messages, windowPairs)) return true
+
+  // 2. Fase 3: Check crossConversationMessages (messages from OTHER chats)
+  const crossMsgs = contextPack.history.crossConversationMessages
+  if (crossMsgs && crossMsgs.length >= 2 && checkOverlapInMessages(crossMsgs, windowPairs))
+    return true
+
+  // 3. Fase 3: Semantic association check — if any user message (current or cross)
+  //    contains keywords semantically associated with the question topic, treat as answered.
+  const questionLower = question.toLowerCase()
+  const allUserMessages = [
+    ...messages.filter((m) => m.role === 'user').map((m) => m.content.toLowerCase()),
+    ...(crossMsgs ?? []).filter((m) => m.role === 'user').map((m) => m.content.toLowerCase()),
+  ]
+  const allUserText = allUserMessages.join(' ')
+
+  for (const [topic, synonyms] of Object.entries(SEMANTIC_ASSOCIATIONS)) {
+    // Check if the question is about this topic
+    if (!questionLower.includes(topic)) continue
+    // Check if any user message contains a semantic synonym (= already answered)
+    const hasSemanticMatch = synonyms.some((syn) => allUserText.includes(syn))
+    if (hasSemanticMatch) return true
+  }
+
   return false
 }
 
@@ -503,9 +590,13 @@ function buildInterviewQueue(
   const ownFieldQsRaw = prioritizeActiveProblem
     ? (specialistOwnFieldQuestions ?? []).filter((question) => isFocusedFollowUpQuestion(question))
     : (specialistOwnFieldQuestions ?? [])
-  const ownFieldQs = ownFieldQsRaw.filter((q) => !wasAlreadyAnsweredInHistory(q, contextPack))
+  const ownFieldQs = ownFieldQsRaw.filter(
+    (q) => !wasAlreadyAnsweredInHistory(q, contextPack) && !isFieldAlreadyInDB(q, contextPack),
+  )
   const fromPlanRaw = buildQuestionPlan(domain, contextPack, userMessage, prioritizeActiveProblem)
-  const fromPlan = fromPlanRaw.filter((q) => !wasAlreadyAnsweredInHistory(q, contextPack))
+  const fromPlan = fromPlanRaw.filter(
+    (q) => !wasAlreadyAnsweredInHistory(q, contextPack) && !isFieldAlreadyInDB(q, contextPack),
+  )
   // Merge: missing required-field questions take precedence over generic plan questions
   const ownFieldSet = new Set(ownFieldQs.map((q) => q.trim().toLowerCase()))
   const combinedL3 = [

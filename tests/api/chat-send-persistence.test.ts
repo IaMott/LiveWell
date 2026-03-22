@@ -403,7 +403,7 @@ describe('/api/chat/send persistence integration', () => {
     expect(body).toContain('"type":"message.complete"')
   })
 
-  it('does not emit immediate thinking events for ambiguous multi-domain messages before protocol evidence exists', async () => {
+  it('emits immediate thinking events for multi-domain messages using accurate routing', async () => {
     vi.resetModules()
     vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
       orchestrate: vi.fn(async () => ({
@@ -431,8 +431,8 @@ describe('/api/chat/send persistence integration', () => {
     const body = await res.text()
 
     expect(res.status).toBe(200)
-    expect(body).not.toContain('"Analisi del messaggio in corso"')
-    expect(body).not.toContain('"type":"agent.thinking"')
+    // With accurate routing, multi-domain messages now correctly show thinking events
+    expect(body).toContain('"type":"agent.thinking"')
     expect(body).toContain('"type":"message.complete"')
   })
 

@@ -332,19 +332,122 @@ function AttributeRow({
   )
 }
 
+type AttrHistoryEntry = { value: unknown; unit: string | null; recordedAt: Date }
+
+function AttributeRowWithHistory({
+  label,
+  history,
+}: {
+  label: string
+  history: AttrHistoryEntry[]
+}) {
+  if (history.length === 0) return null
+  const [latest, ...older] = history
+
+  return (
+    <div
+      style={{
+        padding: '0.5rem 0',
+        borderBottom: '1px solid var(--color-separator, #F2F2F7)',
+      }}
+    >
+      {/* Current (most recent) value */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: '1rem',
+        }}
+      >
+        <span
+          style={{
+            fontSize: '0.8125rem',
+            color: 'var(--color-text-secondary, #8E8E93)',
+            flexShrink: 0,
+            maxWidth: '40%',
+          }}
+        >
+          {label}
+        </span>
+        <div style={{ textAlign: 'right', minWidth: 0 }}>
+          <span
+            style={{
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              color: 'var(--color-text-primary, #1C1C1E)',
+              wordBreak: 'break-word',
+            }}
+          >
+            {formatValue(latest.value)}
+            {latest.unit ? ` ${latest.unit}` : ''}
+          </span>
+          <span
+            style={{
+              fontSize: '0.6875rem',
+              color: 'var(--color-text-secondary, #8E8E93)',
+              marginLeft: '0.375rem',
+            }}
+          >
+            — {formatDate(latest.recordedAt)}
+          </span>
+        </div>
+      </div>
+
+      {/* Older values */}
+      {older.length > 0 && (
+        <div style={{ marginTop: '0.25rem', paddingLeft: '0.75rem' }}>
+          {older.map((entry, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'baseline',
+                gap: '0.375rem',
+                padding: '0.125rem 0',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--color-text-secondary, #8E8E93)',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {formatValue(entry.value)}
+                {entry.unit ? ` ${entry.unit}` : ''}
+              </span>
+              <span
+                style={{
+                  fontSize: '0.6875rem',
+                  color: '#AEAEB2',
+                  flexShrink: 0,
+                }}
+              >
+                — {formatDate(entry.recordedAt)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DomainCard({
   domain,
-  attrs,
+  attrsHistory,
 }: {
   domain: string
-  attrs: Record<string, { value: unknown; unit: string | null }>
+  attrsHistory: Record<string, AttrHistoryEntry[]>
 }) {
   const config = DOMAIN_CONFIG[domain] ?? {
     label: labelForKey(domain),
     emoji: '📌',
     color: '#8E8E93',
   }
-  const entries = Object.entries(attrs)
+  const entries = Object.entries(attrsHistory)
   if (entries.length === 0) return null
 
   return (
@@ -391,10 +494,10 @@ function DomainCard({
         </span>
       </div>
 
-      {/* Attribute rows */}
+      {/* Attribute rows with history */}
       <div style={{ padding: '0.25rem 1rem' }}>
-        {entries.map(([key, attr]) => (
-          <AttributeRow key={key} label={labelForKey(key)} value={attr.value} unit={attr.unit} />
+        {entries.map(([key, history]) => (
+          <AttributeRowWithHistory key={key} label={labelForKey(key)} history={history} />
         ))}
       </div>
     </div>
@@ -550,7 +653,7 @@ function EventCard({ event }: { event: ClinicalEvent }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function CartellaSection({ data }: Props) {
-  const { clinicalEvents, attributesByDomain, profile, user } = data
+  const { clinicalEvents, attributesByDomain, attributesByDomainHistory, profile, user } = data
 
   // Calcola completezza dai domini chiave (con key reali)
   const completeness = DOMAIN_COMPLETENESS.map(({ domain, label, keys, color }) => {
@@ -559,6 +662,9 @@ export function CartellaSection({ data }: Props) {
     const pct = Math.round((filled / keys.length) * 100)
     return { domain, label, pct, color }
   })
+
+  // Use history data for display, fall back to latest-only if unavailable
+  const historyData = attributesByDomainHistory ?? null
 
   // Domini con dati da mostrare (ordine: personal → health → nutrition → training → mindfulness → rest)
   const DOMAIN_ORDER = [
@@ -571,19 +677,20 @@ export function CartellaSection({ data }: Props) {
     'career',
     'financial',
   ]
+  const domainSource = historyData ?? attributesByDomain
   const domainsWithData = DOMAIN_ORDER.filter(
-    (d) => attributesByDomain?.[d] && Object.keys(attributesByDomain[d]).length > 0,
+    (d) => domainSource?.[d] && Object.keys(domainSource[d]).length > 0,
   )
   // Add any domains not in the predefined order
-  if (attributesByDomain) {
-    for (const d of Object.keys(attributesByDomain)) {
-      if (!DOMAIN_ORDER.includes(d) && Object.keys(attributesByDomain[d]).length > 0) {
+  if (domainSource) {
+    for (const d of Object.keys(domainSource)) {
+      if (!DOMAIN_ORDER.includes(d) && Object.keys(domainSource[d]).length > 0) {
         domainsWithData.push(d)
       }
     }
   }
   const totalAttributes = domainsWithData.reduce(
-    (sum, d) => sum + Object.keys(attributesByDomain?.[d] ?? {}).length,
+    (sum, d) => sum + Object.keys(domainSource?.[d] ?? {}).length,
     0,
   )
 
@@ -693,9 +800,22 @@ export function CartellaSection({ data }: Props) {
         <>
           <h3 style={sectionHeaderStyle}>Dati raccolti ({totalAttributes})</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {domainsWithData.map((domain) => (
-              <DomainCard key={domain} domain={domain} attrs={attributesByDomain![domain]} />
-            ))}
+            {domainsWithData.map((domain) => {
+              if (historyData?.[domain]) {
+                return (
+                  <DomainCard key={domain} domain={domain} attrsHistory={historyData[domain]} />
+                )
+              }
+              // Fallback: wrap latest-only data as single-entry history
+              const latestAttrs = attributesByDomain?.[domain] ?? {}
+              const fallbackHistory: Record<string, AttrHistoryEntry[]> = {}
+              for (const [key, attr] of Object.entries(latestAttrs)) {
+                fallbackHistory[key] = [
+                  { value: attr.value, unit: attr.unit, recordedAt: new Date() },
+                ]
+              }
+              return <DomainCard key={domain} domain={domain} attrsHistory={fallbackHistory} />
+            })}
           </div>
         </>
       ) : (

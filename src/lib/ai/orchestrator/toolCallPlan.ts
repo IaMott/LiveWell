@@ -60,9 +60,17 @@ export function planToolCalls(input: ToolCallPlanInput): ToolCallPlan {
     activeSpecialist: input.activeSpecialist,
   })
   const mergedToolCalls = [...input.consensusToolCalls, ...fallbackToolCalls]
+  // Semantic dedup: for user.setAttribute, match on domain+key+value (ignore notes, recordedAt)
+  const semanticKey = (c: ToolCall): string => {
+    if (c.name === 'user.setAttribute' && c.args) {
+      const a = c.args as Record<string, unknown>
+      return `${c.name}:${a.domain}:${a.key}:${JSON.stringify(a.value)}`
+    }
+    return `${c.name}:${JSON.stringify(c.args)}`
+  }
   const dedupedToolCalls = mergedToolCalls.filter((c, idx, arr) => {
-    const key = `${c.name}:${JSON.stringify(c.args)}`
-    return arr.findIndex((x) => `${x.name}:${JSON.stringify(x.args)}` === key) === idx
+    const k = semanticKey(c)
+    return arr.findIndex((x) => semanticKey(x) === k) === idx
   })
   const filteredByTrace = filterNonRetriableToolCallsFromRecentTrace(
     dedupedToolCalls,

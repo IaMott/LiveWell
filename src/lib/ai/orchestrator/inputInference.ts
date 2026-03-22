@@ -160,6 +160,7 @@ export function inferAttributeToolCallsFromMessage(
 ): ToolCall[] {
   const calls: ToolCall[] = []
   const lower = message.toLowerCase()
+  const now = new Date().toISOString()
 
   const effectiveDomain =
     ctx.activeSpecialist?.domains?.includes(ctx.domainHint) ||
@@ -185,6 +186,7 @@ export function inferAttributeToolCallsFromMessage(
           key: 'birthDate',
           value: dobIso,
           notes: 'Estratto automaticamente da messaggio naturale utente',
+          recordedAt: now,
         },
       })
     }
@@ -208,7 +210,7 @@ export function inferAttributeToolCallsFromMessage(
           calls.push({
             id: crypto.randomUUID(),
             name: 'user.setAttribute',
-            args: { domain: 'personal', key: 'age', value: age, unit: 'years' },
+            args: { domain: 'personal', key: 'age', value: age, unit: 'years', recordedAt: now },
           })
           ageExtracted = true
           break
@@ -226,15 +228,28 @@ export function inferAttributeToolCallsFromMessage(
         calls.push({
           id: crypto.randomUUID(),
           name: 'user.setAttribute',
-          args: { domain: 'personal', key: 'age', value: age, unit: 'years' },
+          args: { domain: 'personal', key: 'age', value: age, unit: 'years', recordedAt: now },
         })
       }
     }
   }
 
+  // Helper: create a setAttribute tool call with timestamp
+  const attr = (domain: string, key: string, value: unknown, unit?: string) => {
+    calls.push({
+      id: crypto.randomUUID(),
+      name: 'user.setAttribute',
+      args: { domain, key, value, ...(unit ? { unit } : {}), recordedAt: now },
+    })
+  }
+
+  // ── Allergies & Intolerances ──────────────────────────────────────────────
   const allergyPatterns = [
-    /allergic[oa]\s+a(?:l|ll|gli|lle|ll')?\s*([a-zàèéìòù'’\s]+)/i,
-    /allergia\s+a(?:l|ll|gli|lle|ll')?\s*([a-zàèéìòù'’\s]+)/i,
+    /allergic[oa]\s+a(?:l|ll|gli|lle|ll')?\s*([a-zàèéìòù''\s]+)/i,
+    /allergia\s+a(?:l|ll|gli|lle|ll')?\s*([a-zàèéìòù''\s]+)/i,
+    /intollerante\s+a(?:l|ll|gli|lle|ll')?\s*([a-zàèéìòù''\s]+)/i,
+    /intolleranza\s+a(?:l|ll|gli|lle|ll')?\s*([a-zàèéìòù''\s]+)/i,
+    /non\s+posso\s+mangiare\s+(?:il|la|i|le|gli|l')?\s*([a-zàèéìòù''\s]+)/i,
   ]
   for (const re of allergyPatterns) {
     const m = lower.match(re)
@@ -245,222 +260,241 @@ export function inferAttributeToolCallsFromMessage(
       .replace(/[.,;!?]+$/g, '')
       .replace(/^(al|allo|alla|ai|agli|alle)\s+/i, '')
     if (allergen.length >= 2) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: {
-          domain: 'nutrition',
-          key: 'allergy',
-          value: allergen,
-        },
-      })
+      attr('nutrition', 'allergy', allergen)
       break
     }
   }
 
-  const freqMatch = lower.match(/alleno\s+(\d{1,2})\s+volt[ea]\s+a\s+settimana/i)
+  // ── Training frequency ────────────────────────────────────────────────────
+  const freqMatch = lower.match(
+    /(?:mi\s+)?alleno\s+(\d{1,2})\s+volt[ea]\s+(?:a|alla|per)\s+settimana/i,
+  )
   if (freqMatch?.[1]) {
-    calls.push({
-      id: crypto.randomUUID(),
-      name: 'user.setAttribute',
-      args: {
-        domain: 'training',
-        key: 'training_frequency_per_week',
-        value: Number(freqMatch[1]),
-        unit: 'sessions/week',
-      },
-    })
+    attr('training', 'training_frequency_per_week', Number(freqMatch[1]), 'sessions/week')
   }
 
+  // ── Medical conditions (broad pattern) ────────────────────────────────────
+  const conditionPatterns = [
+    /\b(?:soffro\s+di|ho\s+(?:la|il|l'|le|i|gli)?)\s*(gastrite|reflusso|diabete|asma|ipertensione|ipotensione|anemia|artrite|artrosi|fibromialgia|celiachia|colite|emicrania|epilessia|osteoporosi|tiroidite|ipotiroidismo|ipertiroidismo|endometriosi|psoriasi|eczema|dermatite|ernia|scoliosi|lordosi|cifosi)\b/i,
+    /\b(?:mi\s+(?:è\s+stata?\s+)?diagnosticat[oa])\s+(?:la|il|l'|un|una|uno)?\s*([a-zàèéìòù\s]{3,40})/i,
+  ]
+  for (const re of conditionPatterns) {
+    const m = lower.match(re)
+    if (m?.[1]) {
+      const condition = m[1].trim().replace(/[.,;!?]+$/g, '')
+      if (condition.length >= 3) {
+        attr('health', 'diagnosis', condition)
+        break
+      }
+    }
+  }
+
+  // ── Hypertension (specific) ───────────────────────────────────────────────
   if (lower.includes('ipertensione')) {
-    calls.push({
-      id: crypto.randomUUID(),
-      name: 'user.setAttribute',
-      args: {
-        domain: 'health',
-        key: 'hypertension',
-        value: true,
-      },
-    })
-  }
-  const yearMatch = lower.match(/\b(19\d{2}|20\d{2})\b/)
-  if (lower.includes('ipertensione') && yearMatch?.[1]) {
-    calls.push({
-      id: crypto.randomUUID(),
-      name: 'user.setAttribute',
-      args: {
-        domain: 'health',
-        key: 'hypertension_diagnosed_year',
-        value: Number(yearMatch[1]),
-      },
-    })
+    attr('health', 'hypertension', true)
+    const yearMatch = lower.match(/\b(19\d{2}|20\d{2})\b/)
+    if (yearMatch?.[1]) {
+      attr('health', 'hypertension_diagnosed_year', Number(yearMatch[1]))
+    }
   }
 
+  // ── Medications ───────────────────────────────────────────────────────────
+  const medPatterns = [
+    /\b(?:prendo|assumo|sto\s+prendendo|mi\s+hanno\s+prescritto)\s+(?:il|la|l'|le|i|gli|un|una|lo)?\s*([a-zàèéìòù\s]{3,50})/i,
+  ]
+  for (const re of medPatterns) {
+    const m = lower.match(re)
+    if (m?.[1]) {
+      const med = m[1]
+        .trim()
+        .replace(/[.,;!?]+$/g, '')
+        .replace(/\s+(da|per|ogni|al)\s+.*$/, '')
+      if (med.length >= 3 && !/\b(mattina|sera|giorno|colazione|pranzo|cena)\b/.test(med)) {
+        attr('health', 'medications', med)
+        break
+      }
+    }
+  }
+
+  // ── Symptoms (broad) ──────────────────────────────────────────────────────
+  const symptomPatterns = [
+    /\b(?:ho|avverto|sento)\s+(?:spesso\s+)?(?:un|una|dei|delle)?\s*(nausea|vertigini|tachicardia|palpitazioni|bruciore|gonfiore|prurito|formicolio|stanchezza|affaticamento|capogiri|crampi|tremori|sudorazione)\b/i,
+  ]
+  for (const re of symptomPatterns) {
+    const m = lower.match(re)
+    if (m?.[1]) {
+      attr('health', 'symptoms', m[1].trim())
+      break
+    }
+  }
+
+  // ── Food triggers ─────────────────────────────────────────────────────────
+  const foodTriggerPatterns = [
+    /\b(?:mi\s+(?:peggiora|fa\s+male|dà\s+fastidio|provoca)\s+(?:il|la|l'|i|le|lo)?\s*)([a-zàèéìòù\s]{3,40})/i,
+    /\b([a-zàèéìòù\s]{3,30})\s+(?:mi\s+(?:peggiora|fa\s+male|dà\s+fastidio|provoca))\b/i,
+  ]
+  for (const re of foodTriggerPatterns) {
+    const m = lower.match(re)
+    if (m?.[1]) {
+      const trigger = m[1].trim().replace(/[.,;!?]+$/g, '')
+      if (trigger.length >= 3 && !/\b(tutto|niente|nulla|sempre|mai)\b/.test(trigger)) {
+        attr('nutrition', 'food_triggers', trigger)
+        break
+      }
+    }
+  }
+
+  // ── Goals / Objectives (expanded) ─────────────────────────────────────────
+  const isQuestionLike =
+    lower.includes('?') || lower.startsWith('qual ') || lower.startsWith('quale ')
+  if (!isQuestionLike) {
+    const goalPatterns = [
+      /\b(?:voglio|vorrei|desidero|mi\s+piacerebbe)\s+(dimagrire|perdere\s+peso|mettere\s+massa|tonificare|ingrassare|aumentare\s+di\s+peso|migliorare\s+la\s+forma)/i,
+      /\b(?:il\s+mio\s+)?obiettivo\s*(?:è|e|:)?\s*(.{4,80}?)(?:[.,;!]|$)/i,
+      /\b(?:voglio|vorrei)\s+(?:impostare|creare|avere|seguire)\s+(?:un|una|il|la)\s+(?:piano|dieta|programma|scheda)\s+(?:per\s+)?(.{3,60}?)(?:[.,;!]|$)/i,
+    ]
+    for (const re of goalPatterns) {
+      const m = lower.match(re) ?? message.match(re)
+      if (m?.[1]) {
+        const goalText = m[1]
+          .trim()
+          .replace(/[.,;!?]+$/g, '')
+          .slice(0, 240)
+        if (goalText.length >= 3) {
+          attr(effectiveDomain === 'nutrition' ? 'nutrition' : 'general', 'goal', goalText)
+          break
+        }
+      }
+    }
+  }
+  // Fallback for inspiration domain goals
+  if (
+    !isQuestionLike &&
+    !calls.some((c) => (c.args as Record<string, unknown>)['key'] === 'goal') &&
+    (effectiveDomain === 'inspiration' || lower.includes('podcast') || lower.includes('progetto'))
+  ) {
+    const goalText =
+      message.match(/obiettivo\s*(?:è|e)?\s*(.+)$/i)?.[1]?.trim() ??
+      message.match(/(?:lanciare|avviare)\s+(.+)$/i)?.[0]?.trim()
+    if (goalText && goalText.length >= 4) {
+      attr('general', 'goal', goalText.slice(0, 240))
+    }
+  }
+
+  // ── Sport / activity ──────────────────────────────────────────────────────
+  const sportPatterns = [
+    /\b(?:faccio|pratico|gioco\s+a)\s+([a-zàèéìòù\s]{3,30})(?:\s+da|\s+\d|\b)/i,
+  ]
+  for (const re of sportPatterns) {
+    const m = lower.match(re)
+    if (m?.[1]) {
+      const sport = m[1].trim().replace(/[.,;!?]+$/g, '')
+      // Exclude very generic words
+      if (
+        sport.length >= 3 &&
+        !/\b(sport|attività|esercizio|niente|nulla|poco|tanto|molto)\b/.test(sport)
+      ) {
+        attr('training', 'sport', sport)
+        break
+      }
+    }
+  }
+
+  // ── Stress & Sleep ────────────────────────────────────────────────────────
   const stressMatch = lower.match(/stress\s+(\d{1,2})\s*(?:su|\/)\s*10/i)
   if (stressMatch?.[1]) {
-    calls.push({
-      id: crypto.randomUUID(),
-      name: 'user.setAttribute',
-      args: {
-        domain: 'mindfulness',
-        key: 'stress_level',
-        value: Number(stressMatch[1]),
-        unit: '/10',
-      },
-    })
+    attr('mindfulness', 'stress_level', Number(stressMatch[1]), '/10')
   }
-  const sleepMatch = lower.match(/dormo\s+(\d{1,2})\s+ore/i)
-  if (sleepMatch?.[1]) {
-    calls.push({
-      id: crypto.randomUUID(),
-      name: 'user.setAttribute',
-      args: {
-        domain: 'mindfulness',
-        key: 'sleep_hours',
-        value: Number(sleepMatch[1]),
-        unit: 'hours',
-      },
-    })
+  // Broader stress signal
+  if (
+    !stressMatch &&
+    /\b(?:sono\s+(?:molto\s+)?stressat[oa]|ho\s+(?:molto\s+)?stress|sono\s+esaurit[oa]|ho\s+il\s+burnout|burnout)\b/.test(
+      lower,
+    )
+  ) {
+    attr('mindfulness', 'stress_level', 'alto')
   }
 
-  // Weight — "peso 80 kg", "peso 80kg", "80 chili", "80 kg", bare "89 kg"
-  // Stored in personal domain (matches readPersonalSnapshot)
+  const sleepMatch = lower.match(/dormo\s+(?:circa\s+)?(\d{1,2})\s+ore/i)
+  if (sleepMatch?.[1]) {
+    attr('mindfulness', 'sleep_hours', Number(sleepMatch[1]), 'hours')
+  }
+
+  // ── Weight ────────────────────────────────────────────────────────────────
   const weightMatch = lower.match(
     /(?:peso|peso\s+circa|sono\s+(?:sui|intorno\s+ai|a\s+circa))\s*(\d{2,3})(?:[.,]\d)?\s*(?:kg|chili|chilo|kili|k(?:g)?)?(?:\b|$)/i,
   )
   if (weightMatch?.[1]) {
     const w = Number(weightMatch[1])
     if (w >= 30 && w <= 300) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: { domain: 'personal', key: 'weight', value: w, unit: 'kg' },
-      })
+      attr('personal', 'weight', w, 'kg')
     }
   }
-  // Bare "X kg" / "X chili" — common short answer to "qual è il tuo peso?"
-  // Only if weight not already captured from above pattern.
   if (!weightMatch) {
     const bareWeightKg = lower.match(/\b(\d{2,3})(?:[.,]\d)?\s*(?:kg|chili|chilo|kili)\b/i)
     if (bareWeightKg?.[1]) {
       const w = Number(bareWeightKg[1])
       if (w >= 30 && w <= 300) {
-        calls.push({
-          id: crypto.randomUUID(),
-          name: 'user.setAttribute',
-          args: { domain: 'personal', key: 'weight', value: w, unit: 'kg' },
-        })
+        attr('personal', 'weight', w, 'kg')
       }
     }
   }
 
-  // Height — "sono alto 180", "altezza 180cm", "alto 1,80m", "1.75m", "175 cm", bare "189 cm"
-  // Stored in personal domain (matches readPersonalSnapshot)
+  // ── Height ────────────────────────────────────────────────────────────────
   const heightCmMatch = lower.match(/(?:sono\s+alto|altezza|alt\.|alto)\s+(\d{2,3})\s*cm/i)
   if (heightCmMatch?.[1]) {
     const h = Number(heightCmMatch[1])
-    if (h >= 100 && h <= 250) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: { domain: 'personal', key: 'height', value: h, unit: 'cm' },
-      })
-    }
+    if (h >= 100 && h <= 250) attr('personal', 'height', h, 'cm')
   }
   const heightMtMatch = lower.match(/(?:sono\s+alto|altezza|alto)\s+1[,.](\d{1,2})\s*m?/i)
   if (!heightCmMatch && heightMtMatch?.[1]) {
     const decimals = heightMtMatch[1].padEnd(2, '0').slice(0, 2)
     const h = Math.round(100 + Number(decimals))
-    if (h >= 100 && h <= 250) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: { domain: 'personal', key: 'height', value: h, unit: 'cm' },
-      })
-    }
+    if (h >= 100 && h <= 250) attr('personal', 'height', h, 'cm')
   }
-  // bare height like "sono alto 180"
   const heightBareMatch = lower.match(/sono\s+(?:alto|alta)\s+(\d{3})\b/i)
   if (!heightCmMatch && !heightMtMatch && heightBareMatch?.[1]) {
     const h = Number(heightBareMatch[1])
-    if (h >= 100 && h <= 250) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: { domain: 'personal', key: 'height', value: h, unit: 'cm' },
-      })
-    }
+    if (h >= 100 && h <= 250) attr('personal', 'height', h, 'cm')
   }
-  // Bare "X cm" without prefix — common short answer to "qual è la tua altezza?"
-  // Only if no height already captured. Exclude blood pressure context (e.g. "120/80").
   const heightAlreadyCaptured = !!(heightCmMatch ?? heightMtMatch ?? heightBareMatch)
   if (!heightAlreadyCaptured && !lower.includes('/')) {
     const bareHeightCm = lower.match(/\b(1[0-9]{2}|2[0-4]\d)\s*cm\b/i)
     if (bareHeightCm?.[1]) {
       const h = Number(bareHeightCm[1])
-      if (h >= 100 && h <= 250) {
-        calls.push({
-          id: crypto.randomUUID(),
-          name: 'user.setAttribute',
-          args: { domain: 'personal', key: 'height', value: h, unit: 'cm' },
-        })
-      }
+      if (h >= 100 && h <= 250) attr('personal', 'height', h, 'cm')
     }
   }
 
-  // Blood pressure — "pressione 120/80", "120/80 mmhg"
+  // ── Blood pressure ────────────────────────────────────────────────────────
   const bpMatch = lower.match(/(?:pressione\s+)?(\d{2,3})\s*[\/]\s*(\d{2,3})\s*(?:mmhg)?/i)
   if (bpMatch?.[1] && bpMatch?.[2]) {
     const sys = Number(bpMatch[1])
     const dia = Number(bpMatch[2])
     if (sys >= 60 && sys <= 250 && dia >= 40 && dia <= 150) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: {
-          domain: 'health',
-          key: 'bloodPressure',
-          value: `${sys}/${dia}`,
-          unit: 'mmHg',
-        },
-      })
+      attr('health', 'blood_pressure', `${sys}/${dia}`, 'mmHg')
     }
   }
 
-  // Heart rate — "60 bpm", "frequenza cardiaca 65 bpm"
+  // ── Heart rate ────────────────────────────────────────────────────────────
   const hrMatch = lower.match(/(?:frequenza\s+cardiaca|fc|battiti|bpm[:\s]+)?(\d{2,3})\s*bpm/i)
   if (hrMatch?.[1]) {
     const hr = Number(hrMatch[1])
-    if (hr >= 30 && hr <= 220) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: { domain: 'health', key: 'restingHr', value: hr, unit: 'bpm' },
-      })
-    }
+    if (hr >= 30 && hr <= 220) attr('health', 'restingHr', hr, 'bpm')
   }
 
-  // Smoking status
+  // ── Smoking ───────────────────────────────────────────────────────────────
   if (
     /\b(?:non\s+fumo|non\s+sono\s+fumatore|ex[\s-]?fumator[ei]|ho\s+smesso\s+di\s+fumare)\b/.test(
       lower,
     )
   ) {
-    calls.push({
-      id: crypto.randomUUID(),
-      name: 'user.setAttribute',
-      args: { domain: 'personal', key: 'smokingStatus', value: 'non-smoker' },
-    })
+    attr('personal', 'smokingStatus', 'non-smoker')
   } else if (/\b(?:fumo|sono\s+fumator[ei]|sigarette)\b/.test(lower)) {
-    calls.push({
-      id: crypto.randomUUID(),
-      name: 'user.setAttribute',
-      args: { domain: 'personal', key: 'smokingStatus', value: 'smoker' },
-    })
+    attr('personal', 'smokingStatus', 'smoker')
   }
 
-  // Name — "mi chiamo X", "il mio nome è X", "sono X" (only if single capitalized word, not a verb phrase)
-  // Avoids saving "sono stanco", "sono qui", etc.
+  // ── Name ──────────────────────────────────────────────────────────────────
   const namePatterns = [
     /\bmi\s+chiamo\s+([A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30}(?:\s+[A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30})?)/,
     /\bil\s+mio\s+nome\s+[eè]\s+([A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30}(?:\s+[A-ZÀÈÉÌÒÙ][a-zàèéìòù]{1,30})?)/i,
@@ -470,32 +504,21 @@ export function inferAttributeToolCallsFromMessage(
   for (const re of namePatterns) {
     const m = message.match(re)
     if (m?.[1] && m[1].length >= 2) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: { domain: 'personal', key: 'name', value: m[1].trim() },
-      })
+      attr('personal', 'name', m[1].trim())
       nameFound = true
       break
     }
   }
-  // Bare two-word proper name — direct answer to "Come ti chiami?" (e.g. "Mattia Mottisi")
-  // Requires exactly two capitalized words, each 3+ chars. Avoids accidental matches on
-  // phrases like "Ciao Bene" by rejecting single-word messages.
   if (!nameFound) {
     const bareFullName = message
       .trim()
       .match(/^([A-ZÀÈÉÌÒÙ][a-zàèéìòù]{2,30})\s+([A-ZÀÈÉÌÒÙ][a-zàèéìòù]{2,30})$/)
     if (bareFullName) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: { domain: 'personal', key: 'name', value: `${bareFullName[1]} ${bareFullName[2]}` },
-      })
+      attr('personal', 'name', `${bareFullName[1]} ${bareFullName[2]}`)
     }
   }
 
-  // Gender — "sono un uomo", "M", "maschio", "sono donna", "F", "femmina"
+  // ── Gender ────────────────────────────────────────────────────────────────
   if (!calls.some((c) => (c.args as Record<string, unknown>)['key'] === 'gender')) {
     const isMale =
       /\b(?:sono\s+(?:un\s+)?uomo|sono\s+maschio|sesso\s+maschile|genere\s+maschile)\b/.test(
@@ -505,121 +528,49 @@ export function inferAttributeToolCallsFromMessage(
       /\b(?:sono\s+(?:una\s+)?donna|sono\s+femmina|sesso\s+femminile|genere\s+femminile)\b/.test(
         lower,
       ) || /^f(?:emmina)?\.?$/i.test(lower.trim())
-    if (isMale) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: { domain: 'personal', key: 'gender', value: 'male' },
-      })
-    } else if (isFemale) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: { domain: 'personal', key: 'gender', value: 'female' },
-      })
-    }
+    if (isMale) attr('personal', 'gender', 'male')
+    else if (isFemale) attr('personal', 'gender', 'female')
   }
 
-  // Diet type
+  // ── Diet type ─────────────────────────────────────────────────────────────
   if (/\b(?:sono\s+vegano|sono\s+vegana|dieta\s+vegana)\b/.test(lower)) {
-    calls.push({
-      id: crypto.randomUUID(),
-      name: 'user.setAttribute',
-      args: { domain: 'nutrition', key: 'dietType', value: 'vegan' },
-    })
+    attr('nutrition', 'dietType', 'vegan')
   } else if (/\b(?:sono\s+vegetariano|sono\s+vegetariana|dieta\s+vegetariana)\b/.test(lower)) {
-    calls.push({
-      id: crypto.randomUUID(),
-      name: 'user.setAttribute',
-      args: { domain: 'nutrition', key: 'dietType', value: 'vegetarian' },
-    })
+    attr('nutrition', 'dietType', 'vegetarian')
   }
   if (/\b(?:celiaco|celiaca|intollerante\s+al\s+glutine|senza\s+glutine)\b/.test(lower)) {
-    calls.push({
-      id: crypto.randomUUID(),
-      name: 'user.setAttribute',
-      args: { domain: 'nutrition', key: 'intolerances', value: 'gluten' },
-    })
+    attr('nutrition', 'intolerances', 'gluten')
   }
   if (/\b(?:intollerante\s+al\s+lattosio|senza\s+lattosio)\b/.test(lower)) {
-    calls.push({
-      id: crypto.randomUUID(),
-      name: 'user.setAttribute',
-      args: { domain: 'nutrition', key: 'intolerances', value: 'lactose' },
-    })
+    attr('nutrition', 'intolerances', 'lactose')
   }
 
-  // Water intake — "bevo 2 litri", "bevo circa 1,5 litri d'acqua"
+  // ── Water intake ──────────────────────────────────────────────────────────
   const waterMatch = lower.match(/bevo\s+(?:circa\s+)?(\d+)[,.]?(\d*)\s*litri/i)
   if (waterMatch?.[1]) {
     const liters = Number(`${waterMatch[1]}.${(waterMatch[2] ?? '0').padEnd(1, '0')}`)
     if (liters >= 0.5 && liters <= 10) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: {
-          domain: 'nutrition',
-          key: 'waterGoal',
-          value: Math.round(liters * 1000),
-          unit: 'ml',
-        },
-      })
+      attr('nutrition', 'waterGoal', Math.round(liters * 1000), 'ml')
     }
   }
 
-  // Meals per day — "faccio 3 pasti", "mangio 5 volte al giorno"
+  // ── Meals per day ─────────────────────────────────────────────────────────
   const mealsMatch = lower.match(/(?:faccio|mangio)\s+(\d)\s+(?:pasti|volte\s+al\s+giorno)/i)
   if (mealsMatch?.[1]) {
     const meals = Number(mealsMatch[1])
-    if (meals >= 1 && meals <= 8) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: { domain: 'nutrition', key: 'mealsPerDay', value: meals },
-      })
-    }
+    if (meals >= 1 && meals <= 8) attr('nutrition', 'mealsPerDay', meals)
   }
 
-  // Injury/pain — "dolore al ginocchio", "mi fa male la schiena", "dolore alla spalla"
+  // ── Injury/pain ───────────────────────────────────────────────────────────
   const painMatch = lower.match(
     /(?:dolore\s+(?:al|alla|alle|agli|ai)\s+(\w+)|mi\s+fa\s+male\s+(?:il|la|le|i|gli|l')\s+(\w+))/i,
   )
   if (painMatch?.[1] ?? painMatch?.[2]) {
     const location = (painMatch?.[1] ?? painMatch?.[2] ?? '').trim()
-    if (location.length >= 3) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: { domain: 'training', key: 'injuries', value: location },
-      })
-    }
+    if (location.length >= 3) attr('training', 'injury', location)
   }
 
-  const isQuestionLike =
-    lower.includes('?') || lower.startsWith('qual ') || lower.startsWith('quale ')
-  if (
-    !isQuestionLike &&
-    (effectiveDomain === 'inspiration' ||
-      lower.includes('obiettivo') ||
-      lower.includes('podcast') ||
-      lower.includes('progetto'))
-  ) {
-    const goalText =
-      message.match(/obiettivo\s*(?:è|e)?\s*(.+)$/i)?.[1]?.trim() ??
-      message.match(/(?:lanciare|avviare)\s+(.+)$/i)?.[0]?.trim()
-    if (goalText && goalText.length >= 4) {
-      calls.push({
-        id: crypto.randomUUID(),
-        name: 'user.setAttribute',
-        args: {
-          domain: 'general',
-          key: 'goal',
-          value: goalText.slice(0, 240),
-        },
-      })
-    }
-  }
-
+  // ── Dedup & return ────────────────────────────────────────────────────────
   const seen = new Set<string>()
   return calls.filter((c) => {
     const k = `${c.name}:${JSON.stringify(c.args)}`

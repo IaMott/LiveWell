@@ -17,6 +17,11 @@ export type ThinkingStep = {
   thought?: string
 }
 
+export type CartellaNotification = {
+  id: string
+  message: string
+}
+
 export type ChatMessage = {
   id: string
   role: 'user' | 'assistant'
@@ -34,6 +39,8 @@ type ChatContextValue = {
   activeDomain: Domain | null
   activeSpecialistId: string | undefined
   activeSpecialistName: string | undefined
+  cartellaNotifications: CartellaNotification[]
+  dismissCartellaNotification: (id: string) => void
   send: (text: string, domain?: Domain, files?: File[]) => Promise<void>
   loadConversation: (id: string) => Promise<void>
   newConversation: () => void
@@ -55,6 +62,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeDomain, setActiveDomain] = useState<Domain | null>(null)
   const [activeSpecialistId, setActiveSpecialistId] = useState<string | undefined>(undefined)
   const [activeSpecialistName, setActiveSpecialistName] = useState<string | undefined>(undefined)
+  const [cartellaNotifications, setCartellaNotifications] = useState<CartellaNotification[]>([])
+
+  const dismissCartellaNotification = useCallback((id: string) => {
+    setCartellaNotifications((prev) => prev.filter((n) => n.id !== id))
+  }, [])
 
   const conversationIdRef = useRef<string | undefined>(undefined)
   const activeSpecialistIdRef = useRef<string | undefined>(undefined)
@@ -334,6 +346,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               setMessages((prev) =>
                 prev.map((m) => (m.id === assistantId ? { ...m, domain, specialistName } : m)),
               )
+            } else if (event.type === 'tool.result') {
+              // Fase 6: Show cartella notification for successful setAttribute saves
+              if (event.ok && typeof event.message === 'string' && event.message) {
+                const notifId = crypto.randomUUID()
+                setCartellaNotifications((prev) => [
+                  ...prev,
+                  { id: notifId, message: event.message as string },
+                ])
+                // Auto-dismiss after 4 seconds
+                setTimeout(() => {
+                  setCartellaNotifications((prev) => prev.filter((n) => n.id !== notifId))
+                }, 4000)
+              }
             } else if (event.type === 'agent.thinking') {
               const stepName = String(event.specialistName ?? '').trim()
               const stepTitle = String(event.title ?? '').trim()
@@ -384,6 +409,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     activeDomain,
     activeSpecialistId,
     activeSpecialistName,
+    cartellaNotifications,
+    dismissCartellaNotification,
     send,
     loadConversation,
     newConversation,

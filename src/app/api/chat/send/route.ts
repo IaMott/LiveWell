@@ -6,7 +6,8 @@ import { errorResponse } from '@/lib/security/errorSchema'
 import { logApiErrorEvent } from '@/lib/monitoring/apiErrorEvents'
 import { deriveActiveSpecialistFromCaseState } from '@/lib/ai/case/compat'
 import { buildCaseThinkingEvents } from '@/lib/ai/case/events'
-import { orchestrate } from '@/lib/ai/orchestrator/orchestrator'
+import { orchestrate, type ProgressEvent } from '@/lib/ai/orchestrator/orchestrator'
+import { resolveRoutingCandidates } from '@/lib/ai/orchestrator/routing'
 import { detectDomainFromText, detectDomainsMulti } from '@/lib/ai/domain/domainDetection'
 import { createLlmWithFallback } from '@/lib/ai/llmFactory'
 import { loadTeam } from '@/lib/ai/team/loader'
@@ -32,6 +33,37 @@ const requestSchema = z.object({
   confirmedByUser: z.boolean().optional(),
   confirmToken: z.string().trim().min(1).optional(),
 })
+
+// ── Fase 6: Cartella notification labels ──────────────────────────────────
+const CARTELLA_KEY_LABELS: Record<string, string> = {
+  weight: 'Peso',
+  height: 'Altezza',
+  gender: 'Sesso',
+  birthDate: 'Data di nascita',
+  age: 'Età',
+  goal: 'Obiettivo',
+  allergy: 'Allergie',
+  diagnosis: 'Diagnosi',
+  medications: 'Farmaci',
+  symptoms: 'Sintomi',
+  sport: 'Sport',
+  injury: 'Infortuni',
+  stress_level: 'Stress',
+  sleep_hours: 'Ore sonno',
+  blood_pressure: 'Pressione',
+  training_frequency_per_week: 'Allenamenti/sett.',
+  food_triggers: 'Trigger alimentari',
+  complaint: 'Motivo consulto',
+  meal_pattern: 'Schema pasti',
+}
+
+function formatToolValue(v: unknown): string {
+  if (v === null || v === undefined) return '—'
+  if (typeof v === 'boolean') return v ? 'Sì' : 'No'
+  if (typeof v === 'string') return v.length > 50 ? v.slice(0, 47) + '...' : v
+  if (typeof v === 'number') return String(v)
+  return String(v).slice(0, 50)
+}
 
 function parseToolDirective(message: string): ToolCall[] {
   const direct = message.match(/^\/tool\s+([a-zA-Z0-9._-]+)\s+([\s\S]+)$/)
@@ -73,33 +105,35 @@ function buildToolExecutor(
 }
 
 /**
- * Returns up to 2 agents to show in the immediate thinking animation,
- * before orchestrate() completes. Uses quick domain detection.
+ * Returns the actual agents that will handle the request, using the same
+ * resolveRoutingCandidates logic as orchestrate(). This ensures the initial
+ * thinking animation matches who actually responds.
  */
 function getImmediateThinkingAgents(
   team: AgentProfile[],
-  quickDomain: Domain,
   message: string,
-): Array<{ displayName: string; domainTags: Domain[] }> {
-  const trimmed = message.trim()
-  const multiDomains = detectDomainsMulti(message)
-  const isAmbiguousMultiDomain = multiDomains.length > 1
-  const isTooGeneric =
-    quickDomain === 'general' ||
-    trimmed.split(/\s+/).length < 4 ||
-    /^((ciao|hey|ehi|salve|buongiorno|buonasera|voglio stare meglio)[!.,\s]*)$/i.test(trimmed)
+  caseState: Parameters<typeof deriveActiveSpecialistFromCaseState>[0],
+): AgentProfile[] {
+  const detectedDomain = detectDomainFromText(message)
+  const allDomains = detectDomainsMulti(message).map((d) => d.domain)
 
-  if (isTooGeneric || isAmbiguousMultiDomain) return []
+  // Determine active specialist from case state (mirrors orchestrate logic)
+  const activeSpecialist = deriveActiveSpecialistFromCaseState(caseState, team)
 
-  const domainMatches = team.filter(
-    (a) =>
-      a.domainTags.includes(quickDomain) &&
-      a.id !== 'orchestratore' &&
-      a.id !== 'intervistatore' &&
-      a.id !== 'analista-contesto',
-  )
-  if (domainMatches.length > 0) return domainMatches.slice(0, 2)
-  return team.filter((a) => a.id !== 'orchestratore' && a.id !== 'intervistatore').slice(0, 1)
+  const { selectedAgents } = resolveRoutingCandidates({
+    team,
+    message,
+    detectedDomain,
+    allDomains,
+    currentSpeakerId: activeSpecialist?.id,
+  })
+
+  // Return up to 2 agents for the immediate animation
+  return selectedAgents
+    .filter(
+      (a) => a.id !== 'orchestratore' && a.id !== 'intervistatore' && a.id !== 'analista-contesto',
+    )
+    .slice(0, 2)
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -261,9 +295,8 @@ export async function POST(request: Request): Promise<Response> {
       ? buildDeterministicLlm(requestedToolCalls)
       : createLlmWithFallback()
 
-  // Quick domain for immediate thinking events (no LLM needed)
-  const quickDomain = detectDomainFromText(parsedBody.message)
-  const immediateAgents = getImmediateThinkingAgents(team, quickDomain, parsedBody.message)
+  // Use the same routing logic as orchestrate() for accurate immediate agents
+  const immediateAgents = getImmediateThinkingAgents(team, parsedBody.message, storedCaseState)
   const msgPreviewImmediate = parsedBody.message.slice(0, 48).trim()
 
   const encoder = new TextEncoder()
@@ -271,7 +304,7 @@ export async function POST(request: Request): Promise<Response> {
     async start(controller) {
       try {
         // ── Step 1: Immediate thinking events (before orchestrate) ─────────
-        // Emitted right away so the user sees animation from the very start
+        // Uses resolveRoutingCandidates (same as orchestrate) for accurate agent names
         for (let i = 0; i < immediateAgents.length; i++) {
           const agent = immediateAgents[i]
           controller.enqueue(
@@ -281,7 +314,7 @@ export async function POST(request: Request): Promise<Response> {
                 specialistName: agent.displayName,
                 title: `"${msgPreviewImmediate}${parsedBody.message.length > 48 ? '…' : ''}"`,
                 domain: agent.domainTags[0] as Domain | undefined,
-                thought: 'Analisi del messaggio in corso',
+                thought: 'Sta valutando la richiesta',
               }),
             ),
           )
@@ -290,6 +323,23 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         // ── Step 2: Orchestrate (main AI work) ────────────────────────────
+        // onProgress emits real-time thinking events during orchestration
+        const onProgress = (event: ProgressEvent) => {
+          controller.enqueue(
+            encoder.encode(
+              toSse({
+                type: 'agent.thinking',
+                specialistName: event.displayName,
+                title: event.thought,
+                domain: team.find((a) => a.id === event.agentId)?.domainTags[0] as
+                  | Domain
+                  | undefined,
+                thought: event.thought,
+              }),
+            ),
+          )
+        }
+
         let consensus
         try {
           consensus = await orchestrate(
@@ -297,6 +347,7 @@ export async function POST(request: Request): Promise<Response> {
               llm,
               team,
               orchestratorToolsAllowed: [...ALLOWED_TOOL_NAMES],
+              onProgress,
             },
             agentInput,
           )
@@ -529,6 +580,15 @@ export async function POST(request: Request): Promise<Response> {
         )
 
         for (const r of toolResults) {
+          // Fase 6: Build a human-readable notification for setAttribute saves
+          let cartellaMessage: string | undefined
+          const matchingCall = toolCallsToExecute.find((c) => c.id === r.toolCallId)
+          if (matchingCall?.name === 'user.setAttribute' && r.ok) {
+            const args = matchingCall.args as { domain?: string; key?: string; value?: unknown }
+            const label = CARTELLA_KEY_LABELS[args.key ?? ''] ?? args.key ?? 'dato'
+            cartellaMessage = `${label}: ${formatToolValue(args.value)} → salvato in cartella`
+          }
+
           controller.enqueue(
             encoder.encode(
               toSse({
@@ -536,7 +596,7 @@ export async function POST(request: Request): Promise<Response> {
                 toolCallId: r.toolCallId,
                 ok: r.ok,
                 code: r.error?.code,
-                message: r.error?.message,
+                message: cartellaMessage ?? r.error?.message,
                 requiresUserConfirmation: r.requiresUserConfirmation,
                 confirmToken: r.confirmToken,
               }),

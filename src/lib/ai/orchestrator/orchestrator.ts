@@ -32,6 +32,13 @@ function withGlobalTimeout<T>(promise: Promise<T>, ms: number, label: string): P
   return Promise.race([promise, deadline])
 }
 
+export type ProgressEvent = {
+  agentId: string
+  displayName: string
+  phase: 'analyzing' | 'peer-review' | 'consensus' | 'synthesizing'
+  thought: string
+}
+
 export type OrchestratorDeps = {
   llm: LlmClient
   team: AgentProfile[]
@@ -39,6 +46,8 @@ export type OrchestratorDeps = {
   retryGuardWindowMs?: number
   /** Override global orchestration budget in ms (default: ORCHESTRATION_BUDGET_MS). */
   globalTimeoutMs?: number
+  /** Optional callback for real-time progress events during orchestration. */
+  onProgress?: (event: ProgressEvent) => void
 }
 
 function getRetryGuardWindowMs(): number {
@@ -100,6 +109,16 @@ export async function orchestrate(
   })
   decisionTrace.push(...routingDecisionTrace)
 
+  // Emit progress for each selected agent starting analysis
+  for (const agent of selectedAgents) {
+    deps.onProgress?.({
+      agentId: agent.id,
+      displayName: agent.displayName,
+      phase: 'analyzing',
+      thought: 'Sta valutando la richiesta',
+    })
+  }
+
   // Skip agent rounds for generic messages (greetings, short no-context messages)
   // to prevent any specialist from contaminating the synthesis response.
   const skipAgents = !activeSpecialist && isGenericMessage(input)
@@ -118,6 +137,32 @@ export async function orchestrate(
         'executeAgentRounds',
       )
 
+  // Emit progress with actual proposal summaries after Round 1
+  for (const proposal of round1Proposals) {
+    const agent = deps.team.find((a) => a.id === proposal.agentId)
+    if (agent && proposal.summary && !proposal.summary.toLowerCase().includes('[unavailable]')) {
+      deps.onProgress?.({
+        agentId: agent.id,
+        displayName: agent.displayName,
+        phase: 'analyzing',
+        thought: proposal.summary.slice(0, 100).replace(/\n/g, ' '),
+      })
+    }
+  }
+
+  // Emit peer-review progress when multiple agents contributed
+  if (round2Proposals.length > 1) {
+    const primary = deps.team.find((a) => a.id === round2Proposals[0]?.agentId)
+    if (primary) {
+      deps.onProgress?.({
+        agentId: primary.id,
+        displayName: primary.displayName,
+        phase: 'peer-review',
+        thought: 'Confronto tra specialisti',
+      })
+    }
+  }
+
   const { consensus } = executeConsensusFlow({
     team: deps.team,
     round2Proposals,
@@ -126,6 +171,18 @@ export async function orchestrate(
     orchestratorToolsAllowed: deps.orchestratorToolsAllowed,
   })
   const consensusOutcome = adaptConsensusOutcome({ consensus })
+
+  // Emit consensus progress
+  const winnerAgentId = consensusOutcome.selectedAgentsFromConsensus[0] ?? selectedAgents[0]?.id
+  const winnerAgent = deps.team.find((a) => a.id === winnerAgentId)
+  if (winnerAgent) {
+    deps.onProgress?.({
+      agentId: winnerAgent.id,
+      displayName: winnerAgent.displayName,
+      phase: 'consensus',
+      thought: `Consenso raggiunto — ${winnerAgent.displayName} guida la risposta`,
+    })
+  }
 
   const { finalInterviewQuestions, round2WithQueue, round2ForPersistence } = applyInterviewFlow({
     domain: domainHint,

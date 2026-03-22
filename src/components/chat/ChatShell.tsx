@@ -23,6 +23,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     activeDomain,
     activeSpecialistId,
     activeSpecialistName,
+    cartellaNotifications,
     loadConversation,
     newConversation,
     exportConversation,
@@ -150,6 +151,53 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         onNew={newConversation}
         onExport={exportConversation}
       />
+
+      {/* Fase 6: Cartella save notifications */}
+      {cartellaNotifications.length > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '5rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.5rem',
+            zIndex: 1000,
+            pointerEvents: 'none',
+            maxWidth: '90vw',
+          }}
+        >
+          {cartellaNotifications.map((n) => (
+            <div
+              key={n.id}
+              style={{
+                background: 'rgba(34, 139, 34, 0.92)',
+                color: '#fff',
+                fontSize: '0.8125rem',
+                fontWeight: 500,
+                padding: '0.5rem 1rem',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                animation: 'cartellaFadeIn 0.3s ease-out',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '400px',
+              }}
+            >
+              {n.message}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes cartellaFadeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   )
 }

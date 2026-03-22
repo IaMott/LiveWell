@@ -85,13 +85,14 @@ export function buildThinkingEvents(
           specialistName: agentName,
           title: `${name}: "${msgPreview}${msgPreview.length >= 42 ? '…' : ''}"`,
           domain,
-          thought: 'Analisi della richiesta',
+          thought: 'Sta valutando la richiesta',
         })
       }
 
-      // Step B: what the agent found / needs
+      // Step B: what the agent found / needs — use actual proposal content
       const hasQuestions = p.questions && p.questions.length > 0
       const hasSummary = p.summary && !p.summary.toLowerCase().includes('[unavailable]')
+      const hasReasoning = p.reasoning && p.reasoning.length > 5
 
       if (hasQuestions && p.questions) {
         const q = p.questions[0].slice(0, 58)
@@ -99,7 +100,10 @@ export function buildThinkingEvents(
           specialistName: agentName,
           title: `da raccogliere: ${q}${p.questions[0].length > 58 ? '…' : ''}`,
           domain,
-          thought: 'Profilo incompleto — identifico i dati mancanti',
+          thought:
+            hasReasoning && p.reasoning
+              ? p.reasoning.slice(0, 120).replace(/\n/g, ' ')
+              : 'Profilo incompleto — identifico i dati mancanti',
         })
       } else if (hasSummary && p.summary) {
         const preview = p.summary.slice(0, 62).replace(/\n/g, ' ')
@@ -107,14 +111,20 @@ export function buildThinkingEvents(
           specialistName: agentName,
           title: preview + (p.summary.length > 62 ? '…' : ''),
           domain,
-          thought: 'Elaboro la risposta con i dati disponibili',
+          thought:
+            hasReasoning && p.reasoning
+              ? p.reasoning.slice(0, 120).replace(/\n/g, ' ')
+              : p.summary.slice(0, 120).replace(/\n/g, ' '),
         })
       } else {
         steps.push({
           specialistName: agentName,
           title: 'valuto il profilo e il contesto',
           domain,
-          thought: 'Verifico le informazioni nel profilo',
+          thought:
+            hasReasoning && p.reasoning
+              ? p.reasoning.slice(0, 120).replace(/\n/g, ' ')
+              : 'Verifico le informazioni nel profilo',
         })
       }
 

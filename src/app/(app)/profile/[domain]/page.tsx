@@ -49,6 +49,24 @@ function groupAttributesByDomain(
   return result
 }
 
+type AttrHistory = { value: unknown; unit: string | null; recordedAt: Date }
+
+function groupAttributesByDomainWithHistory(
+  attrs: AttrRow[],
+): Record<string, Record<string, AttrHistory[]>> {
+  const result: Record<string, Record<string, AttrHistory[]>> = {}
+  for (const attr of attrs) {
+    if (!result[attr.domain]) result[attr.domain] = {}
+    if (!result[attr.domain][attr.key]) result[attr.domain][attr.key] = []
+    result[attr.domain][attr.key].push({
+      value: attr.value,
+      unit: attr.unit,
+      recordedAt: attr.recordedAt,
+    })
+  }
+  return result
+}
+
 async function fetchProfileData(userId: string) {
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
@@ -252,6 +270,7 @@ async function fetchProfileData(userId: string) {
     bodyMetrics30d,
     allAttributes,
     attributesByDomain: groupAttributesByDomain(allAttributes),
+    attributesByDomainHistory: groupAttributesByDomainWithHistory(allAttributes),
     workoutPlan,
     allArtifacts,
     clinicalEvents,

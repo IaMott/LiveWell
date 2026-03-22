@@ -258,8 +258,8 @@ function renderInline(text: string): React.ReactNode {
  *                  [thought (italic, smaller)]
  */
 function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
-  // Show up to last 4 steps; latest is highlighted
-  const visible = steps.slice(-4)
+  // Show up to last 5 steps; all visible, latest highlighted
+  const visible = steps.slice(-5)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '3px 0' }}>
@@ -272,7 +272,7 @@ function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
               display: 'flex',
               flexDirection: 'column',
               gap: '2px',
-              opacity: isLatest ? 1 : 0.28,
+              opacity: isLatest ? 1 : 0.7,
               animation: isLatest ? 'lw-step-in 0.3s ease forwards' : undefined,
             }}
           >
@@ -299,7 +299,7 @@ function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
               {/* Name → title */}
               <span
                 style={{
-                  fontSize: '0.6875rem',
+                  fontSize: '0.75rem',
                   color: 'var(--color-text-secondary)',
                   letterSpacing: '0.02em',
                   display: 'inline-flex',
@@ -316,7 +316,7 @@ function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
                   style={{
                     fontWeight: 700,
                     textTransform: 'uppercase',
-                    fontSize: '0.625rem',
+                    fontSize: '0.6875rem',
                     letterSpacing: '0.06em',
                   }}
                 >
@@ -326,17 +326,17 @@ function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
                 <span style={{ fontWeight: 400 }}>{step.title}</span>
               </span>
             </div>
-            {/* Thought — italic, only for latest */}
-            {isLatest && step.thought && (
+            {/* Thought — visible for ALL steps, italic */}
+            {step.thought && (
               <span
                 style={{
                   marginLeft: '17px',
-                  fontSize: '0.6rem',
+                  fontSize: '0.6875rem',
                   color: 'var(--color-text-secondary)',
                   fontStyle: 'italic',
-                  opacity: 0,
-                  animation: 'lw-thought-in 0.4s ease 0.2s forwards',
-                  maxWidth: '280px',
+                  opacity: isLatest ? undefined : 0.7,
+                  animation: isLatest ? 'lw-thought-in 0.4s ease 0.2s forwards' : undefined,
+                  maxWidth: '300px',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -380,7 +380,7 @@ function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
         }
         @keyframes lw-thought-in {
           from { opacity: 0; }
-          to { opacity: 0.65; }
+          to { opacity: 0.75; }
         }
       `}</style>
     </div>
