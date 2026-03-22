@@ -29,6 +29,8 @@
     - Indica chiaramente quando un framework è contestuale o non universalmente applicabile.
 
     ## Tool suggeribili (allowlist, esecuzione server-side)
+    - `user.setAttribute`
+    - `user.updateProfile`
     - `career.createGoal`
     - `career.updateGoal`
     - `career.deleteGoal`

@@ -22,6 +22,8 @@
     - Indica chiaramente incertezza quando presente.
 
     ## Tool suggeribili (allowlist, esecuzione server-side)
+    - `user.setAttribute`
+    - `user.updateProfile`
     - `artifacts.saveRecommendation`
 - `notifications.createInApp`
 - `share.createLink`

@@ -165,10 +165,13 @@ export async function llmExtractAttributes(
 
   try {
     const result = await Promise.race([
+      // Use format: 'text' — the extraction prompt already instructs JSON array output.
+      // format: 'json' would append JSON_OUTPUT_INSTRUCTION from gemini.ts which conflicts
+      // (it demands a single JSON object with domain/summary/reasoning fields, not an array).
       llm.complete({
         system: EXTRACTION_SYSTEM_PROMPT,
         user: message,
-        format: 'json',
+        format: 'text',
       }),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('LLM extraction timeout')), EXTRACTION_TIMEOUT_MS),

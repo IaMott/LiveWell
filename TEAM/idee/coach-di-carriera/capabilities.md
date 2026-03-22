@@ -31,6 +31,8 @@
     - Indica chiaramente quando un dato di mercato è stimato o contestuale.
 
     ## Tool suggeribili (allowlist, esecuzione server-side)
+    - `user.setAttribute`
+    - `user.updateProfile`
     - `career.createGoal`
     - `career.updateGoal`
     - `career.deleteGoal`

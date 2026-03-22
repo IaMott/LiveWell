@@ -22,6 +22,8 @@
     - Indica chiaramente incertezza quando presente.
 
     ## Tool suggeribili (allowlist, esecuzione server-side)
+    - `user.setAttribute`
+    - `user.updateProfile`
     - `health.addMetric`
 - `health.updateMedicalInfo`
 - `artifacts.saveRecommendation`

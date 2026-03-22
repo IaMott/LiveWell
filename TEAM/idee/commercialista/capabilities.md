@@ -30,6 +30,8 @@
     - Indica chiaramente quando una norma è in evoluzione o controversa.
 
     ## Tool suggeribili (allowlist, esecuzione server-side)
+    - `user.setAttribute`
+    - `user.updateProfile`
     - `finance.addBudgetEntry`
     - `finance.updateBudgetEntry`
     - `finance.createGoal`

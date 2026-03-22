@@ -29,6 +29,8 @@
     - Indica chiaramente incertezza quando presente.
 
     ## Tool suggeribili (allowlist, esecuzione server-side)
+    - `user.setAttribute`
+    - `user.updateProfile`
     - `finance.addBudgetEntry`
     - `finance.updateBudgetEntry`
     - `finance.deleteBudgetEntry`

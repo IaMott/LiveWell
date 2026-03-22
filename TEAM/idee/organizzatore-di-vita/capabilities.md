@@ -29,6 +29,8 @@
     - Indica chiaramente quando un metodo è adatto o non adatto al profilo dell'utente.
 
     ## Tool suggeribili (allowlist, esecuzione server-side)
+    - `user.setAttribute`
+    - `user.updateProfile`
     - `productivity.createTask`
     - `productivity.updateTask`
     - `productivity.deleteTask`

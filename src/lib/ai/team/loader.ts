@@ -25,6 +25,23 @@ function safeReadJson(filePath: string): unknown {
   return JSON.parse(raw)
 }
 
+// Universal tools that EVERY agent must have — these are non-destructive data-capture
+// tools that the orchestrator uses to persist user-provided information to the database.
+// Without these, user.setAttribute calls are blocked by RBAC and NO data is ever saved.
+const UNIVERSAL_TOOLS = ['user.setAttribute', 'user.updateProfile']
+
+/**
+ * Merge profile.json toolsAllowed with capabilities.md allowedTools.
+ * capabilities.md tools take priority, but UNIVERSAL_TOOLS are always included.
+ * This prevents capabilities.md from accidentally removing essential data-capture tools.
+ */
+function mergeToolsAllowed(profileTools: string[], capabilityTools: string[]): string[] {
+  const base = capabilityTools.length > 0 ? capabilityTools : profileTools
+  const merged = new Set(base)
+  for (const tool of UNIVERSAL_TOOLS) merged.add(tool)
+  return [...merged]
+}
+
 function loadOneAgent(agentDir: string): AgentProfileType {
   const profilePath = path.join(agentDir, 'profile.json')
   const parsed = AgentProfileSchema.parse(safeReadJson(profilePath)) as AgentProfileFile
@@ -41,9 +58,10 @@ function loadOneAgent(agentDir: string): AgentProfileType {
     displayName: parsed.displayName,
     domainTags: parsed.domainTags,
     systemPrompt,
-    toolsAllowed: runtimeCapabilities?.allowedTools.length
-      ? runtimeCapabilities.allowedTools
-      : parsed.toolsAllowed ?? [],
+    toolsAllowed: mergeToolsAllowed(
+      parsed.toolsAllowed ?? [],
+      runtimeCapabilities?.allowedTools ?? [],
+    ),
     escalationRules: runtimeCapabilities?.escalationRules.length
       ? runtimeCapabilities.escalationRules
       : parsed.escalationRules ?? [],

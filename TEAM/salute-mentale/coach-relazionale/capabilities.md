@@ -34,6 +34,8 @@
     - Indica chiaramente quando un framework è contestuale o limitato a una prospettiva.
 
     ## Tool suggeribili (allowlist, esecuzione server-side)
+    - `user.setAttribute`
+    - `user.updateProfile`
     - `mindfulness.createEntry`
     - `mindfulness.updateEntry`
     - `mindfulness.saveRecommendation`

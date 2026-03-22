@@ -32,6 +32,8 @@
     - Indica chiaramente quando una norma è in evoluzione o oggetto di interpretazioni contrastanti.
 
     ## Tool suggeribili (allowlist, esecuzione server-side)
+    - `user.setAttribute`
+    - `user.updateProfile`
     - `artifacts.saveRecommendation`
 
     ## Escalation rules

@@ -24,6 +24,8 @@
     - È il primo punto di contatto e l'ultimo punto di integrazione.
 
     ## Tool suggeribili (allowlist, esecuzione server-side)
+    - `user.setAttribute`
+    - `user.updateProfile`
     - `artifacts.saveRecommendation`
     - `notifications.createInApp`
     - `share.createLink`

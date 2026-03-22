@@ -29,6 +29,8 @@
     - Indica chiaramente quando un intervento è supportato da evidenze forti vs preliminari.
 
     ## Tool suggeribili (allowlist, esecuzione server-side)
+    - `user.setAttribute`
+    - `user.updateProfile`
     - `health.addMetric`
     - `health.updateMedicalInfo`
     - `mindfulness.createEntry`
