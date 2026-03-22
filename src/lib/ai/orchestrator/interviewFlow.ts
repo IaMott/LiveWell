@@ -6,6 +6,15 @@ import { getMissingRequiredFields, getQuestionForField } from './intakeQuestions
 const CONTINUATION_PATTERN =
   /\b(continuiamo|continua|proseguiamo|prosegui|riprendiamo|riprendi|torniamo|torniamo al|ripartiamo|restiamo|parliamo ancora)\b/i
 
+/**
+ * Detect when the user is *demanding output* (a plan, a schedule, a recipe…)
+ * rather than providing more data. When this fires, gating questions are
+ * suppressed: the agent must produce a substantive response.
+ * Examples: "creami un piano", "voglio la dieta", "fammi il programma", "mandami le ricette".
+ */
+const OUTPUT_REQUEST_PATTERN =
+  /\b(creami|fammi|dammi|mandami|preparami|costruisci(mi)?|dai(mi)?|fai(mi)?)\b.*\b(piano|dieta|programma|ricett|calendario|menu|menù|scheda|lista|orario)\b|\b(voglio|ho bisogno di|mi serve|mi dai|mi fai|mi mandi|vorrei)\b.{0,30}\b(piano|dieta|programma|ricett|calendario|menu|menù|scheda|lista)\b/i
+
 const SPECIFIC_CASE_PATTERN =
   /\b(gastrite|reflusso|gonfiore|digestiv|nausea|rutti|dolore|farmac|ibuprofene|tachicardia|pressione alta|sfoghi|rash|prurito|ginocchio|schiena|spalla|caviglia|insonnia|risvegli|dormo male|sonno|caff[eè]|burnout|ansia|stress|concentrarmi|debiti|mutuo|rate|bollette|soldi|separaz|figli|accordi|legali|problemi pratici|organizzarmi|gestire tutto)\b/i
 
@@ -76,6 +85,13 @@ function buildFocusedQuestion(
     /\b(reflusso|gastrite|gonfiore|nausea|rutti|digestiv)\b/i.test(lower) &&
     (domain === 'nutrition' || domain === 'health')
   ) {
+    // Skip if the user has already described their dietary triggers in the conversation.
+    // Patterns: names of acidic/spicy/gaseous foods, or explicit "no trigger" answers.
+    const alreadyDescribedTriggers =
+      /\b(piccant|acid[io]|gasate|gassate|fritto|fritti|cioccolato|caff[eè]|agrumi|pomodoro|alcolici|spezie|latticin|bevande?|grassi|nessuna|non ho|non ci sono|non mangio|non bevo|non prendo)\b/i.test(
+        lower,
+      )
+    if (alreadyDescribedTriggers) return null
     return 'Hai notato alimenti, bevande o orari dei pasti che peggiorano i sintomi digestivi?'
   }
 
@@ -312,6 +328,55 @@ function buildQuestionPlan(
   return plan
 }
 
+/**
+ * Returns true if the given question was already asked AND the user replied
+ * within the most recent N assistant→user message pairs in the conversation.
+ * This prevents the orchestrator from repeating a question the user has
+ * already answered in the same session.
+ */
+function wasAlreadyAnsweredInHistory(
+  question: string,
+  contextPack: ContextPack,
+  windowPairs = 6,
+): boolean {
+  const messages = contextPack.history.recentMessages
+  if (messages.length < 2) return false
+
+  const questionTokens = new Set(
+    question
+      .toLowerCase()
+      .replace(/[?.,!]/g, '')
+      .split(/\s+/)
+      .filter((t) => t.length > 4),
+  )
+
+  // Walk the history in reverse looking for assistant messages that contain
+  // enough tokens from the question (semantic overlap > 60%).
+  let pairsChecked = 0
+  for (let i = messages.length - 1; i >= 0 && pairsChecked < windowPairs; i--) {
+    const msg = messages[i]
+    if (msg.role !== 'assistant') continue
+    const assistantTokens = new Set(
+      msg.content
+        .toLowerCase()
+        .replace(/[?.,!]/g, '')
+        .split(/\s+/)
+        .filter((t) => t.length > 4),
+    )
+    const intersection = [...questionTokens].filter((t) => assistantTokens.has(t)).length
+    const union = new Set([...questionTokens, ...assistantTokens]).size
+    const overlap = union > 0 ? intersection / questionTokens.size : 0
+
+    if (overlap >= 0.55) {
+      // Found the assistant asking something similar; check that the NEXT message
+      // is from the user (meaning they replied).
+      if (i + 1 < messages.length && messages[i + 1].role === 'user') return true
+    }
+    pairsChecked++
+  }
+  return false
+}
+
 function getPendingQuestionsFromWorkspace(
   contextPack: ContextPack,
   domain: Domain,
@@ -363,6 +428,8 @@ function buildInterviewQueue(
   )
   const isEarlyConversation = contextPack.history.recentMessages.length < 8
   const isContinuationMessage = CONTINUATION_PATTERN.test(userMessage)
+  // When the user explicitly demands output (plan, diet, schedule, recipe…) suppress gating.
+  const isOutputRequest = OUTPUT_REQUEST_PATTERN.test(userMessage)
   const prioritizeActiveProblem = shouldPrioritizeActiveProblem({
     domain,
     contextPack,
@@ -374,8 +441,9 @@ function buildInterviewQueue(
   // Previously maxAskNow=1 in team mode always, making the F4 batching unreachable.
   // isFirstInteractionInDomain covers specialist mode; isL1BaselinePending covers team mode.
   const isL1BaselinePending = !activeSpecialist && !hasCompletedBaseline && isEarlyConversation
-  const maxAskNow =
-    fromWorkspace.length > 0 || isContinuationMessage || prioritizeActiveProblem
+  const maxAskNow = isOutputRequest
+    ? 0
+    : fromWorkspace.length > 0 || isContinuationMessage || prioritizeActiveProblem
       ? 1
       : isFirstInteractionInDomain || isL1BaselinePending
         ? 3
@@ -423,10 +491,13 @@ function buildInterviewQueue(
       : []
 
   // L3 domain-specific: specialist completeness-gate questions first, then generic plan
-  const ownFieldQs = prioritizeActiveProblem
+  // Filter out questions the user has already answered in this session.
+  const ownFieldQsRaw = prioritizeActiveProblem
     ? (specialistOwnFieldQuestions ?? []).filter((question) => isFocusedFollowUpQuestion(question))
     : (specialistOwnFieldQuestions ?? [])
-  const fromPlan = buildQuestionPlan(domain, contextPack, userMessage, prioritizeActiveProblem)
+  const ownFieldQs = ownFieldQsRaw.filter((q) => !wasAlreadyAnsweredInHistory(q, contextPack))
+  const fromPlanRaw = buildQuestionPlan(domain, contextPack, userMessage, prioritizeActiveProblem)
+  const fromPlan = fromPlanRaw.filter((q) => !wasAlreadyAnsweredInHistory(q, contextPack))
   // Merge: missing required-field questions take precedence over generic plan questions
   const ownFieldSet = new Set(ownFieldQs.map((q) => q.trim().toLowerCase()))
   const combinedL3 = [
