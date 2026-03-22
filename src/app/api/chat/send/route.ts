@@ -314,7 +314,7 @@ export async function POST(request: Request): Promise<Response> {
                 specialistName: agent.displayName,
                 title: `"${msgPreviewImmediate}${parsedBody.message.length > 48 ? '…' : ''}"`,
                 domain: agent.domainTags[0] as Domain | undefined,
-                thought: 'Sta valutando la richiesta',
+                thought: `Analizza: "${msgPreviewImmediate}${parsedBody.message.length > 48 ? '…' : ''}"`,
               }),
             ),
           )

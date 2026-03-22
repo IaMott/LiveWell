@@ -64,6 +64,14 @@ export async function orchestrate(
 
   const detectedDomain = input.domainHint ?? detectDomainFromText(input.message)
   const allDomains = detectDomainsMulti(input.message).map((d) => d.domain)
+
+  // Launch LLM extraction IN PARALLEL with the rest of orchestration.
+  // This lightweight Gemini Flash call (~1s) extracts structured data from any Italian text
+  // without depending on regex patterns. Result is awaited only before planToolCalls().
+  const { llmExtractAttributes } = await import('./llmExtraction')
+  const llmExtractionPromise = llmExtractAttributes(deps.llm, input.message, detectedDomain).catch(
+    () => [] as import('../types').ToolCall[],
+  )
   const decisionTrace = [
     buildDomainDetectedTraceEvent({
       step: 1,
@@ -109,13 +117,14 @@ export async function orchestrate(
   })
   decisionTrace.push(...routingDecisionTrace)
 
-  // Emit progress for each selected agent starting analysis
+  // Emit progress for each selected agent starting analysis — with contextual thought
+  const msgPreview = input.message.slice(0, 60).replace(/\n/g, ' ').trim()
   for (const agent of selectedAgents) {
     deps.onProgress?.({
       agentId: agent.id,
       displayName: agent.displayName,
       phase: 'analyzing',
-      thought: 'Sta valutando la richiesta',
+      thought: `Analizza: "${msgPreview}${input.message.length > 60 ? '…' : ''}"`,
     })
   }
 
@@ -215,8 +224,13 @@ export async function orchestrate(
     typeof deps.retryGuardWindowMs === 'number' && deps.retryGuardWindowMs > 0
       ? deps.retryGuardWindowMs
       : getRetryGuardWindowMs()
+
+  // Await the LLM extraction that was launched in parallel at the start
+  const llmExtractedToolCalls = await llmExtractionPromise
+
   const toolCallPlan = planToolCalls({
     consensusToolCalls: consensusOutcome.toolCallsToExecute,
+    llmExtractedToolCalls,
     message: input.message,
     domainHint,
     activeSpecialist,

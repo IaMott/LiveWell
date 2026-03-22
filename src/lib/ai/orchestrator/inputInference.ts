@@ -201,6 +201,8 @@ export function inferAttributeToolCallsFromMessage(
       /\bho\s+(\d{1,3})\s+anni\b/i,
       /\bne\s+ho\s+(\d{1,3})\b/i,
       /\bcompi(?:o|rò)?\s+(\d{1,3})\s+anni\b/i,
+      // Standalone "34 anni" without "ho" — catches comma-separated data like "89 kg, 168 cm, 34 anni, maschio"
+      /\b(\d{1,3})\s+anni\b/i,
     ]
     for (const re of agePatterns) {
       const m = lower.match(re)
@@ -271,6 +273,16 @@ export function inferAttributeToolCallsFromMessage(
   )
   if (freqMatch?.[1]) {
     attr('training', 'training_frequency_per_week', Number(freqMatch[1]), 'sessions/week')
+  }
+  // Broader frequency: "3 volte a settimana" / "3 volte alla settimana" without "alleno"
+  if (!freqMatch) {
+    const broadFreq = lower.match(/\b(\d{1,2})\s+volt[ea]\s+(?:a|alla|per)\s+settimana\b/i)
+    if (broadFreq?.[1]) {
+      const freq = Number(broadFreq[1])
+      if (freq >= 1 && freq <= 14) {
+        attr('training', 'training_frequency_per_week', freq, 'sessions/week')
+      }
+    }
   }
 
   // ── Medical conditions (broad pattern) ────────────────────────────────────
@@ -384,6 +396,10 @@ export function inferAttributeToolCallsFromMessage(
   // ── Sport / activity ──────────────────────────────────────────────────────
   const sportPatterns = [
     /\b(?:faccio|pratico|gioco\s+a)\s+([a-zàèéìòù\s]{3,30})(?:\s+da|\s+\d|\b)/i,
+    // Broader: "vado in palestra", "vado a correre", "vado a nuotare"
+    /\bvado\s+(?:in\s+|a\s+)(palestra|piscina|correre|nuotare|camminare|CrossFit|yoga|pilates)\b/i,
+    // "faccio pesi", "faccio cardio", "faccio CrossFit"
+    /\bfaccio\s+(pesi|cardio|CrossFit|yoga|pilates|boxe|nuoto|corsa|ciclismo)\b/i,
   ]
   for (const re of sportPatterns) {
     const m = lower.match(re)
@@ -523,11 +539,19 @@ export function inferAttributeToolCallsFromMessage(
     const isMale =
       /\b(?:sono\s+(?:un\s+)?uomo|sono\s+maschio|sesso\s+maschile|genere\s+maschile)\b/.test(
         lower,
-      ) || /^m(?:aschio)?\.?$/i.test(lower.trim())
+      ) ||
+      /^m(?:aschio)?\.?$/i.test(lower.trim()) ||
+      // Standalone "maschio" or "uomo" anywhere in text (e.g. "89 kg, 168 cm, 34 anni, maschio")
+      /\bmaschio\b/i.test(lower) ||
+      /\buomo\b/i.test(lower)
     const isFemale =
       /\b(?:sono\s+(?:una\s+)?donna|sono\s+femmina|sesso\s+femminile|genere\s+femminile)\b/.test(
         lower,
-      ) || /^f(?:emmina)?\.?$/i.test(lower.trim())
+      ) ||
+      /^f(?:emmina)?\.?$/i.test(lower.trim()) ||
+      // Standalone "femmina" or "donna" anywhere in text
+      /\bfemmina\b/i.test(lower) ||
+      /\bdonna\b/i.test(lower)
     if (isMale) attr('personal', 'gender', 'male')
     else if (isFemale) attr('personal', 'gender', 'female')
   }

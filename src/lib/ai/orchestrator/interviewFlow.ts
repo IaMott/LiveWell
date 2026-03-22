@@ -359,27 +359,75 @@ function buildQuestionPlan(
 // Fase 3 — Check if a question maps to a DB field already filled
 // ---------------------------------------------------------------------------
 function isFieldAlreadyInDB(question: string, contextPack: ContextPack): boolean {
-  const QUESTION_TO_FIELD: Array<{ pattern: RegExp; domain: string; key: string }> = [
-    { pattern: /obiettivo/i, domain: 'nutrition', key: 'goal' },
-    { pattern: /obiettivo/i, domain: 'general', key: 'goal' },
-    { pattern: /allergi|intolleran/i, domain: 'nutrition', key: 'allergy' },
-    { pattern: /peso/i, domain: 'personal', key: 'weight' },
-    { pattern: /altezza/i, domain: 'personal', key: 'height' },
-    { pattern: /stress/i, domain: 'mindfulness', key: 'stress_level' },
-    { pattern: /sonno|dormi/i, domain: 'mindfulness', key: 'sleep_hours' },
-    { pattern: /allenament|frequenz/i, domain: 'training', key: 'training_frequency_per_week' },
-    { pattern: /infortun|limitazion/i, domain: 'training', key: 'injury' },
-    { pattern: /diagnos/i, domain: 'health', key: 'diagnosis' },
-    { pattern: /farmac|medicinale/i, domain: 'health', key: 'medications' },
-    { pattern: /sesso|genere/i, domain: 'personal', key: 'gender' },
-    { pattern: /nascita|anni|età/i, domain: 'personal', key: 'birthDate' },
+  // Each question pattern maps to one or more (domain, key) pairs to check.
+  // We check ALL related domains — e.g., "obiettivo" might be in general:goal OR nutrition:goal.
+  const QUESTION_TO_FIELD: Array<{
+    pattern: RegExp
+    checks: Array<{ domain: string; key: string }>
+  }> = [
+    {
+      pattern: /obiettivo/i,
+      checks: [
+        { domain: 'nutrition', key: 'goal' },
+        { domain: 'general', key: 'goal' },
+        { domain: 'training', key: 'goal' },
+      ],
+    },
+    {
+      pattern: /allergi|intolleran/i,
+      checks: [
+        { domain: 'nutrition', key: 'allergy' },
+        { domain: 'health', key: 'allergy' },
+      ],
+    },
+    {
+      pattern: /peso/i,
+      checks: [
+        { domain: 'personal', key: 'weight' },
+        { domain: 'health', key: 'weight' },
+      ],
+    },
+    {
+      pattern: /altezza/i,
+      checks: [
+        { domain: 'personal', key: 'height' },
+        { domain: 'health', key: 'height' },
+      ],
+    },
+    { pattern: /stress/i, checks: [{ domain: 'mindfulness', key: 'stress_level' }] },
+    { pattern: /sonno|dormi/i, checks: [{ domain: 'mindfulness', key: 'sleep_hours' }] },
+    {
+      pattern: /allenament|frequenz/i,
+      checks: [{ domain: 'training', key: 'training_frequency_per_week' }],
+    },
+    { pattern: /infortun|limitazion/i, checks: [{ domain: 'training', key: 'injury' }] },
+    { pattern: /diagnos/i, checks: [{ domain: 'health', key: 'diagnosis' }] },
+    { pattern: /farmac|medicinale/i, checks: [{ domain: 'health', key: 'medications' }] },
+    { pattern: /sesso|genere/i, checks: [{ domain: 'personal', key: 'gender' }] },
+    {
+      pattern: /nascita|anni|età/i,
+      checks: [
+        { domain: 'personal', key: 'birthDate' },
+        { domain: 'personal', key: 'age' },
+      ],
+    },
+    { pattern: /sport|attività\s+fisica/i, checks: [{ domain: 'training', key: 'sport' }] },
+    {
+      pattern: /trigger|peggiora|fa\s+male/i,
+      checks: [{ domain: 'nutrition', key: 'food_triggers' }],
+    },
+    { pattern: /sintom/i, checks: [{ domain: 'health', key: 'symptoms' }] },
   ]
 
   const attrs = contextPack.user.attributes ?? {}
-  for (const { pattern, domain, key } of QUESTION_TO_FIELD) {
+  const attrMap = attrs as Record<string, Record<string, { value?: unknown }>>
+
+  for (const { pattern, checks } of QUESTION_TO_FIELD) {
     if (!pattern.test(question)) continue
-    const bucket = (attrs as Record<string, Record<string, { value?: unknown }>>)[domain]
-    if (bucket?.[key]?.value != null) return true
+    // If ANY of the related domain:key pairs has a value, the field is already known
+    for (const { domain, key } of checks) {
+      if (attrMap[domain]?.[key]?.value != null) return true
+    }
   }
   return false
 }

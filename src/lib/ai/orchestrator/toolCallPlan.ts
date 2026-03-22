@@ -10,6 +10,7 @@ const NON_RETRIABLE_TOOL_ERROR_CODES = new Set([
 
 export type ToolCallPlanInput = {
   consensusToolCalls: ToolCall[]
+  llmExtractedToolCalls?: ToolCall[]
   message: string
   domainHint: Domain
   activeSpecialist?: ActiveSpecialist
@@ -59,7 +60,15 @@ export function planToolCalls(input: ToolCallPlanInput): ToolCallPlan {
     domainHint: input.domainHint,
     activeSpecialist: input.activeSpecialist,
   })
-  const mergedToolCalls = [...input.consensusToolCalls, ...fallbackToolCalls]
+  // Merge 3 sources in priority order:
+  // 1. consensusToolCalls (from agent proposals — highest trust)
+  // 2. llmExtractedToolCalls (from dedicated LLM extraction — semantic understanding)
+  // 3. fallbackToolCalls (from regex — fast, zero-cost fallback)
+  const mergedToolCalls = [
+    ...input.consensusToolCalls,
+    ...(input.llmExtractedToolCalls ?? []),
+    ...fallbackToolCalls,
+  ]
   // Semantic dedup: for user.setAttribute, match on domain+key+value (ignore notes, recordedAt)
   const semanticKey = (c: ToolCall): string => {
     if (c.name === 'user.setAttribute' && c.args) {

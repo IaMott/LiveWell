@@ -85,7 +85,7 @@ export function buildThinkingEvents(
           specialistName: agentName,
           title: `${name}: "${msgPreview}${msgPreview.length >= 42 ? '…' : ''}"`,
           domain,
-          thought: 'Sta valutando la richiesta',
+          thought: `Analizza: "${msgPreview}${msgPreview.length >= 42 ? '…' : ''}"`,
         })
       }
 
@@ -102,7 +102,7 @@ export function buildThinkingEvents(
           domain,
           thought:
             hasReasoning && p.reasoning
-              ? p.reasoning.slice(0, 120).replace(/\n/g, ' ')
+              ? p.reasoning.slice(0, 300).replace(/\n/g, ' ')
               : 'Profilo incompleto — identifico i dati mancanti',
         })
       } else if (hasSummary && p.summary) {
@@ -113,8 +113,8 @@ export function buildThinkingEvents(
           domain,
           thought:
             hasReasoning && p.reasoning
-              ? p.reasoning.slice(0, 120).replace(/\n/g, ' ')
-              : p.summary.slice(0, 120).replace(/\n/g, ' '),
+              ? p.reasoning.slice(0, 300).replace(/\n/g, ' ')
+              : p.summary.slice(0, 300).replace(/\n/g, ' '),
         })
       } else {
         steps.push({
@@ -123,7 +123,7 @@ export function buildThinkingEvents(
           domain,
           thought:
             hasReasoning && p.reasoning
-              ? p.reasoning.slice(0, 120).replace(/\n/g, ' ')
+              ? p.reasoning.slice(0, 300).replace(/\n/g, ' ')
               : 'Verifico le informazioni nel profilo',
         })
       }

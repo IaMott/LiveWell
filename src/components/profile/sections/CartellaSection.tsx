@@ -150,19 +150,19 @@ const DOMAIN_CONFIG: Record<string, { label: string; emoji: string; color: strin
 }
 
 // Keys to track completeness — must match what agents actually save
+// Note: weight/height are saved to 'personal' domain by inputInference/llmExtraction,
+// so completeness check must be cross-domain (see computeCompleteness below)
 const DOMAIN_COMPLETENESS = [
+  {
+    domain: 'personal',
+    label: 'Dati Personali',
+    keys: ['weight', 'height', 'gender', 'age'],
+    color: '#8E8E93',
+  },
   {
     domain: 'health',
     label: 'Salute',
-    keys: [
-      'weight',
-      'height',
-      'blood_pressure',
-      'symptoms',
-      'diagnosis',
-      'medications',
-      'complaint',
-    ],
+    keys: ['blood_pressure', 'symptoms', 'diagnosis', 'medications', 'complaint'],
     color: '#FF3B30',
   },
   {
@@ -655,10 +655,19 @@ function EventCard({ event }: { event: ClinicalEvent }) {
 export function CartellaSection({ data }: Props) {
   const { clinicalEvents, attributesByDomain, attributesByDomainHistory, profile, user } = data
 
-  // Calcola completezza dai domini chiave (con key reali)
+  // Calcola completezza dai domini chiave — verifica CROSS-DOMAIN
+  // (peso/altezza possono essere in 'personal' o 'health', goal in 'general' o 'nutrition')
   const completeness = DOMAIN_COMPLETENESS.map(({ domain, label, keys, color }) => {
-    const attrs = attributesByDomain?.[domain] ?? {}
-    const filled = keys.filter((k) => attrs[k] !== undefined).length
+    const allDomains = attributesByDomain ?? {}
+    const filled = keys.filter((k) => {
+      // Check the target domain AND related domains
+      return (
+        allDomains[domain]?.[k] !== undefined ||
+        allDomains['personal']?.[k] !== undefined ||
+        allDomains['general']?.[k] !== undefined ||
+        allDomains['health']?.[k] !== undefined
+      )
+    }).length
     const pct = Math.round((filled / keys.length) * 100)
     return { domain, label, pct, color }
   })
