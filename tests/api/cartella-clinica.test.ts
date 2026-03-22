@@ -494,6 +494,7 @@ describe('computeMedicalRecord — completezza cartella', () => {
   })
 
   // 16. completezza 100% quando tutti i campi essenziali presenti
+  // Keys match what agents actually save via normalizeKey() + AGENT_INTAKE_KEYS
   it('health con tutti i campi essenziali → 100%', () => {
     const attrs = {
       health: {
@@ -501,11 +502,11 @@ describe('computeMedicalRecord — completezza cartella', () => {
         height: 175,
         birthDate: '1990-01-01',
         gender: 'M',
-        bloodPressure: '120/80',
-        restingHr: 68,
-        conditions: 'nessuna',
+        blood_pressure: '120/80',
+        symptoms: 'nessuno',
+        diagnosis: 'nessuna',
         medications: 'nessuno',
-        allergies: 'nessuna',
+        complaint: 'controllo',
       },
     }
     const rec = computeMedicalRecord(attrs)
@@ -520,7 +521,7 @@ describe('computeMedicalRecord — completezza cartella', () => {
         weight: 80,
         height: 170,
         gender: 'F',
-        // mancano: birthDate, bloodPressure, restingHr, conditions, medications, allergies
+        // mancano: birthDate, blood_pressure, symptoms, diagnosis, medications, complaint
       },
     }
     const rec = computeMedicalRecord(attrs)
@@ -528,7 +529,7 @@ describe('computeMedicalRecord — completezza cartella', () => {
     expect(rec.completeness['health']!.total).toBe(9)
     expect(rec.completeness['health']!.pct).toBe(33)
     expect(rec.missingKeys['health']).toHaveLength(6)
-    expect(rec.missingKeys['health']).toContain('bloodPressure')
+    expect(rec.missingKeys['health']).toContain('blood_pressure')
     expect(rec.missingKeys['health']).not.toContain('weight')
   })
 

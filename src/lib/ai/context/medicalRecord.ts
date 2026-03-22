@@ -1,22 +1,24 @@
 import type { UserAttributes, MedicalRecord } from '../types'
 
 // Essential keys to track completeness per domain — these drive the "cartella clinica"
+// Keys must match what agents ACTUALLY save via normalizeKey() in handlers.ts
+// and AGENT_INTAKE_KEYS in intakeQuestions.ts — snake_case, real names.
 export const ESSENTIAL_KEYS: Record<string, readonly string[]> = {
   health: [
     'weight',
     'height',
     'birthDate',
     'gender',
-    'bloodPressure',
-    'restingHr',
-    'conditions',
+    'blood_pressure',
+    'symptoms',
+    'diagnosis',
     'medications',
-    'allergies',
+    'complaint',
   ],
-  nutrition: ['caloricGoal', 'dietType', 'mealsPerDay', 'waterGoal', 'intolerances'],
-  training: ['weeklyFrequency', 'fitnessLevel', 'trainingGoal', 'injuries', 'preferredActivity'],
-  mindfulness: ['stressLevel', 'sleepHours', 'meditationFrequency', 'mainStressor'],
-  personal: ['occupation', 'lifestyle', 'smokingStatus', 'alcoholFrequency'],
+  nutrition: ['allergy', 'goal', 'meal_pattern', 'metabolic_condition', 'food_triggers'],
+  training: ['training_frequency_per_week', 'fitness_level', 'goal', 'injury', 'sport'],
+  mindfulness: ['stress_level', 'sleep_hours', 'sleep_quality', 'complaint', 'distress_intensity'],
+  personal: ['weight', 'height', 'gender', 'birthDate', 'goal'],
 }
 
 /**

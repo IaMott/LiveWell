@@ -7,6 +7,184 @@ type ClinicalEvent = ProfileData['clinicalEvents'][number]
 
 type Props = { data: ProfileData }
 
+// ── Human-readable labels for attribute keys ─────────────────────────────────
+// Keys match what agents save via normalizeKey() + AGENT_INTAKE_KEYS
+
+const KEY_LABELS: Record<string, string> = {
+  // Biometric / personal
+  weight: 'Peso',
+  height: 'Altezza',
+  gender: 'Sesso',
+  birthDate: 'Data di nascita',
+  age: 'Età',
+  goal: 'Obiettivo',
+  declared_goal: 'Obiettivo dichiarato',
+
+  // Health
+  blood_pressure: 'Pressione arteriosa',
+  symptoms: 'Sintomi',
+  diagnosis: 'Diagnosi',
+  medications: 'Farmaci',
+  complaint: 'Motivo consulto',
+  lifestyle: 'Stile di vita',
+  hypertension: 'Ipertensione',
+  hypertension_diagnosed_year: 'Anno diagnosi ipertensione',
+  medical_condition_note: 'Note condizioni mediche',
+  symptom_duration: 'Durata sintomi',
+  family_history: 'Familiarità',
+
+  // Nutrition
+  allergy: 'Allergie / Intolleranze',
+  meal_pattern: 'Schema pasti',
+  metabolic_condition: 'Condizioni metaboliche',
+  food_triggers: 'Trigger alimentari',
+  digestive_symptoms: 'Sintomi digestivi',
+  symptom_frequency: 'Frequenza sintomi',
+  budget_food: 'Budget alimentare',
+  cooking_time: 'Tempo preparazione',
+  cooking_experience: 'Esperienza in cucina',
+  dietary_restrictions: 'Restrizioni dietetiche',
+  supplements_current: 'Integratori attuali',
+  functional_goal: 'Obiettivo funzionale',
+  lab_results_nutrition: 'Esami nutrizionali',
+
+  // Training
+  training_frequency_per_week: 'Allenamenti/settimana',
+  fitness_level: 'Livello fitness',
+  injury: 'Infortuni',
+  sport: 'Sport praticato',
+  equipment: 'Attrezzatura',
+  body_awareness: 'Consapevolezza corporea',
+  physical_activity: 'Attività fisica',
+
+  // Pain / Rehab
+  pain_location: 'Localizzazione dolore',
+  pain_cause: 'Causa dolore',
+  pain_intensity: 'Intensità dolore',
+  functional_impact: 'Impatto funzionale',
+  functional_status: 'Stato funzionale',
+  previous_treatments: 'Trattamenti precedenti',
+  rehab_goal: 'Obiettivo riabilitativo',
+
+  // Sleep
+  sleep_hours: 'Ore di sonno',
+  sleep_latency: 'Latenza addormentamento',
+  night_wakings: 'Risvegli notturni',
+  sleep_quality: 'Qualità sonno',
+  evening_routine: 'Routine serale',
+
+  // Mental health
+  stress_level: 'Livello di stress',
+  distress_intensity: 'Intensità disagio',
+  psychiatric_history: 'Anamnesi psichiatrica',
+  substance_use: 'Uso sostanze',
+  relational_context: 'Contesto relazionale',
+  work_context: 'Contesto lavorativo',
+  mental_performance_goal: 'Obiettivo performance mentale',
+  difficulty_area: 'Area di difficoltà',
+  context: 'Contesto',
+  main_problem: 'Problema principale',
+  main_complaint: 'Problematica principale',
+
+  // Rheumatology
+  joint_pain_location: 'Articolazioni coinvolte',
+  joint_stiffness_duration: 'Rigidità mattutina',
+  autoimmune_markers: 'Marker autoimmuni',
+
+  // Dermatology
+  lesion_type: 'Tipo lesione cutanea',
+  lesion_location: 'Zona lesione',
+  triggers: 'Fattori scatenanti',
+  current_treatment: 'Trattamento in corso',
+
+  // Career / Inspiration
+  current_role: 'Ruolo attuale',
+  professional_goal: 'Obiettivo professionale',
+  main_obstacle: 'Ostacolo principale',
+  timeline: 'Tempistica',
+  leadership_role: 'Ruolo di leadership',
+  team_context: 'Contesto team',
+  main_challenge: 'Sfida principale',
+  analysis_domain: 'Dominio di analisi',
+  decision_goal: 'Obiettivo decisionale',
+  urgency: 'Urgenza',
+
+  // Financial
+  activity_type: 'Tipo attività',
+  tax_regime: 'Regime fiscale',
+  fiscal_situation: 'Situazione fiscale',
+  upcoming_deadlines: 'Scadenze',
+  income_range: 'Range reddito',
+  expenses: 'Spese principali',
+  savings: 'Risparmi',
+  financial_goal: 'Obiettivo finanziario',
+  risk_tolerance: 'Tolleranza al rischio',
+  debts: 'Debiti',
+
+  // Legal
+  legal_issue_type: 'Tipo questione legale',
+  case_status: 'Stato pratica',
+  objective: 'Obiettivo',
+  documentation: 'Documentazione',
+
+  // Life organizer
+  organizational_goal: 'Obiettivo organizzativo',
+  constraints: 'Vincoli',
+  current_tools: 'Strumenti attuali',
+
+  // Relationship
+  relationship_type: 'Tipo relazione',
+  problem_duration: 'Durata problema',
+}
+
+// Domain display config
+const DOMAIN_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
+  health: { label: 'Salute', emoji: '❤️', color: '#FF3B30' },
+  nutrition: { label: 'Nutrizione', emoji: '🍎', color: '#34C759' },
+  training: { label: 'Allenamento', emoji: '💪', color: '#007AFF' },
+  mindfulness: { label: 'Benessere Mentale', emoji: '🧠', color: '#AF52DE' },
+  personal: { label: 'Dati Personali', emoji: '👤', color: '#8E8E93' },
+  general: { label: 'Generale', emoji: '📋', color: '#FF9F0A' },
+  career: { label: 'Carriera', emoji: '💼', color: '#FF6B35' },
+  financial: { label: 'Finanze', emoji: '💰', color: '#5AC8FA' },
+}
+
+// Keys to track completeness — must match what agents actually save
+const DOMAIN_COMPLETENESS = [
+  {
+    domain: 'health',
+    label: 'Salute',
+    keys: [
+      'weight',
+      'height',
+      'blood_pressure',
+      'symptoms',
+      'diagnosis',
+      'medications',
+      'complaint',
+    ],
+    color: '#FF3B30',
+  },
+  {
+    domain: 'nutrition',
+    label: 'Nutrizione',
+    keys: ['allergy', 'goal', 'meal_pattern', 'metabolic_condition', 'food_triggers'],
+    color: '#34C759',
+  },
+  {
+    domain: 'training',
+    label: 'Allenamento',
+    keys: ['training_frequency_per_week', 'fitness_level', 'goal', 'injury', 'sport'],
+    color: '#007AFF',
+  },
+  {
+    domain: 'mindfulness',
+    label: 'Benessere Mentale',
+    keys: ['stress_level', 'sleep_hours', 'sleep_quality', 'complaint', 'distress_intensity'],
+    color: '#AF52DE',
+  },
+]
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const EVENT_CONFIG: Record<string, { label: string; color: string; emoji: string }> = {
@@ -34,6 +212,28 @@ const SEVERITY_COLOR: Record<string, string> = {
 function formatDate(iso: string | Date): string {
   const d = typeof iso === 'string' ? new Date(iso) : iso
   return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return '—'
+  if (typeof value === 'boolean') return value ? 'Sì' : 'No'
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value.map((v) => formatValue(v)).join(', ')
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+  return String(value)
+}
+
+function labelForKey(key: string): string {
+  if (KEY_LABELS[key]) return KEY_LABELS[key]
+  // Fallback: convert snake_case to Title Case
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -85,6 +285,122 @@ function CompletenessBar({
   )
 }
 
+function AttributeRow({
+  label,
+  value,
+  unit,
+}: {
+  label: string
+  value: unknown
+  unit: string | null
+}) {
+  const display = formatValue(value)
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        padding: '0.5rem 0',
+        borderBottom: '1px solid var(--color-separator, #F2F2F7)',
+        gap: '1rem',
+      }}
+    >
+      <span
+        style={{
+          fontSize: '0.8125rem',
+          color: 'var(--color-text-secondary, #8E8E93)',
+          flexShrink: 0,
+          maxWidth: '40%',
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontSize: '0.8125rem',
+          fontWeight: 500,
+          color: 'var(--color-text-primary, #1C1C1E)',
+          textAlign: 'right',
+          wordBreak: 'break-word',
+        }}
+      >
+        {display}
+        {unit ? ` ${unit}` : ''}
+      </span>
+    </div>
+  )
+}
+
+function DomainCard({
+  domain,
+  attrs,
+}: {
+  domain: string
+  attrs: Record<string, { value: unknown; unit: string | null }>
+}) {
+  const config = DOMAIN_CONFIG[domain] ?? {
+    label: labelForKey(domain),
+    emoji: '📌',
+    color: '#8E8E93',
+  }
+  const entries = Object.entries(attrs)
+  if (entries.length === 0) return null
+
+  return (
+    <div
+      style={{
+        backgroundColor: 'var(--color-surface, #fff)',
+        borderRadius: '1rem',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Domain header */}
+      <div
+        style={{
+          padding: '0.75rem 1rem',
+          borderBottom: `2px solid ${config.color}`,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+        }}
+      >
+        <span style={{ fontSize: '1.125rem' }}>{config.emoji}</span>
+        <span
+          style={{
+            fontSize: '0.875rem',
+            fontWeight: 700,
+            color: 'var(--color-text-primary, #1C1C1E)',
+          }}
+        >
+          {config.label}
+        </span>
+        <span
+          style={{
+            marginLeft: 'auto',
+            fontSize: '0.6875rem',
+            fontWeight: 600,
+            color: config.color,
+            backgroundColor: `${config.color}15`,
+            padding: '0.125rem 0.5rem',
+            borderRadius: '999px',
+          }}
+        >
+          {entries.length} {entries.length === 1 ? 'dato' : 'dati'}
+        </span>
+      </div>
+
+      {/* Attribute rows */}
+      <div style={{ padding: '0.25rem 1rem' }}>
+        {entries.map(([key, attr]) => (
+          <AttributeRow key={key} label={labelForKey(key)} value={attr.value} unit={attr.unit} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function EventCard({ event }: { event: ClinicalEvent }) {
   const config = EVENT_CONFIG[event.eventType] ?? {
     label: event.eventType,
@@ -102,7 +418,7 @@ function EventCard({ event }: { event: ClinicalEvent }) {
         borderBottom: '1px solid var(--color-separator, #E5E5EA)',
       }}
     >
-      {/* Timeline dot + line */}
+      {/* Timeline dot */}
       <div
         style={{
           display: 'flex',
@@ -200,12 +516,10 @@ function EventCard({ event }: { event: ClinicalEvent }) {
         )}
 
         <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.375rem', flexWrap: 'wrap' }}>
-          {/* Date */}
           <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary, #8E8E93)' }}>
-            📅 {formatDate(event.eventDate)}
+            {formatDate(event.eventDate)}
           </span>
 
-          {/* Severity */}
           {event.severity && (
             <span
               style={{
@@ -214,21 +528,18 @@ function EventCard({ event }: { event: ClinicalEvent }) {
                 fontWeight: 500,
               }}
             >
-              ⚠ Severità:{' '}
-              {event.severity === 'low' ? 'bassa' : event.severity === 'medium' ? 'media' : 'alta'}
+              {event.severity === 'low' ? 'Bassa' : event.severity === 'medium' ? 'Media' : 'Alta'}
             </span>
           )}
 
-          {/* Valid until */}
           {event.validUntil && (
             <span style={{ fontSize: '0.75rem', color: '#8E8E93' }}>
-              ⏱ Fino al {formatDate(event.validUntil)}
+              Fino al {formatDate(event.validUntil)}
             </span>
           )}
 
-          {/* Agent */}
           {event.agentId && (
-            <span style={{ fontSize: '0.75rem', color: '#8E8E93' }}>👤 {event.agentId}</span>
+            <span style={{ fontSize: '0.75rem', color: '#8E8E93' }}>{event.agentId}</span>
           )}
         </div>
       </div>
@@ -241,40 +552,40 @@ function EventCard({ event }: { event: ClinicalEvent }) {
 export function CartellaSection({ data }: Props) {
   const { clinicalEvents, attributesByDomain, profile, user } = data
 
-  // Calcola completezza dai domini chiave
-  const DOMAIN_COMPLETENESS = [
-    {
-      domain: 'health',
-      label: 'Salute',
-      keys: ['bloodPressure', 'restingHr', 'conditions', 'medications', 'allergies'],
-      color: '#34C759',
-    },
-    {
-      domain: 'nutrition',
-      label: 'Nutrizione',
-      keys: ['caloricGoal', 'dietType', 'mealsPerDay', 'intolerances'],
-      color: '#AF52DE',
-    },
-    {
-      domain: 'training',
-      label: 'Allenamento',
-      keys: ['weeklyFrequency', 'fitnessLevel', 'trainingGoal', 'injuries'],
-      color: '#007AFF',
-    },
-    {
-      domain: 'mindfulness',
-      label: 'Mindfulness',
-      keys: ['stressLevel', 'sleepHours', 'mainStressor'],
-      color: '#5AC8FA',
-    },
-  ]
-
+  // Calcola completezza dai domini chiave (con key reali)
   const completeness = DOMAIN_COMPLETENESS.map(({ domain, label, keys, color }) => {
     const attrs = attributesByDomain?.[domain] ?? {}
     const filled = keys.filter((k) => attrs[k] !== undefined).length
     const pct = Math.round((filled / keys.length) * 100)
     return { domain, label, pct, color }
   })
+
+  // Domini con dati da mostrare (ordine: personal → health → nutrition → training → mindfulness → rest)
+  const DOMAIN_ORDER = [
+    'personal',
+    'health',
+    'nutrition',
+    'training',
+    'mindfulness',
+    'general',
+    'career',
+    'financial',
+  ]
+  const domainsWithData = DOMAIN_ORDER.filter(
+    (d) => attributesByDomain?.[d] && Object.keys(attributesByDomain[d]).length > 0,
+  )
+  // Add any domains not in the predefined order
+  if (attributesByDomain) {
+    for (const d of Object.keys(attributesByDomain)) {
+      if (!DOMAIN_ORDER.includes(d) && Object.keys(attributesByDomain[d]).length > 0) {
+        domainsWithData.push(d)
+      }
+    }
+  }
+  const totalAttributes = domainsWithData.reduce(
+    (sum, d) => sum + Object.keys(attributesByDomain?.[d] ?? {}).length,
+    0,
+  )
 
   // Raggruppa eventi per tipo
   const eventsByType = clinicalEvents.reduce<Record<string, ClinicalEvent[]>>((acc, ev) => {
@@ -317,7 +628,6 @@ export function CartellaSection({ data }: Props) {
           gap: '1rem',
         }}
       >
-        {/* Avatar */}
         <div
           style={{
             width: '56px',
@@ -333,7 +643,6 @@ export function CartellaSection({ data }: Props) {
           <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>{initials}</span>
         </div>
 
-        {/* Info */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <p
             style={{
@@ -379,30 +688,41 @@ export function CartellaSection({ data }: Props) {
         </div>
       </div>
 
-      {/* ── Header informativo ── */}
-      <div
-        style={{
-          backgroundColor: 'rgba(52,199,89,0.06)',
-          borderRadius: '1rem',
-          padding: '1rem',
-          borderLeft: '3px solid #34C759',
-        }}
-      >
-        <p style={{ margin: '0 0 0.25rem', fontSize: '0.9375rem', fontWeight: 700 }}>
-          📁 Cartella Clinica
-        </p>
-        <p
+      {/* ── Dati raccolti dal team (IL DATABASE DINAMICO) ── */}
+      {totalAttributes > 0 ? (
+        <>
+          <h3 style={sectionHeaderStyle}>Dati raccolti ({totalAttributes})</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {domainsWithData.map((domain) => (
+              <DomainCard key={domain} domain={domain} attrs={attributesByDomain![domain]} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <div
           style={{
-            margin: 0,
-            fontSize: '0.8125rem',
-            color: 'var(--color-text-secondary, #8E8E93)',
-            lineHeight: 1.4,
+            backgroundColor: 'rgba(52,199,89,0.06)',
+            borderRadius: '1rem',
+            padding: '1rem',
+            borderLeft: '3px solid #34C759',
           }}
         >
-          Qui trovi il riepilogo dei tuoi dati sanitari raccolti dal team. Viene aggiornata
-          automaticamente durante le conversazioni.
-        </p>
-      </div>
+          <p style={{ margin: '0 0 0.25rem', fontSize: '0.9375rem', fontWeight: 700 }}>
+            Cartella Clinica
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.8125rem',
+              color: 'var(--color-text-secondary, #8E8E93)',
+              lineHeight: 1.4,
+            }}
+          >
+            I tuoi dati sanitari appariranno qui man mano che parli con il team. Viene aggiornata
+            automaticamente durante le conversazioni.
+          </p>
+        </div>
+      )}
 
       {/* ── Completezza cartella ── */}
       <h3 style={sectionHeaderStyle}>Completezza Cartella</h3>
@@ -417,7 +737,7 @@ export function CartellaSection({ data }: Props) {
             color: 'var(--color-text-secondary, #8E8E93)',
           }}
         >
-          💬 Parla con il team in chat per completare la tua cartella
+          Parla con il team in chat per completare la tua cartella
         </p>
       </div>
 
@@ -467,7 +787,6 @@ export function CartellaSection({ data }: Props) {
           {clinicalEvents.map((event) => (
             <EventCard key={event.id} event={event} />
           ))}
-          {/* Rimuovi l'ultimo separator */}
         </div>
       ) : (
         <div
