@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { decodeAssistantStoredContent } from '@/lib/chat/thinkingPersistence'
 
 const prismaMock = {
   conversation: {
@@ -117,6 +118,11 @@ describe('/api/chat/send persistence integration', () => {
         role: 'assistant',
       },
     })
+    const storedAssistantContent = prismaMock.message.create.mock.calls[1][0].data.content
+    expect(storedAssistantContent).toContain('<!--LIVEWELL_THINKING_V1:')
+    const decodedAssistant = decodeAssistantStoredContent(storedAssistantContent)
+    expect(decodedAssistant.content.length).toBeGreaterThan(0)
+    expect(decodedAssistant.thinkingSteps?.length).toBeGreaterThan(0)
   })
 
   it('persists tool audit logs for executed mutation tools inside transaction', async () => {

@@ -1,4 +1,5 @@
 import { getAuthUserId } from '@/lib/auth'
+import { decodeAssistantStoredContent } from '@/lib/chat/thinkingPersistence'
 import { prisma } from '@/lib/prisma'
 import { errorResponse } from '@/lib/security/errorSchema'
 import { checkRateLimit, getClientIp } from '@/lib/security/httpGuards'
@@ -46,9 +47,11 @@ export async function GET(
     id: conv.id,
     title: conv.title ?? 'Conversazione',
     messages: conv.messages.map((m) => ({
+      ...(m.role === 'assistant'
+        ? decodeAssistantStoredContent(m.content)
+        : { content: m.content }),
       id: m.id,
       role: m.role,
-      content: m.content,
       domain: m.domain ?? undefined,
       specialistName: m.specialistName ?? undefined,
       createdAt: m.createdAt.toISOString(),

@@ -24,6 +24,7 @@ import {
   resolveConversationId,
 } from './chatPersistence'
 import { checkAndCreateCheckpointNotifications } from '@/lib/ai/program/checkpoints'
+import type { PersistedThinkingStep } from '@/lib/chat/thinkingPersistence'
 
 export { buildDefaultContextPack } from './chatPersistence'
 
@@ -302,22 +303,62 @@ export async function POST(request: Request): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
+        const persistedThinkingTrace: PersistedThinkingStep[] = []
+        const thinkingTraceKeys = new Set<string>()
+        const normalizeThinkingEvent = (event: PersistedThinkingStep) => {
+          const specialistName = event.specialistName.trim()
+          const title = event.title.trim()
+          const thought = event.thought?.trim() || undefined
+          const domain = event.domain
+          if (!specialistName || !title) return null
+
+          return { specialistName, title, thought, domain }
+        }
+
+        const recordThinkingEvent = (event: PersistedThinkingStep) => {
+          const normalized = normalizeThinkingEvent(event)
+          if (!normalized) return null
+
+          const dedupeKey = `${normalized.specialistName}:${normalized.title}:${normalized.thought ?? ''}:${normalized.domain ?? ''}`
+          if (thinkingTraceKeys.has(dedupeKey)) return null
+
+          thinkingTraceKeys.add(dedupeKey)
+          persistedThinkingTrace.push(normalized)
+          return normalized
+        }
+
+        const emitThinkingEvent = (
+          event: PersistedThinkingStep,
+          options?: { persist?: boolean },
+        ) => {
+          const normalized =
+            options?.persist === false ? normalizeThinkingEvent(event) : recordThinkingEvent(event)
+          if (!normalized) return
+          const { specialistName, title, thought, domain } = normalized
+          controller.enqueue(
+            encoder.encode(
+              toSse({
+                type: 'agent.thinking',
+                specialistName,
+                title,
+                domain,
+                thought,
+              }),
+            ),
+          )
+        }
+
         // ── Step 1: Immediate thinking events (before orchestrate) ─────────
         // Uses resolveRoutingCandidates (same as orchestrate) for accurate agent names
         // FIX-1: Show meaningful action, not an echo of the user's text
         for (let i = 0; i < immediateAgents.length; i++) {
           const agent = immediateAgents[i]
-          controller.enqueue(
-            encoder.encode(
-              toSse({
-                type: 'agent.thinking',
-                specialistName: agent.displayName,
-                title: 'Analisi in corso',
-                domain: agent.domainTags[0] as Domain | undefined,
-                thought: 'Valutazione del caso in corso',
-              }),
-            ),
-          )
+          emitThinkingEvent({
+            specialistName: agent.displayName,
+            title: 'Analisi in corso',
+            domain: agent.domainTags[0] as Domain | undefined,
+            thought: 'Valutazione del caso in corso',
+          })
           // Short delay between immediate events
           await new Promise((r) => setTimeout(r, 280))
         }
@@ -325,19 +366,12 @@ export async function POST(request: Request): Promise<Response> {
         // ── Step 2: Orchestrate (main AI work) ────────────────────────────
         // onProgress emits real-time thinking events during orchestration
         const onProgress = (event: ProgressEvent) => {
-          controller.enqueue(
-            encoder.encode(
-              toSse({
-                type: 'agent.thinking',
-                specialistName: event.displayName,
-                title: event.thought,
-                domain: team.find((a) => a.id === event.agentId)?.domainTags[0] as
-                  | Domain
-                  | undefined,
-                thought: event.thought,
-              }),
-            ),
-          )
+          emitThinkingEvent({
+            specialistName: event.displayName,
+            title: event.thought,
+            domain: team.find((a) => a.id === event.agentId)?.domainTags[0] as Domain | undefined,
+            thought: event.thought,
+          })
         }
 
         let consensus
@@ -440,6 +474,33 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
 
+        const cpUserName = (contextPack.user?.profile as Record<string, unknown> | undefined)
+          ?.name as string | undefined
+        const protocolThinkingEvents = buildCaseThinkingEvents(consensus.protocolEvents ?? [], team)
+        const proposalThinkingEvents = buildThinkingEvents(
+          {
+            debug: {
+              round1Proposals: consensus.debug?.round1Proposals,
+              selectedAgents: consensus.debug?.selectedAgents,
+            },
+          },
+          team,
+          parsedBody.message,
+          cpUserName ?? null,
+        )
+        const thinkingEvents =
+          protocolThinkingEvents.length > 0
+            ? protocolThinkingEvents
+            : mergeThinkingEvents(protocolThinkingEvents, proposalThinkingEvents)
+        for (const event of thinkingEvents) {
+          recordThinkingEvent({
+            specialistName: event.specialistName,
+            title: event.title,
+            domain: event.domain,
+            thought: event.thought,
+          })
+        }
+
         // ── Step 4: Persist ────────────────────────────────────────────────
         const toolExecutionTrace = toolCallsToExecute.map((call) => {
           const result = toolResults.find((r) => r.toolCallId === call.id)
@@ -473,6 +534,7 @@ export async function POST(request: Request): Promise<Response> {
             userMessage: parsedBody.message,
             assistantMessage: responseText,
             assistantMessageId: assistantId,
+            thinkingTrace: persistedThinkingTrace,
             domain: activeDomain,
             specialistName,
             auditEvents: pendingAuditEvents,
@@ -514,38 +576,17 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         // ── Step 5: Real thinking events (proposal-based, fast) ───────────
-        const cpUserName = (contextPack.user?.profile as Record<string, unknown> | undefined)
-          ?.name as string | undefined
-        const protocolThinkingEvents = buildCaseThinkingEvents(consensus.protocolEvents ?? [], team)
-        const proposalThinkingEvents = buildThinkingEvents(
-          {
-            debug: {
-              round1Proposals: consensus.debug?.round1Proposals,
-              selectedAgents: consensus.debug?.selectedAgents,
-            },
-          },
-          team,
-          parsedBody.message,
-          cpUserName ?? null,
-        )
-        const thinkingEvents =
-          protocolThinkingEvents.length > 0
-            ? protocolThinkingEvents
-            : mergeThinkingEvents(protocolThinkingEvents, proposalThinkingEvents)
-
         if (thinkingEvents.length > 0) {
           for (let i = 0; i < thinkingEvents.length; i += 1) {
             const ev = thinkingEvents[i]
-            controller.enqueue(
-              encoder.encode(
-                toSse({
-                  type: 'agent.thinking',
-                  specialistName: ev.specialistName,
-                  title: ev.title,
-                  domain: ev.domain,
-                  thought: ev.thought,
-                }),
-              ),
+            emitThinkingEvent(
+              {
+                specialistName: ev.specialistName,
+                title: ev.title,
+                domain: ev.domain,
+                thought: ev.thought,
+              },
+              { persist: false },
             )
             // Brief pause between real steps, longer before first response chunk
             await new Promise((resolve) =>

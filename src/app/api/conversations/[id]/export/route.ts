@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createHash } from 'crypto'
 import { getAuthUserId } from '@/lib/auth'
+import { decodeAssistantStoredContent } from '@/lib/chat/thinkingPersistence'
 import { prisma } from '@/lib/prisma'
 
 function hashUserId(userId: string): string {
@@ -109,18 +110,32 @@ export async function GET(
     'LiveWell — Conversazione',
     `Esportata il: ${new Date().toLocaleString('it-IT')}`,
     includeFeedback ? 'Inclusi: feedback messaggi' : '',
+    'Inclusi: ragionamenti agenti',
     '─'.repeat(40),
     '',
   ].filter((l) => l !== '')
 
   for (const m of conversation.messages) {
+    const decoded = m.role === 'assistant' ? decodeAssistantStoredContent(m.content) : null
+    const messageContent = decoded?.content ?? m.content
     const who = m.role === 'user' ? 'Tu' : 'LiveWell'
     const ts = new Date(m.createdAt).toLocaleString('it-IT', {
       dateStyle: 'short',
       timeStyle: 'short',
     })
     lines.push(`[${ts}] ${who}:`)
-    lines.push(m.content)
+    lines.push(messageContent)
+
+    if (decoded?.thinkingSteps && decoded.thinkingSteps.length > 0) {
+      lines.push('  Ragionamento agenti:')
+      for (const step of decoded.thinkingSteps) {
+        const domain = step.domain ? ` [${step.domain}]` : ''
+        lines.push(`  - ${step.specialistName}${domain}: ${step.title}`)
+        if (step.thought) {
+          lines.push(`    ${step.thought}`)
+        }
+      }
+    }
 
     // Append feedback annotation after assistant messages
     if (includeFeedback && m.role === 'assistant') {

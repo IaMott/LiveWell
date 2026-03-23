@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { buildContextPack, type DbClient } from '@/lib/ai/context/contextPackBuilder'
+import { encodeAssistantContentWithThinking } from '@/lib/chat/thinkingPersistence'
 
 function makeDb(): DbClient {
+  const storedAssistantContent = encodeAssistantContentWithThinking('msg old', [
+    {
+      specialistName: 'Fisioterapista',
+      title: 'Analisi in corso',
+      thought: 'Valuto il dolore cervicale',
+      domain: 'health',
+    },
+  ])
   return {
     user: {
       findUnique: async () => ({ id: 'u1', role: 'USER' }),
@@ -15,7 +24,11 @@ function makeDb(): DbClient {
           ]
         }
         return [
-          { role: 'assistant', content: 'msg old', createdAt: new Date('2026-03-09T10:00:00Z') },
+          {
+            role: 'assistant',
+            content: storedAssistantContent,
+            createdAt: new Date('2026-03-09T10:00:00Z'),
+          },
         ]
       },
     },
@@ -86,6 +99,7 @@ describe('buildContextPack', () => {
 
     expect(pack.history.recentMessages.length).toBe(1)
     expect(pack.history.crossConversationMessages?.length).toBe(1)
+    expect(pack.history.crossConversationMessages?.[0]?.content).toBe('msg old')
     expect(pack.user.attributes?.health?.diagnosis).toBeTruthy()
     expect(pack.user.attributes?.health?.diagnosis?.value).toBe('lombalgia')
     expect(pack.history.agentWorkspaces?.[0]?.agentId).toBe('fisioterapista')

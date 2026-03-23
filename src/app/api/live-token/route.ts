@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { GoogleGenAI } from '@google/genai'
 import { errorResponse } from '@/lib/security/errorSchema'
 import { getAuthUserId } from '@/lib/auth'
+import { stripAssistantStoredMetadata } from '@/lib/chat/thinkingPersistence'
 import { getServerSecret } from '@/lib/security/secrets'
 import { getServerEnv } from '@/lib/validators/env'
 import { prisma } from '@/lib/prisma'
@@ -207,7 +208,11 @@ async function buildLiveSystemInstruction(userId: string): Promise<string> {
     const ordered = recentMessages.slice().reverse()
     for (const msg of ordered) {
       const speaker = msg.role === 'user' ? 'Utente' : 'Assistente'
-      const snippet = msg.content.slice(0, 200).replace(/\n/g, ' ')
+      const snippet = (
+        msg.role === 'assistant' ? stripAssistantStoredMetadata(msg.content) : msg.content
+      )
+        .slice(0, 200)
+        .replace(/\n/g, ' ')
       lines.push(`${speaker}: ${snippet}`)
     }
   } else {

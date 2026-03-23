@@ -1,4 +1,5 @@
 import { AttributeValue, ContextPack, Domain, Role, UserAttributes } from '../types'
+import { stripAssistantStoredMetadata } from '@/lib/chat/thinkingPersistence'
 import { computeMedicalRecord } from './medicalRecord'
 import { getRecentConversationSummaries } from '../longTermMemory'
 
@@ -379,7 +380,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
         .reverse()
         .map((m) => ({
           role: m.role,
-          content: m.content,
+          content: m.role === 'assistant' ? stripAssistantStoredMetadata(m.content) : m.content,
           createdAt: new Date(m.createdAt).toISOString(),
         })),
       recentArtifacts: recentArtifacts.map((a) => ({
@@ -436,7 +437,8 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
               .reverse()
               .map((m) => ({
                 role: m.role,
-                content: m.content,
+                content:
+                  m.role === 'assistant' ? stripAssistantStoredMetadata(m.content) : m.content,
                 createdAt: new Date(m.createdAt).toISOString(),
               }))
           : undefined,

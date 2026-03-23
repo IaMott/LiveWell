@@ -2,6 +2,11 @@ import { Prisma } from '@prisma/client'
 import { normalizeCaseState, type CaseState } from '@/lib/ai/case/state'
 import { buildContextPack } from '@/lib/ai/context/contextPackBuilder'
 import { toStoredCaseState } from '@/lib/ai/case/persistence'
+import {
+  encodeAssistantContentWithThinking,
+  stripAssistantStoredMetadata,
+  type PersistedThinkingStep,
+} from '@/lib/chat/thinkingPersistence'
 import { prisma } from '@/lib/prisma'
 import { upsertConversationSummary } from '@/lib/ai/longTermMemory'
 import type { AgentProposal, ContextPack, Role } from '@/lib/ai/types'
@@ -41,6 +46,7 @@ export type RoutePersistenceDeps = {
     userMessage: string
     assistantMessage: string
     assistantMessageId?: string
+    thinkingTrace?: PersistedThinkingStep[]
     domain?: string
     specialistName?: string
     auditEvents: MutationAuditEvent[]
@@ -140,6 +146,7 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       userMessage,
       assistantMessage,
       assistantMessageId,
+      thinkingTrace,
       domain,
       specialistName,
       auditEvents,
@@ -162,12 +169,17 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
         data: { conversationId, role: 'user', content: userMessage },
       })
 
+      const storedAssistantMessage = encodeAssistantContentWithThinking(
+        assistantMessage,
+        thinkingTrace,
+      )
+
       await prisma.message.create({
         data: {
           ...(assistantMessageId ? { id: assistantMessageId } : {}),
           conversationId,
           role: 'assistant',
-          content: assistantMessage,
+          content: storedAssistantMessage,
           ...(domain ? { domain } : {}),
           ...(specialistName ? { specialistName } : {}),
         },
@@ -269,7 +281,7 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       const allMessages = [
         ...(recentMessages ?? []).map((m) => ({ role: m.role, content: m.content })),
         { role: 'user', content: userMessage },
-        { role: 'assistant', content: assistantMessage },
+        { role: 'assistant', content: stripAssistantStoredMetadata(storedAssistantMessage) },
       ]
       upsertConversationSummary({
         userId,

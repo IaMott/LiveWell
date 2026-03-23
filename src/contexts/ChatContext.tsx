@@ -154,6 +154,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           content: string
           domain?: string
           specialistName?: string
+          thinkingSteps?: ThinkingStep[]
         }>
       }
       setMessages(
@@ -163,6 +164,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           content: m.content,
           domain: m.domain as Domain | undefined,
           specialistName: m.specialistName,
+          thinkingSteps: m.thinkingSteps,
         })),
       )
       setConversationId(id)
@@ -341,7 +343,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                         ...m,
                         content: String(event.content ?? m.content),
                         streaming: false,
-                        thinkingSteps: undefined,
                       }
                     : m,
                 ),
