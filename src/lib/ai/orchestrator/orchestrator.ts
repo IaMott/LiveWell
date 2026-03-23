@@ -1,7 +1,11 @@
 import { AgentProfile, AgentInput, ConsensusResult } from '../types'
 import { deriveActiveSpecialistFromCaseState } from '../case/compat'
 import { advanceCaseState, detectRequestedAgentId, getCaseRoutingDomain } from '../case/protocol'
-import { detectDomainFromText, detectDomainsMulti } from '../domain/domainDetection'
+import {
+  detectDomainFromText,
+  detectDomainsMulti,
+  detectSignificantDomains,
+} from '../domain/domainDetection'
 import { LlmClient } from './agentExecution'
 import { executeAgentRounds } from './agentRoundExecution'
 import { executeConsensusFlow } from './consensusFlow'
@@ -16,6 +20,7 @@ import { resolveRoutingCandidates } from './routing'
 import { synthesizeRawResponse } from './synthesis'
 import { hardenFinalAnswer } from './finalAnswer'
 import { planToolCalls } from './toolCallPlan'
+import { buildMultiDomainTriage } from './multiDomainTriage'
 import { getServerEnv } from '@/lib/validators/env'
 
 /** Hard deadline for the entire orchestration pipeline (agents + synthesis). */
@@ -64,6 +69,7 @@ export async function orchestrate(
 
   const detectedDomain = input.domainHint ?? detectDomainFromText(input.message)
   const allDomains = detectDomainsMulti(input.message).map((d) => d.domain)
+  const significantDomains = detectSignificantDomains(input.message).map((d) => d.domain)
 
   // Launch LLM extraction IN PARALLEL with the rest of orchestration.
   // This lightweight Gemini Flash call (~1s) extracts structured data from any Italian text
@@ -199,8 +205,19 @@ export async function orchestrate(
   // FIX-3: When no activeSpecialist but domain is specific and proposals exist,
   // derive an implicit specialist from the top proposal. This prevents the
   // orchestrator from giving domain-specific advice in "team" voice.
+  //
+  // MULTI-DOMAIN GUARD: When the message spans 2+ distinct domains (e.g.
+  // "ho male al ginocchio, nausea, non dormo, sono giù di morale"),
+  // we stay in TEAM mode so ALL relevant specialists contribute to the
+  // synthesis — no single specialist is forced as the voice.
+  const isMultiDomain = significantDomains.filter((d) => d !== 'general').length >= 2
   let effectiveSpecialist = activeSpecialist
-  if (!activeSpecialist && domainHint !== 'general' && round2Proposals.length > 0) {
+  if (
+    !activeSpecialist &&
+    domainHint !== 'general' &&
+    round2Proposals.length > 0 &&
+    !isMultiDomain
+  ) {
     const topProposal = round2Proposals.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]
     if (topProposal && (topProposal.confidence ?? 0) >= 0.3) {
       const topAgent = deps.team.find((a) => a.id === topProposal.agentId)
@@ -213,6 +230,58 @@ export async function orchestrate(
           runtimeCapabilities: topAgent.runtimeCapabilities,
         }
       }
+    }
+  }
+
+  // ── Multi-domain triage ──────────────────────────────────────────────
+  // When the message spans 2+ distinct domains and no specialist is locked in,
+  // generate a triage response with quick-reply buttons instead of a blended
+  // synthesis. This lets the user pick which topic to explore first.
+  if (isMultiDomain && !effectiveSpecialist) {
+    const triage = buildMultiDomainTriage(round2Proposals, deps.team)
+
+    // Emit triage thinking event
+    deps.onProgress?.({
+      agentId: 'orchestratore',
+      displayName: 'Team',
+      phase: 'synthesizing',
+      thought: 'Messaggio multi-dominio rilevato — preparo la selezione degli specialisti',
+    })
+
+    const llmExtractedToolCalls = await llmExtractionPromise
+    const toolCallPlan = planToolCalls({
+      consensusToolCalls: consensusOutcome.toolCallsToExecute,
+      llmExtractedToolCalls,
+      message: input.message,
+      domainHint,
+      activeSpecialist: undefined,
+      contextPack: input.contextPack,
+      retryGuardWindowMs:
+        typeof deps.retryGuardWindowMs === 'number' && deps.retryGuardWindowMs > 0
+          ? deps.retryGuardWindowMs
+          : getRetryGuardWindowMs(),
+    })
+
+    return {
+      ...consensusOutcome.baseConsensus,
+      caseState: caseProtocol.caseState,
+      protocolEvents: caseProtocol.events,
+      finalMessageMarkdown: triage.message,
+      quickReplies: triage.quickReplies,
+      toolCallsToExecute: toolCallPlan.toolCallsToExecute,
+      activeSpecialist: undefined,
+      debug: {
+        selectedAgents:
+          consensusOutcome.selectedAgentsFromConsensus.length > 0
+            ? consensusOutcome.selectedAgentsFromConsensus
+            : selectedAgents.map((a) => a.id),
+        conflicts: [...consensusOutcome.conflicts, ...toolCallPlan.conflictMessages],
+        decisionTrace,
+        blockedToolCalls: toolCallPlan.blockedToolCalls,
+        proposals: round2Proposals,
+        round1Proposals,
+        round2Proposals,
+      },
     }
   }
 

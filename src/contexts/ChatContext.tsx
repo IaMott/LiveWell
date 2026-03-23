@@ -22,6 +22,14 @@ export type CartellaNotification = {
   message: string
 }
 
+export type QuickReplyOption = {
+  id: string
+  label: string
+  text: string
+  emoji?: string
+  domain?: Domain
+}
+
 export type ChatMessage = {
   id: string
   role: 'user' | 'assistant'
@@ -30,6 +38,8 @@ export type ChatMessage = {
   specialistName?: string
   thinkingSteps?: ThinkingStep[]
   streaming?: boolean
+  /** Quick-reply buttons shown below the message (e.g. multi-domain triage) */
+  quickReplies?: QuickReplyOption[]
 }
 
 type ChatContextValue = {
@@ -358,6 +368,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 setTimeout(() => {
                   setCartellaNotifications((prev) => prev.filter((n) => n.id !== notifId))
                 }, 4000)
+              }
+            } else if (event.type === 'message.suggestions') {
+              const suggestions = event.suggestions as Array<{
+                id: string
+                label: string
+                text: string
+                emoji?: string
+                domain?: Domain
+              }>
+              if (Array.isArray(suggestions) && suggestions.length > 0) {
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === assistantId ? { ...m, quickReplies: suggestions } : m)),
+                )
               }
             } else if (event.type === 'agent.thinking') {
               const stepName = String(event.specialistName ?? '').trim()

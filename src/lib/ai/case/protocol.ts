@@ -211,16 +211,35 @@ function scoreImplicitOwnerCandidate(
           /\bschiena\b/i,
           /\bspalla\b/i,
           /\bcaviglia\b/i,
+          /\bcollo\b/i,
+          /\bcervicale\b/i,
+          /\btorcicollo\b/i,
+          /\bcontrattura\b/i,
+          /\bstrappo\b/i,
           /\bcorro\b/i,
         ]) * 3
       if (/\b(dolore|male)\b/i.test(lower) && /\b(alleno|allenamento|corro|corsa)\b/i.test(lower)) {
         score += 4
       }
+      if (
+        /\b(male|dolore|fa male)\b/i.test(lower) &&
+        /\b(collo|cervicale|schiena|spalla|ginocchio|caviglia|polso|gomito|anca)\b/i.test(lower)
+      ) {
+        score += 4
+      }
       break
     case 'fisiatra':
       score +=
-        matches([/\bdolore\b/i, /\blimitazioni\b/i, /\bfunzional/i, /\bcronich/i, /\briabilit/i]) *
-        3
+        matches([
+          /\bdolore\b/i,
+          /\blimitazioni\b/i,
+          /\bfunzional/i,
+          /\bcronich/i,
+          /\briabilit/i,
+          /\bcollo\b/i,
+          /\bcervicale\b/i,
+          /\bnervo\b/i,
+        ]) * 3
       break
     case 'chinesologo':
       score +=
@@ -783,11 +802,19 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
   // domain. This makes specialist transitions feel natural: user talks about
   // back pain → fisioterapista, then mentions sleep → sleep-coach, without
   // needing to explicitly say "passami lo sleep-coach".
+  //
+  // MULTI-DOMAIN GUARD: When the message spans 2+ distinct domains (e.g.
+  // "ho male al ginocchio, nausea, non dormo, giù di morale") we do NOT
+  // shift to a single owner — the orchestrator stays as coordinator and
+  // all relevant specialists contribute through the pipeline.
+  const significantDomains = allDomains.filter((d) => d !== 'general')
+  const isMultiDomainMessage = significantDomains.length >= 2
   if (
     current.protocolState === 'owner_active' &&
     !requestedAgentId &&
     !capabilityConsult &&
-    detectedDomain !== 'general'
+    detectedDomain !== 'general' &&
+    !isMultiDomainMessage
   ) {
     const currentOwner = team.find((a) => a.id === current.ownerAgentId)
     if (currentOwner && !agentSupportsDetectedDomain(currentOwner, detectedDomain)) {

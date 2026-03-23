@@ -609,6 +609,24 @@ export async function POST(request: Request): Promise<Response> {
             toSse({ type: 'message.complete', id: assistantId, content: responseText }),
           ),
         )
+
+        // ── Step 8: Quick-reply suggestions (multi-domain triage, etc.) ──
+        if (consensus.quickReplies && consensus.quickReplies.length > 0) {
+          controller.enqueue(
+            encoder.encode(
+              toSse({
+                type: 'message.suggestions',
+                suggestions: consensus.quickReplies.map((qr) => ({
+                  id: qr.id,
+                  label: qr.label,
+                  text: qr.text,
+                  emoji: qr.emoji,
+                  domain: qr.domain,
+                })),
+              }),
+            ),
+          )
+        }
       } catch {
         controller.enqueue(
           encoder.encode(

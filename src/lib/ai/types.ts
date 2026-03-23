@@ -221,6 +221,17 @@ export type DecisionTraceEvent = {
   data: Record<string, string | number | boolean | null | string[]>
 }
 
+/** Quick-reply suggestion shown as a tappable button below an assistant message. */
+export type QuickReply = {
+  id: string
+  /** Visible label on the button (e.g. "Fisioterapista") */
+  label: string
+  /** Message text sent when tapped (e.g. "Vorrei parlare con Fisioterapista") */
+  text: string
+  emoji?: string
+  domain?: Domain
+}
+
 export type ConsensusResult = {
   domain: Domain
   finalMessageMarkdown: string
@@ -231,6 +242,8 @@ export type ConsensusResult = {
   caseState?: CaseState
   /** Protocol events emitted by the canonical case engine. */
   protocolEvents?: CaseProtocolEvent[]
+  /** Quick-reply suggestions to display below the message (multi-domain triage, etc.) */
+  quickReplies?: QuickReply[]
   ui: {
     domainIcon: Domain
     moodScore: number

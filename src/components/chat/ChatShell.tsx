@@ -133,7 +133,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         </div>
       )}
 
-      <MessageList messages={messages} conversationId={conversationId} />
+      <MessageList messages={messages} conversationId={conversationId} onSend={send} />
       <ChatInput
         onSend={send}
         onHistory={() => setHistoryOpen(true)}

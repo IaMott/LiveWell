@@ -50,6 +50,10 @@ function isMidConversationFiller(message: string): boolean {
  */
 export function isGenericMessage(input: AgentInput): boolean {
   const trimmed = input.message.trim()
+  const inferredToolCalls = inferAttributeToolCallsFromMessage(trimmed, {
+    domainHint: input.domainHint ?? detectDomainFromText(trimmed),
+  })
+  if (inferredToolCalls.length > 0) return false
   // Greeting (first message or mid-conversation)
   if (isGenericGreeting(trimmed)) return true
   // M1: Mid-conversation filler — "ok", "grazie", "perfetto" etc. with no domain signal.

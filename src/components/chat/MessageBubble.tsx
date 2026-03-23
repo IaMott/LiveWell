@@ -1,4 +1,4 @@
-import type { ChatMessage, ThinkingStep } from '@/hooks/useChat'
+import type { ChatMessage, ThinkingStep, QuickReplyOption } from '@/hooks/useChat'
 import type { Domain } from '@/lib/ai/types'
 import { FeedbackWidget } from './FeedbackWidget'
 import { DOMAIN_COLORS } from '@/lib/ui/domainColors'
@@ -21,9 +21,10 @@ const DOMAIN_LABELS: Partial<Record<Domain, string>> = {
 type Props = {
   message: ChatMessage
   conversationId?: string
+  onSend?: (text: string) => void
 }
 
-export function MessageBubble({ message, conversationId }: Props) {
+export function MessageBubble({ message, conversationId, onSend }: Props) {
   const isUser = message.role === 'user'
   const domainColor = message.domain ? DOMAIN_COLORS[message.domain] : undefined
   const specialistLabel =
@@ -90,6 +91,11 @@ export function MessageBubble({ message, conversationId }: Props) {
           )}
         </div>
       </div>
+
+      {/* Quick-reply buttons (multi-domain triage, specialist suggestions) */}
+      {!isUser && !message.streaming && message.quickReplies && message.quickReplies.length > 0 && (
+        <QuickReplies options={message.quickReplies} onSelect={onSend} />
+      )}
 
       {/* Feedback widget — only for completed assistant messages */}
       {!isUser && !message.streaming && message.content && conversationId && (
@@ -379,6 +385,80 @@ function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
         @keyframes lw-thought-in {
           from { opacity: 0; }
           to { opacity: 0.75; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+/**
+ * Quick-reply buttons — tappable suggestions below an assistant message.
+ * Tapping a button sends its text as a new user message.
+ */
+function QuickReplies({
+  options,
+  onSelect,
+}: {
+  options: QuickReplyOption[]
+  onSelect?: (text: string) => void
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '0.5rem',
+        marginTop: '0.5rem',
+        marginLeft: '0.25rem',
+        animation: 'lw-qr-in 0.3s ease forwards',
+      }}
+    >
+      {options.map((option) => {
+        const domainColor = option.domain ? DOMAIN_COLORS[option.domain] : undefined
+        return (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => onSelect?.(option.text)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.375rem',
+              padding: '0.5rem 0.875rem',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              color: domainColor ?? 'var(--color-text-primary)',
+              backgroundColor: domainColor ? hexToRgba(domainColor, 0.1) : 'var(--color-surface)',
+              border: `1.5px solid ${domainColor ? hexToRgba(domainColor, 0.3) : 'var(--color-separator)'}`,
+              borderRadius: '1.25rem',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={(e) => {
+              const btn = e.currentTarget
+              btn.style.backgroundColor = domainColor
+                ? hexToRgba(domainColor, 0.2)
+                : 'var(--color-separator)'
+              btn.style.transform = 'translateY(-1px)'
+            }}
+            onMouseLeave={(e) => {
+              const btn = e.currentTarget
+              btn.style.backgroundColor = domainColor
+                ? hexToRgba(domainColor, 0.1)
+                : 'var(--color-surface)'
+              btn.style.transform = 'translateY(0)'
+            }}
+          >
+            {option.emoji && <span>{option.emoji}</span>}
+            <span>{option.label.replace(/^.+?\s/, '')}</span>
+          </button>
+        )
+      })}
+      <style>{`
+        @keyframes lw-qr-in {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>

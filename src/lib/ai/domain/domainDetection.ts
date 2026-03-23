@@ -1,5 +1,13 @@
 import type { Domain } from '../types'
 
+// ──────────────────────────────────────────────────────────────────────
+// KEYWORDS — used for basic domain scoring.
+// Convention:
+//   - Words ending in a vowel → exact word match  (\bword\b)
+//   - Words ending in a consonant → prefix match  (\bword)
+//     so "digestiv" matches "digestivo", "digestivi", etc.
+//   - Multi-word phrases → substring match (text.includes)
+// ──────────────────────────────────────────────────────────────────────
 const KEYWORDS: Record<Domain, string[]> = {
   nutrition: [
     'cibo',
@@ -13,10 +21,8 @@ const KEYWORDS: Record<Domain, string[]> = {
     'menu',
     'dimagrire',
     'perdere peso',
-    'peso',
     'allergie alimentari',
     'intolleranze alimentari',
-    'mangiare meglio',
     'alimentazione',
     'gastrite',
     'digestiv',
@@ -35,7 +41,6 @@ const KEYWORDS: Record<Domain, string[]> = {
     'pranzo',
     'cena',
     'spuntino',
-    'gastrite',
     'reflusso',
     'salto i pasti',
   ],
@@ -65,9 +70,8 @@ const KEYWORDS: Record<Domain, string[]> = {
     'riprendere ad allenarmi',
   ],
   health: [
-    'peso',
-    'pressione',
     'dolore',
+    'male',
     'infortunio',
     'sintomo',
     'medico',
@@ -97,15 +101,47 @@ const KEYWORDS: Record<Domain, string[]> = {
     'cutanei',
     'eczema',
     'pressione alta',
+    // ── Body parts (complete set) ──
     'ginocchio',
     'schiena',
     'spalla',
     'caviglia',
+    'collo',
+    'cervicale',
+    'cervicali',
+    'torcicollo',
+    'polso',
+    'gomito',
+    'anca',
+    'piede',
+    'piedi',
+    'braccio',
+    'gamba',
+    'coscia',
+    'tallone',
+    'testa',
+    'mandibola',
+    'bacino',
+    'lombare',
+    'lombari',
+    'sciatica',
+    // ── Tissue/injury ──
+    'muscolo',
+    'muscoli',
+    'muscolare',
+    'tendinite',
+    'strappo',
+    'contrattura',
+    'nervo',
+    'formicolio',
+    'intorpidimento',
+    // ── Systems ──
     'ormoni',
     'tiroide',
     'insulina',
     'metabolismo',
     'glicemia',
+    'pressione',
   ],
   mindfulness: [
     'ansia',
@@ -130,6 +166,10 @@ const KEYWORDS: Record<Domain, string[]> = {
     'focus',
     'burn out',
     'esaurito',
+    'morale',
+    'giù di morale',
+    'depresso',
+    'triste',
   ],
   inspiration: [
     'idea',
@@ -156,7 +196,6 @@ const KEYWORDS: Record<Domain, string[]> = {
     'priorità',
     'priorita',
     'ordine',
-    'lavoro',
     'carriera',
     'gestire tutto',
     'creatività',
@@ -165,6 +204,8 @@ const KEYWORDS: Record<Domain, string[]> = {
     'business',
     'career',
     'obiettivo professionale',
+    // NOTE: "lavoro" removed as standalone keyword — too ambiguous.
+    // It's still caught by WEIGHTED_PATTERNS when used in career-specific context.
   ],
   coordination: [
     'coordina',
@@ -177,6 +218,30 @@ const KEYWORDS: Record<Domain, string[]> = {
     'ordine',
   ],
   general: [],
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Pre-compiled keyword matchers.
+// Single-word keywords ending in vowel → exact \bword\b
+// Single-word keywords ending in consonant → prefix \bword  (Italian stems)
+// Multi-word phrases → text.includes() (already specific enough)
+// ──────────────────────────────────────────────────────────────────────
+type KeywordMatcher = { test: (text: string) => boolean }
+
+function buildKeywordMatcher(keyword: string): KeywordMatcher {
+  if (keyword.includes(' ')) {
+    // Multi-word phrase: simple substring (already specific)
+    return { test: (text: string) => text.includes(keyword) }
+  }
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const isPrefix = /[bcdfghlmnpqrstvwxyz]$/i.test(keyword)
+  const re = new RegExp(isPrefix ? `\\b${escaped}` : `\\b${escaped}\\b`, 'i')
+  return { test: (text: string) => re.test(text) }
+}
+
+const KEYWORD_MATCHERS: Record<Domain, KeywordMatcher[]> = {} as Record<Domain, KeywordMatcher[]>
+for (const domain of Object.keys(KEYWORDS) as Domain[]) {
+  KEYWORD_MATCHERS[domain] = KEYWORDS[domain].map(buildKeywordMatcher)
 }
 
 const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }>> = {
@@ -193,6 +258,11 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
     { pattern: /\b(perdere peso|dimagrire|mangiare meglio)\b/i, score: 3 },
     {
       pattern:
+        /\b(aggiorna(?:re)?|riprova(?:\s+ad)?\s+aggiorna(?:re)?|salva(?:re)?|registra(?:re)?)\b.{0,20}\b(peso|altezza)\b|\b(peso|altezza)\b.{0,20}\b(aggiorna(?:re)?|salva(?:re)?|registra(?:re)?)\b/i,
+      score: 4,
+    },
+    {
+      pattern:
         /\b(gastrite|reflusso|gonfiore|problemi digestivi).{0,40}\b(mangiare|alimenti|cibo)\b/i,
       score: 4,
     },
@@ -207,13 +277,19 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
   training: [
     { pattern: /\b(mi serve|voglio|dammi|fammi)\b.{0,30}\b(scheda|programma)\b/i, score: 4 },
     { pattern: /\b(ricominciare ad allenarmi|allenarmi meglio|allenarmi)\b/i, score: 3 },
-    { pattern: /\b(riprendere ad allenarmi|riprendere a correre|voglio riprendere)\b/i, score: 4 },
+    {
+      pattern: /\b(riprendere ad allenarmi|riprendere a correre|voglio riprendere)\b/i,
+      score: 4,
+    },
     { pattern: /\b(protocollo di recupero|recupero)\b/i, score: 3 },
     { pattern: /\b(mi alleno male|eseguo male gli esercizi)\b/i, score: 4 },
   ],
   health: [
     { pattern: /\b(pressione alta|giramenti|vertigini)\b/i, score: 4 },
-    { pattern: /\b(tachicardia|palpitazioni|pressione alta|giramenti|vertigini)\b/i, score: 5 },
+    {
+      pattern: /\b(tachicardia|palpitazioni|pressione alta|giramenti|vertigini)\b/i,
+      score: 5,
+    },
     {
       pattern:
         /\b(gonfiore|problemi digestivi|digestione difficile|dolore addominale|crampi addominali|reflusso|nausea|vomito)\b/i,
@@ -228,6 +304,21 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
       pattern: /\b(ormoni|tiroide|insulina|metabolismo|glicemia)\b/i,
       score: 4,
     },
+    // ── "ho male al [body part]" — the most common Italian pain expression ──
+    {
+      pattern: /\b(ho male|mi fa male|mi fanno male|fa male|avevo male|aveva male)\b/i,
+      score: 3,
+    },
+    {
+      pattern:
+        /\b(male|dolore|fa male)\b.{0,25}\b(collo|cervicale|testa|schiena|spalla|ginocchio|caviglia|piede|braccio|gamba|polso|gomito|anca|coscia|tallone|mandibola|bacino|lombare)\b/i,
+      score: 5,
+    },
+    {
+      pattern:
+        /\b(collo|cervicale|testa|schiena|spalla|ginocchio|caviglia|piede|braccio|gamba|polso|gomito|anca|coscia|tallone|mandibola|bacino|lombare)\b.{0,25}\b(male|dolore|fa male)\b/i,
+      score: 5,
+    },
     {
       pattern:
         /\b(mi fa male|dolore)\b.{0,25}\b(ginocchio|schiena|spalla|caviglia)\b|\b(ginocchio|schiena|spalla|caviglia)\b.{0,25}\b(mi fa male|dolore)\b/i,
@@ -238,6 +329,10 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
         /\b(corro|correndo|corsa|allenamento|mi alleno)\b.{0,30}\b(dolore|male|infortunio)\b|\b(dolore|male|infortunio)\b.{0,30}\b(corro|correndo|corsa|allenamento|mi alleno)\b/i,
       score: 4,
     },
+    {
+      pattern: /\b(contrattura|strappo|tendinite|formicolio|intorpidimento|torcicollo)\b/i,
+      score: 4,
+    },
     { pattern: /\b(dolore|sintomi?)\b/i, score: 2 },
   ],
   mindfulness: [
@@ -245,10 +340,17 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
     { pattern: /\b(dormo male|dormo malissimo|insonnia)\b/i, score: 4 },
     { pattern: /\b(risvegli notturni|mi sveglio|mi risveglio)\b/i, score: 5 },
     { pattern: /\b(caff[eè])\b.{0,25}\b(sera|tardi|18|19|20|notte)\b/i, score: 3 },
-    { pattern: /\b(burnout|sopraffatt[oa]|non riesco a concentrarmi|blocco mentale)\b/i, score: 5 },
+    {
+      pattern: /\b(burnout|sopraffatt[oa]|non riesco a concentrarmi|blocco mentale)\b/i,
+      score: 5,
+    },
     {
       pattern:
         /\b(lavoro|focus|concentrarmi)\b.{0,30}\b(stress|ansia|burnout)\b|\b(stress|ansia|burnout)\b.{0,30}\b(lavoro|focus|concentrarmi)\b/i,
+      score: 4,
+    },
+    {
+      pattern: /\b(giù di morale|butta giù|buttato giù|depresso|triste|tristezza)\b/i,
       score: 4,
     },
   ],
@@ -273,7 +375,15 @@ const WEIGHTED_PATTERNS: Record<Domain, Array<{ pattern: RegExp; score: number }
       score: 4,
     },
     { pattern: /\b(non riesco pi[uù] a gestire tutto|sopraffatt[oa])\b/i, score: 2 },
-    { pattern: /\b(bloccato nel lavoro|bloccata nel lavoro|carriera|lavoro)\b/i, score: 3 },
+    // "lavoro" alone is NOT enough — must be in an explicit career context
+    {
+      pattern: /\b(bloccato nel lavoro|bloccata nel lavoro|carriera|obiettivo professionale)\b/i,
+      score: 3,
+    },
+    {
+      pattern: /\b(cambiare lavoro|cerco lavoro|colloquio|promozione|ruolo)\b/i,
+      score: 4,
+    },
   ],
   coordination: [
     {
@@ -309,6 +419,28 @@ const CRITICAL_HEALTH_PATTERNS = [
 
 function getCriticalHealthScore(text: string): number {
   return CRITICAL_HEALTH_PATTERNS.some((pattern) => pattern.test(text)) ? 8 : 0
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Contextual dampening — reduces scores when a keyword appears in an
+// incidental/temporal context rather than a topical one.
+// ──────────────────────────────────────────────────────────────────────
+function getContextualDampening(text: string, domain: Domain): number {
+  // "lavoro" used in temporal context → NOT a career topic
+  if (domain === 'inspiration') {
+    const temporalWork =
+      /\b(finito di lavorare|giornata di lavoro|giornata lavorativa|tornato dal lavoro|dopo il lavoro|esco dal lavoro|uscito dal lavoro|pausa lavoro|prima del lavoro|durante il lavoro|andare al lavoro|vado al lavoro|vengo dal lavoro)\b/i
+    if (temporalWork.test(text)) {
+      // If the ONLY inspiration signal is the temporal "lavoro" reference,
+      // dampen hard. If there are other career signals, don't dampen.
+      const hasCareerSignal =
+        /\b(carriera|promozione|colloquio|ruolo|cambio lavoro|cerco lavoro|obiettivo professionale|bloccato nel lavoro)\b/i
+      if (!hasCareerSignal.test(text)) {
+        return -5
+      }
+    }
+  }
+  return 0
 }
 
 function getNegativeDomainAdjustment(text: string, domain: Domain): number {
@@ -352,14 +484,21 @@ function getNegativeDomainAdjustment(text: string, domain: Domain): number {
 
 function scoreDomain(text: string, domain: Domain): number {
   if (domain === 'general') return 0
-  const keywordScore = KEYWORDS[domain].reduce((acc, kw) => (text.includes(kw) ? acc + 1 : acc), 0)
+  const keywordScore = KEYWORD_MATCHERS[domain].reduce(
+    (acc, matcher) => (matcher.test(text) ? acc + 1 : acc),
+    0,
+  )
   const patternScore = WEIGHTED_PATTERNS[domain].reduce(
     (acc, entry) => (entry.pattern.test(text) ? acc + entry.score : acc),
     0,
   )
   const criticalHealthScore = domain === 'health' ? getCriticalHealthScore(text) : 0
   return (
-    keywordScore + patternScore + criticalHealthScore + getNegativeDomainAdjustment(text, domain)
+    keywordScore +
+    patternScore +
+    criticalHealthScore +
+    getNegativeDomainAdjustment(text, domain) +
+    getContextualDampening(text, domain)
   )
 }
 
@@ -376,6 +515,13 @@ export function detectDomainFromText(text: string): Domain {
   return best.score > 0 ? best.d : 'general'
 }
 
+/**
+ * Return all domains with a positive score, sorted descending.
+ * Domains with score < MULTI_DOMAIN_MIN_SCORE are filtered out so that
+ * incidental keyword matches don't trigger multi-domain triage.
+ */
+export const MULTI_DOMAIN_MIN_SCORE = 3
+
 export function detectDomainsMulti(text: string): Array<{ domain: Domain; score: number }> {
   const t = text.toLowerCase()
   return (Object.keys(KEYWORDS) as Domain[])
@@ -386,4 +532,12 @@ export function detectDomainsMulti(text: string): Array<{ domain: Domain; score:
     }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
+}
+
+/**
+ * Like detectDomainsMulti but only returns domains with score >= MULTI_DOMAIN_MIN_SCORE.
+ * Used by the orchestrator to decide if a message is genuinely multi-domain.
+ */
+export function detectSignificantDomains(text: string): Array<{ domain: Domain; score: number }> {
+  return detectDomainsMulti(text).filter((x) => x.score >= MULTI_DOMAIN_MIN_SCORE)
 }

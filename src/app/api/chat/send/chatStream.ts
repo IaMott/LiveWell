@@ -31,6 +31,16 @@ export type ChatStreamEvent =
       confirmToken?: string
     }
   | { type: 'message.complete'; id: string; content: string }
+  | {
+      type: 'message.suggestions'
+      suggestions: Array<{
+        id: string
+        label: string
+        text: string
+        emoji?: string
+        domain?: Domain
+      }>
+    }
   | { type: 'error'; code: string; message: string }
 
 export function toSse(event: ChatStreamEvent): string {
