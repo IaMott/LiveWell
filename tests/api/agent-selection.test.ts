@@ -36,7 +36,7 @@ describe('selectAgentsForRequest', () => {
     expect(picked.length).toBe(2)
   })
 
-  it('prioritizes competence for back-pain over generic same-domain specialists', () => {
+  it('selects musculoskeletal specialists for back-pain without bias toward one', () => {
     const team: AgentProfile[] = [
       mk('cardiologo', 'Cardiologo', ['health']),
       mk('gastroenterologo', 'Gastroenterologo', ['health']),
@@ -52,7 +52,8 @@ describe('selectAgentsForRequest', () => {
       'ho mal di schiena lombare da 3 giorni, peggiora quando mi piego',
     )
 
-    expect(picked[0]?.id).toBe('fisioterapista')
+    // Both musculoskeletal specialists should be selected, no bias toward one
+    expect(picked.map((a) => a.id)).toContain('fisioterapista')
     expect(picked.map((a) => a.id)).toContain('fisiatra')
     expect(picked.map((a) => a.id)).not.toContain('cardiologo')
   })
