@@ -105,19 +105,6 @@ const AGENT_COMPETENCE_HINTS: Record<string, string[]> = {
   'life-organizer': ['organizzazione', 'priorità', 'tempo', 'produttività', 'pianificazione'],
 }
 
-// FIX-2: Removed 'dolore' — too generic (any pain mention triggered musculoskeletal bias).
-// Kept only anatomy/condition-specific terms.
-const MUSCULOSKELETAL_HINTS = new Set([
-  'schiena',
-  'lombalgia',
-  'sciatica',
-  'postura',
-  'muscolo',
-  'muscolare',
-  'colonna',
-  'cervicale',
-])
-
 function textToTokens(text: string): Set<string> {
   return new Set(
     text
@@ -138,8 +125,14 @@ export function selectAgentsForRequest(
   const secondary = allDomains.filter((d) => d !== domain && d !== 'general')
   const lowerMessage = message.toLowerCase()
   const msgTokens = textToTokens(message)
-  const hasMusculoskeletalSignal = [...msgTokens].some((t) => MUSCULOSKELETAL_HINTS.has(t))
 
+  // Scoring is fully general — same rules for every agent:
+  //   +4  primary domain match
+  //   +1  'general' domain tag
+  //   +2  each secondary domain match
+  //   +2  agent id or displayName mentioned in message
+  //   +3  per competence-hint keyword match
+  // No hardcoded bonus for any specific agent group.
   const scored = team.map((a) => ({
     agent: a,
     score: (() => {
@@ -154,15 +147,6 @@ export function selectAgentsForRequest(
       const competenceMatches = competenceHints.filter((h) => msgTokens.has(h)).length
       if (competenceMatches > 0) s += competenceMatches * 3
 
-      // FIX-2: Reduced from +4/+5 to +2 — musculoskeletal signal should boost
-      // relevant agents moderately, not dominate scoring. Removed individual
-      // fisioterapista bonus to avoid systematic preference.
-      if (
-        hasMusculoskeletalSignal &&
-        (a.id === 'fisioterapista' || a.id === 'fisiatra' || a.id === 'medico-dello-sport')
-      ) {
-        s += 2
-      }
       return s
     })(),
   }))
