@@ -297,7 +297,6 @@ export async function POST(request: Request): Promise<Response> {
 
   // Use the same routing logic as orchestrate() for accurate immediate agents
   const immediateAgents = getImmediateThinkingAgents(team, parsedBody.message, storedCaseState)
-  const msgPreviewImmediate = parsedBody.message.slice(0, 48).trim()
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream<Uint8Array>({
@@ -305,6 +304,7 @@ export async function POST(request: Request): Promise<Response> {
       try {
         // ── Step 1: Immediate thinking events (before orchestrate) ─────────
         // Uses resolveRoutingCandidates (same as orchestrate) for accurate agent names
+        // FIX-1: Show meaningful action, not an echo of the user's text
         for (let i = 0; i < immediateAgents.length; i++) {
           const agent = immediateAgents[i]
           controller.enqueue(
@@ -312,9 +312,9 @@ export async function POST(request: Request): Promise<Response> {
               toSse({
                 type: 'agent.thinking',
                 specialistName: agent.displayName,
-                title: `"${msgPreviewImmediate}${parsedBody.message.length > 48 ? '…' : ''}"`,
+                title: 'Analisi in corso',
                 domain: agent.domainTags[0] as Domain | undefined,
-                thought: `Analizza: "${msgPreviewImmediate}${parsedBody.message.length > 48 ? '…' : ''}"`,
+                thought: 'Valutazione del caso in corso',
               }),
             ),
           )

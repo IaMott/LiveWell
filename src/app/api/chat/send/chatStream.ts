@@ -55,12 +55,9 @@ export function buildThinkingEvents(
     }
   },
   team: Array<{ id: string; displayName: string; domainTags: Domain[] }>,
-  userMessage?: string,
-  userName?: string | null,
+  _userMessage?: string,
+  _userName?: string | null,
 ): Array<{ specialistName: string; title: string; domain?: Domain; thought?: string }> {
-  const name = userName ?? "l'utente"
-  const msgPreview = userMessage ? userMessage.slice(0, 42).trim() : ''
-
   const round1 = consensus.debug?.round1Proposals ?? []
   const selectedIds = consensus.debug?.selectedAgents ?? []
 
@@ -74,57 +71,45 @@ export function buildThinkingEvents(
       thought?: string
     }> = []
 
+    // FIX-1: Show the REAL specialist reasoning — no echo of the user's text.
+    // Each proposal generates ONE step with the agent's actual analysis.
     for (const p of proposals) {
       const agent = team.find((a) => a.id === p.agentId)
       const agentName = agent?.displayName ?? p.agentId
       const domain = p.domain
 
-      // Step A: interpreting the user message
-      if (msgPreview) {
-        steps.push({
-          specialistName: agentName,
-          title: `${name}: "${msgPreview}${msgPreview.length >= 42 ? '…' : ''}"`,
-          domain,
-          thought: `Analizza: "${msgPreview}${msgPreview.length >= 42 ? '…' : ''}"`,
-        })
-      }
-
-      // Step B: what the agent found / needs — use actual proposal content
       const hasQuestions = p.questions && p.questions.length > 0
       const hasSummary = p.summary && !p.summary.toLowerCase().includes('[unavailable]')
       const hasReasoning = p.reasoning && p.reasoning.length > 5
 
+      // Full reasoning without truncation — the UI handles overflow
+      const fullThought =
+        hasReasoning && p.reasoning
+          ? p.reasoning.replace(/\n/g, ' ')
+          : hasSummary && p.summary
+            ? p.summary.replace(/\n/g, ' ')
+            : 'Verifico le informazioni nel profilo'
+
       if (hasQuestions && p.questions) {
-        const q = p.questions[0].slice(0, 58)
         steps.push({
           specialistName: agentName,
-          title: `da raccogliere: ${q}${p.questions[0].length > 58 ? '…' : ''}`,
+          title: `Da raccogliere: ${p.questions[0]}`,
           domain,
-          thought:
-            hasReasoning && p.reasoning
-              ? p.reasoning.slice(0, 300).replace(/\n/g, ' ')
-              : 'Profilo incompleto — identifico i dati mancanti',
+          thought: fullThought,
         })
       } else if (hasSummary && p.summary) {
-        const preview = p.summary.slice(0, 62).replace(/\n/g, ' ')
         steps.push({
           specialistName: agentName,
-          title: preview + (p.summary.length > 62 ? '…' : ''),
+          title: p.summary.replace(/\n/g, ' '),
           domain,
-          thought:
-            hasReasoning && p.reasoning
-              ? p.reasoning.slice(0, 300).replace(/\n/g, ' ')
-              : p.summary.slice(0, 300).replace(/\n/g, ' '),
+          thought: fullThought,
         })
       } else {
         steps.push({
           specialistName: agentName,
-          title: 'valuto il profilo e il contesto',
+          title: 'Valuto il profilo e il contesto',
           domain,
-          thought:
-            hasReasoning && p.reasoning
-              ? p.reasoning.slice(0, 300).replace(/\n/g, ' ')
-              : 'Verifico le informazioni nel profilo',
+          thought: fullThought,
         })
       }
 
@@ -138,7 +123,7 @@ export function buildThinkingEvents(
       if (primary && secondary) {
         steps.push({
           specialistName: secondary.displayName,
-          title: `mi confronto con ${primary.displayName}`,
+          title: `Mi confronto con ${primary.displayName}`,
           domain: proposals[1].domain,
           thought: 'Scambio di informazioni tra specialisti del team',
         })
@@ -154,9 +139,7 @@ export function buildThinkingEvents(
       const agent = team.find((a) => a.id === agentId)
       return {
         specialistName: agent?.displayName ?? agentId,
-        title: msgPreview
-          ? `analisi: "${msgPreview}${msgPreview.length >= 42 ? '…' : ''}"`
-          : 'Valutazione specialistica in corso',
+        title: 'Valutazione specialistica in corso',
         domain: agent?.domainTags?.[0],
         thought: 'Elaborazione in corso',
       }

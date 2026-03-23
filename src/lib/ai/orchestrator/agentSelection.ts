@@ -105,6 +105,8 @@ const AGENT_COMPETENCE_HINTS: Record<string, string[]> = {
   'life-organizer': ['organizzazione', 'priorità', 'tempo', 'produttività', 'pianificazione'],
 }
 
+// FIX-2: Removed 'dolore' — too generic (any pain mention triggered musculoskeletal bias).
+// Kept only anatomy/condition-specific terms.
 const MUSCULOSKELETAL_HINTS = new Set([
   'schiena',
   'lombalgia',
@@ -113,7 +115,6 @@ const MUSCULOSKELETAL_HINTS = new Set([
   'muscolo',
   'muscolare',
   'colonna',
-  'dolore',
   'cervicale',
 ])
 
@@ -153,14 +154,14 @@ export function selectAgentsForRequest(
       const competenceMatches = competenceHints.filter((h) => msgTokens.has(h)).length
       if (competenceMatches > 0) s += competenceMatches * 3
 
+      // FIX-2: Reduced from +4/+5 to +2 — musculoskeletal signal should boost
+      // relevant agents moderately, not dominate scoring. Removed individual
+      // fisioterapista bonus to avoid systematic preference.
       if (
         hasMusculoskeletalSignal &&
         (a.id === 'fisioterapista' || a.id === 'fisiatra' || a.id === 'medico-dello-sport')
       ) {
-        s += 4
-      }
-      if (hasMusculoskeletalSignal && a.id === 'fisioterapista') {
-        s += 1
+        s += 2
       }
       return s
     })(),

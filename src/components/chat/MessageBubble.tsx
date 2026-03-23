@@ -326,7 +326,7 @@ function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
                 <span style={{ fontWeight: 400 }}>{step.title}</span>
               </span>
             </div>
-            {/* Thought — visible for ALL steps, italic */}
+            {/* FIX-1: Show full specialist reasoning — wrap text, no truncation */}
             {step.thought && (
               <span
                 style={{
@@ -336,11 +336,9 @@ function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
                   fontStyle: 'italic',
                   opacity: isLatest ? undefined : 0.7,
                   animation: isLatest ? 'lw-thought-in 0.4s ease 0.2s forwards' : undefined,
-                  maxWidth: '300px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  maxWidth: '320px',
                   display: 'block',
+                  lineHeight: 1.4,
                 }}
               >
                 {step.thought}

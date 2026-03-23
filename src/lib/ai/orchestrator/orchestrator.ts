@@ -117,14 +117,13 @@ export async function orchestrate(
   })
   decisionTrace.push(...routingDecisionTrace)
 
-  // Emit progress for each selected agent starting analysis — with contextual thought
-  const msgPreview = input.message.slice(0, 60).replace(/\n/g, ' ').trim()
+  // FIX-1: Emit meaningful phase title, not an echo of the user's text
   for (const agent of selectedAgents) {
     deps.onProgress?.({
       agentId: agent.id,
       displayName: agent.displayName,
       phase: 'analyzing',
-      thought: `Analizza: "${msgPreview}${input.message.length > 60 ? '…' : ''}"`,
+      thought: 'Valutazione del caso in corso',
     })
   }
 
@@ -146,15 +145,19 @@ export async function orchestrate(
         'executeAgentRounds',
       )
 
-  // Emit progress with actual proposal summaries after Round 1
+  // FIX-1: Show the FULL proposal reasoning, not truncated to 100 chars
   for (const proposal of round1Proposals) {
     const agent = deps.team.find((a) => a.id === proposal.agentId)
     if (agent && proposal.summary && !proposal.summary.toLowerCase().includes('[unavailable]')) {
+      const thought =
+        proposal.reasoning && proposal.reasoning.length > 5
+          ? proposal.reasoning.replace(/\n/g, ' ')
+          : proposal.summary.replace(/\n/g, ' ')
       deps.onProgress?.({
         agentId: agent.id,
         displayName: agent.displayName,
         phase: 'analyzing',
-        thought: proposal.summary.slice(0, 100).replace(/\n/g, ' '),
+        thought,
       })
     }
   }
@@ -193,13 +196,33 @@ export async function orchestrate(
     })
   }
 
+  // FIX-3: When no activeSpecialist but domain is specific and proposals exist,
+  // derive an implicit specialist from the top proposal. This prevents the
+  // orchestrator from giving domain-specific advice in "team" voice.
+  let effectiveSpecialist = activeSpecialist
+  if (!activeSpecialist && domainHint !== 'general' && round2Proposals.length > 0) {
+    const topProposal = round2Proposals.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]
+    if (topProposal && (topProposal.confidence ?? 0) >= 0.3) {
+      const topAgent = deps.team.find((a) => a.id === topProposal.agentId)
+      if (topAgent) {
+        effectiveSpecialist = {
+          id: topAgent.id,
+          displayName: topAgent.displayName,
+          domain: topProposal.domain,
+          domains: topAgent.domainTags as import('../types').Domain[],
+          runtimeCapabilities: topAgent.runtimeCapabilities,
+        }
+      }
+    }
+  }
+
   const { finalInterviewQuestions, round2WithQueue, round2ForPersistence } = applyInterviewFlow({
     domain: domainHint,
     contextPack: input.contextPack,
     userMessage: input.message,
     consensusGatingQuestions: consensusOutcome.gatingQuestions,
     round2Proposals,
-    activeSpecialist,
+    activeSpecialist: effectiveSpecialist,
     teamAgentIds: deps.team.map((a) => a.id),
   })
 
@@ -212,7 +235,7 @@ export async function orchestrate(
     // interview-flow queue — passing the same array twice caused double-counting.
     criticalQuestions: consensusOutcome.gatingQuestions ?? [],
     contextPack: input.contextPack,
-    activeSpecialist,
+    activeSpecialist: effectiveSpecialist,
   })
   const finalAnswer = hardenFinalAnswer({
     rawText: synthesis.rawText,
@@ -233,7 +256,7 @@ export async function orchestrate(
     llmExtractedToolCalls,
     message: input.message,
     domainHint,
-    activeSpecialist,
+    activeSpecialist: effectiveSpecialist,
     contextPack: input.contextPack,
     retryGuardWindowMs,
   })
@@ -245,7 +268,7 @@ export async function orchestrate(
     gatingQuestions: finalInterviewQuestions,
     toolCallsToExecute: toolCallPlan.toolCallsToExecute,
     finalMessageMarkdown: finalAnswer.finalText,
-    activeSpecialist,
+    activeSpecialist: effectiveSpecialist,
     debug: {
       selectedAgents:
         consensusOutcome.selectedAgentsFromConsensus.length > 0
