@@ -675,6 +675,9 @@ export function CartellaSection({ data }: Props) {
   // Use history data for display, fall back to latest-only if unavailable
   const historyData = attributesByDomainHistory ?? null
 
+  // Keys already shown in the header summary card — don't duplicate in DATI RACCOLTI
+  const HEADER_SHOWN_KEYS = new Set(['weight', 'height', 'age', 'gender'])
+
   // Domini con dati da mostrare (ordine: personal → health → nutrition → training → mindfulness → rest)
   const DOMAIN_ORDER = [
     'personal',
@@ -687,19 +690,38 @@ export function CartellaSection({ data }: Props) {
     'financial',
   ]
   const domainSource = historyData ?? attributesByDomain
+
+  // Filter out personal keys already displayed in the header card
+  const filteredDomainSource = { ...domainSource } as typeof domainSource
+  if (filteredDomainSource?.['personal']) {
+    const personalKeys = Object.keys(filteredDomainSource['personal'])
+    const nonHeaderKeys = personalKeys.filter((k) => !HEADER_SHOWN_KEYS.has(k))
+    if (nonHeaderKeys.length === 0) {
+      // All personal keys are already in the header — don't show the personal card
+      delete (filteredDomainSource as Record<string, unknown>)['personal']
+    } else {
+      // Keep only non-header keys in the personal domain
+      const filtered: Record<string, unknown> = {}
+      for (const k of nonHeaderKeys) {
+        filtered[k] = (filteredDomainSource['personal'] as Record<string, unknown>)[k]
+      }
+      ;(filteredDomainSource as Record<string, Record<string, unknown>>)['personal'] = filtered
+    }
+  }
+
   const domainsWithData = DOMAIN_ORDER.filter(
-    (d) => domainSource?.[d] && Object.keys(domainSource[d]).length > 0,
+    (d) => filteredDomainSource?.[d] && Object.keys(filteredDomainSource[d]).length > 0,
   )
   // Add any domains not in the predefined order
-  if (domainSource) {
-    for (const d of Object.keys(domainSource)) {
-      if (!DOMAIN_ORDER.includes(d) && Object.keys(domainSource[d]).length > 0) {
+  if (filteredDomainSource) {
+    for (const d of Object.keys(filteredDomainSource)) {
+      if (!DOMAIN_ORDER.includes(d) && Object.keys(filteredDomainSource[d]).length > 0) {
         domainsWithData.push(d)
       }
     }
   }
   const totalAttributes = domainsWithData.reduce(
-    (sum, d) => sum + Object.keys(domainSource?.[d] ?? {}).length,
+    (sum, d) => sum + Object.keys(filteredDomainSource?.[d] ?? {}).length,
     0,
   )
 
@@ -810,19 +832,29 @@ export function CartellaSection({ data }: Props) {
           <h3 style={sectionHeaderStyle}>Dati raccolti ({totalAttributes})</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {domainsWithData.map((domain) => {
+              // Use filtered source for personal domain to avoid duplication with header
+              const sourceForDomain =
+                domain === 'personal' && filteredDomainSource?.['personal']
+                  ? filteredDomainSource['personal']
+                  : null
+
               if (historyData?.[domain]) {
-                return (
-                  <DomainCard key={domain} domain={domain} attrsHistory={historyData[domain]} />
-                )
+                const historyForDomain =
+                  domain === 'personal' && sourceForDomain
+                    ? (sourceForDomain as Record<string, AttrHistoryEntry[]>)
+                    : historyData[domain]
+                return <DomainCard key={domain} domain={domain} attrsHistory={historyForDomain} />
               }
               // Fallback: wrap latest-only data as single-entry history
               const latestAttrs = attributesByDomain?.[domain] ?? {}
               const fallbackHistory: Record<string, AttrHistoryEntry[]> = {}
               for (const [key, attr] of Object.entries(latestAttrs)) {
+                if (domain === 'personal' && HEADER_SHOWN_KEYS.has(key)) continue
                 fallbackHistory[key] = [
                   { value: attr.value, unit: attr.unit, recordedAt: new Date() },
                 ]
               }
+              if (Object.keys(fallbackHistory).length === 0) return null
               return <DomainCard key={domain} domain={domain} attrsHistory={fallbackHistory} />
             })}
           </div>

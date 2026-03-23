@@ -170,15 +170,16 @@ function buildL1BaselineQuestions(contextPack: ContextPack, userMessage: string)
   const attrs = contextPack.user.attributes ?? {}
   const lower = buildConversationFocusText(contextPack, userMessage)
 
-  // Skip L1 if the message already carries specific health/numeric data (measurements, symptoms).
-  const hasSpecificData =
-    hasSpecificCaseSignals(lower) ||
+  // Skip L1 if the message carries specific MEDICAL context (symptoms, conditions, treatments).
+  // But NOT for pure biometric data like "89 kg, 168 cm, 34 anni" — those are data-provision
+  // messages and we still need to ask about goals/objectives.
+  const hasMedicalContext =
+    SPECIFIC_CASE_PATTERN.test(lower) ||
     lower.includes('soffro') ||
-    lower.includes('alleno') ||
     lower.includes('sono nato') ||
     lower.includes('sono nata') ||
     lower.includes('data di nascita')
-  if (hasSpecificData) return []
+  if (hasMedicalContext) return []
 
   // F4: Collect ALL missing baseline fields and ask up to 3 at once instead of 1 per turn.
   // This reduces the 6+ turn onboarding to 2-3 turns max.
