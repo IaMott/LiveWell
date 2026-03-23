@@ -11,7 +11,14 @@ import { resolveRoutingCandidates } from '@/lib/ai/orchestrator/routing'
 import { detectDomainFromText, detectDomainsMulti } from '@/lib/ai/domain/domainDetection'
 import { createLlmWithFallback } from '@/lib/ai/llmFactory'
 import { loadTeam } from '@/lib/ai/team/loader'
-import type { AgentInput, AgentProfile, Domain, ToolCall, ToolResult } from '@/lib/ai/types'
+import type {
+  AgentInput,
+  AgentProfile,
+  AgentProposal,
+  Domain,
+  ToolCall,
+  ToolResult,
+} from '@/lib/ai/types'
 import { ALLOWED_TOOL_NAMES, isAllowedToolName } from '@/lib/tools/toolRegistry'
 import { createToolExecutor, type MutationAuditEvent } from '@/lib/tools/toolExecutor'
 import { realToolHandlers, stubToolHandlers } from '@/lib/tools/handlers'
@@ -135,6 +142,57 @@ function getImmediateThinkingAgents(
       (a) => a.id !== 'orchestratore' && a.id !== 'intervistatore' && a.id !== 'analista-contesto',
     )
     .slice(0, 2)
+}
+
+function normalizeThinkingText(value?: string): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.replace(/\r\n/g, '\n').trim()
+  return normalized.length > 0 ? normalized : undefined
+}
+
+function dedupeThinkingSteps(steps: PersistedThinkingStep[]): PersistedThinkingStep[] {
+  const out: PersistedThinkingStep[] = []
+  const seen = new Set<string>()
+
+  for (const step of steps) {
+    const specialistName = step.specialistName.trim()
+    const title = step.title.trim()
+    const thought = normalizeThinkingText(step.thought)
+    const domain = step.domain
+    if (!specialistName || !title) continue
+
+    const key = `${specialistName}:${title}:${thought ?? ''}:${domain ?? ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ specialistName, title, thought, domain })
+  }
+
+  return out
+}
+
+function buildProposalThinkingTrace(
+  proposals: AgentProposal[] | undefined,
+  team: AgentProfile[],
+): PersistedThinkingStep[] {
+  const steps: PersistedThinkingStep[] = []
+
+  for (const proposal of proposals ?? []) {
+    if ((proposal.confidence ?? 0) === 0) continue
+    const summary = normalizeThinkingText(proposal.summary)
+    if (!summary || summary.toLowerCase().includes('[unavailable]')) continue
+
+    const agent = team.find((a) => a.id === proposal.agentId)
+    if (!agent) continue
+
+    steps.push({
+      specialistName: agent.displayName,
+      title: summary,
+      thought: normalizeThinkingText(proposal.reasoning) ?? summary,
+      domain: proposal.domain,
+    })
+  }
+
+  return dedupeThinkingSteps(steps)
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -303,7 +361,7 @@ export async function POST(request: Request): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        const persistedThinkingTrace: PersistedThinkingStep[] = []
+        const streamedThinkingTrace: PersistedThinkingStep[] = []
         const thinkingTraceKeys = new Set<string>()
         const normalizeThinkingEvent = (event: PersistedThinkingStep) => {
           const specialistName = event.specialistName.trim()
@@ -323,7 +381,7 @@ export async function POST(request: Request): Promise<Response> {
           if (thinkingTraceKeys.has(dedupeKey)) return null
 
           thinkingTraceKeys.add(dedupeKey)
-          persistedThinkingTrace.push(normalized)
+          streamedThinkingTrace.push(normalized)
           return normalized
         }
 
@@ -492,14 +550,22 @@ export async function POST(request: Request): Promise<Response> {
           protocolThinkingEvents.length > 0
             ? protocolThinkingEvents
             : mergeThinkingEvents(protocolThinkingEvents, proposalThinkingEvents)
-        for (const event of thinkingEvents) {
-          recordThinkingEvent({
+        const proposalTrace = dedupeThinkingSteps([
+          ...buildProposalThinkingTrace(consensus.debug?.round1Proposals, team),
+          ...buildProposalThinkingTrace(consensus.debug?.round2Proposals, team),
+        ])
+        const protocolTrace = dedupeThinkingSteps(
+          protocolThinkingEvents.map((event) => ({
             specialistName: event.specialistName,
             title: event.title,
             domain: event.domain,
             thought: event.thought,
-          })
-        }
+          })),
+        )
+        const persistedThinkingTrace =
+          proposalTrace.length > 0
+            ? dedupeThinkingSteps([...proposalTrace, ...protocolTrace])
+            : dedupeThinkingSteps([...protocolTrace, ...streamedThinkingTrace])
 
         // ── Step 4: Persist ────────────────────────────────────────────────
         const toolExecutionTrace = toolCallsToExecute.map((call) => {

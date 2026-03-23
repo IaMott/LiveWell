@@ -125,6 +125,72 @@ describe('/api/chat/send persistence integration', () => {
     expect(decodedAssistant.thinkingSteps?.length).toBeGreaterThan(0)
   })
 
+  it('persists full proposal reasoning instead of only generic stream status labels', async () => {
+    vi.resetModules()
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: vi.fn(async () => ({
+        domain: 'health',
+        finalMessageMarkdown: 'Ti spiego cosa noto dal quadro clinico.',
+        toolCallsToExecute: [],
+        caseState: undefined,
+        protocolEvents: [],
+        activeSpecialist: {
+          id: 'fisioterapista',
+          displayName: 'Fisioterapista',
+          domain: 'training',
+          domains: ['training', 'health'],
+        },
+        ui: { domainIcon: 'health', moodScore: 50, sectionScores: { health: 60, general: 50 } },
+        safety: { escalation: 'none' },
+        debug: {
+          selectedAgents: ['fisioterapista'],
+          conflicts: [],
+          round1Proposals: [
+            {
+              agentId: 'fisioterapista',
+              domain: 'training',
+              summary: 'Il quadro suggerisce una componente muscolo-tensiva del trapezio sinistro',
+              reasoning:
+                'Il dolore cronico al trapezio sinistro, associato a posizione seduta prolungata e risvegli notturni, fa pensare a una componente muscolo-tensiva con possibile sovraccarico posturale.\nServe confermare se ci sono irradiazioni, limitazione del movimento o diagnosi strumentale recente.',
+              confidence: 0.91,
+            },
+          ],
+          round2Proposals: [],
+        },
+      })),
+      ORCHESTRATION_BUDGET_MS: 30000,
+    }))
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const req = new Request('http://localhost/api/chat/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': 'u-db',
+      },
+      body: JSON.stringify({ message: 'ho dolore al trapezio sinistro da mesi' }),
+    })
+
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    await res.text()
+
+    const storedAssistantContent = prismaMock.message.create.mock.calls[1][0].data.content
+    const decodedAssistant = decodeAssistantStoredContent(storedAssistantContent)
+
+    expect(decodedAssistant.thinkingSteps).toEqual([
+      expect.objectContaining({
+        specialistName: 'Fisioterapista',
+        title: 'Il quadro suggerisce una componente muscolo-tensiva del trapezio sinistro',
+        thought: expect.stringContaining('componente muscolo-tensiva'),
+      }),
+    ])
+    expect(decodedAssistant.thinkingSteps?.[0]?.thought).toContain(
+      'Serve confermare se ci sono irradiazioni',
+    )
+    expect(decodedAssistant.thinkingSteps?.[0]?.title).not.toBe('Analisi in corso')
+  })
+
   it('persists tool audit logs for executed mutation tools inside transaction', async () => {
     vi.resetModules()
     const { POST } = await import('@/app/api/chat/send/route')

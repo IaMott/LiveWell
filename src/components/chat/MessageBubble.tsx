@@ -345,6 +345,7 @@ function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
                   maxWidth: '320px',
                   display: 'block',
                   lineHeight: 1.4,
+                  whiteSpace: 'pre-wrap',
                 }}
               >
                 {step.thought}

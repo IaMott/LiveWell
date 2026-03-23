@@ -132,7 +132,9 @@ export async function GET(
         const domain = step.domain ? ` [${step.domain}]` : ''
         lines.push(`  - ${step.specialistName}${domain}: ${step.title}`)
         if (step.thought) {
-          lines.push(`    ${step.thought}`)
+          for (const line of step.thought.split('\n')) {
+            lines.push(`    ${line}`)
+          }
         }
       }
     }

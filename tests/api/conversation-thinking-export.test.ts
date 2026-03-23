@@ -33,7 +33,8 @@ describe('conversation thinking persistence and export', () => {
     {
       specialistName: 'Fisioterapista',
       title: 'Analisi in corso',
-      thought: 'Valuto il dolore e i trigger di movimento',
+      thought:
+        'Valuto il dolore e i trigger di movimento.\nIl pattern cronico suggerisce una componente muscolo-tensiva e posturale.',
       domain: 'health',
     },
     {
@@ -80,7 +81,8 @@ describe('conversation thinking persistence and export', () => {
       expect.objectContaining({
         specialistName: 'Fisioterapista',
         title: 'Analisi in corso',
-        thought: 'Valuto il dolore e i trigger di movimento',
+        thought:
+          'Valuto il dolore e i trigger di movimento.\nIl pattern cronico suggerisce una componente muscolo-tensiva e posturale.',
         domain: 'health',
       }),
       expect.objectContaining({
@@ -149,6 +151,9 @@ describe('conversation thinking persistence and export', () => {
     expect(text).toContain('Ragionamento agenti:')
     expect(text).toContain('- Fisioterapista [health]: Analisi in corso')
     expect(text).toContain('Valuto il dolore e i trigger di movimento')
+    expect(text).toContain(
+      'Il pattern cronico suggerisce una componente muscolo-tensiva e posturale.',
+    )
     expect(text).toContain('- Nutrizionista [nutrition]: Confronto tra specialisti')
   })
 })
