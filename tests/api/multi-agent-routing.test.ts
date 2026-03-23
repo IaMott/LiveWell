@@ -504,7 +504,7 @@ describe('selectAgentsForRequest — scoring', () => {
     expect(agents.length).toBeLessThanOrEqual(3)
   })
 
-  it('musculoskeletal hint → fisioterapista ha boost extra', () => {
+  it('musculoskeletal keywords select relevant specialists via competence hints', () => {
     const agents = selectAgentsForRequest(
       FULL_TEAM,
       'health',
@@ -513,7 +513,9 @@ describe('selectAgentsForRequest — scoring', () => {
       'ho dolore muscolare alla colonna',
     )
     const ids = agents.map((a) => a.id)
-    // fisioterapista deve essere tra i primi 2 (ha +4 base domain + +4 musculoskeletal + +1 extra)
-    expect(ids.indexOf('fisioterapista')).toBeLessThan(3)
+    // Both fisioterapista and fisiatra have competence hints matching 'muscolo'/'colonna'
+    // They should be selected without any hardcoded bonus — just competence hints
+    expect(ids).toContain('fisioterapista')
+    expect(ids).toContain('fisiatra')
   })
 })

@@ -9,6 +9,7 @@ export type CaseTransitionKind =
   | 'consult_blocked'
   | 'handoff_requested'
   | 'handoff_completed'
+  | 'domain_shift'
 
 export type CaseProtocolEvent = {
   kind: CaseTransitionKind

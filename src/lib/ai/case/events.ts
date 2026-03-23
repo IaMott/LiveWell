@@ -61,6 +61,13 @@ export function buildCaseThinkingEvents(
           domain: getDomain(event.toAgentId),
           thought: 'Handoff permanente completato',
         }
+      case 'domain_shift':
+        return {
+          specialistName: getName(event.toAgentId),
+          title: `subentro — il tema è cambiato`,
+          domain: getDomain(event.toAgentId),
+          thought: `${getName(event.fromAgentId)} passa il caso a ${getName(event.toAgentId)}`,
+        }
       case 'consult_blocked':
         return {
           specialistName: getName(event.actorAgentId),

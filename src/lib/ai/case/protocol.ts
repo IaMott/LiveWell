@@ -777,6 +777,42 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
     }
   }
 
+  // ── Domain shift detection ────────────────────────────────────────────
+  // When the owner is active but the detected domain is NOT covered by the
+  // current owner's domain tags, auto-switch to the best agent for the new
+  // domain. This makes specialist transitions feel natural: user talks about
+  // back pain → fisioterapista, then mentions sleep → sleep-coach, without
+  // needing to explicitly say "passami lo sleep-coach".
+  if (
+    current.protocolState === 'owner_active' &&
+    !requestedAgentId &&
+    !capabilityConsult &&
+    detectedDomain !== 'general'
+  ) {
+    const currentOwner = team.find((a) => a.id === current.ownerAgentId)
+    if (currentOwner && !agentSupportsDetectedDomain(currentOwner, detectedDomain)) {
+      const newOwnerId = chooseInitialOwner({ message, detectedDomain, allDomains, team })
+      if (newOwnerId !== current.ownerAgentId) {
+        const next: CaseState = {
+          conversationId,
+          ownerAgentId: newOwnerId,
+          activeSpeakerAgentId: newOwnerId,
+          protocolState: 'owner_active',
+          takeoverTurns: 0,
+          loopCount: current.loopCount,
+          handoffCount: current.handoffCount,
+        }
+        events.push({
+          kind: 'domain_shift',
+          fromAgentId: current.ownerAgentId,
+          toAgentId: newOwnerId,
+          reason: `domain_changed:${detectedDomain}`,
+        })
+        return { caseState: next, events }
+      }
+    }
+  }
+
   if (
     current.protocolState === 'owner_active' &&
     ((requestedAgentId && requestedAgentId !== current.ownerAgentId) || capabilityConsult)
