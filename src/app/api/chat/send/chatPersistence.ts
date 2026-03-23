@@ -40,6 +40,7 @@ export type RoutePersistenceDeps = {
     conversationId: string
     userMessage: string
     assistantMessage: string
+    assistantMessageId?: string
     domain?: string
     specialistName?: string
     auditEvents: MutationAuditEvent[]
@@ -138,6 +139,7 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       conversationId,
       userMessage,
       assistantMessage,
+      assistantMessageId,
       domain,
       specialistName,
       auditEvents,
@@ -162,6 +164,7 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
 
       await prisma.message.create({
         data: {
+          ...(assistantMessageId ? { id: assistantMessageId } : {}),
           conversationId,
           role: 'assistant',
           content: assistantMessage,

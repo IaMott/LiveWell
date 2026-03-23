@@ -472,6 +472,7 @@ export async function POST(request: Request): Promise<Response> {
             conversationId,
             userMessage: parsedBody.message,
             assistantMessage: responseText,
+            assistantMessageId: assistantId,
             domain: activeDomain,
             specialistName,
             auditEvents: pendingAuditEvents,

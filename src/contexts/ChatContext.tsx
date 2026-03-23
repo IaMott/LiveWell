@@ -260,6 +260,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       content: trimmed + filesSuffix,
     }
     const assistantId = crypto.randomUUID()
+    let currentAssistantId = assistantId
     const assistantMsg: ChatMessage = {
       id: assistantId,
       role: 'assistant',
@@ -314,11 +315,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           if (!line.startsWith('data: ')) continue
           try {
             const event = JSON.parse(line.slice(6)) as Record<string, unknown>
+            const serverMessageId =
+              typeof event.id === 'string' && event.id.trim().length > 0 ? event.id.trim() : null
+            if (serverMessageId && serverMessageId !== currentAssistantId) {
+              const previousAssistantId = currentAssistantId
+              currentAssistantId = serverMessageId
+              setMessages((prev) =>
+                prev.map((m) => (m.id === previousAssistantId ? { ...m, id: serverMessageId } : m)),
+              )
+            }
 
             if (event.type === 'message.delta') {
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === assistantId
+                  m.id === currentAssistantId
                     ? { ...m, content: m.content + String(event.delta ?? '') }
                     : m,
                 ),
@@ -326,7 +336,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             } else if (event.type === 'message.complete') {
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === assistantId
+                  m.id === currentAssistantId
                     ? {
                         ...m,
                         content: String(event.content ?? m.content),
@@ -354,7 +364,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               }
 
               setMessages((prev) =>
-                prev.map((m) => (m.id === assistantId ? { ...m, domain, specialistName } : m)),
+                prev.map((m) =>
+                  m.id === currentAssistantId ? { ...m, domain, specialistName } : m,
+                ),
               )
             } else if (event.type === 'tool.result') {
               // Fase 6: Show cartella notification for successful setAttribute saves
@@ -379,7 +391,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               }>
               if (Array.isArray(suggestions) && suggestions.length > 0) {
                 setMessages((prev) =>
-                  prev.map((m) => (m.id === assistantId ? { ...m, quickReplies: suggestions } : m)),
+                  prev.map((m) =>
+                    m.id === currentAssistantId ? { ...m, quickReplies: suggestions } : m,
+                  ),
                 )
               }
             } else if (event.type === 'agent.thinking') {
@@ -395,7 +409,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 }
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === assistantId
+                    m.id === currentAssistantId
                       ? {
                           ...m,
                           streaming: true,
@@ -414,7 +428,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch {
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantId
+          m.id === currentAssistantId
             ? { ...m, content: 'Connessione interrotta. Riprova.', streaming: false }
             : m,
         ),

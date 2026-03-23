@@ -100,7 +100,7 @@ describe('/api/chat/send persistence integration', () => {
     expect(res.status).toBe(200)
     // Consume the stream so the ReadableStream start() async body completes
     // and all persistence calls (inside the stream) have been awaited.
-    await res.text()
+    const body = await res.text()
 
     // Sequential saves — no $transaction, each op is a direct prisma call
     expect(prismaMock.conversation.upsert).toHaveBeenCalledTimes(1)
@@ -108,8 +108,14 @@ describe('/api/chat/send persistence integration', () => {
     expect(prismaMock.message.create.mock.calls[0][0]).toMatchObject({
       data: { conversationId: expect.any(String), role: 'user', content: 'ciao dal db' },
     })
+    const streamedAssistantId = body.match(/"type":"message\.complete","id":"([^"]+)"/)?.[1]
+    expect(streamedAssistantId).toBeTruthy()
     expect(prismaMock.message.create.mock.calls[1][0]).toMatchObject({
-      data: { conversationId: expect.any(String), role: 'assistant' },
+      data: {
+        id: streamedAssistantId,
+        conversationId: expect.any(String),
+        role: 'assistant',
+      },
     })
   })
 

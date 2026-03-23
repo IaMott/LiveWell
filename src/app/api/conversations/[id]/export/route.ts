@@ -43,6 +43,13 @@ export async function GET(
   }
 
   // Build feedback map (messageId → review) when requested
+  type FeedbackReview = {
+    messageId: string
+    rating: number
+    comment: string | null
+    agentName: string | null
+    createdAt: Date
+  }
   const feedbackMap = new Map<
     string,
     { rating: number; comment: string | null; agentName: string | null }
@@ -51,10 +58,50 @@ export async function GET(
     const userHash = hashUserId(userId)
     const reviews = await prisma.messageReview.findMany({
       where: { conversationId: id, userHash },
-      select: { messageId: true, rating: true, comment: true, agentName: true },
+      orderBy: { createdAt: 'asc' },
+      select: { messageId: true, rating: true, comment: true, agentName: true, createdAt: true },
     })
+    const assistantMessages = conversation.messages.filter((m) => m.role === 'assistant')
+    const exactMatchedMessageIds = new Set<string>()
+    const unmatchedReviews: FeedbackReview[] = []
+
     for (const r of reviews) {
-      feedbackMap.set(r.messageId, { rating: r.rating, comment: r.comment, agentName: r.agentName })
+      const review = {
+        messageId: r.messageId,
+        rating: r.rating,
+        comment: r.comment,
+        agentName: r.agentName,
+        createdAt: r.createdAt,
+      }
+      if (assistantMessages.some((m) => m.id === r.messageId)) {
+        feedbackMap.set(r.messageId, {
+          rating: r.rating,
+          comment: r.comment,
+          agentName: r.agentName,
+        })
+        exactMatchedMessageIds.add(r.messageId)
+      } else {
+        unmatchedReviews.push(review)
+      }
+    }
+
+    const fallbackAssignedMessageIds = new Set<string>()
+    for (const review of unmatchedReviews) {
+      const reviewTs = new Date(review.createdAt).getTime()
+      const candidate = [...assistantMessages]
+        .filter((m) => !exactMatchedMessageIds.has(m.id) && !fallbackAssignedMessageIds.has(m.id))
+        .filter((m) => new Date(m.createdAt).getTime() <= reviewTs)
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        .pop()
+
+      if (!candidate) continue
+
+      feedbackMap.set(candidate.id, {
+        rating: review.rating,
+        comment: review.comment,
+        agentName: review.agentName,
+      })
+      fallbackAssignedMessageIds.add(candidate.id)
     }
   }
 
