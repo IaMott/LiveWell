@@ -155,6 +155,12 @@ function buildSystemPrompt(
     // BUG-E: Prevent repeating already-communicated data
     const noRepetitionRule = `NON riformulare o ripetere informazioni già menzionate nella conversazione recente (IMC/BMI, peso, altezza, sedentarietà, condizioni note, situazione lavorativa, ecc.). ${nameRef} le conosce già — vai avanti con contenuto nuovo.`
 
+    // Anti-filler: no generic principle blocks unless part of a concrete plan
+    const specialistNoFillerRule = `NON includere sezioni di "principi generali" (es. "bevi acqua", "mangia cibi integrali", "fai pause al PC") a meno che stai costruendo un piano completo con indicazioni specifiche per ${nameRef}. Tali sezioni allungano la risposta senza valore aggiunto contestuale.`
+
+    // Anti-repeated-question: don't ask what was already answered
+    const specialistNoRepeatedQuestionRule = `Prima di fare una domanda, controlla la conversazione recente. Se la risposta è già stata fornita (frequenza di allenamento, ore di lavoro, sintomi già descritti, obiettivi già espressi), NON ripetere la domanda — usa i dati già noti.`
+
     // BUG-H: Strict domain boundary + cross-domain guardrail
     const domainBoundaryRule = `Rimani strettamente nel tuo ambito di competenza. Se ${nameRef} menziona qualcosa fuori dal tuo dominio specifico, riconoscilo in UNA sola riga rimandando al collega competente — non approfondire né dare consigli su aree di altri specialisti. Non riportare mai consigli o indicazioni che appartengono al dominio di un altro specialista del team: lascia che sia quello specialista a fornirli direttamente.`
 
@@ -220,6 +226,8 @@ function buildSystemPrompt(
       antiPattern,
       antiGatekeeperRule,
       noRepetitionRule,
+      specialistNoFillerRule,
+      specialistNoRepeatedQuestionRule,
       ``,
       `Hai le informazioni necessarie. Dai consigli concreti, specifici per ${nameRef}, basati sui dati reali.`,
       `Sii diretto e personale. Se serve aggiustare il piano, fallo. Se emerge qualcosa di critico, segnalalo.`,
@@ -248,6 +256,12 @@ function buildSystemPrompt(
   // BUG-E: No-repetition rule for team mode too
   const teamNoRepetitionRule = `NON riformulare o ripetere informazioni già menzionate nella conversazione recente (dati biometrici, condizioni note, situazione lavorativa, ecc.). Sono già noti — vai avanti con contenuto nuovo.`
 
+  // Anti-filler: no generic principle blocks unless part of a concrete plan
+  const noFillerRule = `NON includere mai sezioni di "principi generali" (es. "bevi 2L d'acqua", "mangia cibi integrali", "fai pause ogni ora") a meno che stai costruendo un piano completo personalizzato con numeri specifici per ${nameRef}. Queste sezioni allungano la risposta senza valore aggiunto.`
+
+  // Anti-repeated-question: before asking, verify the answer isn't already in the recent history
+  const noRepeatedQuestionRule = `Prima di fare una domanda, controlla la conversazione recente. Se la risposta è già stata fornita (es. frequenza di allenamento, ore di lavoro, sintomi già descritti), NON ripetere la domanda — usa le informazioni già note.`
+
   if (effectivelyHasMissingData) {
     // BUG-A: Team mode can now ask up to 3 baseline questions when L1 is pending
     const teamQuestionInstruction =
@@ -261,6 +275,8 @@ function buildSystemPrompt(
       `Rispondi a nome del gruppo usando "noi". Se l'utente chiede esplicitamente chi sta analizzando il suo caso, cita i nomi degli specialisti attivi.`,
       teamAntiPattern,
       teamNoRepetitionRule,
+      noFillerRule,
+      noRepeatedQuestionRule,
       ``,
       `Stai raccogliendo le informazioni per costruire un percorso personalizzato per ${nameRef}.`,
       teamQuestionInstruction,
@@ -277,6 +293,8 @@ function buildSystemPrompt(
     `Rispondi a nome del gruppo usando "noi". Se l'utente chiede esplicitamente chi sta analizzando il suo caso, cita i nomi degli specialisti attivi.`,
     teamAntiPattern,
     teamNoRepetitionRule,
+    noFillerRule,
+    noRepeatedQuestionRule,
     `Ogni specialista contribuisce solo nel proprio ambito. Non riportare consigli di un dominio attraverso la voce di un altro — ogni indicazione specialistica proviene dallo specialista corretto.`,
     ``,
     `Hai informazioni sufficienti su ${nameRef}. Fornisci analisi e consigli concreti, personali, basati sui dati reali.`,
