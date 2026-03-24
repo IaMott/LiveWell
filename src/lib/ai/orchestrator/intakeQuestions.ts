@@ -552,6 +552,43 @@ export const FIELD_PRIMARY_OWNER: Record<string, string> = {
 
   // Supplements — biologo-nutrizionista owns supplement data
   supplements_current: 'biologo-nutrizionista',
+
+  // Neurologo — owns neurological-specific fields
+  neurological_complaint: 'neurologo',
+  associated_symptoms: 'neurologo',
+  previous_neurological_diagnosis: 'neurologo',
+  family_history_neurological: 'neurologo',
+
+  // Ortopedico — owns musculoskeletal-specific fields
+  musculoskeletal_complaint: 'ortopedico',
+  injury_mechanism: 'ortopedico',
+  previous_imaging: 'ortopedico',
+
+  // Urologo — owns urological-specific fields
+  urological_complaint: 'urologo',
+  urinary_frequency: 'urologo',
+  previous_urological_exams: 'urologo',
+  prostate_history: 'urologo',
+
+  // Oculista — owns visual-specific fields
+  visual_complaint: 'oculista',
+  symptom_onset: 'oculista',
+  current_correction: 'oculista',
+  last_eye_exam: 'oculista',
+  family_history_ocular: 'oculista',
+  systemic_diseases: 'oculista',
+
+  // ORL — owns ENT-specific fields
+  ent_complaint: 'otorinolaringoiatra',
+  allergies: 'otorinolaringoiatra',
+  previous_ent_treatments: 'otorinolaringoiatra',
+  smoking_status: 'otorinolaringoiatra',
+
+  // Pneumologo — owns respiratory-specific fields
+  respiratory_complaint: 'pneumologo',
+  dyspnea_on_exertion: 'pneumologo',
+  spirometry_results: 'pneumologo',
+  occupational_exposure: 'pneumologo',
 }
 
 // ---------------------------------------------------------------------------

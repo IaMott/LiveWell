@@ -47,6 +47,9 @@ const nextConfig: NextConfig = {
       },
     ]
   },
+  // pdf-parse uses fs and Node.js internals — exclude from webpack bundling
+  // to avoid "Module not found" errors in serverless API routes.
+  serverExternalPackages: ['pdf-parse'],
 }
 
 export default nextConfig
