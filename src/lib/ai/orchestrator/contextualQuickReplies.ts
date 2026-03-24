@@ -178,6 +178,123 @@ const RULES: PatternRule[] = [
       },
     ],
   },
+
+  // ── Menstrual cycle regularity (Ginecologo) ───────────────────────────────
+  {
+    patterns: [
+      /ciclo.*?regolar/i,
+      /mestruazion.*?regolar/i,
+      /come.*?è.*?il.*?ciclo/i,
+      /ciclo.*?mestrual/i,
+      /hai.*?ciclo.*?regolare/i,
+    ],
+    templates: [
+      { label: 'Regolare', text: 'Il ciclo è regolare (ogni 28-30 giorni circa)', emoji: '🌸' },
+      { label: 'Irregolare', text: 'Il ciclo è irregolare', emoji: '🌸' },
+      { label: 'Molto doloroso', text: 'Il ciclo è molto doloroso (dismenorrea)', emoji: '🌸' },
+      { label: 'Abbondante', text: 'Il ciclo è abbondante', emoji: '🌸' },
+      { label: 'Assente', text: 'Il ciclo è assente (amenorrea)', emoji: '🌸' },
+    ],
+  },
+
+  // ── Blood glucose / glycemia (Diabetologo) ────────────────────────────────
+  {
+    patterns: [
+      /glicemia.*?a.*?digiun/i,
+      /ultimo.*?valor.*?glicemi/i,
+      /conosci.*?glicemi/i,
+      /glicemia.*?recent/i,
+      /hba1c/i,
+      /emoglobina.*?glicata/i,
+    ],
+    templates: [
+      { label: '< 100 mg/dL', text: 'Glicemia a digiuno < 100 mg/dL (normale)', emoji: '🩸' },
+      {
+        label: '100-125 mg/dL',
+        text: 'Glicemia a digiuno 100-125 mg/dL (pre-diabete)',
+        emoji: '🩸',
+      },
+      {
+        label: '> 126 mg/dL',
+        text: 'Glicemia a digiuno > 126 mg/dL (diabete)',
+        emoji: '🩸',
+      },
+      { label: 'Non so', text: 'Non conosco il mio valore di glicemia', emoji: '🩸' },
+    ],
+  },
+
+  // ── Allergy reaction type (Allergologo) ───────────────────────────────────
+  {
+    patterns: [
+      /come.*?si.*?manifest/i,
+      /tipo.*?di.*?reazion/i,
+      /reazion.*?allergic/i,
+      /sintomi.*?allergi/i,
+      /cosa.*?senti.*?quando/i,
+    ],
+    templates: [
+      { label: 'Prurito / orticaria', text: 'Prurito, orticaria o rossore cutaneo', emoji: '🤧' },
+      { label: 'Naso / occhi', text: 'Naso che cola, starnuti, occhi rossi', emoji: '🤧' },
+      {
+        label: 'Difficoltà respiratoria',
+        text: 'Difficoltà respiratoria o respiro sibilante',
+        emoji: '🤧',
+      },
+      { label: 'Gonfiore', text: 'Gonfiore a labbra, lingua o viso (angioedema)', emoji: '🤧' },
+      {
+        label: 'Shock anafilattico',
+        text: 'Reazione grave con perdita di coscienza (anafilassi)',
+        emoji: '🚨',
+      },
+    ],
+  },
+
+  // ── Functional autonomy (Geriatra) ────────────────────────────────────────
+  {
+    patterns: [
+      /riesci.*?autonomamente/i,
+      /autonomia.*?quotidiana/i,
+      /attività.*?quotidiane/i,
+      /riesci.*?svolgere/i,
+      /capacità.*?funzional/i,
+    ],
+    templates: [
+      {
+        label: 'Completamente autonomo',
+        text: 'Sono completamente autonomo nelle attività quotidiane',
+        emoji: '🧓',
+      },
+      {
+        label: 'Parzialmente autonomo',
+        text: 'Ho bisogno di aiuto per alcune attività',
+        emoji: '🧓',
+      },
+      { label: 'Dipendente', text: 'Ho bisogno di assistenza continua', emoji: '🧓' },
+      { label: 'Caregiver presente', text: 'Ho un caregiver che mi assiste', emoji: '🧓' },
+    ],
+  },
+
+  // ── Oncology treatment phase ───────────────────────────────────────────────
+  {
+    patterns: [
+      /fase.*?del.*?percorso/i,
+      /trattamento.*?attivo/i,
+      /stai.*?seguendo.*?terapia/i,
+      /chemioterapia.*?radioterapia/i,
+      /in.*?cura.*?per/i,
+    ],
+    templates: [
+      {
+        label: 'In trattamento',
+        text: 'Sono in trattamento attivo (chemio, radio, immunoterapia)',
+        emoji: '🎗️',
+      },
+      { label: 'Mantenimento', text: 'Sono in fase di mantenimento o ormonoterapia', emoji: '🎗️' },
+      { label: 'Follow-up', text: 'Sono in follow-up oncologico', emoji: '🎗️' },
+      { label: 'Guarigione', text: 'Sono in remissione / guarito', emoji: '🎗️' },
+      { label: 'Cure palliative', text: 'Sto seguendo cure palliative', emoji: '🎗️' },
+    ],
+  },
 ]
 
 // ── Main function ─────────────────────────────────────────────────────────────
