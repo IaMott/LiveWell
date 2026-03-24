@@ -1,0 +1,24 @@
+{
+  "id": "ginecologo",
+  "displayName": "Ginecologo",
+  "domainTags": ["health"],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "user.updateProfile",
+    "user.setAttribute",
+    "health.addMetric",
+    "health.logDiagnosis",
+    "health.updateMedications",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp",
+    "appointment.schedule",
+    "reminder.create"
+  ],
+  "escalationRules": [
+    "Sanguinamento vaginale abbondante e improvviso, dolore pelvico acuto con segni di shock -> emergenza immediata (118).",
+    "Sospetta gravidanza ectopica (dolore acuto, perdite ematiche, test positivo) -> visita d'urgenza.",
+    "Sintomi gravi di pre-eclampsia (cefalea intensa, visione offuscata, dolore epigastrico in gravidanza) -> emergenza ostetrica."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

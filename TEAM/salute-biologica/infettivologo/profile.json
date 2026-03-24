@@ -1,0 +1,24 @@
+{
+  "id": "infettivologo",
+  "displayName": "Infettivologo",
+  "domainTags": ["health"],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "user.updateProfile",
+    "user.setAttribute",
+    "health.addMetric",
+    "health.logDiagnosis",
+    "health.updateMedications",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp",
+    "appointment.schedule",
+    "reminder.create"
+  ],
+  "escalationRules": [
+    "Febbre > 40°C con rigidità nucale, petecchie, confusione -> sospetta meningite/sepsi, emergenza immediata (118).",
+    "Sepsi conclamata (febbre alta, ipotensione, tachicardia, alterazione dello stato mentale) -> emergenza ospedaliera.",
+    "Infezione in paziente immunocompromesso con segni di deterioramento rapido -> valutazione medica urgente."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

@@ -1,0 +1,24 @@
+{
+  "id": "allergologo",
+  "displayName": "Allergologo",
+  "domainTags": ["health"],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "user.updateProfile",
+    "user.setAttribute",
+    "health.addMetric",
+    "health.logDiagnosis",
+    "health.updateMedications",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp",
+    "appointment.schedule",
+    "reminder.create"
+  ],
+  "escalationRules": [
+    "Reazione anafilattica in corso (difficoltà respiratoria, ipotensione, angioedema) -> emergenza immediata (118), adrenalina se disponibile.",
+    "Angioedema laringeo con rischio di ostruzione delle vie aeree -> emergenza immediata.",
+    "Asma acuto grave non responsivo al broncodilatatore -> pronto soccorso urgente."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

@@ -191,6 +191,51 @@ export const AGENT_INTAKE_KEYS: Record<string, { required: string[]; optional: s
     ],
     optional: ['spirometry_results', 'allergies', 'occupational_exposure'],
   },
+
+  ginecologo: {
+    required: ['gynecological_complaint', 'menstrual_cycle', 'last_period', 'contraception'],
+    optional: ['gynecological_history', 'obstetric_history', 'last_pap_test', 'hormonal_therapy'],
+  },
+
+  diabetologo: {
+    required: ['diabetes_type', 'glycemia_fasting', 'hba1c', 'diabetes_medications'],
+    optional: ['cgm_use', 'hypoglycemia_episodes', 'diabetic_complications', 'diet_adherence'],
+  },
+
+  infettivologo: {
+    required: ['infectious_complaint', 'fever_duration', 'immunological_status', 'recent_travel'],
+    optional: ['chronic_infections', 'recent_antibiotics', 'vaccination_status'],
+  },
+
+  oncologo: {
+    required: [
+      'oncological_diagnosis',
+      'oncology_current_treatment',
+      'oncology_treatment_phase',
+      'oncology_performance_status',
+    ],
+    optional: [
+      'side_effects_current',
+      'last_oncology_visit',
+      'nutritional_status_oncology',
+      'pain_level_oncology',
+    ],
+  },
+
+  allergologo: {
+    required: ['allergic_complaint', 'known_allergens', 'reaction_type', 'symptom_triggers'],
+    optional: ['allergy_tests_done', 'emergency_medications', 'immunotherapy_history'],
+  },
+
+  geriatra: {
+    required: ['geriatric_complaint', 'age', 'polypharmacy', 'functional_autonomy'],
+    optional: [
+      'cognitive_screening',
+      'fall_history',
+      'nutritional_status_elderly',
+      'caregiver_support',
+    ],
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -440,6 +485,88 @@ const FIELD_QUESTIONS: Record<string, string> = {
   spirometry_results: 'Hai mai eseguito una spirometria o altri test della funzione respiratoria?',
   occupational_exposure:
     'Sei esposto a polveri, sostanze chimiche o agenti irritanti nel lavoro o in casa?',
+
+  // Ginecologo
+  gynecological_complaint:
+    'Qual è il problema ginecologico principale (ciclo irregolare, dolore pelvico, perdite, menopausa, altro)?',
+  menstrual_cycle:
+    'Come descrivi il tuo ciclo mestruale (regolare, irregolare, doloroso, abbondante)?',
+  last_period: 'Quando è iniziato il tuo ultimo ciclo mestruale?',
+  contraception: 'Usi contraccettivi? Se sì, quali?',
+  gynecological_history:
+    'Hai avuto in passato problemi ginecologici (endometriosi, PCOS, fibromi, infezioni, interventi)?',
+  obstetric_history: 'Hai avuto gravidanze? Quante e con quale esito?',
+  last_pap_test: 'Quando hai eseguito il tuo ultimo Pap test o screening HPV?',
+  hormonal_therapy:
+    'Stai seguendo o hai seguito terapia ormonale sostitutiva o contraccettiva ormonale?',
+
+  // Diabetologo
+  diabetes_type:
+    'Hai una diagnosi di diabete? Se sì, di quale tipo (tipo 1, tipo 2, gestazionale)?',
+  glycemia_fasting: 'Qual è il tuo ultimo valore di glicemia a digiuno?',
+  hba1c: 'Conosci il tuo ultimo valore di emoglobina glicata (HbA1c)?',
+  diabetes_medications:
+    'Stai assumendo farmaci per il diabete (metformina, insulina, GLP-1 agonisti, altro)?',
+  cgm_use: 'Usi un dispositivo per il monitoraggio continuo della glicemia (CGM/sensore)?',
+  hypoglycemia_episodes: 'Hai episodi di ipoglicemia (bassa glicemia)? Con quale frequenza?',
+  diabetic_complications:
+    'Hai complicanze legate al diabete (neuropatia, nefropatia, retinopatia, piede diabetico)?',
+  diet_adherence: 'Segui una dieta specifica per il controllo glicemico?',
+
+  // Infettivologo
+  infectious_complaint:
+    'Qual è il problema infettivologico principale (febbre persistente, infezione ricorrente, HIV, epatite, altro)?',
+  fever_duration: 'Da quanto tempo hai la febbre o il sintomo infettivo?',
+  immunological_status:
+    'Hai condizioni che abbassano le difese immunitarie (HIV, chemioterapia, terapie immunosoppressive)?',
+  recent_travel: 'Hai viaggiato di recente in zone tropicali o a rischio endemico?',
+  chronic_infections:
+    'Hai infezioni croniche note (HIV, epatite B o C, tubercolosi latente, altro)?',
+  recent_antibiotics: 'Hai assunto antibiotici di recente? Quali e per quanto tempo?',
+  vaccination_status: 'Il tuo schema vaccinale è aggiornato? Hai ricevuto vaccini di recente?',
+
+  // Oncologo (supportivo)
+  oncological_diagnosis:
+    'Qual è la tua diagnosi oncologica (tipo di tumore, sede, stadio se noto)?',
+  oncology_current_treatment:
+    'Stai seguendo un trattamento attivo (chemioterapia, radioterapia, immunoterapia, ormonoterapia, altro)?',
+  oncology_treatment_phase:
+    'In che fase del percorso oncologico sei (prima linea, mantenimento, follow-up, guarigione)?',
+  oncology_performance_status:
+    'Come valuti la tua capacità funzionale quotidiana (ECOG/Karnofsky se noto, oppure descrivi)?',
+  side_effects_current:
+    'Stai riscontrando effetti collaterali dalla terapia (nausea, fatigue, mucositi, dolore, altro)?',
+  last_oncology_visit: "Quando hai avuto il tuo ultimo appuntamento con l'oncologo?",
+  nutritional_status_oncology: 'Hai perso peso involontariamente o hai difficoltà ad alimentarti?',
+  pain_level_oncology: 'Se presente, come valuteresti il dolore su una scala da 1 a 10?',
+
+  // Allergologo
+  allergic_complaint:
+    'Qual è il problema allergologico principale (rinite, orticaria, asma, allergia alimentare, altro)?',
+  known_allergens:
+    'Hai allergeni già identificati (pollini, acari, nichel, latticini, arachidi, farmaci, altro)?',
+  reaction_type:
+    'Come si manifesta la reazione allergica (prurito, gonfiore, difficoltà respiratoria, shock anafilattico)?',
+  symptom_triggers: 'Cosa scatena i sintomi (stagione, alimenti, animali, profumi, farmaci)?',
+  allergy_tests_done:
+    'Hai già eseguito test allergologici (prick test, patch test, RAST/IgE specifiche)?',
+  emergency_medications:
+    'Porti con te un autoiniettore di adrenalina (EpiPen) o antistaminici di emergenza?',
+  immunotherapy_history:
+    'Hai mai fatto o stai facendo immunoterapia allergene-specifica (SLIT o SCIT)?',
+
+  // Geriatra
+  geriatric_complaint:
+    'Qual è il problema principale (caduta, memoria, deambulazione, gestione farmaci, autonomia quotidiana, altro)?',
+  polypharmacy: 'Quanti farmaci assumi regolarmente? Puoi elencarli o allegare la lista?',
+  functional_autonomy:
+    'Riesci a svolgere le attività quotidiane autonomamente (vestirsi, lavarsi, cucinare, muoversi)?',
+  cognitive_screening:
+    'Hai eseguito test della memoria o valutazioni cognitive di recente? Quali risultati?',
+  fall_history: "Hai avuto cadute nell'ultimo anno? Quante e in quali circostanze?",
+  nutritional_status_elderly:
+    'Mangi regolarmente e in quantità adeguata? Hai perso peso di recente?',
+  caregiver_support: 'Hai un caregiver o supporto familiare? Chi si occupa di te?',
 }
 
 // Agent-specific question overrides for fields shared across specialists
@@ -589,6 +716,63 @@ export const FIELD_PRIMARY_OWNER: Record<string, string> = {
   dyspnea_on_exertion: 'pneumologo',
   spirometry_results: 'pneumologo',
   occupational_exposure: 'pneumologo',
+
+  // Ginecologo — owns gynecological-specific fields
+  gynecological_complaint: 'ginecologo',
+  menstrual_cycle: 'ginecologo',
+  last_period: 'ginecologo',
+  contraception: 'ginecologo',
+  gynecological_history: 'ginecologo',
+  obstetric_history: 'ginecologo',
+  last_pap_test: 'ginecologo',
+  hormonal_therapy: 'ginecologo',
+
+  // Diabetologo — owns diabetes-specific fields
+  diabetes_type: 'diabetologo',
+  glycemia_fasting: 'diabetologo',
+  hba1c: 'diabetologo',
+  diabetes_medications: 'diabetologo',
+  cgm_use: 'diabetologo',
+  hypoglycemia_episodes: 'diabetologo',
+  diabetic_complications: 'diabetologo',
+  diet_adherence: 'diabetologo',
+
+  // Infettivologo — owns infection-specific fields
+  infectious_complaint: 'infettivologo',
+  fever_duration: 'infettivologo',
+  immunological_status: 'infettivologo',
+  recent_travel: 'infettivologo',
+  chronic_infections: 'infettivologo',
+  recent_antibiotics: 'infettivologo',
+  vaccination_status: 'infettivologo',
+
+  // Oncologo — owns oncology-specific fields
+  oncological_diagnosis: 'oncologo',
+  oncology_current_treatment: 'oncologo',
+  oncology_treatment_phase: 'oncologo',
+  oncology_performance_status: 'oncologo',
+  side_effects_current: 'oncologo',
+  last_oncology_visit: 'oncologo',
+  nutritional_status_oncology: 'oncologo',
+  pain_level_oncology: 'oncologo',
+
+  // Allergologo — owns allergy-specific fields
+  allergic_complaint: 'allergologo',
+  known_allergens: 'allergologo',
+  reaction_type: 'allergologo',
+  symptom_triggers: 'allergologo',
+  allergy_tests_done: 'allergologo',
+  emergency_medications: 'allergologo',
+  immunotherapy_history: 'allergologo',
+
+  // Geriatra — owns geriatric-specific fields
+  geriatric_complaint: 'geriatra',
+  polypharmacy: 'geriatra',
+  functional_autonomy: 'geriatra',
+  cognitive_screening: 'geriatra',
+  fall_history: 'geriatra',
+  nutritional_status_elderly: 'geriatra',
+  caregiver_support: 'geriatra',
 }
 
 // ---------------------------------------------------------------------------

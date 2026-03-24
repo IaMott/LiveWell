@@ -1,0 +1,24 @@
+{
+  "id": "geriatra",
+  "displayName": "Geriatra",
+  "domainTags": ["health"],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "user.updateProfile",
+    "user.setAttribute",
+    "health.addMetric",
+    "health.logDiagnosis",
+    "health.updateMedications",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp",
+    "appointment.schedule",
+    "reminder.create"
+  ],
+  "escalationRules": [
+    "Caduta con trauma cranico o sospetta frattura in anziano -> valutazione d'urgenza.",
+    "Confusione acuta (delirium) in paziente anziano -> valutazione medica urgente, escludere cause organiche.",
+    "Deterioramento cognitivo rapido o comportamenti pericolosi per sé o altri -> consultazione psichiatrica/neurologica urgente."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

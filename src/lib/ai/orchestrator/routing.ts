@@ -895,6 +895,113 @@ const SYMPTOM_CLUSTER_RULES: SymptomCluster[] = [
     specialists: ['otorinolaringoiatra', 'mmg'],
     urgency: 'media',
   },
+
+  // ── Ginecologico ──────────────────────────────────────────────────────────
+  {
+    keywords: [
+      [
+        'ciclo',
+        'mestruo',
+        'mestruazioni',
+        'spotting',
+        'amenorrea',
+        'dismenorrea',
+        'ovaia',
+        'utero',
+        'vagina',
+        'pelvico',
+        'endometriosi',
+        'pcos',
+        'fibromi',
+        'menopausa',
+        'gravidanza',
+        'fertilità',
+        'ovulazione',
+      ],
+    ],
+    specialists: ['ginecologo', 'mmg'],
+    urgency: 'media',
+  },
+
+  // ── Diabetologico ─────────────────────────────────────────────────────────
+  {
+    keywords: [
+      [
+        'glicemia',
+        'insulina',
+        'diabete',
+        'hba1c',
+        'glucosio',
+        'ipoglicemia',
+        'iperglicemia',
+        'chetoacidosi',
+        'resistenza insulinica',
+        'prediabete',
+      ],
+    ],
+    specialists: ['diabetologo', 'endocrinologo'],
+    urgency: 'media',
+  },
+
+  // ── Infettivologico ───────────────────────────────────────────────────────
+  {
+    keywords: [
+      [
+        'hiv',
+        'epatite',
+        'tubercolosi',
+        'sepsi',
+        'meningite',
+        'malaria',
+        'dengue',
+        'prep',
+        'pep',
+        'immunodeficienza',
+        'infezione ricorrente',
+        'antibiotico resistenza',
+      ],
+    ],
+    specialists: ['infettivologo', 'mmg'],
+    urgency: 'media',
+  },
+
+  // ── Allergologico ─────────────────────────────────────────────────────────
+  {
+    keywords: [
+      [
+        'allergia',
+        'orticaria',
+        'angioedema',
+        'anafilassi',
+        'rinite allergica',
+        'allergia alimentare',
+        'asma allergico',
+        'dermatite atopica',
+        'prurito cronico',
+      ],
+    ],
+    specialists: ['allergologo', 'mmg'],
+    urgency: 'media',
+  },
+
+  // ── Geriatrico ────────────────────────────────────────────────────────────
+  {
+    keywords: [
+      [
+        'anziano',
+        'demenza',
+        'alzheimer',
+        'caduta',
+        'fragilità',
+        'sarcopenia',
+        'delirium',
+        'deterioramento cognitivo',
+        'polifarmacoterapia',
+      ],
+    ],
+    specialists: ['geriatra', 'mmg'],
+    urgency: 'media',
+  },
 ]
 
 export function detectMultiSpecialistNeed(
