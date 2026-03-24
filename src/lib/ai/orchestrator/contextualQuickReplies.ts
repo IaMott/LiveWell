@@ -10,9 +10,10 @@
 
 import type { QuickReply } from '../types'
 
-let _counter = 0
+// Use crypto.randomUUID() to avoid module-level counter state that would
+// persist across warm serverless invocations and produce colliding IDs.
 function cqr(label: string, text: string, emoji?: string): QuickReply {
-  return { id: `cqr-${++_counter}`, label, text, emoji }
+  return { id: crypto.randomUUID(), label, text, emoji }
 }
 
 // ── Pattern catalogue ────────────────────────────────────────────────────────
