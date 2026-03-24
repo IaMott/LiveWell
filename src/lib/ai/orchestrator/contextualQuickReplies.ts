@@ -6,22 +6,23 @@
  * This avoids asking users to describe technical/medical concepts in free text.
  *
  * No LLM call — pure pattern matching against the last assistant message.
+ *
+ * Architecture note: RULES stores only static templates (label, text, emoji).
+ * IDs are generated with crypto.randomUUID() at call time inside
+ * buildContextualQuickReplies(), so each request gets fresh unique IDs even
+ * on warm serverless invocations where the module is cached.
  */
 
 import type { QuickReply } from '../types'
 
-// Use crypto.randomUUID() to avoid module-level counter state that would
-// persist across warm serverless invocations and produce colliding IDs.
-function cqr(label: string, text: string, emoji?: string): QuickReply {
-  return { id: crypto.randomUUID(), label, text, emoji }
-}
-
-// ── Pattern catalogue ────────────────────────────────────────────────────────
+type ReplyTemplate = { label: string; text: string; emoji?: string }
 
 type PatternRule = {
   patterns: RegExp[]
-  replies: QuickReply[]
+  templates: ReplyTemplate[]
 }
+
+// ── Pattern catalogue ────────────────────────────────────────────────────────
 
 const RULES: PatternRule[] = [
   // ── Anatomical location ────────────────────────────────────────────────────
@@ -37,13 +38,13 @@ const RULES: PatternRule[] = [
       /parte.*?del corpo/i,
       /zona.*?dolor/i,
     ],
-    replies: [
-      cqr('Collo', 'Il dolore è al collo', '🔴'),
-      cqr('Trapezio', 'Sento dolore/tensione al trapezio', '🔴'),
-      cqr('Spalla sin.', 'Alla spalla sinistra', '🔴'),
-      cqr('Spalla dx', 'Alla spalla destra', '🔴'),
-      cqr('Braccio', 'Si irradia lungo il braccio', '🔴'),
-      cqr('Più zone', 'In più punti contemporaneamente', '🔴'),
+    templates: [
+      { label: 'Collo', text: 'Il dolore è al collo', emoji: '🔴' },
+      { label: 'Trapezio', text: 'Sento dolore/tensione al trapezio', emoji: '🔴' },
+      { label: 'Spalla sin.', text: 'Alla spalla sinistra', emoji: '🔴' },
+      { label: 'Spalla dx', text: 'Alla spalla destra', emoji: '🔴' },
+      { label: 'Braccio', text: 'Si irradia lungo il braccio', emoji: '🔴' },
+      { label: 'Più zone', text: 'In più punti contemporaneamente', emoji: '🔴' },
     ],
   },
 
@@ -57,11 +58,11 @@ const RULES: PatternRule[] = [
       /valut.*?dolor[ei]/i,
       /dolor[ei].*?fort[ei]/i,
     ],
-    replies: [
-      cqr('1-3 Lieve', 'Dolore lieve (1-3 su 10)', '🟢'),
-      cqr('4-6 Moderato', 'Dolore moderato (4-6 su 10)', '🟡'),
-      cqr('7-8 Forte', 'Dolore forte (7-8 su 10)', '🟠'),
-      cqr('9-10 Molto forte', 'Dolore molto forte (9-10 su 10)', '🔴'),
+    templates: [
+      { label: '1-3 Lieve', text: 'Dolore lieve (1-3 su 10)', emoji: '🟢' },
+      { label: '4-6 Moderato', text: 'Dolore moderato (4-6 su 10)', emoji: '🟡' },
+      { label: '7-8 Forte', text: 'Dolore forte (7-8 su 10)', emoji: '🟠' },
+      { label: '9-10 Molto forte', text: 'Dolore molto forte (9-10 su 10)', emoji: '🔴' },
     ],
   },
 
@@ -75,12 +76,12 @@ const RULES: PatternRule[] = [
       /ogni quanto/i,
       /con che.*?regolar/i,
     ],
-    replies: [
-      cqr('Quasi mai', 'Raramente, meno di 1 volta a settimana', '📅'),
-      cqr('1-2 volte/sett.', '1-2 volte a settimana', '📅'),
-      cqr('3-4 volte/sett.', '3-4 volte a settimana', '📅'),
-      cqr('Quasi ogni giorno', 'Quasi tutti i giorni', '📅'),
-      cqr('Ogni giorno', 'Ogni giorno', '📅'),
+    templates: [
+      { label: 'Quasi mai', text: 'Raramente, meno di 1 volta a settimana', emoji: '📅' },
+      { label: '1-2 volte/sett.', text: '1-2 volte a settimana', emoji: '📅' },
+      { label: '3-4 volte/sett.', text: '3-4 volte a settimana', emoji: '📅' },
+      { label: 'Quasi ogni giorno', text: 'Quasi tutti i giorni', emoji: '📅' },
+      { label: 'Ogni giorno', text: 'Ogni giorno', emoji: '📅' },
     ],
   },
 
@@ -93,12 +94,12 @@ const RULES: PatternRule[] = [
       /durata.*?sintom/i,
       /inizi[ao].*?quando/i,
     ],
-    replies: [
-      cqr('Pochi giorni', 'È iniziato pochi giorni fa', '🕐'),
-      cqr('1-2 settimane', 'Da 1-2 settimane', '🕐'),
-      cqr('1 mese', 'Da circa un mese', '🕐'),
-      cqr('Più mesi', 'Da diversi mesi', '🕐'),
-      cqr('Cronico', 'È un problema ricorrente da anni', '🕐'),
+    templates: [
+      { label: 'Pochi giorni', text: 'È iniziato pochi giorni fa', emoji: '🕐' },
+      { label: '1-2 settimane', text: 'Da 1-2 settimane', emoji: '🕐' },
+      { label: '1 mese', text: 'Da circa un mese', emoji: '🕐' },
+      { label: 'Più mesi', text: 'Da diversi mesi', emoji: '🕐' },
+      { label: 'Cronico', text: 'È un problema ricorrente da anni', emoji: '🕐' },
     ],
   },
 
@@ -111,13 +112,13 @@ const RULES: PatternRule[] = [
       /ore.*?di.*?sono/i,
       /quante.*?ore.*?dormi/i,
     ],
-    replies: [
-      cqr('Bene', 'Dormo bene, mi sveglio riposato', '😴'),
-      cqr('Discreto', 'Abbastanza bene, qualche risveglio', '😴'),
-      cqr('Male', 'Dormo male, mi sveglio stanco', '😴'),
-      cqr('< 6 ore', 'Meno di 6 ore a notte', '⏰'),
-      cqr('6-7 ore', 'Circa 6-7 ore a notte', '⏰'),
-      cqr('8+ ore', '8 ore o più a notte', '⏰'),
+    templates: [
+      { label: 'Bene', text: 'Dormo bene, mi sveglio riposato', emoji: '😴' },
+      { label: 'Discreto', text: 'Abbastanza bene, qualche risveglio', emoji: '😴' },
+      { label: 'Male', text: 'Dormo male, mi sveglio stanco', emoji: '😴' },
+      { label: '< 6 ore', text: 'Meno di 6 ore a notte', emoji: '⏰' },
+      { label: '6-7 ore', text: 'Circa 6-7 ore a notte', emoji: '⏰' },
+      { label: '8+ ore', text: '8 ore o più a notte', emoji: '⏰' },
     ],
   },
 
@@ -128,13 +129,14 @@ const RULES: PatternRule[] = [
       /quanti.*?allenament/i,
       /quante.*?volt[ei].*?palestra/i,
       /disponibil.*?allenament/i,
-      /realistically.*?fare/i,
+      /realisticamente.*?fare/i,
+      /realist.*?allenament/i,
     ],
-    replies: [
-      cqr('1 volta/sett.', '1 volta a settimana', '🏋️'),
-      cqr('2 volte/sett.', '2 volte a settimana', '🏋️'),
-      cqr('3 volte/sett.', '3 volte a settimana', '🏋️'),
-      cqr('4+ volte/sett.', '4 o più volte a settimana', '🏋️'),
+    templates: [
+      { label: '1 volta/sett.', text: '1 volta a settimana', emoji: '🏋️' },
+      { label: '2 volte/sett.', text: '2 volte a settimana', emoji: '🏋️' },
+      { label: '3 volte/sett.', text: '3 volte a settimana', emoji: '🏋️' },
+      { label: '4+ volte/sett.', text: '4 o più volte a settimana', emoji: '🏋️' },
     ],
   },
 
@@ -147,10 +149,10 @@ const RULES: PatternRule[] = [
       /hai fatto.*?visita/i,
       /sei stato.*?dal medico/i,
     ],
-    replies: [
-      cqr('Sì, ho una diagnosi', 'Sì, ho già una diagnosi medica', '✅'),
-      cqr('Sì, ho esami', 'Sì, ho esami recenti (li condivido)', '📄'),
-      cqr('No, non ancora', 'No, non ho ancora consultato un medico', '❌'),
+    templates: [
+      { label: 'Sì, ho una diagnosi', text: 'Sì, ho già una diagnosi medica', emoji: '✅' },
+      { label: 'Sì, ho esami', text: 'Sì, ho esami recenti (li condivido)', emoji: '📄' },
+      { label: 'No, non ancora', text: 'No, non ho ancora consultato un medico', emoji: '❌' },
     ],
   },
 
@@ -165,11 +167,15 @@ const RULES: PatternRule[] = [
       /nome.*?del.*?farmac/i,
       /nome.*?del.*?integrat/i,
     ],
-    replies: [
-      cqr('Nessuno', 'Non prendo farmaci o integratori', '💊'),
-      cqr('Solo integratori', 'Prendo solo integratori (te lo dico)', '💊'),
-      cqr('Farmaci prescritti', 'Prendo farmaci su prescrizione medica', '💊'),
-      cqr('Antidolorifico', 'Ho preso un antidolorifico/antinfiammatorio', '💊'),
+    templates: [
+      { label: 'Nessuno', text: 'Non prendo farmaci o integratori', emoji: '💊' },
+      { label: 'Solo integratori', text: 'Prendo solo integratori (te lo dico)', emoji: '💊' },
+      { label: 'Farmaci prescritti', text: 'Prendo farmaci su prescrizione medica', emoji: '💊' },
+      {
+        label: 'Antidolorifico',
+        text: 'Ho preso un antidolorifico/antinfiammatorio',
+        emoji: '💊',
+      },
     ],
   },
 ]
@@ -179,6 +185,8 @@ const RULES: PatternRule[] = [
 /**
  * Given the last assistant response, detect if it ends with a question and
  * return contextual quick reply options. Returns [] if no pattern matches.
+ *
+ * IDs are generated fresh per call — never reused across requests.
  */
 export function buildContextualQuickReplies(assistantMessage: string): QuickReply[] {
   // Only trigger when the message contains a question mark
@@ -190,7 +198,13 @@ export function buildContextualQuickReplies(assistantMessage: string): QuickRepl
   for (const rule of RULES) {
     for (const pattern of rule.patterns) {
       if (pattern.test(tail)) {
-        return rule.replies
+        // Generate fresh UUIDs here, not at module load time
+        return rule.templates.map((t) => ({
+          id: crypto.randomUUID(),
+          label: t.label,
+          text: t.text,
+          emoji: t.emoji,
+        }))
       }
     }
   }
