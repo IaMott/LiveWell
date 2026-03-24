@@ -353,6 +353,25 @@ export async function POST(request: Request): Promise<Response> {
   }
   // ────────────────────────────────────────────────────────────────────────
 
+  // P5: Bind uploaded FileAssets to the (now-resolved) conversationId.
+  // When files are uploaded before the first message, they have conversationId = null.
+  // We update them here so contextPackBuilder can find them in the query below.
+  if (parsedBody.fileIds && parsedBody.fileIds.length > 0 && isDbPersistenceEnabled()) {
+    try {
+      const { prisma } = await import('@/lib/prisma')
+      await prisma.fileAsset.updateMany({
+        where: {
+          id: { in: parsedBody.fileIds },
+          userId,
+          conversationId: null,
+        },
+        data: { conversationId },
+      })
+    } catch {
+      // best-effort — files may not appear in this turn's context but will in later turns
+    }
+  }
+
   const requestedToolCalls = parseToolDirective(parsedBody.message)
   const contextPack = await persistence.buildContextPack({
     userId,
