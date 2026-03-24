@@ -41,6 +41,8 @@ const requestSchema = z.object({
   conversationId: z.string().min(1).optional(),
   confirmedByUser: z.boolean().optional(),
   confirmToken: z.string().trim().min(1).optional(),
+  /** P5: FileAsset IDs uploaded alongside this message */
+  fileIds: z.array(z.string().min(1)).max(5).optional(),
 })
 
 // ── Fase 6: Cartella notification labels ──────────────────────────────────
@@ -641,6 +643,8 @@ export async function POST(request: Request): Promise<Response> {
             toolExecutionTrace: persistedToolExecutionTrace,
             // C1: Pass full history so the long-term memory summary covers the whole arc.
             recentMessages: contextPack.history.recentMessages,
+            // P5: Link uploaded files to the user message
+            fileIds: parsedBody.fileIds,
           })
         } catch (error) {
           console.error('[chat/send] persistChatTurn failed, continuing in fallback mode', error)

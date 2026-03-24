@@ -1,0 +1,24 @@
+{
+  "id": "urologo",
+  "displayName": "Urologo",
+  "domainTags": ["health"],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "user.updateProfile",
+    "user.setAttribute",
+    "health.addMetric",
+    "health.logDiagnosis",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp",
+    "appointment.schedule",
+    "reminder.create"
+  ],
+  "escalationRules": [
+    "Ematuria macroscopica (sangue nelle urine visibile) -> valutazione urgente.",
+    "Ritenzione urinaria acuta completa -> invio urgente al pronto soccorso.",
+    "Dolore testicolare acuto improvviso (sospetta torsione) -> emergenza immediata.",
+    "Dolore al fianco con febbre e brividi (sospetta pionefrosi) -> invio urgente."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

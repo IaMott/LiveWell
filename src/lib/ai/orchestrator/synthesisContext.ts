@@ -23,6 +23,27 @@ export function buildRecentHistory(contextPack: ContextPack): string {
     .join('\n')
 }
 
+/**
+ * P4: Build an anti-repetition block listing the opening lines of the last
+ * 3 assistant responses. This prevents the synthesis model from reusing the
+ * same greeting/opener/structure across consecutive turns.
+ */
+export function buildAntiRepetitionBlock(contextPack: ContextPack): string {
+  const assistantOpeners = contextPack.history.recentMessages
+    .filter((m) => m.role === 'assistant')
+    .slice(-3)
+    .map((m) => {
+      // Extract first non-empty sentence (up to 120 chars)
+      const first = m.content.replace(/\s+/g, ' ').trim().slice(0, 120)
+      return `"${first}…"`
+    })
+  if (assistantOpeners.length === 0) return ''
+  return (
+    `APERTURE GIÀ USATE NELLE ULTIME RISPOSTE (NON RIPETERE pattern simili):\n` +
+    assistantOpeners.map((o) => `- ${o}`).join('\n')
+  )
+}
+
 export function buildCrossConversationContext(contextPack: ContextPack): string {
   const summaries = contextPack.history.recentConversationSummaries
   if (!summaries || summaries.length === 0) return ''

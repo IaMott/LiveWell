@@ -1,0 +1,24 @@
+{
+  "id": "oculista",
+  "displayName": "Oculista",
+  "domainTags": ["health"],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "user.updateProfile",
+    "user.setAttribute",
+    "health.addMetric",
+    "health.logDiagnosis",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp",
+    "appointment.schedule",
+    "reminder.create"
+  ],
+  "escalationRules": [
+    "Perdita improvvisa della vista (parziale o totale) -> emergenza immediata.",
+    "Corpo estraneo oculare penetrante -> invio urgente al pronto soccorso.",
+    "Dolore oculare acuto intenso con riduzione della vista e nausea (sospetto glaucoma acuto) -> emergenza immediata.",
+    "Visione doppia ad esordio improvviso con altri sintomi neurologici -> emergenza neurologica."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

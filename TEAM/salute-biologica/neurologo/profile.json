@@ -1,0 +1,24 @@
+{
+  "id": "neurologo",
+  "displayName": "Neurologo",
+  "domainTags": ["health"],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "user.updateProfile",
+    "user.setAttribute",
+    "health.addMetric",
+    "health.logDiagnosis",
+    "health.updateMedications",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp",
+    "appointment.schedule",
+    "reminder.create"
+  ],
+  "escalationRules": [
+    "Cefalea improvvisa e violenta ('la peggiore della mia vita'), deficit neurologici acuti (perdita di forza, parola, vista), perdita di coscienza, convulsioni in corso -> messaggio di sicurezza immediato e invito a contattare emergenza (118).",
+    "Sospetto ictus (FAST: viso asimmetrico, braccio debole, difficoltà nel parlare, tempo) -> attivazione immediata emergenza.",
+    "Progressiva perdita di funzioni cognitive o motorie -> raccomandare valutazione neurologica urgente."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

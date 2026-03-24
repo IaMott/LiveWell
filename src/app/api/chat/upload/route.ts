@@ -2,6 +2,19 @@ import { getAuthUserId } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { errorResponse } from '@/lib/security/errorSchema'
 
+async function extractPdfText(buffer: Buffer): Promise<string | null> {
+  try {
+    // Dynamic import — avoids bundling the heavy lib at module load time
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mod = (await import('pdf-parse')) as any
+    const pdfParse = mod.default ?? mod
+    const data = await pdfParse(buffer)
+    return (data.text as string | undefined)?.trim() || null
+  } catch {
+    return null
+  }
+}
+
 const MAX_FILES = 5
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB per file
 const MAX_IMAGE_SIZE_BYTES = 4 * 1024 * 1024 // 4 MB for inline base64 (stays within Neon text limits)
@@ -58,6 +71,20 @@ export async function POST(request: Request): Promise<Response> {
         } catch {
           // skip — will be stored as metadata-only
         }
+      }
+    } else if (mimeType === 'application/pdf') {
+      try {
+        const bytes = await file.arrayBuffer()
+        const buffer = Buffer.from(bytes)
+        const pdfText = await extractPdfText(buffer)
+        if (pdfText) {
+          extractedText =
+            pdfText.length > MAX_TEXT_LENGTH
+              ? pdfText.slice(0, MAX_TEXT_LENGTH) + '\n…[troncato]'
+              : pdfText
+        }
+      } catch {
+        // PDF parsing failed — stored as metadata-only
       }
     } else if (
       mimeType.startsWith('text/') ||

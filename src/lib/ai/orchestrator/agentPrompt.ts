@@ -307,6 +307,22 @@ export function buildAgentUserPrompt(
     parts.push(``, ...intakeLines)
   }
 
+  // 1A3 — Uploaded files / documents with extracted content
+  const contextFiles = input.contextPack.files ?? []
+  const filesWithContent = contextFiles.filter(
+    (f) => f.extractedText && !f.extractedText.startsWith('data:'),
+  )
+  if (filesWithContent.length > 0) {
+    parts.push(``, `ALLEGATI INVIATI DALL'UTENTE:`)
+    for (const f of filesWithContent) {
+      const sizeKb = Math.round((f.size ?? 0) / 1024)
+      parts.push(`📎 ${f.filename} (${f.mimeType}, ${sizeKb}KB):`, f.extractedText!.slice(0, 4000))
+    }
+    parts.push(
+      `IMPORTANTE: I file sopra sono stati già inviati dall'utente. Non chiedere di inviare nuovamente documenti già presenti qui.`,
+    )
+  }
+
   // 1B — Session mode
   const sessionMode = detectSessionMode(agentId, input.contextPack)
   parts.push(``, ...buildSessionModeBlock(sessionMode))

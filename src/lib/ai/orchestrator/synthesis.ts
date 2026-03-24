@@ -2,6 +2,7 @@ import { ActiveSpecialist, AgentProposal, ContextPack } from '../types'
 import { buildProfessionalOutputInstructions } from '../artifacts/contracts'
 import { LlmClient } from './agentExecution'
 import {
+  buildAntiRepetitionBlock,
   buildCrossConversationContext,
   buildRecentHistory,
   buildStructuredProfileBlock,
@@ -154,8 +155,8 @@ function buildSystemPrompt(
     // BUG-E: Prevent repeating already-communicated data
     const noRepetitionRule = `NON riformulare o ripetere informazioni già menzionate nella conversazione recente (IMC/BMI, peso, altezza, sedentarietà, condizioni note, situazione lavorativa, ecc.). ${nameRef} le conosce già — vai avanti con contenuto nuovo.`
 
-    // BUG-H: Strict domain boundary
-    const domainBoundaryRule = `Rimani strettamente nel tuo ambito di competenza. Se ${nameRef} menziona qualcosa fuori dal tuo dominio specifico, riconoscilo in UNA sola riga rimandando al collega competente — non approfondire né dare consigli su aree di altri specialisti.`
+    // BUG-H: Strict domain boundary + cross-domain guardrail
+    const domainBoundaryRule = `Rimani strettamente nel tuo ambito di competenza. Se ${nameRef} menziona qualcosa fuori dal tuo dominio specifico, riconoscilo in UNA sola riga rimandando al collega competente — non approfondire né dare consigli su aree di altri specialisti. Non riportare mai consigli o indicazioni che appartengono al dominio di un altro specialista del team: lascia che sia quello specialista a fornirli direttamente.`
 
     if (isFirstMessage) {
       return [
@@ -276,6 +277,7 @@ function buildSystemPrompt(
     `Rispondi a nome del gruppo usando "noi". Se l'utente chiede esplicitamente chi sta analizzando il suo caso, cita i nomi degli specialisti attivi.`,
     teamAntiPattern,
     teamNoRepetitionRule,
+    `Ogni specialista contribuisce solo nel proprio ambito. Non riportare consigli di un dominio attraverso la voce di un altro — ogni indicazione specialistica proviene dallo specialista corretto.`,
     ``,
     `Hai informazioni sufficienti su ${nameRef}. Fornisci analisi e consigli concreti, personali, basati sui dati reali.`,
     `Sii diretto. Se ${nameRef} ha bisogno di qualcosa di specifico, affrontalo.`,
@@ -301,6 +303,8 @@ function buildUserPrompt(params: {
   planRequest: boolean
   /** F2: ContextPack for structured profile data */
   contextPack: ContextPack
+  /** P4: Anti-repetition block listing recent assistant openers */
+  antiRepetitionBlock?: string
 }): string {
   const {
     userMessage,
@@ -312,6 +316,7 @@ function buildUserPrompt(params: {
     hasImages,
     planRequest,
     contextPack,
+    antiRepetitionBlock,
   } = params
 
   // F2: Structured profile block so the model always sees weight, height, etc.
@@ -337,6 +342,18 @@ function buildUserPrompt(params: {
             ? `Fai la domanda indicata sopra in modo naturale. Non dare consigli in questo messaggio.`
             : `Dai una risposta diretta, concreta e personalizzata basandoti sui dati disponibili.`
 
+  // P5: Build file attachment block for non-image files
+  const filesWithContent = (contextPack.files ?? []).filter(
+    (f) => f.extractedText && !f.extractedText.startsWith('data:'),
+  )
+  const fileBlock =
+    filesWithContent.length > 0
+      ? `ALLEGATI DELL'UTENTE (già inviati — NON chiedere di reinviarli):\n` +
+        filesWithContent
+          .map((f) => `📎 ${f.filename}:\n${f.extractedText!.slice(0, 3000)}`)
+          .join('\n\n')
+      : ''
+
   return [
     // C1: long-term memory from past sessions shown first so model has full context
     crossConversationContext
@@ -344,6 +361,8 @@ function buildUserPrompt(params: {
       : '',
     // F2: Structured profile data — always visible before the conversation
     profileBlock ? `${profileBlock}\n` : '',
+    // P5: File attachments — documents, PDFs, reports
+    fileBlock ? `${fileBlock}\n` : '',
     recentHistory ? `CONVERSAZIONE RECENTE:\n${recentHistory}\n` : '',
     `MESSAGGIO DI ${hasImages ? 'UTENTE (con allegato immagine)' : 'UTENTE'}: "${userMessage}"`,
     ``,
@@ -352,6 +371,7 @@ function buildUserPrompt(params: {
     topRecommendations ? `\nRACCOMANDAZIONI EMERSE:\n${topRecommendations}` : '',
     missingQuestionsBlock,
     ``,
+    antiRepetitionBlock ? `\n${antiRepetitionBlock}` : '',
     `Scrivi la risposta in italiano, rivolta direttamente all'utente.`,
     closingInstruction,
   ]
@@ -386,6 +406,8 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
   const recentHistory = buildRecentHistory(input.contextPack)
   // C1: load cross-conversation long-term memory
   const crossConversationContext = buildCrossConversationContext(input.contextPack)
+  // P4: anti-repetition block
+  const antiRepetitionBlock = buildAntiRepetitionBlock(input.contextPack)
 
   const conversationLength = input.contextPack.history.recentMessages.length
   // C3: True only when the user has genuinely never spoken to the system:
@@ -446,6 +468,7 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
     hasImages,
     planRequest,
     contextPack: input.contextPack, // F2: for structured profile block
+    antiRepetitionBlock, // P4: prevent repeated openers
   })
 
   try {

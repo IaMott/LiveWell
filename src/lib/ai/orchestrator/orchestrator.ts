@@ -152,9 +152,17 @@ export async function orchestrate(
       )
 
   // FIX-1: Show the FULL proposal reasoning, not truncated to 100 chars
+  // P3: Only emit thinking events for agents with meaningful confidence (> 0.3)
+  //     to avoid showing irrelevant specialists in the streaming UI.
   for (const proposal of round1Proposals) {
     const agent = deps.team.find((a) => a.id === proposal.agentId)
-    if (agent && proposal.summary && !proposal.summary.toLowerCase().includes('[unavailable]')) {
+    const isRelevant = (proposal.confidence ?? 0) > 0.3
+    if (
+      agent &&
+      isRelevant &&
+      proposal.summary &&
+      !proposal.summary.toLowerCase().includes('[unavailable]')
+    ) {
       const thought =
         proposal.reasoning && proposal.reasoning.length > 5
           ? proposal.reasoning.replace(/\n/g, ' ')

@@ -1,0 +1,25 @@
+{
+  "id": "pneumologo",
+  "displayName": "Pneumologo",
+  "domainTags": ["health"],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "user.updateProfile",
+    "user.setAttribute",
+    "health.addMetric",
+    "health.logDiagnosis",
+    "health.updateMedications",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp",
+    "appointment.schedule",
+    "reminder.create"
+  ],
+  "escalationRules": [
+    "Dispnea grave a riposo, cianosi, saturazione O2 < 90% -> emergenza immediata (118).",
+    "Emottisi (sangue nel catarro) -> valutazione urgente.",
+    "Dolore toracico pleuritico acuto con dispnea (sospetto pneumotorace) -> emergenza immediata.",
+    "Crisi asmatica grave non responsiva a broncodilatatori -> emergenza immediata."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

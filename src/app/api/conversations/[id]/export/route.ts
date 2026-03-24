@@ -34,7 +34,15 @@ export async function GET(
     include: {
       messages: {
         orderBy: { createdAt: 'asc' },
-        select: { id: true, role: true, content: true, createdAt: true },
+        select: {
+          id: true,
+          role: true,
+          content: true,
+          createdAt: true,
+          attachments: {
+            select: { fileName: true, mimeType: true, fileSize: true },
+          },
+        },
       },
     },
   })
@@ -124,6 +132,13 @@ export async function GET(
       timeStyle: 'short',
     })
     lines.push(`[${ts}] ${who}:`)
+    // P5: Show attachments for user messages
+    if (m.role === 'user' && m.attachments && m.attachments.length > 0) {
+      for (const att of m.attachments) {
+        const sizeKb = Math.round(att.fileSize / 1024)
+        lines.push(`  📎 ${att.fileName} (${att.mimeType}, ${sizeKb}KB)`)
+      }
+    }
     lines.push(messageContent)
 
     if (decoded?.thinkingSteps && decoded.thinkingSteps.length > 0) {

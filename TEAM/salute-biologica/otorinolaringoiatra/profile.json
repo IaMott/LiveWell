@@ -1,0 +1,24 @@
+{
+  "id": "otorinolaringoiatra",
+  "displayName": "Otorinolaringoiatra",
+  "domainTags": ["health"],
+  "systemPromptPath": "prompt.md",
+  "toolsAllowed": [
+    "user.updateProfile",
+    "user.setAttribute",
+    "health.addMetric",
+    "health.logDiagnosis",
+    "artifacts.saveRecommendation",
+    "notifications.createInApp",
+    "appointment.schedule",
+    "reminder.create"
+  ],
+  "escalationRules": [
+    "Perdita improvvisa dell'udito monolaterale -> valutazione ORL urgente entro 24-48h.",
+    "Difficoltà respiratoria con stridore laringeo -> emergenza immediata.",
+    "Epistassi non controllabile -> invio urgente al pronto soccorso.",
+    "Sospetta epiglottite o corpo estraneo nelle vie aeree -> emergenza immediata."
+  ],
+  "disclaimerStyle": "strict",
+  "decisionStyle": "team-led"
+}

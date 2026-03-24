@@ -61,6 +61,8 @@ export type RoutePersistenceDeps = {
     }>
     /** C1: Full conversation history for accurate long-term memory summaries. */
     recentMessages?: Array<{ role: string; content: string }>
+    /** P5: FileAsset IDs uploaded with this user message — creates Attachment records. */
+    fileIds?: string[]
   }) => Promise<void>
   buildContextPack: (input: {
     userId: string
@@ -154,36 +156,93 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       round2Proposals,
       toolExecutionTrace,
       recentMessages,
+      fileIds,
     }) => {
       // ── Phase 1: Critical — conversation + messages ──────────────────────
       // Sequential saves (no $transaction) for maximum compatibility with Neon
       // serverless connection pooling. Each operation is isolated; partial failures
       // are tolerated — the next save is still attempted.
-      await prisma.conversation.upsert({
-        where: { id: conversationId },
-        create: { id: conversationId, userId, title: userMessage.slice(0, 80) },
-        update: {},
-      })
 
-      await prisma.message.create({
-        data: { conversationId, role: 'user', content: userMessage },
-      })
+      // Retry helper for critical DB writes — retries once after 300ms on transient failures
+      async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+        try {
+          return await fn()
+        } catch (err) {
+          console.warn(`[chatPersistence] ${label} failed on first attempt, retrying…`, err)
+          await new Promise((r) => setTimeout(r, 300))
+          try {
+            return await fn()
+          } catch (retryErr) {
+            console.error(
+              `[chatPersistence] ${label} failed after retry — message may be lost`,
+              retryErr,
+            )
+            throw retryErr
+          }
+        }
+      }
+
+      await withRetry('conversation.upsert', () =>
+        prisma.conversation.upsert({
+          where: { id: conversationId },
+          create: { id: conversationId, userId, title: userMessage.slice(0, 80) },
+          update: {},
+        }),
+      )
+
+      const userMsg = await withRetry('message.create[user]', () =>
+        prisma.message.create({
+          data: { conversationId, role: 'user', content: userMessage },
+          select: { id: true },
+        }),
+      )
 
       const storedAssistantMessage = encodeAssistantContentWithThinking(
         assistantMessage,
         thinkingTrace,
       )
 
-      await prisma.message.create({
-        data: {
-          ...(assistantMessageId ? { id: assistantMessageId } : {}),
-          conversationId,
-          role: 'assistant',
-          content: storedAssistantMessage,
-          ...(domain ? { domain } : {}),
-          ...(specialistName ? { specialistName } : {}),
-        },
-      })
+      await withRetry('message.create[assistant]', () =>
+        prisma.message.create({
+          data: {
+            ...(assistantMessageId ? { id: assistantMessageId } : {}),
+            conversationId,
+            role: 'assistant',
+            content: storedAssistantMessage,
+            ...(domain ? { domain } : {}),
+            ...(specialistName ? { specialistName } : {}),
+          },
+        }),
+      )
+
+      // Link uploaded files to the user message via Attachment records
+      if (fileIds && fileIds.length > 0) {
+        for (const fileId of fileIds) {
+          try {
+            const asset = await prisma.fileAsset.findUnique({
+              where: { id: fileId },
+              select: { id: true, filename: true, mimeType: true, size: true },
+            })
+            if (!asset) continue
+            await prisma.attachment.create({
+              data: {
+                messageId: userMsg.id,
+                type: asset.mimeType.startsWith('image/') ? 'image' : 'file',
+                fileName: asset.filename,
+                fileSize: asset.size,
+                mimeType: asset.mimeType,
+                url: `/api/files/${asset.id}`,
+                metadata: JSON.stringify({ fileAssetId: asset.id }),
+              },
+            })
+          } catch (attachErr) {
+            console.warn(
+              `[chatPersistence] attachment.create failed for fileId=${fileId}`,
+              attachErr,
+            )
+          }
+        }
+      }
 
       for (const event of auditEvents) {
         try {
