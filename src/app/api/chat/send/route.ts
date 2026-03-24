@@ -179,16 +179,37 @@ function buildProposalThinkingTrace(
 
   for (const proposal of proposals ?? []) {
     if ((proposal.confidence ?? 0) === 0) continue
-    const summary = normalizeThinkingText(proposal.summary)
-    if (!summary || summary.toLowerCase().includes('[unavailable]')) continue
 
     const agent = team.find((a) => a.id === proposal.agentId)
     if (!agent) continue
 
+    // Try primary sources: summary + reasoning
+    let title = normalizeThinkingText(proposal.summary)
+    let thought = normalizeThinkingText(proposal.reasoning)
+
+    if (title?.toLowerCase().includes('[unavailable]')) title = undefined
+    if (thought?.toLowerCase().includes('[unavailable]')) thought = undefined
+
+    // Fallback 1: first recommendation title + rationale
+    if (!title && proposal.recommendations && proposal.recommendations.length > 0) {
+      const rec = proposal.recommendations[0]
+      title = normalizeThinkingText(rec.title)
+      thought =
+        normalizeThinkingText(rec.rationale) ?? normalizeThinkingText(rec.steps?.[0]) ?? title
+    }
+
+    // Fallback 2: first pending question
+    if (!title && proposal.questions && proposal.questions.length > 0) {
+      title = `Da valutare: ${proposal.questions[0]}`
+      thought = proposal.questions.join(' | ')
+    }
+
+    if (!title) continue
+
     steps.push({
       specialistName: agent.displayName,
-      title: summary,
-      thought: normalizeThinkingText(proposal.reasoning) ?? summary,
+      title,
+      thought: thought ?? title,
       domain: proposal.domain,
     })
   }
@@ -408,29 +429,40 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         // ── Step 1: Immediate thinking events (before orchestrate) ─────────
-        // Uses resolveRoutingCandidates (same as orchestrate) for accurate agent names
-        // FIX-1: Show meaningful action, not an echo of the user's text
+        // Visual-only placeholders — not persisted so they don't pollute the export.
         for (let i = 0; i < immediateAgents.length; i++) {
           const agent = immediateAgents[i]
-          emitThinkingEvent({
-            specialistName: agent.displayName,
-            title: 'Analisi in corso',
-            domain: agent.domainTags[0] as Domain | undefined,
-            thought: 'Valutazione del caso in corso',
-          })
+          emitThinkingEvent(
+            {
+              specialistName: agent.displayName,
+              title: 'Analisi in corso',
+              domain: agent.domainTags[0] as Domain | undefined,
+              thought: 'Valutazione del caso in corso',
+            },
+            { persist: false },
+          )
           // Short delay between immediate events
           await new Promise((r) => setTimeout(r, 280))
         }
 
         // ── Step 2: Orchestrate (main AI work) ────────────────────────────
-        // onProgress emits real-time thinking events during orchestration
+        // Generic structural labels are emitted live for the UI but NOT persisted.
+        // Only real agent reasoning (non-generic thought text) is saved to the trace.
+        const GENERIC_ORCHESTRATOR_THOUGHTS = new Set([
+          'Valutazione del caso in corso',
+          'Confronto tra specialisti',
+        ])
         const onProgress = (event: ProgressEvent) => {
-          emitThinkingEvent({
-            specialistName: event.displayName,
-            title: event.thought,
-            domain: team.find((a) => a.id === event.agentId)?.domainTags[0] as Domain | undefined,
-            thought: event.thought,
-          })
+          const isGeneric = GENERIC_ORCHESTRATOR_THOUGHTS.has(event.thought)
+          emitThinkingEvent(
+            {
+              specialistName: event.displayName,
+              title: event.thought,
+              domain: team.find((a) => a.id === event.agentId)?.domainTags[0] as Domain | undefined,
+              thought: event.thought,
+            },
+            { persist: !isGeneric },
+          )
         }
 
         let consensus
@@ -547,10 +579,9 @@ export async function POST(request: Request): Promise<Response> {
           parsedBody.message,
           cpUserName ?? null,
         )
-        const thinkingEvents =
-          protocolThinkingEvents.length > 0
-            ? protocolThinkingEvents
-            : mergeThinkingEvents(protocolThinkingEvents, proposalThinkingEvents)
+        // Always merge protocol + proposal events so real agent reasoning is shown
+        // even when protocol events (e.g. "subentro") are also present.
+        const thinkingEvents = mergeThinkingEvents(protocolThinkingEvents, proposalThinkingEvents)
         const proposalTrace = dedupeThinkingSteps([
           ...buildProposalThinkingTrace(consensus.debug?.round1Proposals, team),
           ...buildProposalThinkingTrace(consensus.debug?.round2Proposals, team),
@@ -720,11 +751,14 @@ export async function POST(request: Request): Promise<Response> {
         )
 
         // ── Step 8: Quick-reply suggestions (multi-domain triage or single-domain) ──
+        // Skip single-domain suggestions when a specialist is active — the suggestions
+        // would reflect the specialist's domain (e.g. "training" for Fisioterapista)
+        // rather than the actual conversation topic, leading to incoherent buttons.
         const multiQrs = consensus.quickReplies ?? []
         const suggestionsToSend =
           multiQrs.length > 0
             ? multiQrs
-            : activeDomain
+            : !activeSpecialistId && activeDomain
               ? buildSingleDomainSuggestions(activeDomain)
               : []
 

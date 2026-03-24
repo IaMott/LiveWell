@@ -81,23 +81,25 @@ export function buildThinkingEvents(
       thought?: string
     }> = []
 
-    // FIX-1: Show the REAL specialist reasoning — no echo of the user's text.
-    // Each proposal generates ONE step with the agent's actual analysis.
+    // Show the REAL specialist reasoning. Cascade through all available sources.
     for (const p of proposals) {
       const agent = team.find((a) => a.id === p.agentId)
       const agentName = agent?.displayName ?? p.agentId
       const domain = p.domain
 
-      const hasQuestions = p.questions && p.questions.length > 0
-      const hasSummary = p.summary && !p.summary.toLowerCase().includes('[unavailable]')
-      const hasReasoning = p.reasoning && p.reasoning.length > 5
+      const hasSummary =
+        !!p.summary && !p.summary.toLowerCase().includes('[unavailable]') && p.summary.length > 2
+      const hasReasoning = !!p.reasoning && p.reasoning.length > 5
+      const hasRecommendations = !!p.recommendations && p.recommendations.length > 0
+      const hasQuestions = !!p.questions && p.questions.length > 0
 
-      // Full reasoning without truncation — the UI handles overflow
-      const fullThought =
-        hasReasoning && p.reasoning
-          ? p.reasoning.replace(/\n/g, ' ')
-          : hasSummary && p.summary
-            ? p.summary.replace(/\n/g, ' ')
+      // Best available thought text — prefer reasoning, then summary, then recommendation rationale
+      const fullThought = hasReasoning
+        ? p.reasoning!.replace(/\n/g, ' ')
+        : hasSummary
+          ? p.summary!.replace(/\n/g, ' ')
+          : hasRecommendations
+            ? (p.recommendations![0].rationale || p.recommendations![0].title).replace(/\n/g, ' ')
             : 'Verifico le informazioni nel profilo'
 
       if (hasQuestions && p.questions) {
@@ -111,6 +113,13 @@ export function buildThinkingEvents(
         steps.push({
           specialistName: agentName,
           title: p.summary.replace(/\n/g, ' '),
+          domain,
+          thought: fullThought,
+        })
+      } else if (hasRecommendations) {
+        steps.push({
+          specialistName: agentName,
+          title: p.recommendations![0].title.replace(/\n/g, ' '),
           domain,
           thought: fullThought,
         })
