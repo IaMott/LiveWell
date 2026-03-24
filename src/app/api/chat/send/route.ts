@@ -773,17 +773,23 @@ export async function POST(request: Request): Promise<Response> {
           ),
         )
 
-        // ── Step 8: Quick-reply suggestions (multi-domain triage or single-domain) ──
-        // Skip single-domain suggestions when a specialist is active — the suggestions
-        // would reflect the specialist's domain (e.g. "training" for Fisioterapista)
-        // rather than the actual conversation topic, leading to incoherent buttons.
+        // ── Step 8: Quick-reply suggestions ────────────────────────────────
+        // Priority order:
+        // 1. Contextual quick replies — detected from the last question in the response
+        // 2. Multi-domain triage quick replies — from consensus engine
+        // 3. Single-domain static suggestions — only when no specialist is active
+        const { buildContextualQuickReplies } =
+          await import('@/lib/ai/orchestrator/contextualQuickReplies')
+        const contextualQrs = buildContextualQuickReplies(responseText)
         const multiQrs = consensus.quickReplies ?? []
         const suggestionsToSend =
-          multiQrs.length > 0
-            ? multiQrs
-            : !activeSpecialistId && activeDomain
-              ? buildSingleDomainSuggestions(activeDomain)
-              : []
+          contextualQrs.length > 0
+            ? contextualQrs
+            : multiQrs.length > 0
+              ? multiQrs
+              : !activeSpecialistId && activeDomain
+                ? buildSingleDomainSuggestions(activeDomain)
+                : []
 
         if (suggestionsToSend.length > 0) {
           controller.enqueue(
