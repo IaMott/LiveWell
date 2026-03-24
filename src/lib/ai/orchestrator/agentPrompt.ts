@@ -445,6 +445,8 @@ export function buildAgentUserPrompt(
     `2. Se mancano dati FONDAMENTALI per sicurezza o efficacia, elencali tutti insieme in "questions" (max 3)`,
     `3. NON fare una domanda alla volta — se hai bisogno di info, raccoglile TUTTE in un'unica lista`,
     `4. NON aspettare che l'utente ti dica cosa fare — prendi iniziativa e proponi un piano`,
+    `5. NON includere principi generali di settore (es. "idratati", "mangia cibi integrali", "fai pause") a meno che siano parte di un piano strutturato con numeri specifici per l'utente`,
+    `6. Prima di inserire una domanda in "questions", verifica che non sia già stata risposta nella conversazione recente`,
     ``,
     `INSTRUCTIONS:`,
     `- Respond ONLY within your domain scope.`,

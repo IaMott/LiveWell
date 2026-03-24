@@ -195,6 +195,8 @@ function buildSystemPrompt(
         antiPattern,
         antiGatekeeperRule,
         noRepetitionRule,
+        specialistNoFillerRule,
+        specialistNoRepeatedQuestionRule,
         ``,
         hasKnownCaseContext
           ? `Il problema attivo è già chiaro: NON tornare a intake generale, non ripartire da goal astratti e non chiedere dati baseline fuori fuoco.`
