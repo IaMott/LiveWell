@@ -46,11 +46,30 @@ export type TriageResult = {
 }
 
 /**
+ * Extract a short preview (first sentence, max ~80 chars) from a proposal's
+ * reasoning or summary. Falls back to an empty string.
+ */
+function extractPreview(proposal: AgentProposal): string {
+  const raw = proposal.reasoning || proposal.summary || ''
+  if (!raw) return ''
+
+  // Take the first sentence (stop at . ? ! or newline)
+  const firstSentence = raw.split(/[.?!\n]/)[0]?.trim() ?? ''
+
+  if (firstSentence.length <= 80) return firstSentence
+  // Truncate at last space before 80 chars
+  const truncated = firstSentence.slice(0, 80)
+  const lastSpace = truncated.lastIndexOf(' ')
+  return (lastSpace > 40 ? truncated.slice(0, lastSpace) : truncated) + '…'
+}
+
+/**
  * Build a multi-domain triage response when the user's message spans 2+
  * distinct domains. Instead of a blended synthesis, the user chooses which
  * topic to explore first.
  *
- * @returns A deterministic triage message + quick-reply buttons.
+ * Each specialist gets a brief preview line from their proposal reasoning,
+ * plus a tappable quick-reply button.
  */
 export function buildMultiDomainTriage(
   proposals: AgentProposal[],
@@ -72,37 +91,41 @@ export function buildMultiDomainTriage(
     .slice(0, 6) // max 6 topics
 
   if (ranked.length < 2) {
-    // Shouldn't happen in multi-domain context, but fallback gracefully
     return {
       message: 'Come posso aiutarti?',
       quickReplies: [],
     }
   }
 
-  // Build quick replies — one per contributing agent
-  const quickReplies: QuickReply[] = ranked.map((p) => {
+  // Build quick replies + topic lines with preview
+  const quickReplies: QuickReply[] = []
+  const topicLines: string[] = []
+
+  for (const p of ranked) {
     const agent = team.find((a) => a.id === p.agentId)
     const displayName = agent?.displayName ?? p.agentId
     const emoji = AGENT_EMOJI[p.agentId] ?? DOMAIN_EMOJI[p.domain] ?? '💬'
+    const preview = extractPreview(p)
 
-    return {
+    quickReplies.push({
       id: crypto.randomUUID(),
       label: `${emoji} ${displayName}`,
       text: `Vorrei parlare con ${displayName}`,
       emoji,
       domain: p.domain,
-    }
-  })
+    })
 
-  // Build the triage message text (a brief list of available specialists)
-  const topicLines = quickReplies.map((qr) => `- **${qr.label}**`).join('\n')
+    // Topic line: "- **🦴 Fisioterapista** — Il dolore al collo potrebbe…"
+    const previewSuffix = preview ? ` — ${preview}` : ''
+    topicLines.push(`- **${emoji} ${displayName}**${previewSuffix}`)
+  }
 
   const message = [
-    'Ho individuato diversi aspetti nel tuo messaggio. Ecco chi puo aiutarti:',
+    'Ho individuato diversi aspetti nel tuo messaggio:',
     '',
-    topicLines,
+    ...topicLines,
     '',
-    'Scegli con chi vuoi iniziare, oppure scrivi liberamente.',
+    "Con chi vuoi iniziare? Tocca un'opzione o scrivi liberamente.",
   ].join('\n')
 
   return { message, quickReplies }

@@ -403,33 +403,65 @@ function scoreImplicitOwnerCandidate(
         ]) * 4
       if (/\bdebiti\b/i.test(lower) && /\bansia\b/i.test(lower)) score += 4
       break
-    case 'career-coach':
-      score += matches([/\blavoro\b/i, /\bcarriera\b/i, /\bbloccato\b/i]) * 3
-      if (
-        /\b(burnout|stress|ansia|focus|concentrarmi)\b/i.test(lower) &&
-        !/\b(obiettivo professionale|carriera|colloquio|ruolo)\b/i.test(lower)
-      ) {
+    case 'career-coach': {
+      // "lavoro" in temporal context ("giornata lavorativa", "finito di lavorare") is NOT career
+      const isTemporalWork =
+        /\b(finito di lavorare|giornata di lavoro|giornata lavorativa|tornato dal lavoro|dopo il lavoro|esco dal lavoro|uscito dal lavoro|pausa lavoro|prima del lavoro|durante il lavoro|andare al lavoro|vado al lavoro|vengo dal lavoro)\b/i.test(
+          lower,
+        )
+      const hasExplicitCareer =
+        /\b(carriera|obiettivo professionale|colloquio|promozione|ruolo|cambiare lavoro|cerco lavoro|bloccato nel lavoro)\b/i.test(
+          lower,
+        )
+      if (isTemporalWork && !hasExplicitCareer) {
+        // Temporal "lavoro" → strong dampening, skip career-coach
+        score -= 10
+      } else {
+        score +=
+          matches([
+            /\bcarriera\b/i,
+            /\bbloccato nel lavoro\b/i,
+            /\bcambiare lavoro\b/i,
+            /\bcerco lavoro\b/i,
+          ]) * 3
+        // Only count bare "lavoro" when in explicit career context
+        if (hasExplicitCareer && /\blavoro\b/i.test(lower)) score += 3
+      }
+      if (/\b(burnout|stress|ansia|focus|concentrarmi)\b/i.test(lower) && !hasExplicitCareer) {
         score -= 6
       }
       if (/\bsepar(?:az|and)|figli|accordi|problemi pratici|soldi\b/i.test(lower)) score -= 10
       break
-    case 'executive-coach':
-      score +=
-        matches([
-          /\bleadership\b/i,
-          /\bteam\b/i,
-          /\bmanager\b/i,
-          /\bruolo\b/i,
-          /\bdecisioni\b/i,
-          /\blavoro\b/i,
-        ]) * 3
+    }
+    case 'executive-coach': {
+      const isTemporalWorkExec =
+        /\b(finito di lavorare|giornata di lavoro|giornata lavorativa|tornato dal lavoro|dopo il lavoro|esco dal lavoro)\b/i.test(
+          lower,
+        )
+      const hasExplicitExecContext = /\b(leadership|team|manager|ruolo|decisioni)\b/i.test(lower)
+      if (isTemporalWorkExec && !hasExplicitExecContext) {
+        score -= 10
+      } else {
+        score +=
+          matches([
+            /\bleadership\b/i,
+            /\bteam\b/i,
+            /\bmanager\b/i,
+            /\bruolo\b/i,
+            /\bdecisioni\b/i,
+          ]) * 3
+        // Only count bare "lavoro" when in executive context
+        if (hasExplicitExecContext && /\blavoro\b/i.test(lower)) score += 3
+      }
       if (
         /\b(burnout|stress|focus|concentrarmi)\b/i.test(lower) &&
-        /\b(lavoro|team|manager|ruolo)\b/i.test(lower)
+        /\b(lavoro|team|manager|ruolo)\b/i.test(lower) &&
+        hasExplicitExecContext
       ) {
         score += 3
       }
       break
+    }
     case 'commercialista':
       score +=
         matches([
