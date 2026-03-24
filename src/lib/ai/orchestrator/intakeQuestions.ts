@@ -149,6 +149,48 @@ export const AGENT_INTAKE_KEYS: Record<string, { required: string[]; optional: s
     required: ['difficulty_area', 'organizational_goal', 'constraints'],
     optional: ['current_tools'],
   },
+  // ── Nuovi specialisti ──────────────────────────────────────────────────────
+  neurologo: {
+    required: [
+      'neurological_complaint',
+      'symptom_duration',
+      'pain_location',
+      'pain_intensity',
+      'associated_symptoms',
+    ],
+    optional: ['previous_neurological_diagnosis', 'medications', 'family_history_neurological'],
+  },
+  ortopedico: {
+    required: [
+      'musculoskeletal_complaint',
+      'injury_mechanism',
+      'pain_location',
+      'pain_intensity',
+      'functional_impact',
+    ],
+    optional: ['previous_imaging', 'previous_treatments', 'physical_activity'],
+  },
+  urologo: {
+    required: ['urological_complaint', 'symptom_duration', 'urinary_frequency', 'medications'],
+    optional: ['previous_urological_exams', 'prostate_history'],
+  },
+  oculista: {
+    required: ['visual_complaint', 'symptom_onset', 'current_correction', 'last_eye_exam'],
+    optional: ['family_history_ocular', 'systemic_diseases'],
+  },
+  otorinolaringoiatra: {
+    required: ['ent_complaint', 'symptom_duration', 'associated_symptoms'],
+    optional: ['allergies', 'previous_ent_treatments', 'smoking_status'],
+  },
+  pneumologo: {
+    required: [
+      'respiratory_complaint',
+      'symptom_duration',
+      'dyspnea_on_exertion',
+      'smoking_status',
+    ],
+    optional: ['spirometry_results', 'allergies', 'occupational_exposure'],
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -342,6 +384,62 @@ const FIELD_QUESTIONS: Record<string, string> = {
     'Cosa vorresti migliorare concretamente nella tua organizzazione quotidiana?',
   constraints: 'Quali sono i principali vincoli (tempo, risorse, impegni fissi) da rispettare?',
   current_tools: 'Usi già strumenti di organizzazione (agenda, app, liste)? Come ti trovi?',
+
+  // Neurologo
+  neurological_complaint:
+    'Qual è il problema neurologico principale che stai riscontrando (cefalea, vertigini, formicolio, debolezza, altro)?',
+  associated_symptoms:
+    'Hai sintomi associati come nausea, disturbi visivi, difficoltà a parlare o camminare?',
+  previous_neurological_diagnosis:
+    'Hai già ricevuto una diagnosi neurologica in passato (emicrania, neuropatia, ernia, ecc.)?',
+  family_history_neurological:
+    'In famiglia ci sono casi di malattie neurologiche (ictus, epilessia, sclerosi multipla, Parkinson)?',
+
+  // Ortopedico
+  musculoskeletal_complaint:
+    'Qual è il problema osteoarticolare principale (dolore, frattura, instabilità, limitazione del movimento)?',
+  injury_mechanism:
+    'Come si è verificato il problema (trauma acuto, usura progressiva, movimento improvviso, senza causa apparente)?',
+  previous_imaging:
+    'Hai eseguito radiografie, risonanze o TAC recenti? Puoi condividere i referti?',
+
+  // Urologo
+  urological_complaint:
+    'Qual è il problema urologico principale (dolore, difficoltà a urinare, frequenza, altro)?',
+  urinary_frequency:
+    'Con quale frequenza urinai? Noti urgenza, gocciolamento, flusso ridotto o bruciore?',
+  previous_urological_exams:
+    'Hai eseguito esami urologici recenti (ecografia, PSA, urinocoltura, analisi delle urine)?',
+  prostate_history: 'Hai una storia di problemi prostatici o hai già eseguito visite urologiche?',
+
+  // Oculista
+  visual_complaint:
+    'Qual è il problema visivo principale (vista sfocata, dolore, lacrimazione, occhio secco, perdita di visione)?',
+  symptom_onset: 'Quando è comparso il problema (improvvisamente o gradualmente)?',
+  current_correction:
+    'Usi occhiali o lenti a contatto? Quando è stato eseguito il tuo ultimo controllo della vista?',
+  last_eye_exam: 'Quando hai effettuato il tuo ultimo controllo oculistico?',
+  family_history_ocular:
+    'In famiglia ci sono casi di glaucoma, degenerazione maculare o altri problemi oculari?',
+  systemic_diseases:
+    'Hai malattie sistemiche che possono interessare gli occhi (diabete, ipertensione, malattie autoimmuni)?',
+
+  // Otorinolaringoiatra
+  ent_complaint:
+    'Qual è il problema principale (orecchio, naso, gola, voce, udito, equilibrio, russare)?',
+  allergies: 'Hai allergie note (alimentari, ambientali, a farmaci)?',
+  previous_ent_treatments:
+    'Hai già eseguito trattamenti ORL in passato (operazioni, terapie, visite specialistiche)?',
+  smoking_status: 'Fumi o hai fumato? Da quanto tempo e quante sigarette al giorno?',
+
+  // Pneumologo
+  respiratory_complaint:
+    'Qual è il problema respiratorio principale (tosse, fiato corto, sibilo, catarro, altro)?',
+  dyspnea_on_exertion:
+    'Hai difficoltà respiratorie sotto sforzo (salire le scale, camminare veloce)?',
+  spirometry_results: 'Hai mai eseguito una spirometria o altri test della funzione respiratoria?',
+  occupational_exposure:
+    'Sei esposto a polveri, sostanze chimiche o agenti irritanti nel lavoro o in casa?',
 }
 
 // Agent-specific question overrides for fields shared across specialists
