@@ -166,6 +166,18 @@ const CLINICAL_ESCALATION_KEYWORDS = [
   'allergia', 'intolleranza', 'celiachia',
   // Pharmacological
   'farmac', 'medicinale', 'prescriz', 'terapia', 'diagnosi',
+  // Gynecological
+  'ciclo', 'mestruo', 'menopausa', 'gravidanza', 'ovaio', 'utero', 'vagina', 'endometriosi', 'pcos',
+  // Diabetological
+  'glicemia', 'insulina', 'diabete', 'hba1c', 'ipoglicemia', 'iperglicemia',
+  // Infectious
+  'hiv', 'epatite', 'tubercolosi', 'sepsi', 'meningite', 'infezione',
+  // Oncological
+  'tumore', 'cancro', 'neoplasia', 'chemioterapia', 'metastasi', 'biopsia',
+  // Allergological
+  'orticaria', 'angioedema', 'anafilassi', 'rinite allergica',
+  // Geriatric
+  'demenza', 'alzheimer', 'caduta anziano', 'delirium', 'fragilità',
 ]
 
 export function messageNeedsClinicalEscalation(message: string): boolean {
