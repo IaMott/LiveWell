@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ChatMessage, ThinkingStep, QuickReplyOption } from '@/hooks/useChat'
 import type { Domain } from '@/lib/ai/types'
 import { FeedbackWidget } from './FeedbackWidget'
@@ -22,10 +23,12 @@ type Props = {
   message: ChatMessage
   conversationId?: string
   onSend?: (text: string) => void
+  onEdit?: () => void
 }
 
-export function MessageBubble({ message, conversationId, onSend }: Props) {
+export function MessageBubble({ message, conversationId, onSend, onEdit }: Props) {
   const isUser = message.role === 'user'
+  const [hovered, setHovered] = useState(false)
   const domainColor = message.domain ? DOMAIN_COLORS[message.domain] : undefined
   const specialistLabel =
     !isUser && message.specialistName
@@ -38,6 +41,8 @@ export function MessageBubble({ message, conversationId, onSend }: Props) {
 
   return (
     <div
+      onMouseEnter={() => isUser && setHovered(true)}
+      onMouseLeave={() => isUser && setHovered(false)}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -91,6 +96,52 @@ export function MessageBubble({ message, conversationId, onSend }: Props) {
           )}
         </div>
       </div>
+
+      {/* Edit button — shown on hover for user messages */}
+      {isUser && hovered && !message.streaming && onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label="Modifica messaggio"
+          style={{
+            marginTop: '0.25rem',
+            marginRight: '0.125rem',
+            padding: '0.25rem 0.5rem',
+            border: 'none',
+            background: 'none',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            fontSize: '0.6875rem',
+            color: 'var(--color-text-secondary)',
+            borderRadius: '4px',
+            transition: 'color 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = 'var(--color-text-primary)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = 'var(--color-text-secondary)'
+          }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="11"
+            height="11"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+          Modifica
+        </button>
+      )}
 
       {/* Quick-reply buttons (multi-domain triage, specialist suggestions) */}
       {!isUser && !message.streaming && message.quickReplies && message.quickReplies.length > 0 && (

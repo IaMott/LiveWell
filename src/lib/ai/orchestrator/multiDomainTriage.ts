@@ -1,5 +1,71 @@
 import type { AgentProfile, AgentProposal, Domain, QuickReply } from '../types'
 
+const SINGLE_DOMAIN_SUGGESTIONS: Record<
+  Domain,
+  Array<{ label: string; text: string; emoji: string }>
+> = {
+  nutrition: [
+    { label: 'Crea piano', text: 'Puoi crearmi un piano alimentare personalizzato?', emoji: '📅' },
+    { label: 'Calcola calorie', text: 'Quante calorie dovrei assumere ogni giorno?', emoji: '🔢' },
+    { label: 'Idratazione', text: 'Quanta acqua devo bere al giorno?', emoji: '💧' },
+  ],
+  health: [
+    { label: 'Cosa fare ora', text: 'Cosa devo fare concretamente?', emoji: '📋' },
+    { label: 'Approfondisci', text: 'Puoi approfondire questo argomento?', emoji: '🔍' },
+    { label: 'Quando preoccuparsi', text: 'Quando è il caso di preoccuparsi?', emoji: '⚠️' },
+  ],
+  training: [
+    {
+      label: 'Scheda settimanale',
+      text: 'Puoi crearmi una scheda di allenamento settimanale?',
+      emoji: '📆',
+    },
+    {
+      label: 'Aumenta intensità',
+      text: "Come posso aumentare l'intensità degli allenamenti?",
+      emoji: '⚡',
+    },
+    { label: 'Alternative', text: 'Hai esercizi alternativi che posso fare?', emoji: '🔄' },
+  ],
+  mindfulness: [
+    { label: 'Esercizio guidato', text: 'Puoi guidarmi in un esercizio pratico?', emoji: '🧘' },
+    {
+      label: 'Tecnica rapida',
+      text: 'Dammi una tecnica veloce da applicare subito',
+      emoji: '⚡',
+    },
+    { label: 'Migliora sonno', text: 'Come posso migliorare la qualità del sonno?', emoji: '😴' },
+  ],
+  inspiration: [
+    { label: 'Approfondisci', text: 'Puoi approfondire questo concetto?', emoji: '💡' },
+    { label: 'Come applicarlo', text: 'Come posso applicarlo nella pratica?', emoji: '📝' },
+    { label: 'Prossimo passo', text: 'Qual è il prossimo passo che mi consigli?', emoji: '🎯' },
+  ],
+  coordination: [
+    { label: 'Riassumi', text: 'Puoi riassumere i punti principali?', emoji: '📋' },
+    { label: 'Prossimi passi', text: 'Quali sono i prossimi passi?', emoji: '🎯' },
+  ],
+  general: [
+    { label: 'Approfondisci', text: 'Puoi approfondire?', emoji: '🔍' },
+    { label: 'Prossimo passo', text: 'Qual è il prossimo passo?', emoji: '🎯' },
+  ],
+}
+
+/**
+ * Build quick-reply suggestions for a single-domain response.
+ * Returns 2-3 contextual follow-up options based on the active domain.
+ */
+export function buildSingleDomainSuggestions(domain: Domain): QuickReply[] {
+  const items = SINGLE_DOMAIN_SUGGESTIONS[domain] ?? SINGLE_DOMAIN_SUGGESTIONS.general
+  return items.map((s) => ({
+    id: crypto.randomUUID(),
+    label: s.label,
+    text: s.text,
+    emoji: s.emoji,
+    domain,
+  }))
+}
+
 const AGENT_EMOJI: Record<string, string> = {
   fisioterapista: '🦴',
   fisiatra: '🦴',

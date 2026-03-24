@@ -8,9 +8,10 @@ type Props = {
   messages: ChatMessage[]
   conversationId?: string
   onSend?: (text: string) => void
+  onEdit?: (messageId: string) => void
 }
 
-export function MessageList({ messages, conversationId, onSend }: Props) {
+export function MessageList({ messages, conversationId, onSend, onEdit }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -66,7 +67,13 @@ export function MessageList({ messages, conversationId, onSend }: Props) {
       }}
     >
       {messages.map((msg) => (
-        <MessageBubble key={msg.id} message={msg} conversationId={conversationId} onSend={onSend} />
+        <MessageBubble
+          key={msg.id}
+          message={msg}
+          conversationId={conversationId}
+          onSend={onSend}
+          onEdit={onEdit ? () => onEdit(msg.id) : undefined}
+        />
       ))}
       <div ref={bottomRef} />
     </div>

@@ -174,6 +174,10 @@ interface Props {
   onVoiceEnd?: (liveConversationId?: string) => void
   /** Active conversation ID — used to save Live session transcript to chat history. */
   conversationId?: string | null
+  /** Called when the user wants to stop the current AI response. */
+  onStop?: () => void
+  /** Pre-fill text for editing a previous message. */
+  editDraft?: string
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -186,6 +190,8 @@ export function ChatInput({
   onVoiceStart,
   onVoiceEnd,
   conversationId,
+  onStop,
+  editDraft,
 }: Props) {
   const [text, setText] = useState('')
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(activeDomain ?? null)
@@ -214,7 +220,6 @@ export function ChatInput({
   }, [showLive]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync activeDomain from orchestrator ui.state SSE
-
   useEffect(() => {
     if (activeDomain && activeDomain !== selectedDomain) {
       setSelectedDomain(activeDomain) // eslint-disable-line react-hooks/set-state-in-effect
@@ -223,6 +228,21 @@ export function ChatInput({
       return () => clearTimeout(t)
     }
   }, [activeDomain]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pre-fill textarea when an edit draft is provided
+  useEffect(() => {
+    if (editDraft !== undefined) {
+      setText(editDraft) // eslint-disable-line react-hooks/set-state-in-effect
+      setTimeout(() => {
+        const el = textareaRef.current
+        if (el) {
+          el.style.height = 'auto'
+          el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+          el.focus()
+        }
+      }, 0)
+    }
+  }, [editDraft])
 
   const currentColor = selectedDomain ? getDomainColor(selectedDomain) : '#8E8E93'
 
@@ -555,44 +575,76 @@ export function ChatInput({
               <IconLive active={showLive} />
             </button>
 
-            {/* Send button */}
-            <button
-              type="button"
-              onClick={submit}
-              disabled={(!text.trim() && pendingFiles.length === 0) || disabled}
-              aria-label="Invia"
-              style={{
-                width: '2rem',
-                height: '2rem',
-                borderRadius: '50%',
-                border: 'none',
-                backgroundColor:
-                  text.trim() || pendingFiles.length > 0
-                    ? currentColor || '#007AFF'
-                    : 'var(--color-separator, #E5E5EA)',
-                color: '#fff',
-                cursor: text.trim() || pendingFiles.length > 0 ? 'pointer' : 'default',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'background-color 0.15s',
-                flexShrink: 0,
-              }}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="14"
-                height="14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+            {/* Stop button (while streaming) or Send button */}
+            {disabled ? (
+              <button
+                type="button"
+                onClick={onStop}
+                aria-label="Interrompi risposta"
+                style={{
+                  width: '2rem',
+                  height: '2rem',
+                  borderRadius: '50%',
+                  border: 'none',
+                  backgroundColor: '#FF3B30',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  transition: 'opacity 0.15s',
+                }}
               >
-                <path d="M12 19V5M5 12l7-7 7 7" />
-              </svg>
-            </button>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="11"
+                  height="11"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <rect x="4" y="4" width="16" height="16" rx="2" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={submit}
+                disabled={!text.trim() && pendingFiles.length === 0}
+                aria-label="Invia"
+                style={{
+                  width: '2rem',
+                  height: '2rem',
+                  borderRadius: '50%',
+                  border: 'none',
+                  backgroundColor:
+                    text.trim() || pendingFiles.length > 0
+                      ? currentColor || '#007AFF'
+                      : 'var(--color-separator, #E5E5EA)',
+                  color: '#fff',
+                  cursor: text.trim() || pendingFiles.length > 0 ? 'pointer' : 'default',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background-color 0.15s',
+                  flexShrink: 0,
+                }}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 19V5M5 12l7-7 7 7" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>

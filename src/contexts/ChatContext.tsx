@@ -52,6 +52,10 @@ type ChatContextValue = {
   cartellaNotifications: CartellaNotification[]
   dismissCartellaNotification: (id: string) => void
   send: (text: string, domain?: Domain, files?: File[]) => Promise<void>
+  stopStreaming: () => void
+  editDraft: string | undefined
+  startEdit: (messageId: string) => void
+  clearEditDraft: () => void
   loadConversation: (id: string) => Promise<void>
   newConversation: () => void
   exitSpecialist: () => void
@@ -73,6 +77,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeSpecialistId, setActiveSpecialistId] = useState<string | undefined>(undefined)
   const [activeSpecialistName, setActiveSpecialistName] = useState<string | undefined>(undefined)
   const [cartellaNotifications, setCartellaNotifications] = useState<CartellaNotification[]>([])
+  const [editDraft, setEditDraft] = useState<string | undefined>(undefined)
 
   const dismissCartellaNotification = useCallback((id: string) => {
     setCartellaNotifications((prev) => prev.filter((n) => n.id !== id))
@@ -206,6 +211,36 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     activeSpecialistIdRef.current = undefined
     localStorage.removeItem(SPECIALIST_KEY)
     localStorage.removeItem(SPECIALIST_NAME_KEY)
+  }, [])
+
+  const stopStreaming = useCallback(() => {
+    if (sendAbortRef.current) {
+      sendAbortRef.current.abort()
+      sendAbortRef.current = null
+    }
+    setMessages((prev) => prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)))
+    setIsStreaming(false)
+    isStreamingRef.current = false
+  }, [])
+
+  const startEdit = useCallback((messageId: string) => {
+    // Stop any in-flight stream
+    if (sendAbortRef.current) {
+      sendAbortRef.current.abort()
+      sendAbortRef.current = null
+    }
+    setIsStreaming(false)
+    isStreamingRef.current = false
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.id === messageId && m.role === 'user')
+      if (idx === -1) return prev
+      setEditDraft(prev[idx].content)
+      return prev.slice(0, idx)
+    })
+  }, [])
+
+  const clearEditDraft = useCallback(() => {
+    setEditDraft(undefined)
   }, [])
 
   const exportConversation = useCallback(async (id?: string) => {
@@ -450,6 +485,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     cartellaNotifications,
     dismissCartellaNotification,
     send,
+    stopStreaming,
+    editDraft,
+    startEdit,
+    clearEditDraft,
     loadConversation,
     newConversation,
     exitSpecialist,

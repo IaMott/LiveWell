@@ -28,6 +28,10 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     newConversation,
     exportConversation,
     exitSpecialist,
+    stopStreaming,
+    editDraft,
+    startEdit,
+    clearEditDraft,
   } = useChat()
   const [historyOpen, setHistoryOpen] = useState(false)
   const lastSpokenIdRef = useRef<string | undefined>(undefined)
@@ -56,6 +60,14 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
       }
     },
     [loadConversation],
+  )
+
+  const handleSend = useCallback(
+    (text: string, domain?: Parameters<typeof send>[1], files?: File[]) => {
+      clearEditDraft()
+      void send(text, domain, files)
+    },
+    [send, clearEditDraft],
   )
 
   const specialistColor = getDomainColor(activeDomain)
@@ -133,15 +145,22 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         </div>
       )}
 
-      <MessageList messages={messages} conversationId={conversationId} onSend={send} />
+      <MessageList
+        messages={messages}
+        conversationId={conversationId}
+        onSend={handleSend}
+        onEdit={startEdit}
+      />
       <ChatInput
-        onSend={send}
+        onSend={handleSend}
         onHistory={() => setHistoryOpen(true)}
         disabled={isStreaming}
         activeDomain={activeDomain}
         onVoiceStart={handleVoiceStart}
         onVoiceEnd={handleVoiceEnd}
         conversationId={conversationId}
+        onStop={stopStreaming}
+        editDraft={editDraft}
       />
       <ConversationHistory
         open={historyOpen}

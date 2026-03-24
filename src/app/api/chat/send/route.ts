@@ -8,6 +8,7 @@ import { deriveActiveSpecialistFromCaseState } from '@/lib/ai/case/compat'
 import { buildCaseThinkingEvents } from '@/lib/ai/case/events'
 import { orchestrate, type ProgressEvent } from '@/lib/ai/orchestrator/orchestrator'
 import { resolveRoutingCandidates } from '@/lib/ai/orchestrator/routing'
+import { buildSingleDomainSuggestions } from '@/lib/ai/orchestrator/multiDomainTriage'
 import { detectDomainFromText, detectDomainsMulti } from '@/lib/ai/domain/domainDetection'
 import { createLlmWithFallback } from '@/lib/ai/llmFactory'
 import { loadTeam } from '@/lib/ai/team/loader'
@@ -718,13 +719,21 @@ export async function POST(request: Request): Promise<Response> {
           ),
         )
 
-        // ── Step 8: Quick-reply suggestions (multi-domain triage, etc.) ──
-        if (consensus.quickReplies && consensus.quickReplies.length > 0) {
+        // ── Step 8: Quick-reply suggestions (multi-domain triage or single-domain) ──
+        const multiQrs = consensus.quickReplies ?? []
+        const suggestionsToSend =
+          multiQrs.length > 0
+            ? multiQrs
+            : activeDomain
+              ? buildSingleDomainSuggestions(activeDomain)
+              : []
+
+        if (suggestionsToSend.length > 0) {
           controller.enqueue(
             encoder.encode(
               toSse({
                 type: 'message.suggestions',
-                suggestions: consensus.quickReplies.map((qr) => ({
+                suggestions: suggestionsToSend.map((qr) => ({
                   id: qr.id,
                   label: qr.label,
                   text: qr.text,
