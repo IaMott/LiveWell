@@ -435,13 +435,12 @@ function ThinkingDots({ steps, animating = true }: { steps: ThinkingStep[]; anim
                   fontSize: '0.75rem',
                   color: 'var(--color-text-secondary)',
                   letterSpacing: '0.02em',
-                  display: 'inline-flex',
+                  display: 'flex',
                   alignItems: 'center',
+                  flexWrap: 'wrap',
                   gap: '5px',
-                  maxWidth: '300px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  minWidth: 0,
+                  flex: 1,
                   marginLeft: isLatest && animating ? 0 : '17px', // align with dots offset
                 }}
               >
@@ -469,10 +468,11 @@ function ThinkingDots({ steps, animating = true }: { steps: ThinkingStep[]; anim
                   fontStyle: 'italic',
                   opacity: isLatest ? undefined : 0.7,
                   animation: isLatest ? 'lw-thought-in 0.4s ease 0.2s forwards' : undefined,
-                  maxWidth: '320px',
                   display: 'block',
                   lineHeight: 1.4,
                   whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'anywhere',
                 }}
               >
                 {step.thought}
