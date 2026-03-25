@@ -410,13 +410,14 @@ function renderInline(text: string): React.ReactNode {
  *                  [thought (italic, smaller)]
  */
 function ThinkingDots({ steps, animating = true }: { steps: ThinkingStep[]; animating?: boolean }) {
-  // Show up to last 5 steps; all visible, latest highlighted
-  const visible = steps.slice(-5)
+  // While streaming: show last 5 to follow live progress.
+  // Once complete (animating=false): show ALL steps so the user can read the full reasoning.
+  const visible = animating ? steps.slice(-5) : steps
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '3px 0' }}>
       {visible.map((step, i) => {
-        const isLatest = i === visible.length - 1
+        const isLatest = animating && i === visible.length - 1
         return (
           <div
             key={`${i}-${step.specialistName}-${step.title}`}
@@ -424,7 +425,7 @@ function ThinkingDots({ steps, animating = true }: { steps: ThinkingStep[]; anim
               display: 'flex',
               flexDirection: 'column',
               gap: '2px',
-              opacity: isLatest ? 1 : 0.7,
+              opacity: animating ? (isLatest ? 1 : 0.7) : 1,
               animation: isLatest ? 'lw-step-in 0.3s ease forwards' : undefined,
             }}
           >
