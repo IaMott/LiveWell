@@ -444,15 +444,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   thought: stepThought,
                 }
                 setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === currentAssistantId
-                      ? {
-                          ...m,
-                          streaming: true,
-                          thinkingSteps: [...(m.thinkingSteps ?? []), newStep],
-                        }
-                      : m,
-                  ),
+                  prev.map((m) => {
+                    if (m.id !== currentAssistantId) return m
+                    const existing = m.thinkingSteps ?? []
+                    // Deduplicate: skip if same specialist+title already present
+                    const isDupe = existing.some(
+                      (s) =>
+                        s.specialistName === newStep.specialistName && s.title === newStep.title,
+                    )
+                    if (isDupe) return m
+                    return {
+                      ...m,
+                      streaming: true,
+                      thinkingSteps: [...existing, newStep],
+                    }
+                  }),
                 )
               }
             }

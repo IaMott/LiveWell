@@ -29,6 +29,9 @@ type Props = {
 export function MessageBubble({ message, conversationId, onSend, onEdit }: Props) {
   const isUser = message.role === 'user'
   const [hovered, setHovered] = useState(false)
+  // Reasoning accordion: open while streaming (no content yet), closed once content arrives
+  const hasContent = message.content.length > 0
+  const [reasoningOpen, setReasoningOpen] = useState(false)
   const domainColor = message.domain ? DOMAIN_COLORS[message.domain] : undefined
   const specialistLabel =
     !isUser && message.specialistName
@@ -38,6 +41,7 @@ export function MessageBubble({ message, conversationId, onSend, onEdit }: Props
         : null
 
   const thinkingSteps: ThinkingStep[] = message.thinkingSteps ?? []
+  const showReasoningAccordion = !isUser && thinkingSteps.length > 0
 
   return (
     <div
@@ -67,6 +71,80 @@ export function MessageBubble({ message, conversationId, onSend, onEdit }: Props
         </span>
       )}
 
+      {/* Reasoning accordion — shown above the bubble when steps exist */}
+      {showReasoningAccordion && (
+        <div
+          style={{
+            maxWidth: '72%',
+            width: '100%',
+            marginBottom: '0.375rem',
+          }}
+        >
+          {/* Toggle header */}
+          {hasContent ? (
+            <button
+              type="button"
+              onClick={() => setReasoningOpen((v) => !v)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '0.125rem 0.375rem',
+                marginLeft: '0.125rem',
+                fontSize: '0.6875rem',
+                color: 'var(--color-text-secondary)',
+                borderRadius: '4px',
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-primary)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)'
+              }}
+            >
+              <svg
+                viewBox="0 0 16 16"
+                width="11"
+                height="11"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  transform: reasoningOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s ease',
+                  flexShrink: 0,
+                }}
+              >
+                <polyline points="4 6 8 10 12 6" />
+              </svg>
+              Ragionamento ({thinkingSteps.length} step{thinkingSteps.length !== 1 ? 's' : ''})
+            </button>
+          ) : null}
+
+          {/* Expanded content: animated during streaming, static when collapsed/expanded */}
+          {(!hasContent || reasoningOpen) && (
+            <div
+              style={{
+                marginTop: hasContent ? '0.25rem' : '0',
+                padding: '0.5rem 0.75rem',
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-separator)',
+                borderRadius: '0.75rem',
+                animation: hasContent ? 'lw-accordion-in 0.2s ease forwards' : undefined,
+              }}
+            >
+              <ThinkingDots steps={thinkingSteps} animating={!hasContent} />
+            </div>
+          )}
+        </div>
+      )}
+
       <div
         style={{
           display: 'flex',
@@ -89,9 +167,7 @@ export function MessageBubble({ message, conversationId, onSend, onEdit }: Props
                 : '0 1px 2px rgba(0,0,0,0.06)',
           }}
         >
-          {message.streaming && !message.content ? (
-            <ThinkingDots steps={thinkingSteps} />
-          ) : (
+          {message.streaming && !hasContent ? null : (
             <MarkdownContent content={message.content} streaming={message.streaming} />
           )}
         </div>
@@ -314,7 +390,7 @@ function renderInline(text: string): React.ReactNode {
  *   • Each step: [SpecialistName] → [title]
  *                  [thought (italic, smaller)]
  */
-function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
+function ThinkingDots({ steps, animating = true }: { steps: ThinkingStep[]; animating?: boolean }) {
   // Show up to last 5 steps; all visible, latest highlighted
   const visible = steps.slice(-5)
 
@@ -333,10 +409,10 @@ function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
               animation: isLatest ? 'lw-step-in 0.3s ease forwards' : undefined,
             }}
           >
-            {/* Row: [dots if latest] [Name → title] */}
+            {/* Row: [dots if latest+animating] [Name → title] */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {/* Bouncing dots only on latest step */}
-              {isLatest && (
+              {/* Bouncing dots only on latest step when actively streaming */}
+              {isLatest && animating && (
                 <div style={{ display: 'flex', gap: '3px', alignItems: 'center', flexShrink: 0 }}>
                   {[0, 1, 2].map((j) => (
                     <span
@@ -366,7 +442,7 @@ function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  marginLeft: isLatest ? 0 : '17px', // align with dots offset
+                  marginLeft: isLatest && animating ? 0 : '17px', // align with dots offset
                 }}
               >
                 <span
@@ -406,8 +482,8 @@ function ThinkingDots({ steps }: { steps: ThinkingStep[] }) {
         )
       })}
 
-      {/* Fallback: plain dots when no steps yet */}
-      {visible.length === 0 && (
+      {/* Fallback: plain dots when no steps yet — only during active streaming */}
+      {visible.length === 0 && animating && (
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center', padding: '4px 0' }}>
           {[0, 1, 2].map((i) => (
             <span
@@ -510,6 +586,10 @@ function QuickReplies({
       <style>{`
         @keyframes lw-qr-in {
           from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes lw-accordion-in {
+          from { opacity: 0; transform: translateY(-4px); }
           to { opacity: 1; transform: translateY(0); }
         }
       `}</style>

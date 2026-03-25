@@ -8,7 +8,7 @@ import { deriveActiveSpecialistFromCaseState } from '@/lib/ai/case/compat'
 import { buildCaseThinkingEvents } from '@/lib/ai/case/events'
 import { orchestrate, type ProgressEvent } from '@/lib/ai/orchestrator/orchestrator'
 import { resolveRoutingCandidates } from '@/lib/ai/orchestrator/routing'
-import { buildSingleDomainSuggestions } from '@/lib/ai/orchestrator/multiDomainTriage'
+
 import { detectDomainFromText, detectDomainsMulti } from '@/lib/ai/domain/domainDetection'
 import { createLlmWithFallback } from '@/lib/ai/llmFactory'
 import { loadTeam } from '@/lib/ai/team/loader'
@@ -777,19 +777,12 @@ export async function POST(request: Request): Promise<Response> {
         // Priority order:
         // 1. Contextual quick replies — detected from the last question in the response
         // 2. Multi-domain triage quick replies — from consensus engine
-        // 3. Single-domain static suggestions — only when no specialist is active
+        // Static single-domain fallbacks removed: they were too generic ("Approfondisci", "passo")
         const { buildContextualQuickReplies } =
           await import('@/lib/ai/orchestrator/contextualQuickReplies')
         const contextualQrs = buildContextualQuickReplies(responseText)
         const multiQrs = consensus.quickReplies ?? []
-        const suggestionsToSend =
-          contextualQrs.length > 0
-            ? contextualQrs
-            : multiQrs.length > 0
-              ? multiQrs
-              : !activeSpecialistId && activeDomain
-                ? buildSingleDomainSuggestions(activeDomain)
-                : []
+        const suggestionsToSend = contextualQrs.length > 0 ? contextualQrs : multiQrs
 
         if (suggestionsToSend.length > 0) {
           controller.enqueue(
