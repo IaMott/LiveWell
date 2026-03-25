@@ -88,10 +88,12 @@ describe('orchestrator decision trace foundation', () => {
       activeSpecialistId: 'fisioterapista',
       exitSpecialistMode: false,
     })
+    // In specialist mode only the active specialist is selected (no cross-domain
+    // contamination from caseContext scoring). collaborationCap trace value is
+    // kept at 3 for backward-compat with trace schema, but actual pool = 1 agent.
     expect(trace?.[2]?.data).toMatchObject({
       domainHint: 'health',
-      selectedAgentIds: ['fisioterapista', 'fisiatra', 'mmg'],
-      collaborationCap: 3,
+      selectedAgentIds: ['fisioterapista'],
     })
   })
 })

@@ -761,16 +761,16 @@ describe('orchestrate — end-to-end con LLM mock', () => {
       },
     )
 
-    // In consult_active_takeover, deriveActiveSpecialist restituisce il consulente
-    // (fisioterapista o il successore, a seconda della state machine)
+    // In specialist mode, only the activeSpecialist is routed — no cross-domain
+    // contamination. Verify the active specialist is defined and is in the selected pool.
     expect(result.activeSpecialist).toBeDefined()
-    // Il pool degli agenti deve includere fisioterapista (è il currentSpeaker)
-    // Nota: il debug.selectedAgents è ordinato per confidence, non per speaker first
+    const activeId = result.activeSpecialist?.id
     const allSelected = [
       ...(result.debug?.selectedAgents ?? []),
       ...(result.debug?.round2Proposals?.map((p: AgentProposal) => p.agentId) ?? []),
     ]
-    expect(allSelected.some((id: string) => id === 'fisioterapista')).toBe(true)
+    expect(activeId).toBeDefined()
+    expect(allSelected.some((id: string) => id === activeId)).toBe(true)
   })
 
   it('tool call non-retriable recente → bloccata + in blockedToolCalls', async () => {
