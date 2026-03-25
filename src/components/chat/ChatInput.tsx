@@ -203,6 +203,8 @@ export function ChatInput({
   // Tracks the conversation used during the current Live session — may be a newly
   // auto-created one if the user started Live with no prior text conversation.
   const liveConversationIdRef = useRef<string | null>(conversationId ?? null)
+  // Buffers the last user turn from Live so we can send it to live-sync after the AI responds
+  const lastLiveUserMsgRef = useRef<string | null>(null)
 
   // Keep liveConversationIdRef seeded with the latest prop (for sessions starting
   // after a text conversation is already open).
@@ -302,13 +304,19 @@ export function ChatInput({
 
   /**
    * Called by LiveModal with each completed transcript turn.
-   * Saves the message to the current conversation without triggering the AI.
-   * If no conversation exists yet, the server auto-creates one and returns its ID,
-   * which is stored in liveConversationIdRef for subsequent saves and the final reload.
+   * Saves the message to the current conversation and, after each assistant turn,
+   * fires a background call to /api/chat/live-sync to execute tool calls
+   * (setAttribute etc.) and advance case state — mirroring the chat pipeline.
    */
   function handleTranscription(role: 'user' | 'assistant', text: string) {
     const trimmed = text.trim()
     if (!trimmed) return
+
+    // Buffer user turn so we can pass it to live-sync after the AI responds
+    if (role === 'user') {
+      lastLiveUserMsgRef.current = trimmed
+    }
+
     void fetch('/api/chat/transcript', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -324,6 +332,23 @@ export function ChatInput({
         if (id && !liveConversationIdRef.current) {
           liveConversationIdRef.current = id
         }
+
+        // After assistant turn: fire background orchestration for tool calls + case state
+        if (role === 'assistant') {
+          const convId =
+            liveConversationIdRef.current ?? (data as { conversationId?: string }).conversationId
+          const userMsg = lastLiveUserMsgRef.current
+          lastLiveUserMsgRef.current = null
+          if (convId && userMsg) {
+            void fetch('/api/chat/live-sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ conversationId: convId, userMessage: userMsg }),
+            }).catch(() => {
+              /* best-effort */
+            })
+          }
+        }
       })
       .catch(() => {
         /* best-effort */
@@ -332,11 +357,7 @@ export function ChatInput({
 
   return (
     <>
-      {showLive && (
-        <LiveModal onClose={() => setShowLive(false)} onTranscription={handleTranscription} />
-      )}
-
-      {/* Hidden file input */}
+      {/* Hidden file input — always in DOM so ref is valid */}
       <input
         ref={fileInputRef}
         type="file"
@@ -347,11 +368,18 @@ export function ChatInput({
         aria-hidden="true"
       />
 
+      {/* Live mode: show compact bar instead of chat input */}
+      {showLive && (
+        <LiveModal onClose={() => setShowLive(false)} onTranscription={handleTranscription} />
+      )}
+
+      {/* Normal chat input — hidden (not removed) while live is active so state is preserved */}
       <div
         style={{
           padding: '0.5rem 0.75rem 0.75rem',
           backgroundColor: 'var(--color-bg, #F2F2F7)',
-          borderTop: '1px solid var(--color-separator, #E5E5EA)',
+          borderTop: showLive ? 'none' : '1px solid var(--color-separator, #E5E5EA)',
+          display: showLive ? 'none' : undefined,
         }}
       >
         <div

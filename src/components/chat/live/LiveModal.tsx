@@ -82,7 +82,7 @@ function normalizeEphemeralToken(name: string): string {
 
 function IconPhoneEnd() {
   return (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
       <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10 21 3 14 3 5c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
     </svg>
   )
@@ -92,8 +92,8 @@ function IconVideo() {
   return (
     <svg
       viewBox="0 0 24 24"
-      width="22"
-      height="22"
+      width="18"
+      height="18"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
@@ -111,8 +111,8 @@ function IconVideoOff() {
   return (
     <svg
       viewBox="0 0 24 24"
-      width="22"
-      height="22"
+      width="18"
+      height="18"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
@@ -131,8 +131,8 @@ function IconSwitchCamera() {
   return (
     <svg
       viewBox="0 0 24 24"
-      width="20"
-      height="20"
+      width="16"
+      height="16"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
@@ -151,12 +151,21 @@ function IconSwitchCamera() {
 
 export function LiveModal({ onClose, onTranscription }: Props) {
   const [phase, setPhase] = useState<Phase>('connecting')
-  const [statusText, setStatusText] = useState('Connessione a Gemini Live…')
+  const [statusText, setStatusText] = useState('Connessione…')
   const [isAiSpeaking, setIsAiSpeaking] = useState(false)
   const [videoEnabled, setVideoEnabled] = useState(false)
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
   const [currentCameraIdx, setCurrentCameraIdx] = useState(0)
-  const [bars, setBars] = useState<number[]>(Array(12).fill(4))
+  const [bars, setBars] = useState<number[]>(Array(5).fill(4))
+
+  // ── PiP drag state ────────────────────────────────────────────────────────
+  const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null)
+  const pipDragRef = useRef<{
+    startX: number
+    startY: number
+    origX: number
+    origY: number
+  } | null>(null)
 
   const sessionRef = useRef<LiveSession | null>(null)
   const sessionReadyRef = useRef(false)
@@ -182,18 +191,18 @@ export function LiveModal({ onClose, onTranscription }: Props) {
   // Tracks current facingMode for devices with a single camera (front/back toggle)
   const facingModeRef = useRef<'environment' | 'user'>('environment')
 
-  // ── Waveform animation ────────────────────────────────────────────────────
+  // ── Waveform animation (5 bars, ChatGPT-style) ────────────────────────────
 
   const startAnim = useCallback(() => {
     function tick() {
       if (analyserRef.current) {
         const data = new Uint8Array(analyserRef.current.frequencyBinCount)
         analyserRef.current.getByteFrequencyData(data)
-        const step = Math.floor(data.length / 12)
+        const step = Math.floor(data.length / 5)
         setBars(
-          Array.from({ length: 12 }, (_, i) => {
+          Array.from({ length: 5 }, (_, i) => {
             const val = data[i * step] ?? 0
-            return Math.max(4, Math.round((val / 255) * 52))
+            return Math.max(4, Math.round((val / 255) * 28))
           }),
         )
       }
@@ -257,7 +266,6 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
   const startMediaStreaming = useCallback(
     async (session: LiveSession, micStream: MediaStream) => {
-      // window.AudioContext is available globally; webkit prefix cast uses unknown (not any)
       const AudioCtxCtor =
         window.AudioContext ??
         (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
@@ -275,10 +283,6 @@ export function LiveModal({ onClose, onTranscription }: Props) {
       analyser.fftSize = 256
       src.connect(analyser)
       analyserRef.current = analyser
-
-      // ScriptProcessor: reliable cross-browser, no worker-blob CSP issues.
-      // M6: TODO — createScriptProcessor is deprecated (W3C AudioWorklet is the replacement).
-      //            Migrate to AudioWorkletNode when AudioWorklet processor CSP issues are resolved.
 
       const proc = inCtx.createScriptProcessor(2048, 1, 1)
       const mute = inCtx.createGain()
@@ -302,7 +306,7 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
       startAnim()
       setPhase('live')
-      setStatusText('In ascolto — parla liberamente')
+      setStatusText('In ascolto…')
     },
     [startAnim],
   )
@@ -401,11 +405,8 @@ export function LiveModal({ onClose, onTranscription }: Props) {
           httpOptions: { apiVersion: 'v1alpha' },
         } as ConstructorParameters<typeof GoogleGenAI>[0])
 
-        // Use model from server; fall back to first candidate if empty
         const liveModel = tokenData.model || (LIVE_MODEL_FALLBACKS[0] ?? '')
 
-        // Use context-aware system instruction from server (includes profile + history).
-        // Fall back to minimal instruction if server omitted it (e.g. first deploy).
         const systemInstructionText =
           tokenData.systemInstruction ??
           'Sei un assistente AI per la salute e il benessere personale. Rispondi in italiano in modo naturale, conciso e conversazionale.'
@@ -420,20 +421,15 @@ export function LiveModal({ onClose, onTranscription }: Props) {
               prebuiltVoiceConfig: { voiceName: 'Kore' },
             },
           },
-          // Enable real-time transcription of both user speech and AI speech
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         }
 
-        // ── Do NOT reference `rawSession` inside callbacks — Temporal Dead Zone ──
-        // onopen sets the ready flag only; startMediaStreaming is called AFTER
-        // await resolves so rawSession is guaranteed assigned (iManager pattern).
         const rawSession = (await ai.live.connect({
           model: liveModel,
           config: liveConfig,
           callbacks: {
             onopen: () => {
-              // Mark ready so ScriptProcessor onaudioprocess will start sending
               sessionReadyRef.current = true
             },
             onmessage: (message: LiveServerMessage) => {
@@ -451,12 +447,10 @@ export function LiveModal({ onClose, onTranscription }: Props) {
               }
 
               // ── Transcript accumulation ───────────────────────────────────
-              // User speech (inputAudioTranscription enabled in config)
               const userText = sc?.inputTranscription?.text
               if (typeof userText === 'string' && userText) {
                 userTranscriptBufRef.current += userText
               }
-              // AI speech (outputAudioTranscription enabled in config)
               const aiText = sc?.outputTranscription?.text
               if (typeof aiText === 'string' && aiText) {
                 aiTranscriptBufRef.current += aiText
@@ -477,34 +471,27 @@ export function LiveModal({ onClose, onTranscription }: Props) {
               console.error('[LiveModal] session error', error)
               if (!mounted) return
               setPhase('error')
-              setStatusText('Errore connessione Live')
+              setStatusText('Errore connessione')
             },
             onclose: (ev: CloseEvent) => {
               if (!mounted || closingRef.current) return
               if (ev.code !== 1000) {
-                const reason = ev.reason ? ` — ${ev.reason}` : ''
                 setPhase('error')
-                setStatusText(`Sessione chiusa (${ev.code}${reason})`)
-                console.error('[LiveModal] session closed', ev.code, ev.reason)
+                setStatusText(`Connessione persa (${ev.code})`)
               }
             },
           },
         })) as unknown as LiveSession
 
-        // Secure session ref before starting media pipeline
         sessionRef.current = rawSession
         if (!mounted) {
           rawSession.close()
           return
         }
 
-        // Start audio pipeline now that rawSession is assigned.
-        // onaudioprocess checks sessionReadyRef (set in onopen) so no audio
-        // is sent until the WebSocket is actually open.
         await startMediaStreaming(rawSession, micStream)
       } catch (err: unknown) {
         if (!mounted) return
-        console.error('[LiveModal] connect error', err)
         setPhase('error')
         const msg = err instanceof Error ? err.message : 'Errore avvio sessione'
         setStatusText(msg)
@@ -532,11 +519,9 @@ export function LiveModal({ onClose, onTranscription }: Props) {
       try {
         stream = await navigator.mediaDevices.getUserMedia(constraints)
       } catch {
-        // Fallback: any camera
         stream = await navigator.mediaDevices.getUserMedia({ video: true })
       }
 
-      // Refresh camera device list after permission
       try {
         const devices = await navigator.mediaDevices.enumerateDevices()
         const cameras = devices.filter((d) => d.kind === 'videoinput')
@@ -567,10 +552,7 @@ export function LiveModal({ onClose, onTranscription }: Props) {
         ctx.drawImage(videoRef.current, 0, 0, 320, 180)
         const dataUrl = canvas.toDataURL('image/jpeg', 0.55)
         session.sendRealtimeInput({
-          video: {
-            mimeType: 'image/jpeg',
-            data: dataUrl.split(',')[1],
-          },
+          video: { mimeType: 'image/jpeg', data: dataUrl.split(',')[1] },
         })
       }, 1100)
     },
@@ -602,12 +584,8 @@ export function LiveModal({ onClose, onTranscription }: Props) {
 
   async function switchCamera() {
     if (!videoEnabled) return
-
-    // M7: Record the current camera state so we can revert on failure.
     const prevCameraIdx = currentCameraIdx
     const prevFacingMode = facingModeRef.current
-
-    // Stop current video stream
     if (videoTimerRef.current) {
       clearInterval(videoTimerRef.current)
       videoTimerRef.current = null
@@ -616,28 +594,23 @@ export function LiveModal({ onClose, onTranscription }: Props) {
     videoStreamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
     setVideoEnabled(false)
-
     try {
       if (videoDevices.length > 1) {
-        // Multiple cameras: cycle by device ID
         const nextIdx = (currentCameraIdx + 1) % videoDevices.length
         setCurrentCameraIdx(nextIdx)
         await startVideoStream(videoDevices[nextIdx]?.deviceId)
       } else {
-        // Single camera (or list not yet populated): toggle facingMode
         const next = facingModeRef.current === 'environment' ? 'user' : 'environment'
         facingModeRef.current = next
         await startVideoStream(undefined, next)
       }
-    } catch (e) {
-      console.error('[LiveModal] camera switch error', e)
-      // M7: Revert to the original camera on failure so the user is not left without video.
+    } catch {
       try {
         setCurrentCameraIdx(prevCameraIdx)
         facingModeRef.current = prevFacingMode
         await startVideoStream(videoDevices[prevCameraIdx]?.deviceId, prevFacingMode)
-      } catch (revertErr) {
-        console.error('[LiveModal] camera revert error', revertErr)
+      } catch {
+        /* ignore */
       }
     }
   }
@@ -647,188 +620,264 @@ export function LiveModal({ onClose, onTranscription }: Props) {
     onClose()
   }
 
+  // ── PiP drag handlers ─────────────────────────────────────────────────────
+
+  function onPipPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const rect = e.currentTarget.getBoundingClientRect()
+    pipDragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: pipPos?.x ?? window.innerWidth - 180,
+      origY: pipPos?.y ?? window.innerHeight - 180,
+    }
+    // Ensure initial pos is set
+    if (!pipPos) {
+      setPipPos({ x: window.innerWidth - 180, y: window.innerHeight - 180 })
+    }
+    void rect // suppress lint
+  }
+
+  function onPipPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!pipDragRef.current) return
+    const { startX, startY, origX, origY } = pipDragRef.current
+    const dx = e.clientX - startX
+    const dy = e.clientY - startY
+    const newX = Math.max(0, Math.min(window.innerWidth - 180, origX + dx))
+    const newY = Math.max(0, Math.min(window.innerHeight - 120, origY + dy))
+    setPipPos({ x: newX, y: newY })
+  }
+
+  function onPipPointerUp() {
+    pipDragRef.current = null
+  }
+
   // ── UI helpers ────────────────────────────────────────────────────────────
 
-  const barColor = phase !== 'live' ? 'rgba(255,255,255,0.2)' : isAiSpeaking ? '#007AFF' : '#FF3B30'
+  const dotColor = phase !== 'live' ? '#8E8E93' : isAiSpeaking ? '#007AFF' : '#FF3B30'
 
-  const displayStatus = phase === 'live' && isAiSpeaking ? "L'assistente sta parlando…" : statusText
+  const barColor = dotColor
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const displayStatus =
+    phase === 'connecting'
+      ? 'Connessione…'
+      : phase === 'error'
+        ? statusText
+        : isAiSpeaking
+          ? 'In risposta…'
+          : 'In ascolto…'
+
+  // PiP default position: bottom-right (above ChatInput area, ~68px from bottom)
+  const pipX = pipPos?.x ?? (typeof window !== 'undefined' ? window.innerWidth - 196 : 200)
+  const pipY = pipPos?.y ?? (typeof window !== 'undefined' ? window.innerHeight - 196 : 200)
+
+  // ── Render: compact LiveBar + optional PiP video ──────────────────────────
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        backgroundColor: 'rgba(0,0,0,0.92)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backdropFilter: 'blur(12px)',
-      }}
-    >
-      {/* Camera preview — always in DOM so videoRef is immediately available on enable */}
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        playsInline
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          opacity: videoEnabled ? 0.35 : 0,
-          pointerEvents: 'none',
-        }}
-      />
-
-      {/* Overlay content */}
+    <>
+      {/* ── Compact live bar (replaces fullscreen overlay) ── */}
       <div
         style={{
-          position: 'relative',
-          zIndex: 2,
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
-          gap: '2rem',
-          padding: '2rem',
-          width: '100%',
-          maxWidth: '400px',
+          gap: '0.625rem',
+          padding: '0.5rem 0.75rem',
+          backgroundColor: 'var(--color-surface, #fff)',
+          borderTop: '1px solid var(--color-separator, #E5E5EA)',
+          minHeight: '52px',
         }}
       >
-        {/* Header */}
-        <div style={{ textAlign: 'center' }}>
-          <div
+        {/* Live dot + label */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexShrink: 0 }}>
+          <span
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              justifyContent: 'center',
-              marginBottom: '0.5rem',
+              width: '7px',
+              height: '7px',
+              borderRadius: '50%',
+              backgroundColor: dotColor,
+              display: 'inline-block',
+              animation: phase === 'live' ? 'lw-live-pulse 2s ease-in-out infinite' : 'none',
+              flexShrink: 0,
+            }}
+          />
+          <span
+            style={{
+              fontSize: '0.6875rem',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              color: dotColor,
             }}
           >
-            <span
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: isAiSpeaking ? '#007AFF' : '#FF3B30',
-                display: 'inline-block',
-                animation: phase === 'live' ? 'lw-live-pulse 2s ease-in-out infinite' : 'none',
-              }}
-            />
-            <span
-              style={{
-                color: '#fff',
-                fontSize: '1.0625rem',
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-              }}
-            >
-              LIVE
-            </span>
-          </div>
-          <p
-            style={{
-              color: 'rgba(255,255,255,0.6)',
-              fontSize: '0.875rem',
-              margin: 0,
-              minHeight: '1.25rem',
-            }}
-          >
-            {displayStatus}
-          </p>
+            LIVE
+          </span>
         </div>
 
-        {/* Waveform visualiser */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '60px' }}>
+        {/* Waveform — 5 bars */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            height: '28px',
+            flexShrink: 0,
+          }}
+        >
           {bars.map((h, i) => (
             <div
               key={i}
               style={{
-                width: '4px',
-                height: phase === 'connecting' ? '8px' : `${h}px`,
-                borderRadius: '2px',
+                width: '3px',
+                height: phase === 'connecting' ? '6px' : `${h}px`,
+                borderRadius: '1.5px',
                 backgroundColor: barColor,
                 transition: 'height 0.08s ease, background-color 0.3s ease',
                 animation:
                   phase === 'connecting'
-                    ? `lw-live-bar ${0.8 + (i % 3) * 0.1}s ${(i * 0.06).toFixed(2)}s ease-in-out infinite`
+                    ? `lw-live-bar ${0.8 + (i % 3) * 0.12}s ${(i * 0.08).toFixed(2)}s ease-in-out infinite`
                     : 'none',
               }}
             />
           ))}
         </div>
 
-        {/* Controls */}
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          {/* Video toggle */}
+        {/* Status text */}
+        <span
+          style={{
+            flex: 1,
+            fontSize: '0.8125rem',
+            color: 'var(--color-text-secondary, #8E8E93)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {displayStatus}
+        </span>
+
+        {/* Video toggle */}
+        <button
+          type="button"
+          onClick={() => void toggleVideo()}
+          aria-label={videoEnabled ? 'Disabilita video' : 'Abilita video'}
+          style={barIconBtn(videoEnabled ? 'var(--color-bg, #F2F2F7)' : 'transparent')}
+        >
+          {videoEnabled ? <IconVideo /> : <IconVideoOff />}
+        </button>
+
+        {/* Camera switch — only when video on */}
+        {videoEnabled && (
           <button
             type="button"
-            onClick={() => void toggleVideo()}
-            aria-label={videoEnabled ? 'Disabilita video' : 'Abilita video'}
-            style={circleBtn(
-              videoEnabled ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.12)',
-              '3rem',
-            )}
+            onClick={() => void switchCamera()}
+            aria-label="Cambia fotocamera"
+            style={barIconBtn('transparent')}
           >
-            {videoEnabled ? <IconVideo /> : <IconVideoOff />}
+            <IconSwitchCamera />
           </button>
+        )}
 
-          {/* Camera switch — shown whenever video is on (toggles facingMode on single-camera devices) */}
-          {videoEnabled && (
-            <button
-              type="button"
-              onClick={() => void switchCamera()}
-              aria-label="Cambia fotocamera"
-              style={circleBtn('rgba(255,255,255,0.12)', '3rem')}
-            >
-              <IconSwitchCamera />
-            </button>
-          )}
-
-          {/* End session */}
-          <button
-            type="button"
-            onClick={handleEnd}
-            aria-label="Termina sessione"
-            style={circleBtn('#FF3B30', '4rem')}
-          >
-            <IconPhoneEnd />
-          </button>
-        </div>
+        {/* End session */}
+        <button
+          type="button"
+          onClick={handleEnd}
+          aria-label="Termina sessione live"
+          style={{
+            ...barIconBtn('#FF3B30'),
+            color: '#fff',
+          }}
+        >
+          <IconPhoneEnd />
+        </button>
       </div>
 
+      {/* ── Draggable PiP video preview ── */}
+      {videoEnabled && (
+        <div
+          onPointerDown={onPipPointerDown}
+          onPointerMove={onPipPointerMove}
+          onPointerUp={onPipPointerUp}
+          style={{
+            position: 'fixed',
+            left: pipX,
+            top: pipY,
+            width: '176px',
+            height: '112px',
+            borderRadius: '10px',
+            overflow: 'hidden',
+            backgroundColor: '#000',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+            cursor: 'grab',
+            zIndex: 900,
+            userSelect: 'none',
+            touchAction: 'none',
+          }}
+        >
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+          {/* Small close/minimize button */}
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => void toggleVideo()}
+            aria-label="Chiudi video"
+            style={{
+              position: 'absolute',
+              top: '4px',
+              right: '4px',
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(0,0,0,0.55)',
+              border: 'none',
+              color: '#fff',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '12px',
+              lineHeight: 1,
+              padding: 0,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* ── CSS keyframes ── */}
       <style>{`
         @keyframes lw-live-bar {
-          0%, 80%, 100% { transform: scaleY(0.6); opacity: 0.5; }
-          40% { transform: scaleY(1.4); opacity: 1; }
+          0%, 80%, 100% { transform: scaleY(0.5); opacity: 0.4; }
+          40% { transform: scaleY(1.5); opacity: 1; }
         }
         @keyframes lw-live-pulse {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.35; }
+          50% { opacity: 0.3; }
         }
       `}</style>
-    </div>
+    </>
   )
 }
 
-function circleBtn(bg: string, size: string): React.CSSProperties {
+function barIconBtn(bg: string): React.CSSProperties {
   return {
-    width: size,
-    height: size,
+    width: '2rem',
+    height: '2rem',
     borderRadius: '50%',
     border: 'none',
     backgroundColor: bg,
-    color: '#fff',
+    color: 'var(--color-text-primary, #1C1C1E)',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    padding: 0,
+    transition: 'background-color 0.15s',
   }
 }
