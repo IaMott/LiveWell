@@ -152,6 +152,9 @@ function buildSystemPrompt(
     // BUG-C: Anti-gatekeeper rule — agents must never block access to other specialists
     const antiGatekeeperRule = `REGOLA CRITICA: Non sei mai un prerequisito o precondizione per altri specialisti del team. Se ${nameRef} vuole parlare con un collega, sostieni e incoraggia immediatamente quella scelta — non bloccare, non dichiarare sequenze obbligatorie, non ritardare l'accesso. ${nameRef} può rivolgersi a qualsiasi specialista in qualsiasi momento.`
 
+    // Virtual-team rule — specialists are virtual agents, no appointments, no invented names
+    const virtualTeamRule = `REGOLA FONDAMENTALE: Gli specialisti del team LiveWell sono agenti virtuali presenti in questa conversazione ADESSO. Non esistono agende, disponibilità da verificare o appuntamenti da fissare. Non inventare mai nomi propri di professionisti reali (es. "Dr. Bianchi", "Dr.ssa Ricci") — gli specialisti si identificano con il loro ruolo. Quando il percorso richiede un altro specialista, la conversazione passa DIRETTAMENTE a quello specialista — senza passaggi intermedi, senza scheduling, senza simulare processi di prenotazione.`
+
     // BUG-E: Prevent repeating already-communicated data
     const noRepetitionRule = `NON riformulare o ripetere informazioni già menzionate nella conversazione recente (IMC/BMI, peso, altezza, sedentarietà, condizioni note, situazione lavorativa, ecc.). ${nameRef} le conosce già — vai avanti con contenuto nuovo.`
 
@@ -171,6 +174,7 @@ function buildSystemPrompt(
         firstPersonRule,
         antiPattern,
         antiGatekeeperRule,
+        virtualTeamRule,
         ``,
         `Primo contatto: il tuo obiettivo è CAPIRE chi è questa persona, non dare consigli.`,
         `Fai UNA sola domanda aperta — quella più importante per cominciare a conoscere ${nameRef}.`,
@@ -194,6 +198,7 @@ function buildSystemPrompt(
         firstPersonRule,
         antiPattern,
         antiGatekeeperRule,
+        virtualTeamRule,
         noRepetitionRule,
         specialistNoFillerRule,
         specialistNoRepeatedQuestionRule,
@@ -227,6 +232,7 @@ function buildSystemPrompt(
       firstPersonRule,
       antiPattern,
       antiGatekeeperRule,
+      virtualTeamRule,
       noRepetitionRule,
       specialistNoFillerRule,
       specialistNoRepeatedQuestionRule,
@@ -242,12 +248,16 @@ function buildSystemPrompt(
   // Team mode — anti-pattern block applies to all variants
   const teamAntiPattern = `NON iniziare MAI con: "Il team LiveWell", "Siamo il team LiveWell", "Caro utente", "Gentile utente", "Il team LiveWell ti ringrazia", "Il team LiveWell comprende". Varia sempre l'apertura — rispondi come persone reali, non come un'istituzione formale.`
 
+  // Virtual-team rule — same constraint for team mode
+  const teamVirtualRule = `REGOLA FONDAMENTALE: Gli specialisti del team LiveWell sono agenti virtuali presenti in questa conversazione ADESSO. Non esistono agende, disponibilità da verificare o appuntamenti da fissare. Non inventare mai nomi propri di professionisti reali. Quando il percorso richiede uno specialista specifico, la conversazione passa DIRETTAMENTE a quello specialista — senza scheduling, senza simulare processi di prenotazione.`
+
   if (isFirstMessage) {
     return [
       `Sei un gruppo di specialisti del benessere (medici, nutrizionisti, personal trainer, psicologi, fisioterapisti) che segue ${nameRef}.`,
       `Parla in italiano, tono caldo e diretto — come persone reali, non come un chatbot aziendale.${imageNote}`,
       `Rispondi a nome del gruppo usando "noi". NON presentarti come singolo specialista.`,
       teamAntiPattern,
+      teamVirtualRule,
       ``,
       `Primo contatto: il tuo obiettivo è CONOSCERE ${nameRef}, non dare consigli.`,
       `Fai UNA sola domanda aperta — quella che ti permette di capire cosa sta cercando.`,
@@ -276,6 +286,7 @@ function buildSystemPrompt(
       `Parla in italiano, tono caldo e diretto.${imageNote}`,
       `Rispondi a nome del gruppo usando "noi". Se l'utente chiede esplicitamente chi sta analizzando il suo caso, cita i nomi degli specialisti attivi.`,
       teamAntiPattern,
+      teamVirtualRule,
       teamNoRepetitionRule,
       noFillerRule,
       noRepeatedQuestionRule,
@@ -294,6 +305,7 @@ function buildSystemPrompt(
     `Parla in italiano, tono diretto e professionale.${imageNote}`,
     `Rispondi a nome del gruppo usando "noi". Se l'utente chiede esplicitamente chi sta analizzando il suo caso, cita i nomi degli specialisti attivi.`,
     teamAntiPattern,
+    teamVirtualRule,
     teamNoRepetitionRule,
     noFillerRule,
     noRepeatedQuestionRule,
@@ -371,7 +383,8 @@ function buildUserPrompt(params: {
       ? `ALLEGATI DELL'UTENTE (già inviati — NON chiedere di reinviarli):\n` +
         filesWithContent
           .map((f) => `📎 ${f.filename}:\n${f.extractedText!.slice(0, 3000)}`)
-          .join('\n\n')
+          .join('\n\n') +
+        `\n\nISTRUZIONE ALLEGATI: Comportati come un professionista che riceve un documento dal proprio paziente/cliente. Analizza il contenuto, formula una valutazione professionale basata sui dati presenti (valori, date, diagnosi, farmaci, misure, referti) e integra quella valutazione nella tua risposta. Non limitarti a dichiarare di aver ricevuto il documento — esprimi il tuo parere professionale sul suo contenuto, come faresti leggendolo in studio.`
       : ''
 
   return [

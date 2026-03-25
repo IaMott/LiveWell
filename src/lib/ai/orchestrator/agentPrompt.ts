@@ -320,6 +320,7 @@ export function buildAgentUserPrompt(
     }
     parts.push(
       `IMPORTANTE: I file sopra sono stati già inviati dall'utente. Non chiedere di inviare nuovamente documenti già presenti qui.`,
+      `ESTRAI E SALVA: Per ogni dato clinico/numerico/rilevante presente nel documento (es. valori ematici, misure antropometriche, farmaci, diagnosi, date) che rientra nel tuo dominio, genera una chiamata setAttribute per salvarlo nella cartella dell'utente. Usa i dati reali del documento — non inventare valori.`,
     )
   }
 
