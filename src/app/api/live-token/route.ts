@@ -7,6 +7,8 @@ import { getServerSecret } from '@/lib/security/secrets'
 import { getServerEnv } from '@/lib/validators/env'
 import { prisma } from '@/lib/prisma'
 import { logApiErrorEvent } from '@/lib/monitoring/apiErrorEvents'
+import * as fs from 'fs'
+import * as path from 'path'
 
 const requestSchema = z.object({
   conversationId: z.string().min(1).optional(),
@@ -81,17 +83,102 @@ function formatAttributesForPrompt(rows: AttrRow[]): string {
   return lines.join('\n')
 }
 
+const TEAM_DIR = path.join(process.cwd(), 'TEAM')
+
+/**
+ * Recursively scan TEAM directory to find an agent directory by its `id` field
+ * in profile.json. Returns the directory path or null if not found.
+ */
+function findAgentDir(agentId: string): string | null {
+  if (!fs.existsSync(TEAM_DIR)) return null
+  for (const entry of fs.readdirSync(TEAM_DIR, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const top = path.join(TEAM_DIR, entry.name)
+    // flat layout: TEAM/<agentId>/profile.json
+    const flatProfile = path.join(top, 'profile.json')
+    if (fs.existsSync(flatProfile)) {
+      try {
+        const p = JSON.parse(fs.readFileSync(flatProfile, 'utf-8')) as { id?: string }
+        if (p.id === agentId) return top
+      } catch {
+        /* skip */
+      }
+    }
+    // nested layout: TEAM/<domain>/<agentId>/profile.json
+    for (const sub of fs.readdirSync(top, { withFileTypes: true })) {
+      if (!sub.isDirectory()) continue
+      const subDir = path.join(top, sub.name)
+      const nestedProfile = path.join(subDir, 'profile.json')
+      if (fs.existsSync(nestedProfile)) {
+        try {
+          const p = JSON.parse(fs.readFileSync(nestedProfile, 'utf-8')) as { id?: string }
+          if (p.id === agentId) return subDir
+        } catch {
+          /* skip */
+        }
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Load the prompt.md for a given agentId. Returns null if not found.
+ */
+function loadAgentPrompt(agentId: string): { displayName: string; prompt: string } | null {
+  const dir = findAgentDir(agentId)
+  if (!dir) return null
+  const promptPath = path.join(dir, 'prompt.md')
+  if (!fs.existsSync(promptPath)) return null
+  const profilePath = path.join(dir, 'profile.json')
+  let displayName = agentId
+  try {
+    const p = JSON.parse(fs.readFileSync(profilePath, 'utf-8')) as { displayName?: string }
+    if (p.displayName) displayName = p.displayName
+  } catch {
+    /* skip */
+  }
+  return { displayName, prompt: fs.readFileSync(promptPath, 'utf-8') }
+}
+
+/**
+ * Read the active agent from the CaseState table for a conversation.
+ * Returns activeSpeakerAgentId ?? ownerAgentId ?? null.
+ */
+async function getActiveAgentId(
+  userId: string,
+  conversationId?: string | null,
+): Promise<string | null> {
+  const cs = conversationId
+    ? await prisma.caseState.findUnique({
+        where: { conversationId },
+        select: { activeSpeakerAgentId: true, ownerAgentId: true },
+      })
+    : await prisma.caseState.findFirst({
+        where: { conversation: { userId } },
+        orderBy: { updatedAt: 'desc' },
+        select: { activeSpeakerAgentId: true, ownerAgentId: true },
+      })
+  if (!cs) return null
+  return cs.activeSpeakerAgentId ?? cs.ownerAgentId ?? null
+}
+
 /**
  * Build a rich system instruction for the Gemini Live session.
  * Includes user profile, recent chat history across ALL conversations,
  * and tracker summary so the Live agent has full context from the start.
  */
-async function buildLiveSystemInstruction(userId: string): Promise<string> {
+async function buildLiveSystemInstruction(
+  userId: string,
+  conversationId?: string | null,
+): Promise<string> {
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
   const now = new Date()
 
-  const [user, profile, recentMessages, workouts, meals, mindfulness, attrRows] = await Promise.all(
-    [
+  // Resolve active specialist in parallel with DB queries
+  const [activeAgentId, queryResults] = await Promise.all([
+    getActiveAgentId(userId, conversationId),
+    Promise.all([
       prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
       prisma.userProfile.findUnique({
         where: { userId },
@@ -138,14 +225,42 @@ async function buildLiveSystemInstruction(userId: string): Promise<string> {
         take: 100,
         select: { domain: true, key: true, value: true, unit: true, recordedAt: true, notes: true },
       }),
-    ],
-  )
+    ]),
+  ])
+
+  const [user, profile, recentMessages, workouts, meals, mindfulness, attrRows] = queryResults
+
+  // ── Load active specialist prompt (if any) ─────────────────────────────────
+  const agentInfo = activeAgentId ? loadAgentPrompt(activeAgentId) : null
 
   const lines: string[] = []
+
+  // ── Identity: specialist or generic ───────────────────────────────────────
+  if (agentInfo) {
+    lines.push(
+      `Sei ${agentInfo.displayName} del team LiveWell. ` +
+        'Rispondi SOLO in italiano, in modo naturale e conversazionale. ' +
+        'Stai conducendo una sessione audio/video in tempo reale.',
+    )
+    lines.push(`\n=== REGOLE DEL TUO RUOLO (${agentInfo.displayName.toUpperCase()}) ===`)
+    lines.push(agentInfo.prompt)
+    lines.push('=== FINE REGOLE RUOLO ===\n')
+  } else {
+    lines.push(
+      'Sei un assistente AI per la salute e il benessere personale. ' +
+        'Rispondi in italiano in modo naturale, conciso e conversazionale. ' +
+        "Sei parte di un team multidisciplinare (nutrizionisti, allenatori, medici, psicologi) e hai pieno accesso al profilo e alla cronologia dell'utente.",
+    )
+  }
+
+  // ── Regole assolute per la sessione live ───────────────────────────────────
   lines.push(
-    'Sei un assistente AI per la salute e il benessere personale. ' +
-      'Rispondi in italiano in modo naturale, conciso e conversazionale. ' +
-      "Sei parte di un team multidisciplinare (nutrizionisti, allenatori, medici, psicologi) e hai pieno accesso al profilo e alla cronologia dell'utente.",
+    '\nREGOLE ASSOLUTE PER LA SESSIONE LIVE (priorità massima, sovrascrivono tutto):',
+    '1. Sei in un\'app virtuale — NON suggerire mai di "fissare un appuntamento", "incontrarsi di persona" o fare riferimento a uno studio fisico. Tutto avviene qui e ora in chat.',
+    "2. Se sei in modalità video e vedi l'utente, NON commentare il suo aspetto fisico, abbigliamento o corpo. Mantieni sempre il focus clinico/professionale.",
+    '3. Rispondi SEMPRE e SOLO in italiano. Nessuna parola inglese.',
+    '4. Sei l\'unico interlocutore della sessione vocale: non puoi "passare" fisicamente la parola ad altri agenti, ma puoi annunciare verbalmente che il caso richiede un altro specialista e che la consulenza avverrà nella chat testuale.',
+    '5. Sii conciso: risposte brevi e naturali, come in una conversazione telefonica. Evita elenchi puntati lunghi.',
   )
 
   // ── User identity ──────────────────────────────────────────────────────────
@@ -286,27 +401,28 @@ export async function POST(request: Request): Promise<Response> {
     // Build context-aware system instruction (profile + history).
     // Wrapped in try-catch: if DB is unavailable (test env, cold-start error) we fall back
     // gracefully to a minimal prompt rather than blocking token creation.
-    const systemInstruction = await buildLiveSystemInstruction(userId).catch(
-      async (err: unknown) => {
-        console.error('[live-token] system instruction build failed, using fallback:', err)
-        await logApiErrorEvent({
-          endpoint: '/api/live-token',
-          errorCode: 'FALLBACK_SYSTEM_INSTRUCTION',
-          statusCode: 200,
-          message: 'system instruction build failed, fallback prompt used',
-          requestId,
-          userId,
-          metadata: {
-            fallbackPhase: 'SYSTEM_INSTRUCTION_BUILD',
-            cause:
-              err instanceof Error
-                ? { name: err.name, message: err.message }
-                : { message: String(err) },
-          },
-        })
-        return FALLBACK_SYSTEM_INSTRUCTION
-      },
-    )
+    const systemInstruction = await buildLiveSystemInstruction(
+      userId,
+      parsedBody.conversationId,
+    ).catch(async (err: unknown) => {
+      console.error('[live-token] system instruction build failed, using fallback:', err)
+      await logApiErrorEvent({
+        endpoint: '/api/live-token',
+        errorCode: 'FALLBACK_SYSTEM_INSTRUCTION',
+        statusCode: 200,
+        message: 'system instruction build failed, fallback prompt used',
+        requestId,
+        userId,
+        metadata: {
+          fallbackPhase: 'SYSTEM_INSTRUCTION_BUILD',
+          cause:
+            err instanceof Error
+              ? { name: err.name, message: err.message }
+              : { message: String(err) },
+        },
+      })
+      return FALLBACK_SYSTEM_INSTRUCTION
+    })
 
     // v1alpha is required for ephemeral token creation
     const ai = new GoogleGenAI({

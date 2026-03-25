@@ -45,6 +45,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     appendLiveMessage,
   } = useChat()
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [liveActive, setLiveActive] = useState(false)
   const [liveInterim, setLiveInterim] = useState<LiveInterim>(null)
   const lastSpokenIdRef = useRef<string | undefined>(undefined)
   // Ref so handleVoiceEnd closure always sees the latest conversationId
@@ -54,6 +55,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
   }, [conversationId])
 
   const handleVoiceStart = useCallback(() => {
+    setLiveActive(true)
     // Pin lastSpokenId to the current last message so the TTS effect does NOT
     // re-speak it when the modal opens. Only new messages will be spoken.
     lastSpokenIdRef.current = messages.at(-1)?.id
@@ -61,7 +63,8 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
 
   const handleVoiceEnd = useCallback(
     (liveConversationId?: string) => {
-      // Clear any remaining interim bubble
+      // Clear any remaining interim bubble and live flag
+      setLiveActive(false)
       setLiveInterim(null)
       // Prefer the conversation used during the Live session (may be newly created)
       // over the one that was active before it started.
@@ -134,8 +137,10 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     >
       <TopBar userInitials={userInitials} userName={userName} userImage={userImage} />
 
-      {/* Specialist mode banner */}
-      {activeSpecialistId && activeSpecialistName && (
+      {/* Specialist mode banner — hidden during live session to avoid confusion:
+          the live model runs as a single agent; the specialist mode is re-applied
+          to text chat when the live session ends. */}
+      {activeSpecialistId && activeSpecialistName && !liveActive && (
         <div
           style={{
             display: 'flex',
