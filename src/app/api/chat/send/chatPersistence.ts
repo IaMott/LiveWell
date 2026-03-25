@@ -479,6 +479,12 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
                   },
                 }),
             },
+            messagereview: {
+              findMany: async (args) =>
+                prisma.messageReview.findMany(args as object) as Promise<
+                  Array<{ agentId: string | null; rating: number }>
+                >,
+            },
           },
         })
       } catch {
