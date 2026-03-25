@@ -178,6 +178,12 @@ interface Props {
   onStop?: () => void
   /** Pre-fill text for editing a previous message. */
   editDraft?: string
+  /** Called when a live transcript message is confirmed and saved to DB.
+   * Used by parent to append the message to the chat immediately. */
+  onLiveMessage?: (role: 'user' | 'assistant', text: string) => void
+  /** Real-time partial transcript from live session (growing text before turnComplete).
+   * Pass empty string to clear the interim bubble for that role. */
+  onInterimTranscription?: (role: 'user' | 'assistant', text: string) => void
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -192,6 +198,8 @@ export function ChatInput({
   conversationId,
   onStop,
   editDraft,
+  onLiveMessage,
+  onInterimTranscription,
 }: Props) {
   const [text, setText] = useState('')
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(activeDomain ?? null)
@@ -333,6 +341,9 @@ export function ChatInput({
           liveConversationIdRef.current = id
         }
 
+        // Append confirmed message to chat immediately (no need to wait for session end)
+        onLiveMessage?.(role, trimmed)
+
         // After assistant turn: fire background orchestration for tool calls + case state
         if (role === 'assistant') {
           const convId =
@@ -370,7 +381,11 @@ export function ChatInput({
 
       {/* Live mode: show compact bar instead of chat input */}
       {showLive && (
-        <LiveModal onClose={() => setShowLive(false)} onTranscription={handleTranscription} />
+        <LiveModal
+          onClose={() => setShowLive(false)}
+          onTranscription={handleTranscription}
+          onInterimTranscription={onInterimTranscription}
+        />
       )}
 
       {/* Normal chat input — hidden (not removed) while live is active so state is preserved */}

@@ -14,6 +14,12 @@ type Props = {
   userImage?: string | null
 }
 
+/** Interim live-transcript state: partial text growing in real-time before turnComplete. */
+type LiveInterim = {
+  role: 'user' | 'assistant'
+  text: string
+} | null
+
 export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
   const {
     messages,
@@ -32,8 +38,10 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     editDraft,
     startEdit,
     clearEditDraft,
+    appendLiveMessage,
   } = useChat()
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [liveInterim, setLiveInterim] = useState<LiveInterim>(null)
   const lastSpokenIdRef = useRef<string | undefined>(undefined)
   // Ref so handleVoiceEnd closure always sees the latest conversationId
   const conversationIdRef = useRef(conversationId)
@@ -49,6 +57,8 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
 
   const handleVoiceEnd = useCallback(
     (liveConversationId?: string) => {
+      // Clear any remaining interim bubble
+      setLiveInterim(null)
       // Prefer the conversation used during the Live session (may be newly created)
       // over the one that was active before it started.
       const cid = liveConversationId ?? conversationIdRef.current
@@ -60,6 +70,26 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
       }
     },
     [loadConversation],
+  )
+
+  /** Real-time partial transcript handler: update the ghost bubble while the user/AI speaks. */
+  const handleInterimTranscription = useCallback((role: 'user' | 'assistant', text: string) => {
+    if (!text) {
+      // Empty string = clear interim for this role
+      setLiveInterim((prev) => (prev?.role === role ? null : prev))
+    } else {
+      setLiveInterim({ role, text })
+    }
+  }, [])
+
+  /** Confirmed message handler: append to local messages immediately (no session-end wait). */
+  const handleLiveMessage = useCallback(
+    (role: 'user' | 'assistant', text: string) => {
+      // Clear interim for this role — it's now confirmed
+      setLiveInterim((prev) => (prev?.role === role ? null : prev))
+      appendLiveMessage(role, text)
+    },
+    [appendLiveMessage],
   )
 
   const handleSend = useCallback(
@@ -151,6 +181,54 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         onSend={handleSend}
         onEdit={startEdit}
       />
+
+      {/* Live interim transcript ghost bubble — shown in real-time while user/AI speaks */}
+      {liveInterim && (
+        <div
+          aria-live="polite"
+          aria-label={liveInterim.role === 'user' ? 'Stai dicendo' : 'Il team sta rispondendo'}
+          style={{
+            padding: '0 1rem 0.25rem',
+            display: 'flex',
+            justifyContent: liveInterim.role === 'user' ? 'flex-end' : 'flex-start',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '78%',
+              padding: '0.5rem 0.875rem',
+              borderRadius:
+                liveInterim.role === 'user'
+                  ? '1.125rem 1.125rem 0.25rem 1.125rem'
+                  : '1.125rem 1.125rem 1.125rem 0.25rem',
+              backgroundColor:
+                liveInterim.role === 'user'
+                  ? 'var(--color-accent, #007AFF)'
+                  : 'var(--color-surface, #fff)',
+              color: liveInterim.role === 'user' ? '#fff' : 'var(--color-text-primary, #1C1C1E)',
+              fontSize: '0.9375rem',
+              lineHeight: 1.45,
+              opacity: 0.7,
+              boxShadow: liveInterim.role === 'assistant' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              wordBreak: 'break-word',
+            }}
+          >
+            {liveInterim.text}
+            <span
+              style={{
+                display: 'inline-block',
+                width: '2px',
+                height: '0.9em',
+                marginLeft: '2px',
+                backgroundColor: 'currentColor',
+                verticalAlign: 'text-bottom',
+                animation: 'liveCursorBlink 0.8s step-end infinite',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       <ChatInput
         onSend={handleSend}
         onHistory={() => setHistoryOpen(true)}
@@ -161,6 +239,8 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         conversationId={conversationId}
         onStop={stopStreaming}
         editDraft={editDraft}
+        onLiveMessage={handleLiveMessage}
+        onInterimTranscription={handleInterimTranscription}
       />
       <ConversationHistory
         open={historyOpen}
@@ -215,6 +295,10 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         @keyframes cartellaFadeIn {
           from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes liveCursorBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
         }
       `}</style>
     </div>

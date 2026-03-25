@@ -60,6 +60,9 @@ type ChatContextValue = {
   newConversation: () => void
   exitSpecialist: () => void
   exportConversation: (id?: string) => Promise<void>
+  /** Append a confirmed live-session message to the local message list immediately,
+   * without waiting for loadConversation to reload from DB. */
+  appendLiveMessage: (role: 'user' | 'assistant', text: string) => void
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -481,6 +484,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const appendLiveMessage = useCallback((role: 'user' | 'assistant', text: string) => {
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role, content: text, streaming: false },
+    ])
+  }, [])
+
   const value: ChatContextValue = {
     messages,
     isStreaming,
@@ -499,6 +509,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     newConversation,
     exitSpecialist,
     exportConversation,
+    appendLiveMessage,
   }
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>

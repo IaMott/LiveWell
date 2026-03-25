@@ -19,6 +19,9 @@ interface Props {
   onClose: () => void
   /** Called for each completed transcript segment from user or assistant. */
   onTranscription?: (role: 'user' | 'assistant', text: string) => void
+  /** Called in real-time with the growing partial text as the user or AI speaks.
+   * Fires on every incoming chunk before turnComplete. Pass empty string to clear. */
+  onInterimTranscription?: (role: 'user' | 'assistant', text: string) => void
 }
 
 // ── Live model — must use v1alpha BidiGenerateContentConstrained endpoint ────
@@ -149,7 +152,7 @@ function IconSwitchCamera() {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function LiveModal({ onClose, onTranscription }: Props) {
+export function LiveModal({ onClose, onTranscription, onInterimTranscription }: Props) {
   const [phase, setPhase] = useState<Phase>('connecting')
   const [statusText, setStatusText] = useState('Connessione…')
   const [isAiSpeaking, setIsAiSpeaking] = useState(false)
@@ -450,21 +453,31 @@ export function LiveModal({ onClose, onTranscription }: Props) {
               const userText = sc?.inputTranscription?.text
               if (typeof userText === 'string' && userText) {
                 userTranscriptBufRef.current += userText
+                // Fire interim in real-time so the UI can show partial text
+                onInterimTranscription?.('user', userTranscriptBufRef.current)
               }
               const aiText = sc?.outputTranscription?.text
               if (typeof aiText === 'string' && aiText) {
                 aiTranscriptBufRef.current += aiText
+                // Fire interim in real-time so the UI can show partial text
+                onInterimTranscription?.('assistant', aiTranscriptBufRef.current)
               }
 
-              // Emit both segments on turn complete
+              // Emit both segments on turn complete, clear interim
               if (sc?.turnComplete) {
                 const userSeg = userTranscriptBufRef.current.trim()
                 userTranscriptBufRef.current = ''
-                if (userSeg) onTranscription?.('user', userSeg)
+                if (userSeg) {
+                  onInterimTranscription?.('user', '') // clear user interim
+                  onTranscription?.('user', userSeg)
+                }
 
                 const aiSeg = aiTranscriptBufRef.current.trim()
                 aiTranscriptBufRef.current = ''
-                if (aiSeg) onTranscription?.('assistant', aiSeg)
+                if (aiSeg) {
+                  onInterimTranscription?.('assistant', '') // clear assistant interim
+                  onTranscription?.('assistant', aiSeg)
+                }
               }
             },
             onerror: (error: ErrorEvent) => {
