@@ -316,6 +316,21 @@ export function buildSharedAgentRules(
   }
 
   lines.push(
+    `DOMAIN MAPPING — REGOLA ASSOLUTA PER setAttribute (errori di dominio = dato inutilizzabile):`,
+    `- Pasti, macro (carboidrati/proteine/grassi/calorie), alimenti, dieta, schema alimentare → domain:"nutrition"`,
+    `- Attività fisica, sport, allenamento, sessioni, intensità, frequenza settimanale → domain:"training"`,
+    `- Peso, altezza, BMI, composizione corporea, parametri biometrici → domain:"health"`,
+    `- Età, sesso, nome → domain:"personal"`,
+    `- Obiettivi dichiarati, motivo consulto, sintomi generali → domain:"general"`,
+    `- NON usare mai domain:"training" per dati alimentari o domain:"nutrition" per attività fisica.`,
+    ``,
+    `VALUTAZIONE CLINICA OBBLIGATORIA (notes in ogni setAttribute):`,
+    `- Ogni chiamata setAttribute DEVE includere il campo notes con una breve valutazione clinica del dato.`,
+    `- Esempi: notes:"Apporto proteico elevato rispetto al fabbisogno stimato; monitorare funzione renale."`,
+    `          notes:"Schema colazione adeguato in macro ma con IG alto per il miele; valutare sostituzione."`,
+    `          notes:"Peso in stallo nonostante piano seguito; sospettare sottostima calorica o adattamento metabolico."`,
+    `- Se non hai abbastanza dati per una valutazione, scrivi notes:"Dato registrato — valutazione in attesa di più informazioni."`,
+    ``,
     `GOAL & COMPLAINT CAPTURE (obbligatorio):`,
     `- Se l'utente risponde a "Qual è la cosa più importante che vorresti migliorare?",`,
     `  salva: user.setAttribute domain:"general" key:"declared_goal" value:<risposta utente>.`,

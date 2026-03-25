@@ -213,6 +213,9 @@ export function ChatInput({
   const liveConversationIdRef = useRef<string | null>(conversationId ?? null)
   // Buffers the last user turn from Live so we can send it to live-sync after the AI responds
   const lastLiveUserMsgRef = useRef<string | null>(null)
+  // Tracks whether at least one transcript turn was saved — used to decide if
+  // an end-of-session comprehensive extraction sync is needed.
+  const liveHasDataRef = useRef<boolean>(false)
 
   // Keep liveConversationIdRef seeded with the latest prop (for sessions starting
   // after a text conversation is already open).
@@ -223,9 +226,37 @@ export function ChatInput({
   // Notify parent when live session opens/closes
   useEffect(() => {
     if (showLive) {
+      liveHasDataRef.current = false
       onVoiceStart?.()
     } else {
-      onVoiceEnd?.(liveConversationIdRef.current ?? undefined)
+      const closingConvId = liveConversationIdRef.current
+      onVoiceEnd?.(closingConvId ?? undefined)
+
+      // End-of-session comprehensive extraction: runs the orchestrator over the
+      // FULL session transcript so it can extract all data mentioned across turns
+      // (macro details, habits, goals etc.) — not just the last turn.
+      // Fires after a 1.5s delay to let the final transcript writes flush to DB.
+      if (closingConvId && liveHasDataRef.current) {
+        setTimeout(() => {
+          void fetch('/api/chat/live-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              conversationId: closingConvId,
+              userMessage:
+                '[FINE SESSIONE LIVE] Analizza TUTTA la conversazione live appena conclusa. ' +
+                'Estrai e salva con setAttribute TUTTI i dati clinici rilevanti menzionati: ' +
+                'macro (carboidrati, proteine, grassi in grammi), peso, altezza, età, obiettivi, ' +
+                'schema dei pasti, abitudini alimentari, attività fisica, patologie, sintomi, farmaci. ' +
+                'Per ogni setAttribute includi nel campo notes una valutazione clinica del dato ' +
+                '(es. se il macro è adeguato, se lo schema è bilanciato, cosa manca). ' +
+                'Poi salva un artifact con il tuo resoconto clinico complessivo della sessione.',
+            }),
+          }).catch(() => {
+            /* best-effort */
+          })
+        }, 1500)
+      }
     }
   }, [showLive]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -340,6 +371,8 @@ export function ChatInput({
         if (id && !liveConversationIdRef.current) {
           liveConversationIdRef.current = id
         }
+        // Mark that at least one message was saved (triggers end-of-session sync)
+        liveHasDataRef.current = true
 
         // Append confirmed message to chat immediately (no need to wait for session end)
         onLiveMessage?.(role, trimmed)
