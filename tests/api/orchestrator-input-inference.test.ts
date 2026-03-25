@@ -67,7 +67,7 @@ describe('orchestrator input inference helpers', () => {
     })
   })
 
-  it('infers fallback user.setAttribute tool calls from natural chat without agent tool output', () => {
+  it('infers fallback user.setAttribute tool calls from natural chat without inventing birth dates', () => {
     const activeSpecialist: ActiveSpecialist = {
       id: 'fisioterapista',
       displayName: 'Fisioterapista',
@@ -81,10 +81,11 @@ describe('orchestrator input inference helpers', () => {
     )
 
     expect(calls.some((c) => JSON.stringify(c.args).includes('"key":"birthDate"'))).toBe(true)
+    expect(calls.some((c) => JSON.stringify(c.args).includes('"key":"age"'))).toBe(true)
     expect(calls.some((c) => JSON.stringify(c.args).includes('"key":"stress_level"'))).toBe(true)
     expect(calls.some((c) => JSON.stringify(c.args).includes('"key":"sleep_hours"'))).toBe(true)
-    expect(calls.some((c) => JSON.stringify(c.args).includes('Data di nascita approssimata'))).toBe(
-      true,
-    )
+    expect(
+      calls.some((c) => JSON.stringify(c.args).includes('data di nascita non specificata')),
+    ).toBe(true)
   })
 })

@@ -221,17 +221,13 @@ async function fetchProfileData(userId: string) {
     profile?.gender ??
     (typeof getAttrValue('gender') === 'string' ? (getAttrValue('gender') as string) : null)
 
-  // Birth date: from profile or derived from age attribute
+  // Birth date: show only an explicit date, never one inferred from age.
   let mergedBirthDate: Date | null = profile?.birthDate ?? null
   if (!mergedBirthDate) {
-    const ageVal = getAttrValue('age')
     const birthDateVal = getAttrValue('birthDate')
     if (birthDateVal && typeof birthDateVal === 'string') {
       const d = new Date(birthDateVal)
       if (!isNaN(d.getTime())) mergedBirthDate = d
-    } else if (typeof ageVal === 'number' && ageVal > 0) {
-      const birthYear = new Date().getFullYear() - Math.round(ageVal)
-      mergedBirthDate = new Date(`${birthYear}-01-01`)
     }
   }
 

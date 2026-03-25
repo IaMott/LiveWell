@@ -254,13 +254,12 @@ const userSetAttribute: Handler = async (args, ctx) => {
       }
     }
 
-    // Age captured as a number (e.g. from "ho 34 anni") → derive birthDate approximation
+    // Age stays an independent attribute. Do not synthesize a birthDate without
+    // an explicit day/month/year provided by the user.
     if (profileKey === 'age' || profileKey === 'eta' || profileKey === 'età') {
       const ageNum = coerceNumber(a.value)
       if (ageNum != null && ageNum > 0 && ageNum < 130) {
-        // Approximate birthDate as Jan 1 of the birth year
-        const birthYear = new Date().getFullYear() - Math.round(ageNum)
-        profileUpdate.birthDate = new Date(`${birthYear}-01-01`)
+        // Intentionally no legacy profile sync for birthDate.
       }
     }
 

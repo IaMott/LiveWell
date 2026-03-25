@@ -148,6 +148,36 @@ describe('smoke auth user.setAttribute (mock DB)', () => {
     expect(mockUpdateUserProfile).toHaveBeenCalledWith('user-auth-3', { gender: 'M' })
   })
 
+  it('does not synthesize birthDate in UserProfile when only personal.age is provided', async () => {
+    const writeAuditLog = vi.fn(async () => undefined)
+    const executor = createToolExecutor({
+      handlers: realToolHandlers,
+      writeAuditLog,
+    })
+
+    const result = await executor.executeToolCall(
+      {
+        id: 'tc-3b',
+        name: 'user.setAttribute',
+        args: {
+          domain: 'personal',
+          key: 'age',
+          value: 35,
+        },
+      },
+      {
+        requestId: 'req-3b',
+        conversationId: 'conv-3b',
+        actor: { userId: 'user-auth-3b', role: 'USER', ownerModeEnabled: false },
+        source: 'assistant',
+        confirmedByUser: false,
+      },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(mockUpdateUserProfile).not.toHaveBeenCalled()
+  })
+
   it('normalizes allergy domain/key and de-dupes repeated attributes', async () => {
     const writeAuditLog = vi.fn(async () => undefined)
     const executor = createToolExecutor({
