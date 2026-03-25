@@ -680,6 +680,19 @@ describe('getMissingRequiredFields', () => {
     expect(result.ownFields).not.toContain('weight')
     expect(result.ownFields).not.toContain('height')
   })
+
+  it('birthDate nel profilo soddisfa il required birth_date', () => {
+    const ctxWithBirthDate: ContextPack = {
+      ...BASE_CONTEXT,
+      user: {
+        id: 'u1',
+        role: 'USER',
+        profile: { birthDate: '1991-06-26' },
+      },
+    }
+    const result = getMissingRequiredFields('dietista', ctxWithBirthDate, teamIds)
+    expect(result.ownFields).not.toContain('birth_date')
+  })
 })
 
 // ─── 5. Orchestrazione End-to-End ────────────────────────────────────────────

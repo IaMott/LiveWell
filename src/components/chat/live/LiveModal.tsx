@@ -17,6 +17,7 @@ interface LiveSession extends Session {
 
 interface Props {
   onClose: () => void
+  conversationId?: string | null
   /** Called for each completed transcript segment from user or assistant. */
   onTranscription?: (role: 'user' | 'assistant', text: string) => void
   /** Called in real-time with the growing partial text as the user or AI speaks.
@@ -152,7 +153,12 @@ function IconSwitchCamera() {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function LiveModal({ onClose, onTranscription, onInterimTranscription }: Props) {
+export function LiveModal({
+  onClose,
+  conversationId,
+  onTranscription,
+  onInterimTranscription,
+}: Props) {
   const [phase, setPhase] = useState<Phase>('connecting')
   const [statusText, setStatusText] = useState('Connessione…')
   const [isAiSpeaking, setIsAiSpeaking] = useState(false)
@@ -360,7 +366,7 @@ export function LiveModal({ onClose, onTranscription, onInterimTranscription }: 
         const tokenRes = await fetch('/api/live-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ conversationId }),
         })
         if (!tokenRes.ok) {
           const err = (await tokenRes.json().catch(() => ({}))) as { error?: string }
@@ -517,7 +523,7 @@ export function LiveModal({ onClose, onTranscription, onInterimTranscription }: 
       mounted = false
       cleanup()
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Start video stream with a specific device ─────────────────────────────
 

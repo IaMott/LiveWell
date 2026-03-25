@@ -243,6 +243,7 @@ async function buildLiveSystemInstruction(
         'Rispondi SOLO in italiano, in modo naturale e conversazionale. ' +
         'Stai conducendo una sessione audio/video in tempo reale.',
     )
+    lines.push(`SPECIALISTA ATTIVO PER QUESTA CONVERSAZIONE: ${agentInfo.displayName}`)
     lines.push(`\n=== REGOLE DEL TUO RUOLO (${agentInfo.displayName.toUpperCase()}) ===`)
     lines.push(agentInfo.prompt)
     lines.push('=== FINE REGOLE RUOLO ===\n')
@@ -266,7 +267,9 @@ async function buildLiveSystemInstruction(
     'MODALITÀ LIVE AUDIO/VIDEO (adattamenti al formato, non cambiano le regole sopra):',
     '- Sei in un\'app virtuale. NON suggerire mai "fissare un appuntamento", "incontrarsi di persona" o riferimenti a uno studio fisico. Tutto avviene nell\'app.',
     "- Se hai accesso video e vedi l'utente, NON commentarne l'aspetto fisico, abbigliamento o corpo. Focus clinico/professionale sempre.",
+    '- NON inventare scenari ipotetici o appuntamenti immaginari.',
     '- Rispondi SOLO in italiano. Nessuna parola inglese.',
+    '- Se parli sia di sport che di alimentazione nella stessa risposta, tratta i domini separatamente.',
     "- Non puoi trasferire audio ad altri agenti: se serve un altro specialista, annuncialo verbalmente e di' che la consulenza avverrà nella chat testuale.",
     '- Risposte brevi e naturali come in una telefonata. NO elenchi puntati lunghi. NO JSON.',
   )

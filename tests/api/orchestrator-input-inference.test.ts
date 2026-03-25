@@ -76,12 +76,15 @@ describe('orchestrator input inference helpers', () => {
     }
 
     const calls = inferAttributeToolCallsFromMessage(
-      'sono nato il 26/06/1991, ho stress 8 su 10 e dormo 5 ore',
+      'ho 35 anni, sono nato il 26/06/1991, ho stress 8 su 10 e dormo 5 ore',
       { domainHint: 'mindfulness', activeSpecialist },
     )
 
     expect(calls.some((c) => JSON.stringify(c.args).includes('"key":"birthDate"'))).toBe(true)
     expect(calls.some((c) => JSON.stringify(c.args).includes('"key":"stress_level"'))).toBe(true)
     expect(calls.some((c) => JSON.stringify(c.args).includes('"key":"sleep_hours"'))).toBe(true)
+    expect(calls.some((c) => JSON.stringify(c.args).includes('Data di nascita approssimata'))).toBe(
+      true,
+    )
   })
 })

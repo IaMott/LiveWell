@@ -192,6 +192,11 @@ export function inferAttributeToolCallsFromMessage(
     }
   }
 
+  const buildApproxBirthDateFromAge = (age: number): string => {
+    const birthYear = new Date().getFullYear() - Math.round(age)
+    return `${birthYear}-06-15`
+  }
+
   // Age — "ho 35 anni", "ne ho 35", "35 anni" (standalone phrase)
   // Excludes duration phrases like "da 20 anni soffro di X", "20 anni fa", "per 3 anni"
   const ageIsDurationContext = /\b(?:fa|or\s+sono|prima|dopo|da\s+\d|per\s+\d)\b/.test(lower)
@@ -212,7 +217,13 @@ export function inferAttributeToolCallsFromMessage(
           calls.push({
             id: crypto.randomUUID(),
             name: 'user.setAttribute',
-            args: { domain: 'personal', key: 'age', value: age, unit: 'years', recordedAt: now },
+            args: {
+              domain: 'personal',
+              key: 'birthDate',
+              value: buildApproxBirthDateFromAge(age),
+              notes: `Data di nascita approssimata derivata da età dichiarata (${age} anni)`,
+              recordedAt: now,
+            },
           })
           ageExtracted = true
           break
@@ -230,7 +241,13 @@ export function inferAttributeToolCallsFromMessage(
         calls.push({
           id: crypto.randomUUID(),
           name: 'user.setAttribute',
-          args: { domain: 'personal', key: 'age', value: age, unit: 'years', recordedAt: now },
+          args: {
+            domain: 'personal',
+            key: 'birthDate',
+            value: buildApproxBirthDateFromAge(age),
+            notes: `Data di nascita approssimata derivata da età dichiarata (${age} anni)`,
+            recordedAt: now,
+          },
         })
       }
     }

@@ -1,7 +1,7 @@
 import { applyQuestionPolicy, isGenericQuestion } from '../policy/questionPolicy'
 import { ActiveSpecialist, AgentProposal, ContextPack, Domain } from '../types'
 import { isAgeQuestion, readPersonalSnapshot } from './inputInference'
-import { getMissingRequiredFields, getQuestionForField } from './intakeQuestions'
+import { getMissingRequiredFields } from './intakeQuestions'
 
 const CONTINUATION_PATTERN =
   /\b(continuiamo|continua|proseguiamo|prosegui|riprendiamo|riprendi|torniamo|torniamo al|ripartiamo|restiamo|parliamo ancora)\b/i
@@ -730,12 +730,11 @@ export function applyInterviewFlow(input: InterviewFlowInput): InterviewFlowResu
 
   if (activeSpecialist) {
     const missing = getMissingRequiredFields(activeSpecialist.id, contextPack, teamAgentIds)
-    specialistOwnFieldQuestions = missing.ownFields.map((f) =>
-      getQuestionForField(activeSpecialist.id, f),
-    )
-    peerRequests = missing.peerFields.map(({ agentId, fields }) => ({
+    // Pass field KEY NAMES only — the LLM generates contextual questions via the ✓/✗ intake checklist
+    specialistOwnFieldQuestions = [] // LLM generates questions from buildIntakeSection checklist
+    peerRequests = missing.peerFields.map(({ agentId, fields: _fields }) => ({
       agentId,
-      questions: fields.map((f) => getQuestionForField(agentId, f)),
+      questions: [], // LLM generates questions contextually
     }))
   }
 

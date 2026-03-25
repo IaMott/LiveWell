@@ -416,6 +416,7 @@ export function ChatInput({
       {showLive && (
         <LiveModal
           onClose={() => setShowLive(false)}
+          conversationId={conversationId ?? null}
           onTranscription={handleTranscription}
           onInterimTranscription={onInterimTranscription}
         />
