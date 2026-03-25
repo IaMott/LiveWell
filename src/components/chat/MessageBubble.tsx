@@ -167,7 +167,26 @@ export function MessageBubble({ message, conversationId, onSend, onEdit }: Props
                 : '0 1px 2px rgba(0,0,0,0.06)',
           }}
         >
-          {message.streaming && !hasContent ? null : (
+          {message.streaming && !hasContent ? (
+            // Show bouncing dots while waiting for content and no reasoning steps yet
+            !isUser && thinkingSteps.length === 0 ? (
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', padding: '2px 0' }}>
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--color-text-secondary)',
+                      animation: `lw-bounce 1.4s ease-in-out ${i * 0.2}s infinite`,
+                      display: 'inline-block',
+                    }}
+                  />
+                ))}
+              </div>
+            ) : null
+          ) : (
             <MarkdownContent content={message.content} streaming={message.streaming} />
           )}
         </div>
