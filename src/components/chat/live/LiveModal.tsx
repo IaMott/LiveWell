@@ -791,63 +791,64 @@ export function LiveModal({ onClose, onTranscription }: Props) {
       </div>
 
       {/* ── Draggable PiP video preview ── */}
-      {videoEnabled && (
-        <div
-          onPointerDown={onPipPointerDown}
-          onPointerMove={onPipPointerMove}
-          onPointerUp={onPipPointerUp}
+      {/* Always in DOM so videoRef.current is available when startVideoStream sets srcObject. */}
+      {/* Visibility controlled by display:none — avoids the ref-null race with {condition && ...}. */}
+      <div
+        onPointerDown={onPipPointerDown}
+        onPointerMove={onPipPointerMove}
+        onPointerUp={onPipPointerUp}
+        style={{
+          display: videoEnabled ? 'block' : 'none',
+          position: 'fixed',
+          left: pipX,
+          top: pipY,
+          width: '120px',
+          height: '213px',
+          borderRadius: '12px',
+          overflow: 'hidden',
+          backgroundColor: '#000',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.45)',
+          cursor: 'grab',
+          zIndex: 900,
+          userSelect: 'none',
+          touchAction: 'none',
+        }}
+      >
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+        {/* Close button */}
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => void toggleVideo()}
+          aria-label="Chiudi video"
           style={{
-            position: 'fixed',
-            left: pipX,
-            top: pipY,
-            width: '176px',
-            height: '112px',
-            borderRadius: '10px',
-            overflow: 'hidden',
-            backgroundColor: '#000',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
-            cursor: 'grab',
-            zIndex: 900,
-            userSelect: 'none',
-            touchAction: 'none',
+            position: 'absolute',
+            top: '6px',
+            right: '6px',
+            width: '22px',
+            height: '22px',
+            borderRadius: '50%',
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            border: 'none',
+            color: '#fff',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '11px',
+            lineHeight: 1,
+            padding: 0,
           }}
         >
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          />
-          {/* Small close/minimize button */}
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => void toggleVideo()}
-            aria-label="Chiudi video"
-            style={{
-              position: 'absolute',
-              top: '4px',
-              right: '4px',
-              width: '20px',
-              height: '20px',
-              borderRadius: '50%',
-              backgroundColor: 'rgba(0,0,0,0.55)',
-              border: 'none',
-              color: '#fff',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12px',
-              lineHeight: 1,
-              padding: 0,
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      )}
+          ✕
+        </button>
+      </div>
 
       {/* ── CSS keyframes ── */}
       <style>{`
