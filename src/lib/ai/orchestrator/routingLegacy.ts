@@ -90,20 +90,9 @@ export function resolveRoutingContext(params: ResolveRoutingParams): RoutingReso
 
   const selectedAgents = activeSpecialist
     ? (() => {
-        const base = selectAgentsForRequest(
-          team,
-          domainHint,
-          6,
-          allDomains,
-          message,
-          caseContext,
-          agentFeedbackScores,
-        ).filter((agent) => agent.id !== 'orchestratore')
-        const ordered = [
-          team.find((agent) => agent.id === activeSpecialist?.id),
-          ...base.filter((agent) => agent.id !== activeSpecialist?.id),
-        ].filter((agent): agent is AgentProfile => Boolean(agent))
-        return ordered.slice(0, 3)
+        // When a specialist is active, route exclusively to that agent.
+        const activeAgent = team.find((agent) => agent.id === activeSpecialist?.id)
+        return activeAgent ? [activeAgent] : []
       })()
     : clusterMatch
       ? (() => {

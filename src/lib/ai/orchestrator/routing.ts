@@ -1252,20 +1252,12 @@ export function resolveRoutingCandidates(params: {
 
   const selectedAgents = currentSpeakerId
     ? (() => {
-        const base = selectAgentsForRequest(
-          team,
-          domainHint,
-          6,
-          allDomains,
-          message,
-          caseContext,
-          agentFeedbackScores,
-        ).filter((agent) => agent.id !== 'orchestratore')
-        const ordered = [
-          team.find((agent) => agent.id === currentSpeakerId),
-          ...base.filter((agent) => agent.id !== currentSpeakerId),
-        ].filter((agent): agent is AgentProfile => Boolean(agent))
-        return ordered.slice(0, 3)
+        // When a specialist is active, route exclusively to that agent.
+        // Adding other agents from caseContext scoring causes cross-domain
+        // contamination (e.g., injury keywords routing Fisioterapista into
+        // a nutrition conversation).
+        const activeAgent = team.find((agent) => agent.id === currentSpeakerId)
+        return activeAgent ? [activeAgent] : []
       })()
     : clusterMatch
       ? (() => {

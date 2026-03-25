@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { signOut } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import type React from 'react'
 
 type Props = { user: { email: string; name?: string | null } }
@@ -31,6 +32,9 @@ function getSavedSettings(): Record<string, unknown> {
 }
 
 export function SettingsSection({ user }: Props) {
+  const router = useRouter()
+  const [resetLoading, setResetLoading] = useState(false)
+  const [resetMessage, setResetMessage] = useState<string | null>(null)
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => {
     const s = getSavedSettings()
     return (s.theme as 'light' | 'dark' | 'system') ?? 'system'
@@ -75,6 +79,28 @@ export function SettingsSection({ user }: Props) {
   function handleAccent(c: string) {
     setAccentColor(c)
     save({ accentColor: c })
+  }
+
+  async function handleResetMemory() {
+    const confirmed = window.confirm(
+      'Sei sicuro? Questa azione elimina tutta la cronologia delle conversazioni e i dati raccolti dal team. Non è reversibile.',
+    )
+    if (!confirmed) return
+    setResetLoading(true)
+    setResetMessage(null)
+    try {
+      const res = await fetch('/api/user/reset-data', { method: 'DELETE' })
+      if (res.ok) {
+        setResetMessage('Memoria azzerata. Puoi iniziare da capo.')
+        router.refresh()
+      } else {
+        setResetMessage('Errore durante il reset. Riprova.')
+      }
+    } catch {
+      setResetMessage('Errore di rete. Riprova.')
+    } finally {
+      setResetLoading(false)
+    }
   }
 
   return (
@@ -250,6 +276,56 @@ export function SettingsSection({ user }: Props) {
           >
             Abilitazione della posizione per usare normative, alimenti e dati sanitari nazionali.
           </p>
+        </Card>
+      </section>
+
+      {/* Dati e Privacy */}
+      <section>
+        <SectionLabel>Dati e Privacy</SectionLabel>
+        <Card>
+          <p
+            style={{
+              fontSize: '0.8125rem',
+              color: 'var(--color-text-secondary, #8E8E93)',
+              margin: '0 0 0.875rem 0',
+              lineHeight: 1.5,
+            }}
+          >
+            Azzera la memoria del team AI: elimina tutte le conversazioni, i dati raccolti dagli
+            specialisti e lo storico clinico. Il tuo account rimane attivo.
+          </p>
+          <button
+            type="button"
+            onClick={() => void handleResetMemory()}
+            disabled={resetLoading}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              borderRadius: '0.75rem',
+              border: '1px solid #FF3B30',
+              backgroundColor: 'transparent',
+              color: '#FF3B30',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              cursor: resetLoading ? 'not-allowed' : 'pointer',
+              opacity: resetLoading ? 0.6 : 1,
+              transition: 'opacity 0.15s',
+            }}
+          >
+            {resetLoading ? 'Azzeramento in corso…' : 'Azzera memoria AI'}
+          </button>
+          {resetMessage && (
+            <p
+              style={{
+                fontSize: '0.75rem',
+                color: resetMessage.startsWith('Memoria') ? '#34C759' : '#FF3B30',
+                margin: '0.5rem 0 0',
+                textAlign: 'center',
+              }}
+            >
+              {resetMessage}
+            </p>
+          )}
         </Card>
       </section>
     </div>
