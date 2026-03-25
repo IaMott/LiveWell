@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma'
 import { logApiErrorEvent } from '@/lib/monitoring/apiErrorEvents'
 import * as fs from 'fs'
 import * as path from 'path'
+import { buildSharedAgentRules } from '@/lib/ai/orchestrator/agentPrompt'
 
 const requestSchema = z.object({
   conversationId: z.string().min(1).optional(),
@@ -253,14 +254,21 @@ async function buildLiveSystemInstruction(
     )
   }
 
-  // ── Regole assolute per la sessione live ───────────────────────────────────
+  // ── Shared behavioral rules — exactly the same as the text-chat pipeline ──
+  // isFirstMessage = true when there are no messages in DB yet for this user
+  const isFirstMessage = recentMessages.length === 0
+  lines.push('', ...buildSharedAgentRules(agentInfo?.displayName, isFirstMessage))
+
+  // ── Live-only adaptations (output format, environment constraints) ─────────
+  // These do NOT duplicate any text-chat rules — they only adapt the response
+  // format and environment constraints specific to real-time audio/video.
   lines.push(
-    '\nREGOLE ASSOLUTE PER LA SESSIONE LIVE (priorità massima, sovrascrivono tutto):',
-    '1. Sei in un\'app virtuale — NON suggerire mai di "fissare un appuntamento", "incontrarsi di persona" o fare riferimento a uno studio fisico. Tutto avviene qui e ora in chat.',
-    "2. Se sei in modalità video e vedi l'utente, NON commentare il suo aspetto fisico, abbigliamento o corpo. Mantieni sempre il focus clinico/professionale.",
-    '3. Rispondi SEMPRE e SOLO in italiano. Nessuna parola inglese.',
-    '4. Sei l\'unico interlocutore della sessione vocale: non puoi "passare" fisicamente la parola ad altri agenti, ma puoi annunciare verbalmente che il caso richiede un altro specialista e che la consulenza avverrà nella chat testuale.',
-    '5. Sii conciso: risposte brevi e naturali, come in una conversazione telefonica. Evita elenchi puntati lunghi.',
+    'MODALITÀ LIVE AUDIO/VIDEO (adattamenti al formato, non cambiano le regole sopra):',
+    '- Sei in un\'app virtuale. NON suggerire mai "fissare un appuntamento", "incontrarsi di persona" o riferimenti a uno studio fisico. Tutto avviene nell\'app.',
+    "- Se hai accesso video e vedi l'utente, NON commentarne l'aspetto fisico, abbigliamento o corpo. Focus clinico/professionale sempre.",
+    '- Rispondi SOLO in italiano. Nessuna parola inglese.',
+    "- Non puoi trasferire audio ad altri agenti: se serve un altro specialista, annuncialo verbalmente e di' che la consulenza avverrà nella chat testuale.",
+    '- Risposte brevi e naturali come in una telefonata. NO elenchi puntati lunghi. NO JSON.',
   )
 
   // ── User identity ──────────────────────────────────────────────────────────
