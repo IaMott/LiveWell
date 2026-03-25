@@ -1,6 +1,21 @@
+import type { ContextPack } from '../types'
 import { AgentProfile, DecisionTraceEvent, Domain } from '../types'
 import { selectAgentsForRequest } from './agentSelection'
 import { buildAgentsSelectedTraceEvent } from './decisionTrace'
+
+/** Build a flat string from user attributes for competence scoring against case state. */
+function buildCaseContextFromAttributes(contextPack: ContextPack): string {
+  const attrs = contextPack.user?.attributes
+  if (!attrs) return ''
+  const parts: string[] = []
+  for (const domainAttrs of Object.values(attrs)) {
+    if (!domainAttrs || typeof domainAttrs !== 'object') continue
+    for (const [key, attr] of Object.entries(domainAttrs as Record<string, { value: unknown }>)) {
+      if (attr?.value != null) parts.push(`${key} ${String(attr.value)}`)
+    }
+  }
+  return parts.join(' ')
+}
 
 // ---------------------------------------------------------------------------
 // 3A — SYMPTOM_CLUSTER_RULES + detectMultiSpecialistNeed
@@ -1226,16 +1241,26 @@ export function resolveRoutingCandidates(params: {
   detectedDomain: Domain
   allDomains: Domain[]
   currentSpeakerId?: string
+  contextPack?: ContextPack
 }): RoutingCandidateResolution {
-  const { team, message, detectedDomain, allDomains, currentSpeakerId } = params
+  const { team, message, detectedDomain, allDomains, currentSpeakerId, contextPack } = params
   const clusterMatch = detectMultiSpecialistNeed(message, team)
   const domainHint = detectedDomain
 
+  const caseContext = contextPack ? buildCaseContextFromAttributes(contextPack) : ''
+  const agentFeedbackScores = contextPack?.routing?.agentFeedbackScores ?? {}
+
   const selectedAgents = currentSpeakerId
     ? (() => {
-        const base = selectAgentsForRequest(team, domainHint, 6, allDomains, message).filter(
-          (agent) => agent.id !== 'orchestratore',
-        )
+        const base = selectAgentsForRequest(
+          team,
+          domainHint,
+          6,
+          allDomains,
+          message,
+          caseContext,
+          agentFeedbackScores,
+        ).filter((agent) => agent.id !== 'orchestratore')
         const ordered = [
           team.find((agent) => agent.id === currentSpeakerId),
           ...base.filter((agent) => agent.id !== currentSpeakerId),
@@ -1244,7 +1269,15 @@ export function resolveRoutingCandidates(params: {
       })()
     : clusterMatch
       ? (() => {
-          const domainScored = selectAgentsForRequest(team, domainHint, 6, allDomains, message)
+          const domainScored = selectAgentsForRequest(
+            team,
+            domainHint,
+            6,
+            allDomains,
+            message,
+            caseContext,
+            agentFeedbackScores,
+          )
           const clusterIds = new Set(clusterMatch.specialists.map((s) => s.id))
           const clusterFirst: AgentProfile[] =
             clusterMatch.urgency === 'alta'
@@ -1253,7 +1286,15 @@ export function resolveRoutingCandidates(params: {
           const fillers = domainScored.filter((a) => !clusterIds.has(a.id))
           return [...clusterFirst, ...fillers].slice(0, 6)
         })()
-      : selectAgentsForRequest(team, domainHint, 4, allDomains, message)
+      : selectAgentsForRequest(
+          team,
+          domainHint,
+          4,
+          allDomains,
+          message,
+          caseContext,
+          agentFeedbackScores,
+        )
 
   return {
     domainHint,

@@ -59,6 +59,25 @@ function buildIntakeSection(agentId: string, input: AgentInput): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// formatTrend — derive a trend indicator string from attribute history
+// ---------------------------------------------------------------------------
+
+function formatTrend(history: Array<{ value: unknown; recordedAt: string }> | undefined): string {
+  if (!history || history.length < 2) return ''
+  const latest = history[0]
+  const older = history[history.length - 1]
+  const latestNum = parseFloat(String(latest.value))
+  const olderNum = parseFloat(String(older.value))
+  if (isNaN(latestNum) || isNaN(olderNum) || latestNum === olderNum) return ''
+  const arrow = latestNum < olderNum ? '▼' : '▲'
+  const daysDiff = Math.round(
+    (new Date(latest.recordedAt).getTime() - new Date(older.recordedAt).getTime()) /
+      (1000 * 60 * 60 * 24),
+  )
+  return ` (${arrow} da ${olderNum} → ${latestNum}, ${daysDiff}gg)`
+}
+
+// ---------------------------------------------------------------------------
 // Original formatUserAttributes (used as fallback in buildIntakeSection)
 // ---------------------------------------------------------------------------
 
@@ -66,15 +85,20 @@ export function formatUserAttributes(input: AgentInput): string[] {
   const attrs = input.contextPack.user.attributes
   if (!attrs) return []
 
+  const attrHistory = input.contextPack.user.attributeHistory
+
   const lines: string[] = []
   for (const [domain, kv] of Object.entries(attrs)) {
     if (!kv || typeof kv !== 'object') continue
     const entries = Object.entries(kv as Record<string, { value: unknown; unit?: string }>)
       .slice(0, 8)
-      .map(
-        ([k, v]) =>
-          `${k}: ${typeof v.value === 'object' ? JSON.stringify(v.value) : String(v.value)}${v.unit ? ` ${v.unit}` : ''}`,
-      )
+      .map(([k, v]) => {
+        const valStr = typeof v.value === 'object' ? JSON.stringify(v.value) : String(v.value)
+        const unitStr = v.unit ? ` ${v.unit}` : ''
+        const historyForKey = attrHistory?.[domain]?.[k]
+        const trendStr = formatTrend(historyForKey)
+        return `${k}: ${valStr}${unitStr}${trendStr}`
+      })
     if (entries.length > 0) {
       lines.push(`[${domain}] ${entries.join(' | ')}`)
     }

@@ -16,6 +16,7 @@ export const AgentProfileSchema = z.object({
   domainTags: z.array(DomainSchema).min(1),
   systemPromptPath: z.string().min(1), // relative to agent folder
   toolsAllowed: z.array(z.string()).default([]),
+  competenceKeywords: z.array(z.string()).optional(),
   escalationRules: z.array(z.string()).optional(),
   disclaimerStyle: z.enum(['concise', 'standard', 'strict']).optional(),
   decisionStyle: z.literal('team-led'),

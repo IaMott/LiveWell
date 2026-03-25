@@ -36,6 +36,7 @@ export type AgentProfile = {
   domainTags: Domain[]
   systemPrompt: string
   toolsAllowed: string[]
+  competenceKeywords?: string[]
   escalationRules?: string[]
   disclaimerStyle?: 'concise' | 'standard' | 'strict'
   decisionStyle: 'team-led'
@@ -112,6 +113,7 @@ export type ContextPack = {
     role: Role
     profile?: Record<string, unknown>
     attributes?: UserAttributes
+    attributeHistory?: Record<string, Record<string, Array<{ value: unknown; recordedAt: string }>>>
     /** Completeness analysis across domains — populated by contextPackBuilder */
     medicalRecord?: MedicalRecord
   }
@@ -181,6 +183,10 @@ export type ContextPack = {
     city: string | null
     timezone: string | null
     accuracy: string | null
+  }
+  /** Non-clinical routing metadata — NEVER exposed to agents in clinical context */
+  routing?: {
+    agentFeedbackScores?: Record<string, number>
   }
 }
 

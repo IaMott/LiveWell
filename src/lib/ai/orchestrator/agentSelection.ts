@@ -567,6 +567,8 @@ export function selectAgentsForRequest(
   maxAgents: number,
   allDomains: Domain[] = [],
   message = '',
+  caseContext = '',
+  agentFeedbackScores: Record<string, number> = {},
 ): AgentProfile[] {
   const secondary = allDomains.filter((d) => d !== domain && d !== 'general')
   const lowerMessage = message.toLowerCase()
@@ -577,7 +579,9 @@ export function selectAgentsForRequest(
   //   +1  'general' domain tag
   //   +2  each secondary domain match
   //   +2  agent id or displayName mentioned in message
-  //   +3  per competence-hint keyword match
+  //   +3  per competence-hint keyword match (current message)
+  //   +2  per competence-hint keyword match (accumulated case context)
+  //   ±2  feedback score adjustment (only if ≥3 ratings)
   // No hardcoded bonus for any specific agent group.
   const scored = team.map((a) => ({
     agent: a,
@@ -589,12 +593,29 @@ export function selectAgentsForRequest(
       if (lowerMessage.includes(a.id.toLowerCase())) s += 2
       if (lowerMessage.includes(a.displayName.toLowerCase())) s += 2
 
-      const competenceHints = AGENT_COMPETENCE_HINTS[a.id] ?? []
-      // Single-word hints use the fast token Set; multi-word hints fall back to substring search
-      const competenceMatches = competenceHints.filter((h) =>
+      const competenceHints = a.competenceKeywords ?? AGENT_COMPETENCE_HINTS[a.id] ?? []
+      // Score against current message (weight: +3 per match)
+      const msgMatches = competenceHints.filter((h) =>
         h.includes(' ') ? lowerMessage.includes(h) : msgTokens.has(h),
       ).length
-      if (competenceMatches > 0) s += competenceMatches * 3
+      if (msgMatches > 0) s += msgMatches * 3
+
+      // Score against accumulated case context (weight: +2 per match — slightly lower)
+      if (caseContext) {
+        const lowerCase = caseContext.toLowerCase()
+        const caseTokens = textToTokens(caseContext)
+        const caseMatches = competenceHints.filter((h) =>
+          h.includes(' ') ? lowerCase.includes(h) : caseTokens.has(h),
+        ).length
+        if (caseMatches > 0) s += caseMatches * 2
+      }
+
+      // Feedback scoring: +2 if highly rated (≥4.0), -2 if poorly rated (≤2.0)
+      // Only applies if user has given ≥3 ratings for this agent
+      const avgRating = agentFeedbackScores[a.id]
+      if (avgRating !== undefined) {
+        s += Math.round((avgRating - 3) * 1.0) // 5★ → +2, 3★ → 0, 1★ → -2
+      }
 
       return s
     })(),

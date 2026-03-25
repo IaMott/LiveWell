@@ -1,4 +1,10 @@
-import type { ActiveSpecialist, AgentProfile, DecisionTraceEvent, Domain } from '../types'
+import type {
+  ActiveSpecialist,
+  AgentProfile,
+  ContextPack,
+  DecisionTraceEvent,
+  Domain,
+} from '../types'
 import { selectAgentsForRequest } from './agentSelection'
 import {
   buildAgentsSelectedTraceEvent,
@@ -9,6 +15,20 @@ import {
   detectSpecialistRequest,
   shouldExitSpecialistMode,
 } from './routing'
+
+/** Build a flat string from user attributes for competence scoring against case state. */
+function buildCaseContextFromAttributes(contextPack: ContextPack): string {
+  const attrs = contextPack.user?.attributes
+  if (!attrs) return ''
+  const parts: string[] = []
+  for (const domainAttrs of Object.values(attrs)) {
+    if (!domainAttrs || typeof domainAttrs !== 'object') continue
+    for (const [key, attr] of Object.entries(domainAttrs as Record<string, { value: unknown }>)) {
+      if (attr?.value != null) parts.push(`${key} ${String(attr.value)}`)
+    }
+  }
+  return parts.join(' ')
+}
 
 function pickSpecialistEffectiveDomain(
   activeSpecialist: ActiveSpecialist | undefined,
@@ -27,6 +47,7 @@ export type ResolveRoutingParams = {
   detectedDomain: Domain
   allDomains: Domain[]
   activeSpecialistId?: string
+  contextPack?: ContextPack
 }
 
 export type RoutingResolution = {
@@ -37,8 +58,11 @@ export type RoutingResolution = {
 }
 
 export function resolveRoutingContext(params: ResolveRoutingParams): RoutingResolution {
-  const { team, message, detectedDomain, allDomains, activeSpecialistId } = params
+  const { team, message, detectedDomain, allDomains, activeSpecialistId, contextPack } = params
   const decisionTrace: DecisionTraceEvent[] = []
+
+  const caseContext = contextPack ? buildCaseContextFromAttributes(contextPack) : ''
+  const agentFeedbackScores = contextPack?.routing?.agentFeedbackScores ?? {}
 
   let lockedAgentId = activeSpecialistId ?? null
   const requestedSpecialistId = detectSpecialistRequest(message, team)
@@ -66,9 +90,15 @@ export function resolveRoutingContext(params: ResolveRoutingParams): RoutingReso
 
   const selectedAgents = activeSpecialist
     ? (() => {
-        const base = selectAgentsForRequest(team, domainHint, 6, allDomains, message).filter(
-          (agent) => agent.id !== 'orchestratore',
-        )
+        const base = selectAgentsForRequest(
+          team,
+          domainHint,
+          6,
+          allDomains,
+          message,
+          caseContext,
+          agentFeedbackScores,
+        ).filter((agent) => agent.id !== 'orchestratore')
         const ordered = [
           team.find((agent) => agent.id === activeSpecialist?.id),
           ...base.filter((agent) => agent.id !== activeSpecialist?.id),
@@ -77,7 +107,15 @@ export function resolveRoutingContext(params: ResolveRoutingParams): RoutingReso
       })()
     : clusterMatch
       ? (() => {
-          const domainScored = selectAgentsForRequest(team, domainHint, 6, allDomains, message)
+          const domainScored = selectAgentsForRequest(
+            team,
+            domainHint,
+            6,
+            allDomains,
+            message,
+            caseContext,
+            agentFeedbackScores,
+          )
           const clusterIds = new Set(clusterMatch.specialists.map((s) => s.id))
           const clusterFirst: AgentProfile[] =
             clusterMatch.urgency === 'alta'
@@ -86,7 +124,15 @@ export function resolveRoutingContext(params: ResolveRoutingParams): RoutingReso
           const fillers = domainScored.filter((a) => !clusterIds.has(a.id))
           return [...clusterFirst, ...fillers].slice(0, 6)
         })()
-      : selectAgentsForRequest(team, domainHint, 4, allDomains, message)
+      : selectAgentsForRequest(
+          team,
+          domainHint,
+          4,
+          allDomains,
+          message,
+          caseContext,
+          agentFeedbackScores,
+        )
 
   const specialistReason = exitSpecialistMode
     ? 'explicit_exit_request'

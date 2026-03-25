@@ -97,6 +97,9 @@ export type DbClient = {
   agentWorkspace?: {
     findMany: (args: QueryArgs) => Promise<WorkspaceRow[]>
   }
+  messagereview?: {
+    findMany: (args: QueryArgs) => Promise<Array<{ agentId: string | null; rating: number }>>
+  }
   // Optional — geo preference (privacy-first: only coarse fields, never raw coords)
   geoPreference?: {
     findUnique: (args: QueryArgs) => Promise<{
@@ -110,31 +113,44 @@ export type DbClient = {
   }
 }
 
-function buildAttributeMap(rows: RawAttribute[]): UserAttributes {
-  const seen = new Set<string>()
-  const out: UserAttributes = {}
+function buildAttributeMapWithHistory(rows: RawAttribute[]): {
+  current: UserAttributes
+  history: Record<string, Record<string, Array<{ value: unknown; recordedAt: string }>>>
+} {
+  const seenCurrent = new Set<string>()
+  const current: UserAttributes = {}
+  const history: Record<string, Record<string, Array<{ value: unknown; recordedAt: string }>>> = {}
 
   for (const row of rows) {
     const composite = `${row.domain}:${row.key}`
-    if (seen.has(composite)) continue
-    seen.add(composite)
+
+    // History: keep last 4 values per key (rows already sorted desc by recordedAt)
+    if (!history[row.domain]) history[row.domain] = {}
+    if (!history[row.domain][row.key]) history[row.domain][row.key] = []
+    if (history[row.domain][row.key].length < 4) {
+      history[row.domain][row.key].push({
+        value: row.value,
+        recordedAt: new Date(row.recordedAt).toISOString(),
+      })
+    }
+
+    // Current: only first (most recent) occurrence per key
+    if (seenCurrent.has(composite)) continue
+    seenCurrent.add(composite)
 
     const domainKey = row.domain as keyof UserAttributes
-    const bucket = (out[domainKey] ?? {}) as Record<string, AttributeValue>
-    out[domainKey] = bucket as UserAttributes[keyof UserAttributes]
-
-    const value: AttributeValue = {
+    const bucket = (current[domainKey] ?? {}) as Record<string, AttributeValue>
+    current[domainKey] = bucket as UserAttributes[keyof UserAttributes]
+    bucket[row.key] = {
       value: row.value,
       unit: row.unit ?? undefined,
       recordedAt: new Date(row.recordedAt).toISOString(),
       notes: row.notes ?? undefined,
       source: row.source ?? undefined,
     }
-
-    bucket[row.key] = value
   }
 
-  return out
+  return { current, history }
 }
 
 export type ContextPackBuilderOptions = {
@@ -266,6 +282,10 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
   ])
 
   let userAttributes: UserAttributes = {}
+  let userAttributeHistory: Record<
+    string,
+    Record<string, Array<{ value: unknown; recordedAt: string }>>
+  > = {}
   if (opts.db.userAttribute) {
     const rows = await opts.db.userAttribute
       .findMany({
@@ -286,7 +306,34 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
         },
       })
       .catch(() => [] as RawAttribute[])
-    userAttributes = buildAttributeMap(rows)
+    const { current: builtAttributes, history: builtHistory } = buildAttributeMapWithHistory(rows)
+    userAttributes = builtAttributes
+    userAttributeHistory = builtHistory
+  }
+
+  // Feedback scores — kept separate from clinical data, used for agent routing only
+  const agentFeedbackScores: Record<string, number> = {}
+  if (opts.db.messagereview) {
+    try {
+      const { createHash } = await import('node:crypto')
+      const userHash = createHash('sha256').update(opts.userId).digest('hex').slice(0, 16)
+      const reviews = await opts.db.messagereview.findMany({
+        where: { userHash, agentId: { not: null } },
+        select: { agentId: true, rating: true },
+      })
+      const agg: Record<string, { sum: number; count: number }> = {}
+      for (const r of reviews) {
+        if (!r.agentId) continue
+        if (!agg[r.agentId]) agg[r.agentId] = { sum: 0, count: 0 }
+        agg[r.agentId].sum += r.rating
+        agg[r.agentId].count++
+      }
+      for (const [agentId, { sum, count }] of Object.entries(agg)) {
+        if (count >= 3) agentFeedbackScores[agentId] = sum / count
+      }
+    } catch {
+      // best-effort — feedback scoring is non-critical
+    }
   }
 
   const medicalRecord = computeMedicalRecord(
@@ -372,6 +419,8 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
         ...(user?.name ? { name: user.name } : {}),
       },
       attributes: Object.keys(userAttributes).length > 0 ? userAttributes : undefined,
+      attributeHistory:
+        Object.keys(userAttributeHistory).length > 0 ? userAttributeHistory : undefined,
       medicalRecord,
     },
     history: {
@@ -477,5 +526,9 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
       sectionScores,
     },
     geo,
+    routing: {
+      agentFeedbackScores:
+        Object.keys(agentFeedbackScores).length > 0 ? agentFeedbackScores : undefined,
+    },
   }
 }

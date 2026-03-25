@@ -62,6 +62,7 @@ function loadOneAgent(agentDir: string): AgentProfileType {
       parsed.toolsAllowed ?? [],
       runtimeCapabilities?.allowedTools ?? [],
     ),
+    competenceKeywords: parsed.competenceKeywords,
     escalationRules: runtimeCapabilities?.escalationRules.length
       ? runtimeCapabilities.escalationRules
       : parsed.escalationRules ?? [],
