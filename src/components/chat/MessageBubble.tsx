@@ -145,52 +145,56 @@ export function MessageBubble({ message, conversationId, onSend, onEdit }: Props
         </div>
       )}
 
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: isUser ? 'flex-end' : 'flex-start',
-          width: '100%',
-        }}
-      >
+      {!(message.streaming && !hasContent && thinkingSteps.length > 0) && (
         <div
           style={{
-            maxWidth: '72%',
-            backgroundColor:
-              !isUser && domainColor ? hexToRgba(domainColor, 0.14) : 'var(--color-surface)',
-            borderRadius: isUser
-              ? '1.25rem 1.25rem 0.375rem 1.25rem'
-              : '1.25rem 1.25rem 1.25rem 0.375rem',
-            padding: '0.625rem 0.875rem',
-            boxShadow:
-              !isUser && domainColor
-                ? `0 1px 3px rgba(0,0,0,0.08), inset 0 0 0 1px ${hexToRgba(domainColor, 0.18)}`
-                : '0 1px 2px rgba(0,0,0,0.06)',
+            display: 'flex',
+            justifyContent: isUser ? 'flex-end' : 'flex-start',
+            width: '100%',
           }}
         >
-          {message.streaming && !hasContent ? (
-            // Show bouncing dots while waiting for content and no reasoning steps yet
-            !isUser && thinkingSteps.length === 0 ? (
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', padding: '2px 0' }}>
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      backgroundColor: 'var(--color-text-secondary)',
-                      animation: `lw-bounce 1.4s ease-in-out ${i * 0.2}s infinite`,
-                      display: 'inline-block',
-                    }}
-                  />
-                ))}
-              </div>
-            ) : null
-          ) : (
-            <MarkdownContent content={message.content} streaming={message.streaming} />
-          )}
+          <div
+            style={{
+              maxWidth: '72%',
+              backgroundColor:
+                !isUser && domainColor ? hexToRgba(domainColor, 0.14) : 'var(--color-surface)',
+              borderRadius: isUser
+                ? '1.25rem 1.25rem 0.375rem 1.25rem'
+                : '1.25rem 1.25rem 1.25rem 0.375rem',
+              padding: '0.625rem 0.875rem',
+              boxShadow:
+                !isUser && domainColor
+                  ? `0 1px 3px rgba(0,0,0,0.08), inset 0 0 0 1px ${hexToRgba(domainColor, 0.18)}`
+                  : '0 1px 2px rgba(0,0,0,0.06)',
+            }}
+          >
+            {message.streaming && !hasContent ? (
+              // Show bouncing dots while waiting for content and no reasoning steps yet
+              !isUser && thinkingSteps.length === 0 ? (
+                <div
+                  style={{ display: 'flex', gap: '4px', alignItems: 'center', padding: '2px 0' }}
+                >
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      style={{
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--color-text-secondary)',
+                        animation: `lw-bounce 1.4s ease-in-out ${i * 0.2}s infinite`,
+                        display: 'inline-block',
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : null
+            ) : (
+              <MarkdownContent content={message.content} streaming={message.streaming} />
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Edit button — shown on hover for user messages */}
       {isUser && hovered && !message.streaming && onEdit && (
