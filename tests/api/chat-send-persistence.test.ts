@@ -261,8 +261,8 @@ describe('/api/chat/send persistence integration', () => {
 
     expect(res.status).toBe(200)
     expect(body).toContain('"type":"message.complete"')
-    // conversation upsert was attempted
-    expect(prismaMock.conversation.upsert).toHaveBeenCalledTimes(1)
+    // conversation upsert was attempted — withRetry retries once on failure, so 2 calls total
+    expect(prismaMock.conversation.upsert).toHaveBeenCalledTimes(2)
   })
 
   it('smoke: /api/chat/send back-pain request persists AgentWorkspace proposals', async () => {

@@ -600,9 +600,11 @@ export async function POST(request: Request): Promise<Response> {
           parsedBody.message,
           cpUserName ?? null,
         )
-        // Always merge protocol + proposal events so real agent reasoning is shown
-        // even when protocol events (e.g. "subentro") are also present.
-        const thinkingEvents = mergeThinkingEvents(protocolThinkingEvents, proposalThinkingEvents)
+        // Protocol events (case state transitions) take priority: when present they
+        // describe the real handoff flow and the proposal summaries would be redundant.
+        // Fall back to proposal events only when no protocol events exist.
+        const thinkingEvents =
+          protocolThinkingEvents.length > 0 ? protocolThinkingEvents : proposalThinkingEvents
         const proposalTrace = dedupeThinkingSteps([
           ...buildProposalThinkingTrace(consensus.debug?.round1Proposals, team),
           ...buildProposalThinkingTrace(consensus.debug?.round2Proposals, team),
