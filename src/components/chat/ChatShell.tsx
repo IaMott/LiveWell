@@ -1,12 +1,16 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { TopBar } from '@/components/layout/TopBar'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { ConversationHistory } from './ConversationHistory'
 import { useChat } from '@/hooks/useChat'
+import type { ChatMessage } from '@/hooks/useChat'
 import { getDomainColor } from '@/lib/ui/domainColors'
+
+/** Stable ID for the live interim message — never persisted, replaced on turn complete. */
+const LIVE_INTERIM_ID = 'live-interim'
 
 type Props = {
   userInitials?: string
@@ -102,6 +106,21 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
 
   const specialistColor = getDomainColor(activeDomain)
 
+  /** Merge confirmed messages with the live interim message (if any) so the text
+   * grows word-by-word directly inside the chat bubble — same as text streaming. */
+  const displayMessages = useMemo((): ChatMessage[] => {
+    if (!liveInterim) return messages
+    return [
+      ...messages,
+      {
+        id: LIVE_INTERIM_ID,
+        role: liveInterim.role,
+        content: liveInterim.text,
+        streaming: true, // renders with ▋ cursor via MessageBubble/MarkdownContent
+      },
+    ]
+  }, [messages, liveInterim])
+
   return (
     <div
       style={{
@@ -175,59 +194,15 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         </div>
       )}
 
+      {/* displayMessages merges confirmed messages with the live interim (if any).
+          The interim appears as a streaming bubble directly in the chat flow,
+          growing word-by-word with the ▋ cursor — same UX as text streaming. */}
       <MessageList
-        messages={messages}
+        messages={displayMessages}
         conversationId={conversationId}
         onSend={handleSend}
         onEdit={startEdit}
       />
-
-      {/* Live interim transcript ghost bubble — shown in real-time while user/AI speaks */}
-      {liveInterim && (
-        <div
-          aria-live="polite"
-          aria-label={liveInterim.role === 'user' ? 'Stai dicendo' : 'Il team sta rispondendo'}
-          style={{
-            padding: '0 1rem 0.25rem',
-            display: 'flex',
-            justifyContent: liveInterim.role === 'user' ? 'flex-end' : 'flex-start',
-          }}
-        >
-          <div
-            style={{
-              maxWidth: '78%',
-              padding: '0.5rem 0.875rem',
-              borderRadius:
-                liveInterim.role === 'user'
-                  ? '1.125rem 1.125rem 0.25rem 1.125rem'
-                  : '1.125rem 1.125rem 1.125rem 0.25rem',
-              backgroundColor:
-                liveInterim.role === 'user'
-                  ? 'var(--color-accent, #007AFF)'
-                  : 'var(--color-surface, #fff)',
-              color: liveInterim.role === 'user' ? '#fff' : 'var(--color-text-primary, #1C1C1E)',
-              fontSize: '0.9375rem',
-              lineHeight: 1.45,
-              opacity: 0.7,
-              boxShadow: liveInterim.role === 'assistant' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-              wordBreak: 'break-word',
-            }}
-          >
-            {liveInterim.text}
-            <span
-              style={{
-                display: 'inline-block',
-                width: '2px',
-                height: '0.9em',
-                marginLeft: '2px',
-                backgroundColor: 'currentColor',
-                verticalAlign: 'text-bottom',
-                animation: 'liveCursorBlink 0.8s step-end infinite',
-              }}
-            />
-          </div>
-        </div>
-      )}
 
       <ChatInput
         onSend={handleSend}
@@ -295,10 +270,6 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         @keyframes cartellaFadeIn {
           from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes liveCursorBlink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0; }
         }
       `}</style>
     </div>
