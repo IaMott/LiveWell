@@ -38,14 +38,18 @@ Fatto
   - `tests/api/conversation-thinking-export.test.ts` ora mocka `prisma.caseState.findUnique`
   - `tests/api/orchestrator-interview-flow.test.ts` e` riallineato ai peer stub proposals persistiti dal flow
   - validazione verde con test mirati + `npm run typecheck`
+- fix workflow CI sul warning Node 20 deprecation:
+  - `.github/workflows/ci.yml` usa ora `actions/checkout@v5`
+  - `.github/workflows/ci.yml` usa ora `actions/setup-node@v5`
+  - validazione minima verde su YAML/formatting locale
 
 In corso
 
-Nessun blocco applicativo aperto nel perimetro minimo Fase 1 shared text/live; in attesa solo della nuova esecuzione CI remota sul commit correttivo.
+Nessun blocco applicativo aperto; in attesa della nuova esecuzione CI remota sul commit workflow.
 
 Prossimo
 
-- push del fix test-only e verifica del nuovo workflow GitHub Actions su `main`
+- push del fix workflow e verifica del nuovo run GitHub Actions su `main`
 - follow-up solo se richiesto: ulteriore riduzione/rimozione del compat layer in fase successiva
 
 Rischi
@@ -57,4 +61,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-26 22:55
+2026-03-26 23:07

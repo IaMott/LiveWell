@@ -123,3 +123,9 @@ File touch log (append-only)
 2026-03-26 22:55 | step=CP-24 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/WORKLOG.md` | action=completed | contract=temporary | note=`append worklog fix CI test-only`
 2026-03-26 22:55 | step=CP-24 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/DECISIONS.md` | action=completed | contract=temporary | note=`append ADR su regressione mock Prisma e failure preesistente del test interview flow`
 2026-03-26 22:55 | step=CP-24 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/RISK_LOG.md` | action=completed | contract=temporary | note=`registrato rischio CI mitigato sul drift dei test rispetto al runtime attuale`
+2026-03-26 23:07 | step=CP-25 | file=`/Users/mattiamottisi/Desktop/LiveWell/.github/workflows/ci.yml` | action=completed | contract=infra | note=`bump minimo delle GitHub Actions da v4 a v5 per eliminare il warning di deprecazione Node 20 sulle action runtime`
+2026-03-26 23:07 | step=CP-25 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/CHECKPOINTS.md` | action=completed | contract=temporary | note=`append checkpoint CP-25`
+2026-03-26 23:07 | step=CP-25 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/STATUS.md` | action=completed | contract=temporary | note=`aggiornamento stato operativo dopo fix workflow CI`
+2026-03-26 23:07 | step=CP-25 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/WORKLOG.md` | action=completed | contract=temporary | note=`append worklog fix workflow CI`
+2026-03-26 23:07 | step=CP-25 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/DECISIONS.md` | action=completed | contract=temporary | note=`append ADR sul bump minimo a GitHub Actions v5`
+2026-03-26 23:07 | step=CP-25 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/RISK_LOG.md` | action=completed | contract=temporary | note=`aggiornato rischio CI residuo sulle action runtime deprecate`
