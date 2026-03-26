@@ -34,15 +34,19 @@ Fatto
   - `npx prisma generate`
   - `npm run typecheck`
   - `npm run test -- tests/api/conversation-stateSnapshot-route.test.ts tests/api/live-sync-stateSnapshot.test.ts tests/api/case-persistence.test.ts tests/api/chat-send-persistence.test.ts tests/api/domain-canonical-write-read.e2e.test.ts tests/api/live-token-fallback-observability.test.ts tests/api/live-token-security.test.ts tests/conversations-api.test.ts`
+- fix locale dei failure CI piu recenti:
+  - `tests/api/conversation-thinking-export.test.ts` ora mocka `prisma.caseState.findUnique`
+  - `tests/api/orchestrator-interview-flow.test.ts` e` riallineato ai peer stub proposals persistiti dal flow
+  - validazione verde con test mirati + `npm run typecheck`
 
 In corso
 
-Nessun blocco aperto nel perimetro minimo Fase 1 shared text/live.
+Nessun blocco applicativo aperto nel perimetro minimo Fase 1 shared text/live; in attesa solo della nuova esecuzione CI remota sul commit correttivo.
 
 Prossimo
 
+- push del fix test-only e verifica del nuovo workflow GitHub Actions su `main`
 - follow-up solo se richiesto: ulteriore riduzione/rimozione del compat layer in fase successiva
-- follow-up solo se richiesto: hardening ulteriore della UX live reale con browser/microfono
 
 Rischi
 
@@ -53,4 +57,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-26 21:24
+2026-03-26 22:55

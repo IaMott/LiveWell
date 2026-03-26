@@ -10,6 +10,9 @@ const prismaMock = {
     findFirst: vi.fn(),
     findMany: vi.fn(),
   },
+  caseState: {
+    findUnique: vi.fn(),
+  },
   messageReview: {
     findMany: vi.fn(),
   },
@@ -47,6 +50,7 @@ describe('conversation thinking persistence and export', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    prismaMock.caseState.findUnique.mockResolvedValue(null)
     prismaMock.messageReview.findMany.mockResolvedValue([])
   })
 

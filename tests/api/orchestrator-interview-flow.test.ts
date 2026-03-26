@@ -94,8 +94,21 @@ describe('interview flow boundary', () => {
       'Qual è il tuo obiettivo nutrizionale principale nelle prossime settimane?',
     )
     expect(result.round2WithQueue).toEqual([])
-    // No pendingNext when all asked at once → no synthetic persistence proposal needed
-    expect(result.round2ForPersistence).toEqual([])
+    // Even without pendingNext, peer intake ownership is persisted via stub proposals.
+    expect(result.round2ForPersistence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          agentId: 'mmg',
+          pendingDomain: 'nutrition',
+          pendingQuestions: [],
+        }),
+        expect.objectContaining({
+          agentId: 'persona-trainer',
+          pendingDomain: 'nutrition',
+          pendingQuestions: [],
+        }),
+      ]),
+    )
   })
 
   it('keeps digestive follow-ups focused during an active specialist case instead of reopening nutrition intake', () => {
