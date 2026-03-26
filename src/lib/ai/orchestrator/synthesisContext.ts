@@ -92,8 +92,8 @@ export function buildStructuredProfileBlock(contextPack: ContextPack): string {
 
   if (name) lines.push(`Nome: ${name}`)
   if (gender) lines.push(`Sesso: ${gender}`)
-  if (age) lines.push(`Età: ${age} anni`)
-  else if (birthDate) lines.push(`Data di nascita: ${birthDate}`)
+  if (birthDate) lines.push(`Data di nascita: ${birthDate}`)
+  else if (age) lines.push(`Età osservata: ${age} anni`)
   if (height) lines.push(`Altezza: ${height} cm`)
   if (weight) lines.push(`Peso: ${weight} kg`)
   if (goal) lines.push(`Obiettivo: ${goal}`)

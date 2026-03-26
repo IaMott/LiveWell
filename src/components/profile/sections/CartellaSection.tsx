@@ -8,7 +8,7 @@ const KEY_LABELS: Record<string, string> = {
   weight: 'Peso',
   height: 'Altezza',
   gender: 'Sesso',
-  age: 'Età',
+  age: 'Età osservata',
   birthDate: 'Data di nascita',
   name: 'Nome',
   smokingStatus: 'Stato fumatore',
@@ -64,7 +64,7 @@ const COMPLETENESS = [
   {
     domain: 'personal',
     label: 'Dati Personali',
-    keys: ['weight', 'height', 'gender', 'age'],
+    keys: ['weight', 'height', 'gender', 'birthDate', 'age'],
     color: '#8E8E93',
   },
   {
@@ -117,26 +117,39 @@ function formatDateTime(d: Date | string): string {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function CartellaSection({ data }: Props) {
-  const { user, profile, attributesByDomain, attributesByDomainHistory } = data
+  const {
+    user,
+    profile,
+    attributesByDomain,
+    attributesByDomainHistory,
+    derivedFacts,
+    dynamicDocuments,
+  } = data
 
   // Completeness — cross-domain check
   const allDomains = attributesByDomain ?? {}
   const completeness = COMPLETENESS.map(({ domain, label, keys, color }) => {
-    const filled = keys.filter(
-      (k) =>
-        allDomains[domain]?.[k] !== undefined ||
-        allDomains['personal']?.[k] !== undefined ||
-        allDomains['general']?.[k] !== undefined ||
-        allDomains['health']?.[k] !== undefined,
-    ).length
+    const hasKey = (k: string) =>
+      allDomains[domain]?.[k] !== undefined ||
+      allDomains['personal']?.[k] !== undefined ||
+      allDomains['general']?.[k] !== undefined ||
+      allDomains['health']?.[k] !== undefined
+
+    if (domain === 'personal') {
+      const filled =
+        (hasKey('weight') ? 1 : 0) +
+        (hasKey('height') ? 1 : 0) +
+        (hasKey('gender') ? 1 : 0) +
+        (hasKey('birthDate') || hasKey('age') ? 1 : 0)
+      return { label, pct: Math.round((filled / 4) * 100), color }
+    }
+
+    const filled = keys.filter(hasKey).length
     return { label, pct: Math.round((filled / keys.length) * 100), color }
   })
 
   // User header biometrics
-  const nowMs = new Date().getTime()
-  const age = profile?.birthDate
-    ? Math.floor((nowMs - new Date(profile.birthDate).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
-    : null
+  const age = derivedFacts?.currentAge ?? null
 
   // All attribute data grouped by domain
   const history = attributesByDomainHistory ?? {}
@@ -226,6 +239,7 @@ export function CartellaSection({ data }: Props) {
                   {entries.map(([key, attrHistory]) => {
                     const latest = attrHistory[0]
                     if (!latest) return null
+                    if (key === 'age' && profile?.birthDate) return null
                     return (
                       <div key={key} style={rowStyle}>
                         <span style={fieldLabel}>{keyLabel(key)}</span>
@@ -240,6 +254,66 @@ export function CartellaSection({ data }: Props) {
               )
             })}
           </div>
+        )}
+      </div>
+
+      <div>
+        <p style={sectionLabel}>Documenti e Artifact</p>
+        {dynamicDocuments?.length ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.875rem',
+              marginTop: '0.5rem',
+            }}
+          >
+            {dynamicDocuments.map((doc) => (
+              <div key={`${doc.kind}:${doc.id}`} style={docCardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={docTitleStyle}>
+                      {doc.kind === 'user_file' ? 'Allegato utente' : 'Artifact AI'}: {doc.title}
+                    </p>
+                    <p style={docMetaStyle}>
+                      {doc.kind === 'user_file' && doc.mimeType ? doc.mimeType : 'Documento'}
+                      {doc.size ? ` • ${(doc.size / 1024).toFixed(1)} KB` : ''}
+                      {' • '}
+                      {formatDateTime(doc.recordedAt)}
+                    </p>
+                    <p style={docNotesStyle}>{doc.notes}</p>
+                    {doc.preview ? <pre style={docPreviewStyle}>{doc.preview}</pre> : null}
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.375rem',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {doc.url ? (
+                      <a href={doc.url} target="_blank" rel="noreferrer" style={linkStyle}>
+                        Anteprima
+                      </a>
+                    ) : null}
+                    <a
+                      href={
+                        doc.url ??
+                        `data:text/markdown;charset=utf-8,${encodeURIComponent(doc.content ?? doc.preview ?? doc.title)}`
+                      }
+                      download={doc.downloadFilename ?? undefined}
+                      style={linkStyle}
+                    >
+                      Scarica
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={emptyStyle}>Nessun documento o artifact ancora salvato nel dynamic DB.</p>
         )}
       </div>
     </div>
@@ -301,6 +375,45 @@ const emptyStyle: React.CSSProperties = {
   marginTop: '0.5rem',
   fontSize: '0.875rem',
   color: 'var(--color-text-secondary, #8E8E93)',
+}
+const docCardStyle: React.CSSProperties = {
+  border: '1px solid var(--color-separator, #E5E5EA)',
+  borderRadius: '0.875rem',
+  padding: '0.875rem',
+  background: 'var(--color-surface, #fff)',
+}
+const docTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: '0.875rem',
+  fontWeight: 600,
+  color: 'var(--color-text-primary, #1C1C1E)',
+}
+const docMetaStyle: React.CSSProperties = {
+  margin: '0.25rem 0 0',
+  fontSize: '0.75rem',
+  color: 'var(--color-text-secondary, #8E8E93)',
+}
+const docNotesStyle: React.CSSProperties = {
+  margin: '0.5rem 0 0',
+  fontSize: '0.8125rem',
+  color: 'var(--color-text-primary, #1C1C1E)',
+}
+const docPreviewStyle: React.CSSProperties = {
+  margin: '0.5rem 0 0',
+  padding: '0.625rem',
+  fontSize: '0.75rem',
+  lineHeight: 1.45,
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+  background: 'var(--color-bg, #F2F2F7)',
+  borderRadius: '0.625rem',
+  color: 'var(--color-text-secondary, #3C3C43)',
+}
+const linkStyle: React.CSSProperties = {
+  fontSize: '0.75rem',
+  fontWeight: 600,
+  color: 'var(--color-accent, #007AFF)',
+  textDecoration: 'none',
 }
 
 import type React from 'react'

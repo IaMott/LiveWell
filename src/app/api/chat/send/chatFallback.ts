@@ -60,8 +60,15 @@ export function buildSafeFallbackResponse(
   if (asksAge) {
     const birthDate =
       contextPack.user.attributes?.personal?.birthDate?.value ?? contextPack.user.profile?.birthDate
+    const observedAge = contextPack.user.attributes?.personal?.age
     if (!birthDate) {
-      return 'Non ho la tua data di nascita registrata. Per calcolare la tua età indicami la data di nascita in formato gg/mm/aaaa.'
+      const observedAgeText =
+        observedAge?.value != null
+          ? ` Ho solo un'età osservata registrata: ${String(observedAge.value)} anni${
+              observedAge.recordedAt ? ` (rilevata il ${observedAge.recordedAt.slice(0, 10)})` : ''
+            }, ma non basta per calcolare in modo affidabile l'età attuale.`
+          : ''
+      return `Non ho la tua data di nascita registrata.${observedAgeText} Per calcolare la tua età indicami la data di nascita in formato gg/mm/aaaa.`
     }
   }
 

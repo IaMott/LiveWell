@@ -52,6 +52,39 @@ function coerceDate(value: unknown): Date | null {
   return null
 }
 
+function ensureDynamicNote(note: string | undefined, fallback: string): string {
+  const trimmed = note?.trim()
+  return trimmed && trimmed.length > 0 ? trimmed : fallback
+}
+
+async function persistArtifactReference(input: {
+  userId: string
+  conversationId?: string
+  artifactId: string
+  type: string
+  title: string
+  notes: string
+}) {
+  await prisma.userAttribute.create({
+    data: {
+      userId: input.userId,
+      domain: 'general',
+      key: 'generated_artifact',
+      value: {
+        artifactId: input.artifactId,
+        type: input.type,
+        title: input.title,
+        kind: 'agent_artifact',
+      },
+      source: 'agent',
+      conversationId: input.conversationId,
+      recordedAt: new Date(),
+      notes: input.notes,
+    },
+    select: { id: true },
+  })
+}
+
 function normalizeDomain(
   raw: string,
 ):
@@ -189,7 +222,10 @@ const userSetAttribute: Handler = async (args, ctx) => {
   const normalizedValue = a.value as Prisma.InputJsonValue
   const normalizedUnit = a.unit ?? null
   const normalizedRecordedAt = toDate(a.recordedAt)
-  const normalizedNotes = a.notes ?? null
+  const normalizedNotes = ensureDynamicNote(
+    a.notes,
+    'Dato registrato — valutazione in attesa di più informazioni.',
+  )
 
   // De-dup exact repeats to reduce noisy duplicated health keys.
   const existing = await prisma.userAttribute.findFirst({
@@ -330,6 +366,14 @@ const nutritionCreateFoodItem: Handler = async (args, ctx) => {
     },
     select: { id: true },
   })
+  await persistArtifactReference({
+    userId: ctx.actor.userId,
+    conversationId: ctx.conversationId,
+    artifactId: artifact.id,
+    type: 'nutrition',
+    title: `Alimento: ${a.name}`,
+    notes: `Scheda alimento registrata dall'agente: ${a.name}.`,
+  })
   return { saved: true, id: artifact.id }
 }
 
@@ -352,6 +396,14 @@ const nutritionCreateRecipe: Handler = async (args, ctx) => {
       contentMarkdown,
     },
     select: { id: true },
+  })
+  await persistArtifactReference({
+    userId: ctx.actor.userId,
+    conversationId: ctx.conversationId,
+    artifactId: artifact.id,
+    type: 'nutrition',
+    title: a.title,
+    notes: `Ricetta strutturata registrata dall'agente: ${a.title}.`,
   })
   return { saved: true, id: artifact.id }
 }
@@ -409,7 +461,7 @@ const mindfulnessCreateEntry: Handler = async (args, ctx) => {
 }
 
 const artifactsSaveRecommendation: Handler = async (args, ctx) => {
-  const a = args as { type: string; title: string; contentMarkdown: string }
+  const a = args as { type: string; title: string; contentMarkdown: string; notes?: string }
   const artifact = await prisma.recommendationArtifact.create({
     data: {
       userId: ctx.actor.userId,
@@ -419,6 +471,17 @@ const artifactsSaveRecommendation: Handler = async (args, ctx) => {
       contentMarkdown: a.contentMarkdown,
     },
     select: { id: true },
+  })
+  await persistArtifactReference({
+    userId: ctx.actor.userId,
+    conversationId: ctx.conversationId,
+    artifactId: artifact.id,
+    type: a.type,
+    title: a.title,
+    notes: ensureDynamicNote(
+      a.notes,
+      `Artifact registrato dall'agente: ${a.title}. Valutazione dettagliata contenuta nel documento.`,
+    ),
   })
   return { saved: true, id: artifact.id }
 }

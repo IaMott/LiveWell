@@ -378,7 +378,13 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
                 prisma.recommendationArtifact
                   .findMany({
                     ...(args as object),
-                    select: { type: true, title: true, createdAt: true, contentMarkdown: true },
+                    select: {
+                      id: true,
+                      type: true,
+                      title: true,
+                      createdAt: true,
+                      contentMarkdown: true,
+                    },
                   })
                   .then((rows) => rows.map((r) => ({ ...r, content: r.contentMarkdown }))),
             },
@@ -437,6 +443,7 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
                     size: true,
                     extractedText: true,
                     url: true,
+                    createdAt: true,
                   },
                 }),
             },

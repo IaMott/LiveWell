@@ -1,6 +1,7 @@
 import { AgentInput, ContextPack } from '../types'
 import { AGENT_INTAKE_KEYS, flatAttributeMap } from './intakeQuestions'
 import { buildProgramStatusBlock } from './agentProgramTracker'
+import { getDynamicFieldDescriptor } from '@/lib/dynamicDb/semantics'
 
 // ---------------------------------------------------------------------------
 // 1A — buildIntakeSection: shows ✓/✗ per required key for this agent
@@ -90,14 +91,22 @@ export function formatUserAttributes(input: AgentInput): string[] {
   const lines: string[] = []
   for (const [domain, kv] of Object.entries(attrs)) {
     if (!kv || typeof kv !== 'object') continue
-    const entries = Object.entries(kv as Record<string, { value: unknown; unit?: string }>)
+    const entries = Object.entries(
+      kv as Record<string, { value: unknown; unit?: string; recordedAt?: string; notes?: string }>,
+    )
       .slice(0, 8)
       .map(([k, v]) => {
         const valStr = typeof v.value === 'object' ? JSON.stringify(v.value) : String(v.value)
         const unitStr = v.unit ? ` ${v.unit}` : ''
         const historyForKey = attrHistory?.[domain]?.[k]
         const trendStr = formatTrend(historyForKey)
-        return `${k}: ${valStr}${unitStr}${trendStr}`
+        const descriptor = getDynamicFieldDescriptor(k)
+        const temporalHint =
+          descriptor.semantics === 'observed_temporal_snapshot' && v.recordedAt
+            ? ` [osservazione del ${v.recordedAt.slice(0, 10)}; non dato corrente certo senza base derivativa]`
+            : ''
+        const noteStr = v.notes ? ` {notes: ${v.notes}}` : ''
+        return `${k}: ${valStr}${unitStr}${trendStr}${temporalHint}${noteStr}`
       })
     if (entries.length > 0) {
       lines.push(`[${domain}] ${entries.join(' | ')}`)
@@ -342,6 +351,10 @@ export function buildSharedAgentRules(
     `- NON inventare MAI mese o giorno di nascita e NON convertire mai l'età in una birth_date approssimata.`,
     `- Salva user.setAttribute domain:"personal" key:"birthDate" value:<YYYY-MM-DD> SOLO se l'utente fornisce una data completa reale.`,
     `- Se per un calcolo o una valutazione serve la data di nascita precisa e l'utente ha dato solo l'età, chiedi esplicitamente giorno e mese (o la data completa).`,
+    `- DATI MUTEVOLI NEL TEMPO: distingui sempre tra dato OSSERVATO e dato DERIVABILE.`,
+    `  Esempio: key:"age" è solo un'osservazione temporale registrata a una certa data; NON trattarla come età corrente certa nei turni futuri.`,
+    `  Esempio: key:"birthDate" è un dato base reale da cui il sistema può derivare nel tempo l'età corrente.`,
+    `- Quando leggi USER ATTRIBUTES, presta attenzione a recordedAt/notes: per i dati mutevoli usa latest+history, non assumere che un valore osservato settimane o mesi fa sia ancora identico oggi.`,
     ``,
     `PRIORITÀ (in ordine):`,
     `1. DAI CONSIGLI CONCRETI basati su evidenze scientifiche con i dati già disponibili`,
@@ -424,7 +437,10 @@ export function buildAgentUserPrompt(
     parts.push(``, `ALLEGATI INVIATI DALL'UTENTE:`)
     for (const f of filesWithContent) {
       const sizeKb = Math.round((f.size ?? 0) / 1024)
-      parts.push(`📎 ${f.filename} (${f.mimeType}, ${sizeKb}KB):`, f.extractedText!.slice(0, 4000))
+      parts.push(
+        `📎 ${f.filename} (${f.mimeType}, ${sizeKb}KB)${f.recordedAt ? ` — caricato il ${f.recordedAt.slice(0, 10)}` : ''}${f.notes ? ` — note: ${f.notes}` : ''}:`,
+        f.extractedText!.slice(0, 4000),
+      )
     }
     parts.push(
       `IMPORTANTE: I file sopra sono stati già inviati dall'utente. Non chiedere di inviare nuovamente documenti già presenti qui.`,

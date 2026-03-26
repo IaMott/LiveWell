@@ -56,10 +56,14 @@ export type DbClient = {
     ) => Promise<Array<{ role: 'user' | 'assistant'; content: string; createdAt: Date | string }>>
   }
   recommendationArtifact: {
-    findMany: (
-      args: QueryArgs,
-    ) => Promise<
-      Array<{ type: string; title: string; createdAt: Date | string; content?: string | null }>
+    findMany: (args: QueryArgs) => Promise<
+      Array<{
+        id?: string
+        type: string
+        title: string
+        createdAt: Date | string
+        content?: string | null
+      }>
     >
   }
   notification: {
@@ -88,6 +92,7 @@ export type DbClient = {
         size: number
         extractedText?: string | null
         url?: string | null
+        createdAt?: Date | string
       }>
     >
   }
@@ -151,6 +156,12 @@ function buildAttributeMapWithHistory(rows: RawAttribute[]): {
   }
 
   return { current, history }
+}
+
+function readRefId(value: unknown, key: 'fileAssetId' | 'artifactId'): string | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = (value as Record<string, unknown>)[key]
+  return typeof raw === 'string' && raw.length > 0 ? raw : null
 }
 
 export type ContextPackBuilderOptions = {
@@ -234,7 +245,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
     where: { relatedConversationId: opts.conversationId },
     orderBy: { createdAt: 'desc' },
     take: 10,
-    select: { type: true, title: true, createdAt: true, content: true },
+    select: { id: true, type: true, title: true, createdAt: true, content: true },
   })
 
   const [unreadCount, lastNotification, conversationSummaries] = await Promise.all([
@@ -286,8 +297,9 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
     string,
     Record<string, Array<{ value: unknown; recordedAt: string }>>
   > = {}
+  let attributeRows: RawAttribute[] = []
   if (opts.db.userAttribute) {
-    const rows = await opts.db.userAttribute
+    attributeRows = await opts.db.userAttribute
       .findMany({
         where: {
           userId: opts.userId,
@@ -306,9 +318,25 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
         },
       })
       .catch(() => [] as RawAttribute[])
-    const { current: builtAttributes, history: builtHistory } = buildAttributeMapWithHistory(rows)
+    const { current: builtAttributes, history: builtHistory } =
+      buildAttributeMapWithHistory(attributeRows)
     userAttributes = builtAttributes
     userAttributeHistory = builtHistory
+  }
+
+  const fileNotesById = new Map<string, string>()
+  const artifactNotesById = new Map<string, string>()
+  for (const row of attributeRows) {
+    if (!row.notes) continue
+    if (row.key === 'attachment_file') {
+      const fileAssetId = readRefId(row.value, 'fileAssetId')
+      if (fileAssetId && !fileNotesById.has(fileAssetId)) fileNotesById.set(fileAssetId, row.notes)
+    }
+    if (row.key === 'generated_artifact') {
+      const artifactId = readRefId(row.value, 'artifactId')
+      if (artifactId && !artifactNotesById.has(artifactId))
+        artifactNotesById.set(artifactId, row.notes)
+    }
   }
 
   // Feedback scores — kept separate from clinical data, used for agent routing only
@@ -364,6 +392,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
       size: true,
       extractedText: true,
       url: true,
+      createdAt: true,
     },
   })
 
@@ -437,6 +466,10 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
         title: a.title,
         createdAt: new Date(a.createdAt).toISOString(),
         contentMarkdown: a.content ?? undefined,
+        notes:
+          'id' in (a as Record<string, unknown>)
+            ? artifactNotesById.get(String((a as Record<string, unknown>).id ?? ''))
+            : undefined,
       })),
       agentWorkspaces:
         workspaces.length > 0
@@ -520,6 +553,8 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
       size: f.size,
       extractedText: opts.includeFileExtracts ? (f.extractedText ?? undefined) : undefined,
       url: f.url ?? undefined,
+      recordedAt: f.createdAt ? new Date(f.createdAt).toISOString() : undefined,
+      notes: fileNotesById.get(f.id),
     })),
     ui: {
       moodScore,

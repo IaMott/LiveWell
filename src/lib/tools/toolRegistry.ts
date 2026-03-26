@@ -124,6 +124,7 @@ const artifactSchema = z.object({
   type: z.enum(['nutrition', 'training', 'mindfulness', 'other']),
   title: baseString.max(200),
   contentMarkdown: z.string().min(1),
+  notes: z.string().trim().min(1).max(500).optional(),
 })
 
 const createInAppNotificationSchema = z.object({

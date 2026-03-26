@@ -7,6 +7,7 @@ import { HealthSection } from '@/components/profile/sections/HealthSection'
 import { MindfulnessSection } from '@/components/profile/sections/MindfulnessSection'
 import { IdeasSection } from '@/components/profile/sections/IdeasSection'
 import { CartellaSection } from '@/components/profile/sections/CartellaSection'
+import { computeAgeFromBirthDate } from '@/lib/dynamicDb/semantics'
 
 // Profile domains map to TEAM agent groups:
 //   nutrizione  → TEAM/nutrizione  (dietista, chef, endocrinologo)
@@ -33,6 +34,7 @@ type AttrRow = {
   value: unknown
   unit: string | null
   recordedAt: Date
+  notes?: string | null
 }
 
 function groupAttributesByDomain(
@@ -50,6 +52,20 @@ function groupAttributesByDomain(
 }
 
 type AttrHistory = { value: unknown; unit: string | null; recordedAt: Date }
+
+type DocumentRecord = {
+  id: string
+  kind: 'user_file' | 'generated_artifact'
+  title: string
+  mimeType?: string | null
+  size?: number | null
+  notes: string
+  recordedAt: Date
+  url?: string | null
+  preview?: string | null
+  content?: string | null
+  downloadFilename?: string | null
+}
 
 function groupAttributesByDomainWithHistory(
   attrs: AttrRow[],
@@ -87,6 +103,7 @@ async function fetchProfileData(userId: string) {
     allAttributes,
     workoutPlan,
     allArtifacts,
+    fileAssets,
     clinicalEvents,
   ] = await Promise.all([
     prisma.user.findUnique({
@@ -152,7 +169,7 @@ async function fetchProfileData(userId: string) {
         },
       },
       orderBy: { recordedAt: 'desc' },
-      select: { domain: true, key: true, value: true, unit: true, recordedAt: true },
+      select: { domain: true, key: true, value: true, unit: true, recordedAt: true, notes: true },
     }),
     // Body metrics history (last 30 days, weight only)
     prisma.bodyMetricEntry.findMany({
@@ -168,7 +185,7 @@ async function fetchProfileData(userId: string) {
       },
       orderBy: { recordedAt: 'desc' },
       take: 500,
-      select: { domain: true, key: true, value: true, unit: true, recordedAt: true },
+      select: { domain: true, key: true, value: true, unit: true, recordedAt: true, notes: true },
     }),
     // Latest workout plan
     prisma.workoutPlan.findFirst({
@@ -182,6 +199,20 @@ async function fetchProfileData(userId: string) {
       orderBy: { createdAt: 'desc' },
       take: 20,
       select: { id: true, type: true, title: true, contentMarkdown: true, createdAt: true },
+    }),
+    prisma.fileAsset.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        filename: true,
+        mimeType: true,
+        size: true,
+        url: true,
+        extractedText: true,
+        createdAt: true,
+      },
     }),
     // Cartella clinica: eventi strutturati registrati dagli agenti
     prisma.clinicalEvent.findMany({
@@ -243,9 +274,61 @@ async function fetchProfileData(userId: string) {
         }
       : profile
 
+  const fileNotesById = new Map<string, string>()
+  const artifactNotesById = new Map<string, string>()
+  for (const attr of allAttributes) {
+    if (!attr.notes) continue
+    if (attr.key === 'attachment_file' && attr.value && typeof attr.value === 'object') {
+      const fileAssetId = (attr.value as Record<string, unknown>).fileAssetId
+      if (typeof fileAssetId === 'string' && !fileNotesById.has(fileAssetId)) {
+        fileNotesById.set(fileAssetId, attr.notes)
+      }
+    }
+    if (attr.key === 'generated_artifact' && attr.value && typeof attr.value === 'object') {
+      const artifactId = (attr.value as Record<string, unknown>).artifactId
+      if (typeof artifactId === 'string' && !artifactNotesById.has(artifactId)) {
+        artifactNotesById.set(artifactId, attr.notes)
+      }
+    }
+  }
+
+  const dynamicDocuments: DocumentRecord[] = [
+    ...fileAssets.map((f) => ({
+      id: f.id,
+      kind: 'user_file' as const,
+      title: f.filename,
+      mimeType: f.mimeType,
+      size: f.size,
+      notes:
+        fileNotesById.get(f.id) ??
+        "File caricato dall'utente; contenuto disponibile nel dynamic DB per analisi specialistica.",
+      recordedAt: f.createdAt,
+      url: f.url,
+      preview:
+        f.extractedText && !f.extractedText.startsWith('data:')
+          ? f.extractedText.slice(0, 300)
+          : null,
+      downloadFilename: f.filename,
+    })),
+    ...allArtifacts.map((a) => ({
+      id: a.id,
+      kind: 'generated_artifact' as const,
+      title: a.title,
+      notes:
+        artifactNotesById.get(a.id) ?? `Artifact generato dal sistema multi-agente: ${a.title}.`,
+      recordedAt: a.createdAt,
+      preview: a.contentMarkdown.slice(0, 300),
+      content: a.contentMarkdown,
+      downloadFilename: `${a.title.replace(/[^a-z0-9-_]+/gi, '-').toLowerCase() || 'artifact'}.md`,
+    })),
+  ].sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime())
+
   return {
     user: { name: user?.name ?? null, email: user?.email ?? '' },
     profile: displayProfile as typeof profile,
+    derivedFacts: {
+      currentAge: computeAgeFromBirthDate(displayProfile?.birthDate ?? null),
+    },
     stats: {
       workoutSessions7d: workoutStats._count.id,
       totalWorkoutMin7d: workoutStats._sum.durationMin ?? 0,
@@ -269,6 +352,7 @@ async function fetchProfileData(userId: string) {
     attributesByDomainHistory: groupAttributesByDomainWithHistory(allAttributes),
     workoutPlan,
     allArtifacts,
+    dynamicDocuments,
     clinicalEvents,
   }
 }

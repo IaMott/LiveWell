@@ -145,6 +145,7 @@ export type ContextPack = {
       title: string
       createdAt: string
       contentMarkdown?: string
+      notes?: string
     }>
     /** Cross-conversation summaries for long-term memory (populated from ConversationSummary table) */
     recentConversationSummaries?: Array<{
@@ -171,6 +172,8 @@ export type ContextPack = {
     size: number
     extractedText?: string
     url?: string
+    recordedAt?: string
+    notes?: string
   }>
   ui: {
     moodScore: number // 0..100

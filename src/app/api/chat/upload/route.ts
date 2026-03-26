@@ -60,23 +60,25 @@ export async function POST(request: Request): Promise<Response> {
 
     // Extract content based on file type
     let extractedText: string | null = null
+    let dataUrl: string | null = null
+    let fileBytes: Buffer | null = null
+
+    try {
+      fileBytes = Buffer.from(await file.arrayBuffer())
+      dataUrl = `data:${mimeType};base64,${fileBytes.toString('base64')}`
+    } catch {
+      fileBytes = null
+      dataUrl = null
+    }
 
     if (mimeType.startsWith('image/')) {
       // Store as inline base64 so Gemini can analyse it (max 4 MB)
-      if (file.size <= MAX_IMAGE_SIZE_BYTES) {
-        try {
-          const bytes = await file.arrayBuffer()
-          const base64 = Buffer.from(bytes).toString('base64')
-          extractedText = `data:${mimeType};base64,${base64}`
-        } catch {
-          // skip — will be stored as metadata-only
-        }
+      if (file.size <= MAX_IMAGE_SIZE_BYTES && dataUrl) {
+        extractedText = dataUrl
       }
     } else if (mimeType === 'application/pdf') {
       try {
-        const bytes = await file.arrayBuffer()
-        const buffer = Buffer.from(bytes)
-        const pdfText = await extractPdfText(buffer)
+        const pdfText = fileBytes ? await extractPdfText(fileBytes) : null
         if (pdfText) {
           extractedText =
             pdfText.length > MAX_TEXT_LENGTH
@@ -101,6 +103,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     try {
+      const recordedAt = new Date()
       const asset = await prisma.fileAsset.create({
         data: {
           userId,
@@ -108,9 +111,31 @@ export async function POST(request: Request): Promise<Response> {
           filename: file.name,
           mimeType,
           size: file.size,
+          url: dataUrl,
           extractedText,
+          createdAt: recordedAt,
         },
-        select: { id: true, filename: true, mimeType: true, size: true },
+        select: { id: true, filename: true, mimeType: true, size: true, createdAt: true },
+      })
+      await prisma.userAttribute.create({
+        data: {
+          userId,
+          domain: 'general',
+          key: 'attachment_file',
+          value: {
+            fileAssetId: asset.id,
+            filename: asset.filename,
+            mimeType: asset.mimeType,
+            size: asset.size,
+            kind: 'user_upload',
+          },
+          source: 'user_upload',
+          conversationId,
+          recordedAt,
+          notes:
+            "File caricato dall'utente; contenuto disponibile nel dynamic DB per analisi specialistica.",
+        },
+        select: { id: true },
       })
       results.push(asset)
     } catch {

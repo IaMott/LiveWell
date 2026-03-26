@@ -73,10 +73,17 @@ export function tryAgeQuestionFastPath(input: AgentInput): FastPathResult {
 
   const personal = readPersonalSnapshot(input.contextPack)
   const age = personal.birthDate ? ageFromIsoDate(personal.birthDate) : null
+  const observedAge = input.contextPack.user.attributes?.personal?.age
+  const observedAgeText =
+    observedAge?.value != null
+      ? ` Ho solo un'età osservata registrata: ${String(observedAge.value)} anni${
+          observedAge.recordedAt ? ` (rilevata il ${observedAge.recordedAt.slice(0, 10)})` : ''
+        }, ma non basta per calcolare in modo affidabile l'età attuale.`
+      : ''
   const response =
     age != null
       ? `Hai ${age} anni.`
-      : 'Non ho la tua data di nascita registrata. Per calcolare la tua età indicami la data di nascita in formato gg/mm/aaaa.'
+      : `Non ho la tua data di nascita registrata.${observedAgeText} Per calcolare la tua età indicami la data di nascita in formato gg/mm/aaaa.`
 
   const compatibilitySpeakerId = input.caseState?.activeSpeakerAgentId
 
