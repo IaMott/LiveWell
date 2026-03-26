@@ -16,6 +16,10 @@ Fatto
 - `chatPersistence.ts` ora scrive il canonico come primary write path
 - `fromStoredCaseState()` ora legge in modalita canonical-first con legacy solo fallback/bridge
 - `live-token` ora usa il read path comune invece del mapper legacy manuale
+- commit finale pubblicato: `44231c5` (`feat: close phase1 shared text live state`)
+- push su `origin/main` completato
+- deploy Vercel production completato su `https://livewell.mottisi.com`
+- verifica HTTP positiva dell'alias production
 - copertura aggiunta:
   - `tests/api/case-persistence.test.ts`
   - `tests/api/conversation-stateSnapshot-route.test.ts`
@@ -49,4 +53,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-26 21:17
+2026-03-26 21:24
