@@ -129,3 +129,10 @@ File touch log (append-only)
 2026-03-26 23:07 | step=CP-25 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/WORKLOG.md` | action=completed | contract=temporary | note=`append worklog fix workflow CI`
 2026-03-26 23:07 | step=CP-25 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/DECISIONS.md` | action=completed | contract=temporary | note=`append ADR sul bump minimo a GitHub Actions v5`
 2026-03-26 23:07 | step=CP-25 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/RISK_LOG.md` | action=completed | contract=temporary | note=`aggiornato rischio CI residuo sulle action runtime deprecate`
+2026-03-26 23:20 | step=CP-26 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/lib/ai/case/persistence.ts` | action=completed | contract=canonical | note=`introdotto readCanonicalCaseRuntimeState(), isolati parser canonico e legacy, fromStoredCaseState() ridotta a facade legacy-safe`
+2026-03-26 23:20 | step=CP-26 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/api/case-persistence.test.ts` | action=completed | contract=test | note=`coperti i casi minimi su canonical reader, precedence dello snapshot, fallback legacy e facade legacy-safe`
+2026-03-26 23:20 | step=CP-26 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/CHECKPOINTS.md` | action=completed | contract=temporary | note=`append checkpoint CP-26`
+2026-03-26 23:20 | step=CP-26 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/STATUS.md` | action=completed | contract=temporary | note=`aggiornamento stato operativo dopo refactor persistence boundary`
+2026-03-26 23:20 | step=CP-26 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/WORKLOG.md` | action=completed | contract=temporary | note=`append worklog refactor persistence boundary`
+2026-03-26 23:20 | step=CP-26 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/DECISIONS.md` | action=completed | contract=temporary | note=`append ADR sul nuovo primary read path canonical-first`
+2026-03-26 23:20 | step=CP-26 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/RISK_LOG.md` | action=completed | contract=temporary | note=`registrati i rischi residui di facade legacy e migrazione consumer non ancora iniziata`

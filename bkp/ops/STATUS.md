@@ -42,14 +42,19 @@ Fatto
   - `.github/workflows/ci.yml` usa ora `actions/checkout@v5`
   - `.github/workflows/ci.yml` usa ora `actions/setup-node@v5`
   - validazione minima verde su YAML/formatting locale
+- refactor stretto del boundary canonical-first in `src/lib/ai/case/persistence.ts`:
+  - introdotto `readCanonicalCaseRuntimeState()` come primary read path del modulo
+  - `fromStoredCaseState()` declassata a facade legacy-safe
+  - `tests/api/case-persistence.test.ts` esteso ai 6 casi minimi richiesti
+  - validazione verde con test del modulo + `npm run typecheck`
 
 In corso
 
-Nessun blocco applicativo aperto; in attesa della nuova esecuzione CI remota sul commit workflow.
+Nessun blocco nel perimetro del modulo `persistence.ts`; consumer non ancora migrati per scelta esplicita di scope.
 
 Prossimo
 
-- push del fix workflow e verifica del nuovo run GitHub Actions su `main`
+- primo consumer corretto da migrare, se richiesto: `src/app/api/chat/send/chatPersistence.ts`
 - follow-up solo se richiesto: ulteriore riduzione/rimozione del compat layer in fase successiva
 
 Rischi
@@ -61,4 +66,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-26 23:07
+2026-03-26 23:20

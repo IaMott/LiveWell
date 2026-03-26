@@ -2,6 +2,8 @@ import type { CanonicalCaseStateSnapshot } from '../types'
 import { applyCanonicalSnapshotToLegacyCaseState, toCanonicalCaseStateSnapshot } from './compat'
 import { normalizeCaseState, type CaseState } from './state'
 
+export type CanonicalCaseRuntimeState = CanonicalCaseStateSnapshot
+
 export type CaseStateStore = {
   findCaseStateByConversationId: (conversationId: string) => Promise<Record<string, unknown> | null>
   upsertCaseState: (input: {
@@ -31,10 +33,10 @@ function serializeCanonicalSnapshot(snapshot: CanonicalCaseStateSnapshot): Recor
   }
 }
 
-function toCanonicalSnapshotFromStoredRecord(
+function parseStoredCanonicalSnapshot(
   rawSnapshot: unknown,
   conversationIdFallback?: string,
-): CanonicalCaseStateSnapshot | null {
+): CanonicalCaseRuntimeState | null {
   if (!rawSnapshot || typeof rawSnapshot !== 'object') return null
 
   const normalizedSnapshot = normalizeCaseState({
@@ -50,6 +52,21 @@ function toCanonicalSnapshotFromStoredRecord(
   if (!normalizedSnapshot) return null
 
   return toCanonicalCaseStateSnapshot(normalizedSnapshot)
+}
+
+function readLegacyCaseState(value: unknown): CaseState | null {
+  return normalizeCaseState(value)
+}
+
+export function readCanonicalCaseRuntimeState(value: unknown): CanonicalCaseRuntimeState | null {
+  if (!value || typeof value !== 'object') return null
+
+  const record = value as StoredCaseStateRecord
+  const legacy = readLegacyCaseState(value)
+  const snapshot = parseStoredCanonicalSnapshot(record.stateSnapshot, legacy?.conversationId)
+  if (snapshot) return snapshot
+
+  return toCanonicalCaseStateSnapshot(legacy)
 }
 
 export function toStoredCaseState(caseState: CaseState): Record<string, unknown> {
@@ -85,20 +102,14 @@ export function toStoredCaseStateWithCanonicalSnapshot(
 }
 
 /**
- * Dual-read helper:
- * - legacy-only row -> normalized CaseState
- * - legacy + shadow canonical snapshot -> canonical data merged back into CaseState
+ * Legacy-safe facade:
+ * - future callers should prefer readCanonicalCaseRuntimeState()
+ * - existing callers can keep receiving CaseState while the canonical boundary
+ *   remains the primary source of truth
  */
 export function fromStoredCaseState(value: unknown): CaseState | null {
-  if (!value || typeof value !== 'object') return null
-
-  const record = value as StoredCaseStateRecord
-  const legacy = normalizeCaseState(value)
-  const snapshot = toCanonicalSnapshotFromStoredRecord(record.stateSnapshot, legacy?.conversationId)
-
-  if (snapshot) {
-    return applyCanonicalSnapshotToLegacyCaseState({ snapshot, current: legacy })
-  }
-
-  return legacy
+  const legacy = readLegacyCaseState(value)
+  const canonical = readCanonicalCaseRuntimeState(value)
+  if (!canonical) return legacy
+  return applyCanonicalSnapshotToLegacyCaseState({ snapshot: canonical, current: legacy })
 }
