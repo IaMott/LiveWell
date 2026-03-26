@@ -46,6 +46,7 @@ type ChatContextValue = {
   messages: ChatMessage[]
   isStreaming: boolean
   conversationId: string | undefined
+  stateSnapshot: CanonicalCaseStateSnapshot | null
   activeDomain: Domain | null
   activeSpecialistId: string | undefined
   activeSpecialistName: string | undefined
@@ -84,6 +85,22 @@ function stateSnapshotKeyForConversation(conversationId: string): string {
   return `livewell_case_state_snapshot:${conversationId}`
 }
 
+function formatAgentIdLabel(agentId?: string | null): string | undefined {
+  if (!agentId) return undefined
+  const normalized = agentId.trim().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ')
+  if (!normalized) return undefined
+  return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase())
+}
+
+function getLeadPanel(snapshot: CanonicalCaseStateSnapshot | null) {
+  if (!snapshot) return null
+  return (
+    snapshot.domainPanels.find((panel) => panel.domain === snapshot.leadDomain) ??
+    snapshot.domainPanels[0] ??
+    null
+  )
+}
+
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -117,6 +134,52 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     stateSnapshotRef.current = stateSnapshot
   }, [stateSnapshot])
+
+  useEffect(() => {
+    const leadPanel = getLeadPanel(stateSnapshot)
+    if (stateSnapshot?.leadDomain) {
+      setActiveDomain(stateSnapshot.leadDomain)
+    } else if (!stateSnapshot) {
+      setActiveDomain(null)
+    }
+
+    if (leadPanel?.selectedAgentId) {
+      const nextSpecialistId = leadPanel.selectedAgentId
+      const nextSpecialistName = formatAgentIdLabel(nextSpecialistId)
+      setActiveSpecialistId(nextSpecialistId)
+      activeSpecialistIdRef.current = nextSpecialistId
+      if (nextSpecialistName) setActiveSpecialistName(nextSpecialistName)
+    } else if (!stateSnapshot) {
+      setActiveSpecialistId(undefined)
+      setActiveSpecialistName(undefined)
+      activeSpecialistIdRef.current = undefined
+    }
+  }, [stateSnapshot])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!conversationId) return
+
+    const storageKey = stateSnapshotKeyForConversation(conversationId)
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== storageKey) return
+      if (!event.newValue) {
+        setStateSnapshot(null)
+        stateSnapshotRef.current = null
+        return
+      }
+      try {
+        const parsed = JSON.parse(event.newValue) as CanonicalCaseStateSnapshot
+        setStateSnapshot(parsed)
+        stateSnapshotRef.current = parsed
+      } catch {
+        /* ignore invalid storage snapshot */
+      }
+    }
+
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [conversationId])
 
   useEffect(() => {
     isStreamingRef.current = isStreaming
@@ -164,13 +227,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const savedSpecialistName = localStorage.getItem(specialistNameKeyForConversation(id))
       const savedStateSnapshot = localStorage.getItem(stateSnapshotKeyForConversation(id))
 
-      if (savedSpecialistId) {
-        setActiveSpecialistId(savedSpecialistId)
-        activeSpecialistIdRef.current = savedSpecialistId
-      }
-      if (savedSpecialistName) {
-        setActiveSpecialistName(savedSpecialistName)
-      }
       if (savedStateSnapshot) {
         try {
           const parsed = JSON.parse(savedStateSnapshot) as CanonicalCaseStateSnapshot
@@ -178,6 +234,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           stateSnapshotRef.current = parsed
         } catch {
           localStorage.removeItem(stateSnapshotKeyForConversation(id))
+        }
+      } else if (savedSpecialistId) {
+        setActiveSpecialistId(savedSpecialistId)
+        activeSpecialistIdRef.current = savedSpecialistId
+        if (savedSpecialistName) {
+          setActiveSpecialistName(savedSpecialistName)
         }
       }
     }
@@ -225,15 +287,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         )
       }
 
-      const latestAssistantWithSpecialist = [...data.messages]
-        .reverse()
-        .find((m) => m.role === 'assistant' && m.specialistName)
-      if (latestAssistantWithSpecialist?.specialistName) {
-        setActiveSpecialistName(latestAssistantWithSpecialist.specialistName)
-        localStorage.setItem(
-          specialistNameKeyForConversation(id),
-          latestAssistantWithSpecialist.specialistName,
-        )
+      if (!data.stateSnapshot) {
+        const latestAssistantWithSpecialist = [...data.messages]
+          .reverse()
+          .find((m) => m.role === 'assistant' && m.specialistName)
+        if (latestAssistantWithSpecialist?.specialistName) {
+          setActiveSpecialistName(latestAssistantWithSpecialist.specialistName)
+          localStorage.setItem(
+            specialistNameKeyForConversation(id),
+            latestAssistantWithSpecialist.specialistName,
+          )
+        }
       }
     } catch {
       localStorage.removeItem(STORAGE_KEY)
@@ -350,17 +414,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       setMessages(recoveredMessages)
 
-      const latestAssistantWithSpecialist = [...recoveredMessages]
-        .reverse()
-        .find((m) => m.role === 'assistant' && m.specialistName)
-      if (latestAssistantWithSpecialist?.specialistName) {
-        setActiveSpecialistName(latestAssistantWithSpecialist.specialistName)
-        localStorage.setItem(
-          specialistNameKeyForConversation(id),
-          latestAssistantWithSpecialist.specialistName,
-        )
-      }
-
       if (data.stateSnapshot) {
         setStateSnapshot(data.stateSnapshot)
         stateSnapshotRef.current = data.stateSnapshot
@@ -368,6 +421,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           stateSnapshotKeyForConversation(id),
           JSON.stringify(data.stateSnapshot),
         )
+      } else {
+        const latestAssistantWithSpecialist = [...recoveredMessages]
+          .reverse()
+          .find((m) => m.role === 'assistant' && m.specialistName)
+        if (latestAssistantWithSpecialist?.specialistName) {
+          setActiveSpecialistName(latestAssistantWithSpecialist.specialistName)
+          localStorage.setItem(
+            specialistNameKeyForConversation(id),
+            latestAssistantWithSpecialist.specialistName,
+          )
+        }
       }
 
       return recoveredMessages.some((m) => m.role === 'assistant' && m.content.trim().length > 0)
@@ -512,8 +576,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   event.stateSnapshot != null
                     ? (event.stateSnapshot as CanonicalCaseStateSnapshot)
                     : undefined
+                const leadPanel = getLeadPanel(nextStateSnapshot ?? stateSnapshotRef.current)
+                const resolvedDomain =
+                  nextStateSnapshot?.leadDomain ??
+                  stateSnapshotRef.current?.leadDomain ??
+                  domain ??
+                  null
+                const resolvedSpecialistId =
+                  leadPanel?.selectedAgentId ?? newSpecialistId ?? activeSpecialistIdRef.current
+                const resolvedSpecialistName =
+                  formatAgentIdLabel(leadPanel?.selectedAgentId) ?? specialistName
 
-                if (domain) setActiveDomain(domain)
+                if (resolvedDomain) setActiveDomain(resolvedDomain)
                 if (nextStateSnapshot) {
                   setStateSnapshot(nextStateSnapshot)
                   stateSnapshotRef.current = nextStateSnapshot
@@ -530,24 +604,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   }
                 }
 
-                if (newSpecialistId && newSpecialistId !== activeSpecialistIdRef.current) {
-                  setActiveSpecialistId(newSpecialistId)
-                  setActiveSpecialistName(specialistName)
-                  activeSpecialistIdRef.current = newSpecialistId
+                if (
+                  resolvedSpecialistId &&
+                  resolvedSpecialistId !== activeSpecialistIdRef.current
+                ) {
+                  setActiveSpecialistId(resolvedSpecialistId)
+                  setActiveSpecialistName(resolvedSpecialistName)
+                  activeSpecialistIdRef.current = resolvedSpecialistId
                   const targetConversationId =
                     typeof event.conversationId === 'string' &&
                     event.conversationId.trim().length > 0
                       ? event.conversationId.trim()
                       : conversationIdRef.current
-                  if (newSpecialistId && targetConversationId) {
+                  if (resolvedSpecialistId && targetConversationId) {
                     localStorage.setItem(
                       specialistKeyForConversation(targetConversationId),
-                      newSpecialistId,
+                      resolvedSpecialistId,
                     )
-                    if (specialistName) {
+                    if (resolvedSpecialistName) {
                       localStorage.setItem(
                         specialistNameKeyForConversation(targetConversationId),
-                        specialistName,
+                        resolvedSpecialistName,
                       )
                     }
                   }
@@ -555,7 +632,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === currentAssistantId ? { ...m, domain, specialistName } : m,
+                    m.id === currentAssistantId
+                      ? {
+                          ...m,
+                          domain: resolvedDomain ?? undefined,
+                          specialistName: resolvedSpecialistName,
+                        }
+                      : m,
                   ),
                 )
               } else if (event.type === 'tool.result') {
@@ -658,6 +741,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     messages,
     isStreaming,
     conversationId,
+    stateSnapshot,
     activeDomain,
     activeSpecialistId,
     activeSpecialistName,

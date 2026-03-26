@@ -80,6 +80,13 @@ function formatToolValue(v: unknown): string {
   return String(v).slice(0, 50)
 }
 
+function formatAgentIdLabel(agentId?: string | null): string | undefined {
+  if (!agentId) return undefined
+  const normalized = agentId.trim().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ')
+  if (!normalized) return undefined
+  return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase())
+}
+
 function parseToolDirective(message: string): ToolCall[] {
   const direct = message.match(/^\/tool\s+([a-zA-Z0-9._-]+)\s+([\s\S]+)$/)
   if (!direct) return []
@@ -382,7 +389,13 @@ export async function POST(request: Request): Promise<Response> {
     conversationId,
     role,
   })
-  const storedCaseState = await persistence.getCaseState({ conversationId })
+  const storedCaseRuntimeState = await persistence.getCaseRuntimeState({ conversationId })
+  const storedCaseState = storedCaseRuntimeState
+    ? applyCanonicalSnapshotToLegacyCaseState({
+        snapshot: storedCaseRuntimeState,
+        current: await persistence.getCaseState({ conversationId }),
+      })
+    : await persistence.getCaseState({ conversationId })
   const teamDirAbsolute = path.resolve(process.cwd(), 'TEAM')
   const team = loadTeam({ teamDirAbsolute, allowEmpty: true })
   const caseActiveSpecialist = deriveActiveSpecialistFromCaseState(storedCaseState, team)
@@ -394,6 +407,7 @@ export async function POST(request: Request): Promise<Response> {
     message: parsedBody.message,
     contextPack,
     caseState: storedCaseState,
+    caseStateSnapshot: storedCaseRuntimeState,
   }
 
   const llm =
@@ -521,9 +535,7 @@ export async function POST(request: Request): Promise<Response> {
             finalMessageMarkdown: fallbackText,
             toolCallsToExecute: [],
             caseState: storedCaseState ?? undefined,
-            stateSnapshot: storedCaseState
-              ? (toCanonicalCaseStateSnapshot(storedCaseState) ?? undefined)
-              : undefined,
+            stateSnapshot: storedCaseRuntimeState ?? undefined,
             protocolEvents: [],
             activeSpecialist: caseActiveSpecialist,
             ui: {
@@ -650,10 +662,6 @@ export async function POST(request: Request): Promise<Response> {
         const persistedToolExecutionTrace = [...toolExecutionTrace, ...blockedToolExecutionTrace]
 
         const responseText = consensus.finalMessageMarkdown
-        const activeDomain = consensus.activeSpecialist?.domain ?? consensus.ui.domainIcon
-        const specialistName = consensus.activeSpecialist?.displayName
-        const activeSpecialistId = consensus.activeSpecialist?.id
-        const specialistDomains = consensus.activeSpecialist?.domains
         const nextCaseState =
           consensus.caseState ??
           (consensus.stateSnapshot
@@ -667,9 +675,19 @@ export async function POST(request: Request): Promise<Response> {
           (nextCaseState
             ? (toCanonicalCaseStateSnapshot(nextCaseState) ?? undefined)
             : undefined) ??
-          (storedCaseState
-            ? (toCanonicalCaseStateSnapshot(storedCaseState) ?? undefined)
-            : undefined)
+          storedCaseRuntimeState ??
+          undefined
+        const leadPanel =
+          stateSnapshot?.domainPanels.find((panel) => panel.domain === stateSnapshot.leadDomain) ??
+          stateSnapshot?.domainPanels[0]
+        const activeDomain =
+          stateSnapshot?.leadDomain ?? consensus.activeSpecialist?.domain ?? consensus.ui.domainIcon
+        const activeSpecialistId = leadPanel?.selectedAgentId ?? consensus.activeSpecialist?.id
+        const specialistName =
+          formatAgentIdLabel(leadPanel?.selectedAgentId) ?? consensus.activeSpecialist?.displayName
+        const specialistDomains = leadPanel?.domain
+          ? [leadPanel.domain]
+          : consensus.activeSpecialist?.domains
 
         try {
           await persistence.persistChatTurn({
@@ -717,6 +735,24 @@ export async function POST(request: Request): Promise<Response> {
               message: 'persistCaseState failed, response still streamed',
               error,
               metadata: { conversationId, layer: 'case_state' },
+            })
+          }
+        } else if (stateSnapshot) {
+          try {
+            await persistence.persistCaseRuntimeState({
+              userId,
+              conversationId,
+              caseState: stateSnapshot,
+            })
+          } catch (error) {
+            console.error('[chat/send] persistCaseState failed, continuing in fallback mode', error)
+            await logChatFallbackEvent({
+              phase: 'PERSIST_CHAT_TURN',
+              requestId,
+              userId,
+              message: 'persistCaseState failed, response still streamed',
+              error,
+              metadata: { conversationId, layer: 'case_state_runtime_fallback' },
             })
           }
         }

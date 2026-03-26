@@ -2,7 +2,7 @@ Stato progetto
 
 Obiettivo
 
-Chiudere davvero la Fase 1 shared text/live con persistenza canonica di `stateSnapshot`, read path canonical-first, compat layer ridotto a fallback controllato e campagna finale minima di test text/live/reload.
+Chiudere l'architettura shared text/live sul target canonical-first: un solo runtime canonico multi-dominio, live/text come adapter dello stesso stato, compat legacy confinato e nessuna seconda architettura concorrente.
 
 Fatto
 
@@ -47,15 +47,54 @@ Fatto
   - `fromStoredCaseState()` declassata a facade legacy-safe
   - `tests/api/case-persistence.test.ts` esteso ai 6 casi minimi richiesti
   - validazione verde con test del modulo + `npm run typecheck`
+- primo consumer canonical-first migrato in `src/app/api/chat/send/chatPersistence.ts`:
+  - `RoutePersistenceDeps` espone ora `getCaseRuntimeState()` e `persistCaseRuntimeState()`
+  - `persistCaseState()` resta compatibile ma converge sul write path canonico quando possibile
+  - `tests/api/chat-send-persistence.test.ts` copre read/write canonico nel deps layer
+  - validazione verde con `npm run test -- tests/api/chat-send-persistence.test.ts tests/api/case-persistence.test.ts` e `npm run typecheck`
+- `src/app/api/chat/send/route.ts` migrato al boundary canonico:
+  - usa `getCaseRuntimeState()` come primary read path
+  - passa `caseStateSnapshot` all'orchestrator
+  - usa `persistCaseState()` quando esiste `nextCaseState` e `persistCaseRuntimeState()` solo come fallback runtime
+  - test mirati verdi su route text + persistence
+- `src/app/api/live-token/route.ts` migrato al boundary canonico:
+  - bootstrap live legge ora `readCanonicalCaseRuntimeState()` come source of truth
+  - `activeAgentId` viene risolto dal lead panel canonico
+  - test mirato verde sul bootstrap con snapshot persistito
+- `src/app/api/conversations/[id]/route.ts` migrato al boundary canonico:
+  - reload conversazione legge ora direttamente `readCanonicalCaseRuntimeState()`
+  - il payload esterno resta invariato ma il source of truth non passa piu` dalla facade legacy
+- `src/app/api/chat/live-sync/route.ts` migrato al boundary canonico:
+  - usa `getCaseRuntimeState()` come primary read path
+  - persiste in canonical-first anche nel ramo live
+  - seleziona l'agente tool per-call dal panel/domain context invece di usare un solo `capabilityAgentId` globale
+- cleanup snapshot-first del bordo text/live completato:
+  - `src/app/api/chat/send/route.ts` emette ora `ui.state` con `domain`, `activeSpecialistId`, `specialistName` derivati dal lead panel canonico quando disponibile
+  - `src/contexts/ChatContext.tsx` espone `stateSnapshot` nel context e lo usa come fonte primaria per dominio/specialista
+  - `src/components/chat/ChatShell.tsx` deriva ora lo stato visuale dal canonico prima dei fallback legacy
+- cleanup minimo del core orchestration completato:
+  - `src/lib/ai/orchestrator/orchestrator.ts` usa `caseStateSnapshot` come base prioritaria quando il legacy e` in conflitto
+  - `src/lib/ai/orchestrator/fastPaths.ts` usa il panel canonico come source of truth per il compatibility speaker
+- copertura finale estesa aggiunta:
+  - `tests/api/chat-orchestration.test.ts`
+  - `tests/api/multi-agent-execution.test.ts`
+  - aggiornato `tests/api/chat-send-persistence.test.ts`
+- validazioni finali estese verdi:
+  - `npm run typecheck`
+  - `npm run build`
+  - `npm run test -- tests/api/chat-orchestration.test.ts tests/api/multi-agent-execution.test.ts tests/api/chat-send-persistence.test.ts tests/api/live-sync-stateSnapshot.test.ts tests/api/live-token-fallback-observability.test.ts tests/api/conversation-stateSnapshot-route.test.ts tests/api/case-persistence.test.ts`
+  - `npm run test -- tests/api/chat-send-security.test.ts tests/api/live-token-security.test.ts tests/api/domain-canonical-write-read.e2e.test.ts`
 
 In corso
 
-Nessun blocco nel perimetro del modulo `persistence.ts`; consumer non ancora migrati per scelta esplicita di scope.
+- nessun blocco implementativo obbligatorio aperto
+- restano solo compat legacy residui e warning infrastrutturali non bloccanti
 
 Prossimo
 
-- primo consumer corretto da migrare, se richiesto: `src/app/api/chat/send/chatPersistence.ts`
-- follow-up solo se richiesto: ulteriore riduzione/rimozione del compat layer in fase successiva
+- eventuali follow-up non bloccanti:
+  - ridurre ulteriormente il compat layer interno al protocol engine se emergera` un failure reale
+  - pulire warning infrastrutturali/applicativi residui non legati al runtime shared
 
 Rischi
 
@@ -63,7 +102,12 @@ Rischi
 - resta rischio non bloccante: il bootstrap/test live reale con microfono/browser non e` verificabile dal terminale; la chiusura Fase 1 e` supportata da route tests, integration tests e smoke HTTP locali
 - resta rischio non bloccante: agenti lenti possono ancora andare in timeout al `Round 1`, ma non pagano piu` il doppio timeout al `Round 2`
 - resta debito dichiarato per fase successiva: rimozione del compat layer residuo quando non serviranno piu` dati legacy
+- resta compat legacy residuo non bloccante: `CaseState` sopravvive come adapter interno per continuity del protocol e per record storici senza snapshot
+- restano warning non bloccanti di build/runtime:
+  - warning Next su workspace root multipli
+  - deprecazione convenzione `middleware` -> `proxy`
+- resta rischio non bloccante: il live browser reale con microfono/camera non e` verificabile dal terminale, ma bootstrap/post-turn/tool semantics sono coperti da test di route e integrazione
 
 Ultimo aggiornamento
 
-2026-03-26 23:20
+2026-03-26 23:55

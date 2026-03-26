@@ -111,9 +111,9 @@ export type AgentInput = {
   conversationId: string
   message: string
   domainHint?: Domain
-  /** Canonical protocol state for the conversation. */
+  /** Legacy compatibility adapter for the protocol engine during the migration window. */
   caseState?: CaseState | null
-  /** Phase 1 shared canonical snapshot, optional during compatibility window. */
+  /** Canonical runtime snapshot — primary source of truth for orchestration input. */
   caseStateSnapshot?: CanonicalCaseStateSnapshot | null
   contextPack: ContextPack
   constraints?: {
@@ -298,9 +298,9 @@ export type ConsensusResult = {
   toolCallsToExecute: ToolCall[]
   /** Active specialist for this turn (set by orchestrator) */
   activeSpecialist?: ActiveSpecialist
-  /** Canonical case state after protocol evaluation for the current turn. */
+  /** Legacy compatibility adapter emitted for protocol continuity during migration. */
   caseState?: CaseState
-  /** Phase 1 shared canonical snapshot for text/live transport and persistence. */
+  /** Canonical case runtime snapshot for text/live transport and persistence. */
   stateSnapshot?: CanonicalCaseStateSnapshot
   /** Protocol events emitted by the canonical case engine. */
   protocolEvents?: CaseProtocolEvent[]

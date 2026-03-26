@@ -1,5 +1,9 @@
 import { AgentProfile, AgentInput, ConsensusResult } from '../types'
-import { deriveActiveSpecialistFromCaseState } from '../case/compat'
+import {
+  applyCanonicalSnapshotToLegacyCaseState,
+  deriveActiveSpecialistFromCaseState,
+  toCanonicalCaseStateSnapshot,
+} from '../case/compat'
 import { advanceCaseState, detectRequestedAgentId, getCaseRoutingDomain } from '../case/protocol'
 import {
   detectDomainFromText,
@@ -89,14 +93,23 @@ export async function orchestrate(
     }),
   ]
 
+  const currentCaseState =
+    input.caseStateSnapshot != null
+      ? applyCanonicalSnapshotToLegacyCaseState({
+          snapshot: input.caseStateSnapshot,
+          current: input.caseState ?? null,
+        })
+      : (input.caseState ?? null)
+
   const caseProtocol = advanceCaseState({
-    current: input.caseState ?? null,
+    current: currentCaseState,
     conversationId: input.conversationId,
     message: input.message,
     detectedDomain,
     allDomains,
     team: deps.team,
   })
+  const nextStateSnapshot = toCanonicalCaseStateSnapshot(caseProtocol.caseState) ?? undefined
   const activeSpecialist = deriveActiveSpecialistFromCaseState(caseProtocol.caseState, deps.team)
   const domainHint = getCaseRoutingDomain(caseProtocol.caseState, deps.team, detectedDomain)
   const requestedSpecialistId = detectRequestedAgentId(input.message, deps.team)
@@ -104,10 +117,10 @@ export async function orchestrate(
     buildSpecialistModeResolvedTraceEvent({
       step: 2,
       requestedSpecialistId,
-      previousActiveSpecialistId: input.caseState?.activeSpeakerAgentId ?? null,
+      previousActiveSpecialistId: currentCaseState?.activeSpeakerAgentId ?? null,
       activeSpecialist,
       exitSpecialistMode:
-        input.caseState?.protocolState === 'consult_active_takeover' &&
+        currentCaseState?.protocolState === 'consult_active_takeover' &&
         caseProtocol.caseState.protocolState === 'owner_active',
       reason:
         caseProtocol.events[0]?.kind === 'return_baton'
@@ -276,6 +289,7 @@ export async function orchestrate(
     return {
       ...consensusOutcome.baseConsensus,
       caseState: caseProtocol.caseState,
+      stateSnapshot: nextStateSnapshot,
       protocolEvents: caseProtocol.events,
       finalMessageMarkdown: triage.message,
       quickReplies: triage.quickReplies,
@@ -344,6 +358,7 @@ export async function orchestrate(
   return {
     ...consensusOutcome.baseConsensus,
     caseState: caseProtocol.caseState,
+    stateSnapshot: nextStateSnapshot,
     protocolEvents: caseProtocol.events,
     gatingQuestions: finalInterviewQuestions,
     toolCallsToExecute: toolCallPlan.toolCallsToExecute,

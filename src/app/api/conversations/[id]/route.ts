@@ -1,6 +1,5 @@
 import { getAuthUserId } from '@/lib/auth'
-import { toCanonicalCaseStateSnapshot } from '@/lib/ai/case/compat'
-import { fromStoredCaseState } from '@/lib/ai/case/persistence'
+import { readCanonicalCaseRuntimeState } from '@/lib/ai/case/persistence'
 import { decodeAssistantStoredContent } from '@/lib/chat/thinkingPersistence'
 import { prisma } from '@/lib/prisma'
 import { errorResponse } from '@/lib/security/errorSchema'
@@ -48,7 +47,7 @@ export async function GET(
   const caseStateRow = await prisma.caseState.findUnique({
     where: { conversationId: conv.id },
   })
-  const stateSnapshot = toCanonicalCaseStateSnapshot(fromStoredCaseState(caseStateRow))
+  const stateSnapshot = readCanonicalCaseRuntimeState(caseStateRow)
 
   return Response.json({
     id: conv.id,

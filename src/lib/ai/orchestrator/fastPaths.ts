@@ -7,6 +7,14 @@ import {
 } from './inputInference'
 import { detectDomainFromText } from '../domain/domainDetection'
 
+function getCompatibilitySpeakerId(input: AgentInput): string | undefined {
+  const leadPanel =
+    input.caseStateSnapshot?.domainPanels.find(
+      (panel) => panel.domain === input.caseStateSnapshot?.leadDomain,
+    ) ?? input.caseStateSnapshot?.domainPanels[0]
+  return leadPanel?.selectedAgentId ?? input.caseState?.activeSpeakerAgentId ?? undefined
+}
+
 export type FastPathResult = { handled: true; result: ConsensusResult } | { handled: false }
 
 /** Pure greeting patterns — no topic or domain signal */
@@ -85,7 +93,7 @@ export function tryAgeQuestionFastPath(input: AgentInput): FastPathResult {
       ? `Hai ${age} anni.`
       : `Non ho la tua data di nascita registrata.${observedAgeText} Per calcolare la tua età indicami la data di nascita in formato gg/mm/aaaa.`
 
-  const compatibilitySpeakerId = input.caseState?.activeSpeakerAgentId
+  const compatibilitySpeakerId = getCompatibilitySpeakerId(input)
 
   return {
     handled: true,

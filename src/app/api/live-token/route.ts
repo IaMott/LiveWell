@@ -10,8 +10,7 @@ import { logApiErrorEvent } from '@/lib/monitoring/apiErrorEvents'
 import * as fs from 'fs'
 import * as path from 'path'
 import { buildSharedAgentRules } from '@/lib/ai/orchestrator/agentPrompt'
-import { toCanonicalCaseStateSnapshot } from '@/lib/ai/case/compat'
-import { fromStoredCaseState } from '@/lib/ai/case/persistence'
+import { readCanonicalCaseRuntimeState } from '@/lib/ai/case/persistence'
 import type { CanonicalCaseStateSnapshot } from '@/lib/ai/types'
 
 const requestSchema = z.object({
@@ -185,18 +184,13 @@ async function getLiveCaseBootstrap(
         orderBy: { updatedAt: 'desc' },
       })
   if (!cs) return { activeAgentId: null, stateSnapshot: null }
-  const caseState = fromStoredCaseState(cs)
-  if (!caseState) return { activeAgentId: null, stateSnapshot: null }
-  const stateSnapshot = toCanonicalCaseStateSnapshot(caseState)
+  const stateSnapshot = readCanonicalCaseRuntimeState(cs)
+  if (!stateSnapshot) return { activeAgentId: null, stateSnapshot: null }
   const leadPanel =
     stateSnapshot?.domainPanels.find((panel) => panel.domain === stateSnapshot.leadDomain) ??
     stateSnapshot?.domainPanels[0]
   return {
-    activeAgentId:
-      leadPanel?.selectedAgentId ??
-      caseState.activeSpeakerAgentId ??
-      caseState.ownerAgentId ??
-      null,
+    activeAgentId: leadPanel?.selectedAgentId ?? null,
     stateSnapshot,
   }
 }

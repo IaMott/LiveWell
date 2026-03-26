@@ -1,8 +1,14 @@
 import { Prisma } from '@prisma/client'
 import type { CaseState } from '@/lib/ai/case/state'
+import {
+  applyCanonicalSnapshotToLegacyCaseState,
+  toCanonicalCaseStateSnapshot,
+} from '@/lib/ai/case/compat'
 import { buildContextPack } from '@/lib/ai/context/contextPackBuilder'
 import {
+  type CanonicalCaseRuntimeState,
   fromStoredCaseState,
+  readCanonicalCaseRuntimeState,
   toStoredCaseState,
   toStoredCaseStateWithCanonicalSnapshot,
 } from '@/lib/ai/case/persistence'
@@ -38,7 +44,15 @@ export type RoutePersistenceDeps = {
     userId: string
     title: string
   }) => Promise<{ id: string }>
+  getCaseRuntimeState: (input: {
+    conversationId: string
+  }) => Promise<CanonicalCaseRuntimeState | null>
   getCaseState: (input: { conversationId: string }) => Promise<CaseState | null>
+  persistCaseRuntimeState: (input: {
+    userId: string
+    conversationId: string
+    caseState: CanonicalCaseRuntimeState
+  }) => Promise<void>
   persistCaseState: (input: {
     userId: string
     conversationId: string
@@ -80,7 +94,9 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
     return {
       findConversationById: async () => null,
       createConversation: async ({ id }) => ({ id: id ?? crypto.randomUUID() }),
+      getCaseRuntimeState: async () => null,
       getCaseState: async () => null,
+      persistCaseRuntimeState: async () => undefined,
       persistCaseState: async () => undefined,
       persistChatTurn: async () => undefined,
       buildContextPack: async ({ userId, role }) => buildDefaultContextPack(userId, role),
@@ -115,6 +131,25 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
     }
   }
 
+  async function upsertStoredCaseState(
+    conversationId: string,
+    userId: string,
+    nextStored: Record<string, unknown>,
+  ): Promise<void> {
+    const upsert = getUpsert('caseState')
+    if (!upsert) return
+
+    await upsert({
+      where: { conversationId },
+      create: {
+        userId,
+        conversationId,
+        ...nextStored,
+      },
+      update: nextStored,
+    })
+  }
+
   return {
     findConversationById: async (id) =>
       prisma.conversation.findUnique({
@@ -126,25 +161,40 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
         data: { ...(id ? { id } : {}), userId, title },
         select: { id: true },
       }),
+    getCaseRuntimeState: async ({ conversationId }) => {
+      const row = await findUniqueIfAvailable<Record<string, unknown>>('caseState', {
+        where: { conversationId },
+      })
+      return readCanonicalCaseRuntimeState(row)
+    },
     getCaseState: async ({ conversationId }) => {
       const row = await findUniqueIfAvailable<Record<string, unknown>>('caseState', {
         where: { conversationId },
       })
       return fromStoredCaseState(row)
     },
-    persistCaseState: async ({ userId, conversationId, caseState }) => {
-      const upsert = getUpsert('caseState')
-      if (!upsert) return
-      const nextStored = toStoredCaseStateWithCanonicalSnapshot(caseState)
-      await upsert({
-        where: { conversationId },
-        create: {
-          userId,
-          conversationId,
-          ...nextStored,
-        },
-        update: nextStored,
+    persistCaseRuntimeState: async ({ userId, conversationId, caseState }) => {
+      const legacyCaseState = applyCanonicalSnapshotToLegacyCaseState({
+        snapshot: caseState,
+        current: null,
       })
+      const nextStored = toStoredCaseStateWithCanonicalSnapshot(legacyCaseState)
+      await upsertStoredCaseState(conversationId, userId, nextStored)
+    },
+    persistCaseState: async ({ userId, conversationId, caseState }) => {
+      const canonicalCaseState = toCanonicalCaseStateSnapshot(caseState)
+      if (canonicalCaseState) {
+        const legacyCaseState = applyCanonicalSnapshotToLegacyCaseState({
+          snapshot: canonicalCaseState,
+          current: caseState,
+        })
+        const nextStored = toStoredCaseStateWithCanonicalSnapshot(legacyCaseState)
+        await upsertStoredCaseState(conversationId, userId, nextStored)
+        return
+      }
+
+      const nextStored = toStoredCaseState(caseState)
+      await upsertStoredCaseState(conversationId, userId, nextStored)
     },
     persistChatTurn: async ({
       userId,

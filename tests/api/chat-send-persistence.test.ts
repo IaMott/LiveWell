@@ -53,6 +53,19 @@ vi.mock('@/lib/prisma', () => ({
   prisma: prismaMock,
 }))
 
+function extractSseEvent(body: string, type: string): Record<string, unknown> | null {
+  for (const line of body.split('\n')) {
+    if (!line.startsWith('data: ')) continue
+    try {
+      const parsed = JSON.parse(line.slice(6)) as Record<string, unknown>
+      if (parsed.type === type) return parsed
+    } catch {
+      // ignore malformed SSE lines in tests
+    }
+  }
+  return null
+}
+
 describe('/api/chat/send persistence integration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -265,8 +278,288 @@ describe('/api/chat/send persistence integration', () => {
     expect(prismaMock.conversation.upsert).toHaveBeenCalledTimes(2)
   })
 
+  it('reads canonical runtime state via RoutePersistenceDeps when stateSnapshot is present', async () => {
+    vi.resetModules()
+    prismaMock.caseState.findUnique.mockResolvedValue({
+      conversationId: 'conv-db-1',
+      ownerAgentId: 'legacy-owner',
+      activeSpeakerAgentId: 'legacy-speaker',
+      protocolState: 'consult_active_takeover',
+      stateSnapshot: {
+        schemaVersion: 1,
+        conversationId: 'conv-db-1',
+        activeDomains: ['nutrition'],
+        domainPanels: [
+          {
+            domain: 'nutrition',
+            selectedAgentId: 'dietista',
+            candidateAgentIds: ['dietista'],
+            status: 'active',
+            priorityScore: 8,
+            lastReasoningAt: null,
+            pendingNeeds: [],
+          },
+        ],
+        leadDomain: 'nutrition',
+        speakerPolicy: 'lead',
+        conversationFocus: {
+          activeProblems: ['gonfiore'],
+          activeGoals: ['ridurre sintomi'],
+          activeConstraints: [],
+          summary: 'focus nutrizione',
+        },
+        coordinationState: {
+          crossDomainConflicts: [],
+          dependencies: [],
+          needsReview: false,
+        },
+        sharedOpenQuestions: [],
+        domainOpenQuestions: {},
+        updatedAt: '2026-03-26T23:45:00.000Z',
+      },
+    })
+
+    const { createDbPersistenceDeps } = await import('@/app/api/chat/send/chatPersistence')
+    const deps = createDbPersistenceDeps(true)
+    const state = await deps.getCaseRuntimeState({ conversationId: 'conv-db-1' })
+
+    expect(state?.leadDomain).toBe('nutrition')
+    expect(state?.activeDomains).toEqual(['nutrition'])
+    expect(state?.domainPanels[0]?.selectedAgentId).toBe('dietista')
+  })
+
+  it('writes canonical runtime state through RoutePersistenceDeps with snapshot as primary payload', async () => {
+    vi.resetModules()
+    const { createDbPersistenceDeps } = await import('@/app/api/chat/send/chatPersistence')
+    const deps = createDbPersistenceDeps(true)
+
+    await deps.persistCaseRuntimeState({
+      userId: 'u-db',
+      conversationId: 'conv-db-1',
+      caseState: {
+        schemaVersion: 1,
+        conversationId: 'conv-db-1',
+        activeDomains: ['health'],
+        domainPanels: [
+          {
+            domain: 'health',
+            selectedAgentId: 'fisiatra',
+            candidateAgentIds: ['fisiatra', 'mmg'],
+            status: 'active',
+            priorityScore: 10,
+            lastReasoningAt: null,
+            pendingNeeds: [],
+          },
+        ],
+        leadDomain: 'health',
+        speakerPolicy: 'lead',
+        conversationFocus: {
+          activeProblems: ['dolore lombare'],
+          activeGoals: ['ridurre dolore'],
+          activeConstraints: [],
+          summary: 'focus clinico',
+        },
+        coordinationState: {
+          crossDomainConflicts: [],
+          dependencies: [],
+          needsReview: false,
+        },
+        sharedOpenQuestions: [],
+        domainOpenQuestions: {},
+        updatedAt: '2026-03-26T23:46:00.000Z',
+      },
+    })
+
+    expect(prismaMock.caseState.upsert).toHaveBeenCalledTimes(1)
+    expect(prismaMock.caseState.upsert.mock.calls[0]?.[0]).toMatchObject({
+      where: { conversationId: 'conv-db-1' },
+      create: {
+        userId: 'u-db',
+        conversationId: 'conv-db-1',
+        stateSnapshot: expect.objectContaining({
+          leadDomain: 'health',
+          activeDomains: ['health'],
+        }),
+      },
+      update: {
+        stateSnapshot: expect.objectContaining({
+          leadDomain: 'health',
+          activeDomains: ['health'],
+        }),
+      },
+    })
+  })
+
+  it('passes canonical caseStateSnapshot to orchestrate while keeping a legacy adapter for caseState', async () => {
+    prismaMock.caseState.findUnique.mockResolvedValue({
+      conversationId: 'conv-db-1',
+      ownerAgentId: 'legacy-owner',
+      activeSpeakerAgentId: 'legacy-speaker',
+      protocolState: 'owner_active',
+      stateSnapshot: {
+        schemaVersion: 1,
+        conversationId: 'conv-db-1',
+        activeDomains: ['nutrition'],
+        domainPanels: [
+          {
+            domain: 'nutrition',
+            selectedAgentId: 'dietista',
+            candidateAgentIds: ['dietista'],
+            status: 'active',
+            priorityScore: 9,
+            lastReasoningAt: null,
+            pendingNeeds: [],
+          },
+        ],
+        leadDomain: 'nutrition',
+        speakerPolicy: 'lead',
+        conversationFocus: {
+          activeProblems: ['gonfiore'],
+          activeGoals: ['ridurre sintomi'],
+          activeConstraints: [],
+          summary: 'focus nutrizione',
+        },
+        coordinationState: {
+          crossDomainConflicts: [],
+          dependencies: [],
+          needsReview: false,
+        },
+        sharedOpenQuestions: [],
+        domainOpenQuestions: {},
+        updatedAt: '2026-03-26T23:50:00.000Z',
+      },
+    })
+
+    vi.resetModules()
+    const orchestrateMock = vi.fn(async (_deps, input) => ({
+      domain: 'nutrition',
+      finalMessageMarkdown: 'ok',
+      toolCallsToExecute: [],
+      caseState: input.caseState ?? undefined,
+      stateSnapshot: input.caseStateSnapshot ?? undefined,
+      protocolEvents: [],
+      ui: { domainIcon: 'nutrition', moodScore: 50, sectionScores: { nutrition: 60, general: 50 } },
+      safety: { escalation: 'none' },
+      debug: { selectedAgents: [], conflicts: [] },
+    }))
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: orchestrateMock,
+    }))
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const res = await POST(
+      new Request('http://localhost/api/chat/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'u-db',
+        },
+        body: JSON.stringify({ message: 'ho gonfiore dopo i pasti' }),
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    await res.text()
+
+    expect(orchestrateMock).toHaveBeenCalledTimes(1)
+    expect(orchestrateMock.mock.calls[0]?.[1].caseStateSnapshot).toMatchObject({
+      leadDomain: 'nutrition',
+      activeDomains: ['nutrition'],
+    })
+    expect(orchestrateMock.mock.calls[0]?.[1].caseState).toMatchObject({
+      ownerAgentId: 'legacy-owner',
+      activeSpeakerAgentId: 'dietista',
+    })
+  })
+
+  it('derives ui.state compatibility fields from the canonical lead panel when activeSpecialist is absent', async () => {
+    prismaMock.caseState.findUnique.mockResolvedValue(null)
+
+    vi.resetModules()
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: vi.fn(async () => ({
+        domain: 'nutrition',
+        finalMessageMarkdown: 'ok',
+        toolCallsToExecute: [],
+        caseState: undefined,
+        stateSnapshot: {
+          schemaVersion: 1,
+          conversationId: 'conv-db-1',
+          activeDomains: ['nutrition', 'health'],
+          domainPanels: [
+            {
+              domain: 'nutrition',
+              selectedAgentId: 'dietista',
+              candidateAgentIds: ['dietista'],
+              status: 'active',
+              priorityScore: 9,
+              lastReasoningAt: null,
+              pendingNeeds: [],
+            },
+            {
+              domain: 'health',
+              selectedAgentId: 'fisiatra',
+              candidateAgentIds: ['fisiatra'],
+              status: 'active',
+              priorityScore: 7,
+              lastReasoningAt: null,
+              pendingNeeds: [],
+            },
+          ],
+          leadDomain: 'nutrition',
+          speakerPolicy: 'lead',
+          conversationFocus: {
+            activeProblems: ['gonfiore'],
+            activeGoals: ['capire la causa'],
+            activeConstraints: [],
+            summary: 'focus panel',
+          },
+          coordinationState: {
+            crossDomainConflicts: [],
+            dependencies: [],
+            needsReview: false,
+          },
+          sharedOpenQuestions: [],
+          domainOpenQuestions: {},
+          updatedAt: '2026-03-26T23:58:00.000Z',
+        },
+        protocolEvents: [],
+        ui: { domainIcon: 'general', moodScore: 50, sectionScores: { nutrition: 60, general: 50 } },
+        safety: { escalation: 'none' },
+        debug: { selectedAgents: ['dietista', 'fisiatra'], conflicts: [] },
+      })),
+    }))
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const res = await POST(
+      new Request('http://localhost/api/chat/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'u-db',
+        },
+        body: JSON.stringify({ message: 'ho gonfiore dopo i pasti' }),
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.text()
+    const uiState = extractSseEvent(body, 'ui.state')
+
+    expect(uiState).toMatchObject({
+      domain: 'nutrition',
+      activeSpecialistId: 'dietista',
+      specialistName: 'Dietista',
+      specialistDomains: ['nutrition'],
+      stateSnapshot: expect.objectContaining({
+        leadDomain: 'nutrition',
+      }),
+    })
+  })
+
   it('smoke: /api/chat/send back-pain request persists AgentWorkspace proposals', async () => {
     vi.resetModules()
+    vi.doUnmock('@/lib/ai/orchestrator/orchestrator')
     const { POST } = await import('@/app/api/chat/send/route')
 
     const req = new Request('http://localhost/api/chat/send', {

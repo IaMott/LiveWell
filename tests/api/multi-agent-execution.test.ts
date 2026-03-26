@@ -594,6 +594,62 @@ describe('tryAgeQuestionFastPath', () => {
     }
   })
 
+  it('domanda età con snapshot canonico e legacy in conflitto → usa il panel canonico', () => {
+    const result = tryAgeQuestionFastPath({
+      requestId: 'r',
+      userId: 'u',
+      conversationId: 'c',
+      message: 'quanti anni ho?',
+      caseState: {
+        conversationId: 'c',
+        ownerAgentId: 'mmg',
+        activeSpeakerAgentId: 'mmg',
+        protocolState: 'owner_active',
+        takeoverTurns: 0,
+        loopCount: 0,
+        handoffCount: 0,
+      },
+      caseStateSnapshot: {
+        schemaVersion: 1,
+        conversationId: 'c',
+        activeDomains: ['nutrition'],
+        domainPanels: [
+          {
+            domain: 'nutrition',
+            selectedAgentId: 'dietista',
+            candidateAgentIds: ['dietista'],
+            status: 'active',
+            priorityScore: 9,
+            lastReasoningAt: null,
+            pendingNeeds: [],
+          },
+        ],
+        leadDomain: 'nutrition',
+        speakerPolicy: 'lead',
+        conversationFocus: {
+          activeProblems: [],
+          activeGoals: [],
+          activeConstraints: [],
+          summary: null,
+        },
+        coordinationState: {
+          crossDomainConflicts: [],
+          dependencies: [],
+          needsReview: false,
+        },
+        sharedOpenQuestions: [],
+        domainOpenQuestions: {},
+        updatedAt: '2026-03-26T23:59:00.000Z',
+      },
+      contextPack: BASE_CONTEXT,
+    })
+
+    expect(result.handled).toBe(true)
+    if (result.handled) {
+      expect(result.result.activeSpecialist?.id).toBe('dietista')
+    }
+  })
+
   it('messaggio normale → not handled', () => {
     const result = tryAgeQuestionFastPath({
       requestId: 'r',

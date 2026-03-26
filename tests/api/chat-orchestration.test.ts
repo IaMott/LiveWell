@@ -61,6 +61,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { orchestrate } from '@/lib/ai/orchestrator/orchestrator'
 import type { AgentInput, AgentProfile, ContextPack, Domain, ToolCall } from '@/lib/ai/types'
+import type { CaseState } from '@/lib/ai/case/state'
 
 // ── Mock env (no production checks in tests) ──────────────────────────────────
 vi.mock('@/lib/validators/env', () => ({
@@ -268,6 +269,8 @@ function makeInput(
     domainHint?: Domain
     contextPack?: ContextPack
     conversationId?: string
+    caseState?: CaseState | null
+    caseStateSnapshot?: AgentInput['caseStateSnapshot']
   } = {},
 ): AgentInput {
   return {
@@ -276,7 +279,8 @@ function makeInput(
     conversationId: opts.conversationId ?? 'conv-test',
     message,
     domainHint: opts.domainHint,
-    caseState: null,
+    caseState: opts.caseState ?? null,
+    caseStateSnapshot: opts.caseStateSnapshot ?? null,
     contextPack: opts.contextPack ?? makeContextPack(),
   }
 }
@@ -820,6 +824,63 @@ describe('chat orchestration — pipeline completa', () => {
 
     // La pipeline deve produrre una risposta senza crashare
     expect(result.finalMessageMarkdown).toBeTruthy()
+  })
+
+  it('22b. usa caseStateSnapshot come base canonica anche se il legacy e` in conflitto', async () => {
+    const llm = makeMockLlm('Continuiamo dal panel nutrizione.', {
+      domain: 'nutrition',
+      questions: [],
+    })
+
+    const result = await orchestrate(
+      makeOrchDeps(llm),
+      makeInput('continua pure', {
+        caseState: {
+          conversationId: 'conv-test',
+          ownerAgentId: 'mmg',
+          activeSpeakerAgentId: 'mmg',
+          protocolState: 'owner_active',
+          takeoverTurns: 0,
+          loopCount: 0,
+          handoffCount: 0,
+        },
+        caseStateSnapshot: {
+          schemaVersion: 1,
+          conversationId: 'conv-test',
+          activeDomains: ['nutrition'],
+          domainPanels: [
+            {
+              domain: 'nutrition',
+              selectedAgentId: 'dietista',
+              candidateAgentIds: ['dietista'],
+              status: 'active',
+              priorityScore: 9,
+              lastReasoningAt: null,
+              pendingNeeds: [],
+            },
+          ],
+          leadDomain: 'nutrition',
+          speakerPolicy: 'lead',
+          conversationFocus: {
+            activeProblems: ['gonfiore'],
+            activeGoals: ['capire i trigger'],
+            activeConstraints: [],
+            summary: 'focus nutrizione',
+          },
+          coordinationState: {
+            crossDomainConflicts: [],
+            dependencies: [],
+            needsReview: false,
+          },
+          sharedOpenQuestions: [],
+          domainOpenQuestions: {},
+          updatedAt: '2026-03-26T23:58:00.000Z',
+        },
+      }),
+    )
+
+    expect(result.activeSpecialist?.id).toBe('dietista')
+    expect(result.stateSnapshot?.leadDomain).toBe('nutrition')
   })
 
   // ── 23. Agente timeout → fallback proposal, risposta prodotta ─────────────

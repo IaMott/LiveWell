@@ -9,7 +9,7 @@ import {
 import { orchestrate } from '@/lib/ai/orchestrator/orchestrator'
 import { createLlmWithFallback } from '@/lib/ai/llmFactory'
 import { loadTeam } from '@/lib/ai/team/loader'
-import type { AgentInput } from '@/lib/ai/types'
+import type { AgentInput, Domain, ToolCall } from '@/lib/ai/types'
 import { ALLOWED_TOOL_NAMES, isAllowedToolName } from '@/lib/tools/toolRegistry'
 import { createToolExecutor } from '@/lib/tools/toolExecutor'
 import { realToolHandlers } from '@/lib/tools/handlers'
@@ -22,6 +22,37 @@ const bodySchema = z.object({
   conversationId: z.string().min(1),
   userMessage: z.string().trim().min(1).max(4000),
 })
+
+function normalizeToolDomain(value: string | null | undefined): Domain | null {
+  if (
+    value === 'general' ||
+    value === 'nutrition' ||
+    value === 'health' ||
+    value === 'training' ||
+    value === 'mindfulness' ||
+    value === 'inspiration' ||
+    value === 'coordination'
+  ) {
+    return value
+  }
+
+  if (value === 'personal' || value === 'career' || value === 'financial') {
+    return 'general'
+  }
+
+  return null
+}
+
+function inferToolCallDomain(call: ToolCall): Domain | null {
+  const prefixDomain = normalizeToolDomain(call.name.split('.')[0] ?? null)
+  if (prefixDomain) return prefixDomain
+
+  if (call.name === 'user.setAttribute' && call.args && typeof call.args === 'object') {
+    return normalizeToolDomain((call.args as { domain?: string }).domain)
+  }
+
+  return null
+}
 
 /**
  * POST /api/chat/live-sync
@@ -56,10 +87,14 @@ export async function POST(request: Request): Promise<Response> {
 
   const requestId = crypto.randomUUID()
   const contextPack = await persistence.buildContextPack({ userId, conversationId, role })
-  const storedCaseState = await persistence.getCaseState({ conversationId })
-  const storedStateSnapshot = storedCaseState
-    ? (toCanonicalCaseStateSnapshot(storedCaseState) ?? undefined)
-    : undefined
+  const storedCaseRuntimeState = await persistence.getCaseRuntimeState({ conversationId })
+  const storedCaseState = storedCaseRuntimeState
+    ? applyCanonicalSnapshotToLegacyCaseState({
+        snapshot: storedCaseRuntimeState,
+        current: await persistence.getCaseState({ conversationId }),
+      })
+    : await persistence.getCaseState({ conversationId })
+  const storedStateSnapshot = storedCaseRuntimeState ?? undefined
   const teamDirAbsolute = path.resolve(process.cwd(), 'TEAM')
   const team = loadTeam({ teamDirAbsolute, allowEmpty: true })
 
@@ -106,22 +141,40 @@ export async function POST(request: Request): Promise<Response> {
       liveStateSnapshot?.domainPanels.find(
         (panel) => panel.domain === liveStateSnapshot.leadDomain,
       ) ?? liveStateSnapshot?.domainPanels[0]
-    const capabilityAgentId =
-      liveLeadPanel?.selectedAgentId ??
-      consensus.activeSpecialist?.id ??
-      consensus.debug?.selectedAgents?.[0] ??
-      'orchestratore'
-    const capabilityTools = (
-      team.find((a) => a.id === capabilityAgentId)?.toolsAllowed ?? []
-    ).filter(isAllowedToolName)
 
     for (const call of consensus.toolCallsToExecute) {
+      const callDomain = inferToolCallDomain(call)
+      const callPanel =
+        liveStateSnapshot?.domainPanels.find((panel) => panel.domain === callDomain) ??
+        liveLeadPanel
+      const candidateAgentIds = [
+        callPanel?.selectedAgentId,
+        liveLeadPanel?.selectedAgentId,
+        consensus.activeSpecialist?.id,
+        consensus.debug?.selectedAgents?.[0],
+        'orchestratore',
+      ].filter((value, index, arr): value is string => !!value && arr.indexOf(value) === index)
+      const selectedAgent =
+        candidateAgentIds
+          .map((agentId) => team.find((agent) => agent.id === agentId))
+          .find(
+            (agent) =>
+              agent &&
+              (agent.toolsAllowed.length === 0 ||
+                agent.toolsAllowed.some((toolName) => toolName === call.name)),
+          ) ?? team.find((agent) => agent.id === candidateAgentIds[0])
+
       try {
         await executor.executeToolCall(call, {
           requestId,
           conversationId,
           actor: { userId, role, ownerModeEnabled },
-          agent: { id: capabilityAgentId, toolsAllowed: capabilityTools },
+          agent: selectedAgent
+            ? {
+                id: selectedAgent.id,
+                toolsAllowed: selectedAgent.toolsAllowed.filter(isAllowedToolName),
+              }
+            : undefined,
           source: 'assistant',
           confirmedByUser: false,
           confirmToken: undefined,
@@ -144,6 +197,16 @@ export async function POST(request: Request): Promise<Response> {
   if (nextCaseState) {
     try {
       await persistence.persistCaseState({ userId, conversationId, caseState: nextCaseState })
+    } catch {
+      // best-effort
+    }
+  } else if (consensus.stateSnapshot) {
+    try {
+      await persistence.persistCaseRuntimeState({
+        userId,
+        conversationId,
+        caseState: consensus.stateSnapshot,
+      })
     } catch {
       // best-effort
     }
