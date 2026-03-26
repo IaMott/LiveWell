@@ -2,11 +2,15 @@
 
 import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react'
 import type React from 'react'
-import type { Domain } from '@/lib/ai/types'
+import type { CanonicalCaseStateSnapshot, Domain } from '@/lib/ai/types'
 import { DOMAIN_COLORS, getDomainColor } from '@/lib/ui/domainColors'
 import { LiveModal } from './live/LiveModal'
 
 const ALLOWED_UPLOAD_TYPES = 'image/*,.pdf,.txt,.md,.doc,.docx,.csv,.json'
+
+function stateSnapshotKeyForConversation(conversationId: string): string {
+  return `livewell_case_state_snapshot:${conversationId}`
+}
 
 // ── Icons from design/icons/ ──────────────────────────────────────────────────
 
@@ -388,9 +392,28 @@ export function ChatInput({
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ conversationId: convId, userMessage: userMsg }),
-            }).catch(() => {
-              /* best-effort */
             })
+              .then((res) => (res.ok ? res.json() : null))
+              .then((syncData: { stateSnapshot?: CanonicalCaseStateSnapshot } | null) => {
+                if (!syncData?.stateSnapshot) return
+                const storageKey = stateSnapshotKeyForConversation(convId)
+                const serialized = JSON.stringify(syncData.stateSnapshot)
+                try {
+                  localStorage.setItem(storageKey, serialized)
+                  window.dispatchEvent(
+                    new StorageEvent('storage', {
+                      key: storageKey,
+                      newValue: serialized,
+                      storageArea: localStorage,
+                    }),
+                  )
+                } catch {
+                  /* best-effort */
+                }
+              })
+              .catch(() => {
+                /* best-effort */
+              })
           }
         }
       })

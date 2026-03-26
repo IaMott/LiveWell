@@ -4,7 +4,11 @@ import { checkRateLimit, getClientIp } from '@/lib/security/httpGuards'
 import { getAuthUserId, getAuthRole, getAuthOwnerMode } from '@/lib/auth'
 import { errorResponse } from '@/lib/security/errorSchema'
 import { logApiErrorEvent } from '@/lib/monitoring/apiErrorEvents'
-import { deriveActiveSpecialistFromCaseState } from '@/lib/ai/case/compat'
+import {
+  applyCanonicalSnapshotToLegacyCaseState,
+  deriveActiveSpecialistFromCaseState,
+  toCanonicalCaseStateSnapshot,
+} from '@/lib/ai/case/compat'
 import { buildCaseThinkingEvents } from '@/lib/ai/case/events'
 import { orchestrate, type ProgressEvent } from '@/lib/ai/orchestrator/orchestrator'
 import { resolveRoutingCandidates } from '@/lib/ai/orchestrator/routing'
@@ -517,6 +521,9 @@ export async function POST(request: Request): Promise<Response> {
             finalMessageMarkdown: fallbackText,
             toolCallsToExecute: [],
             caseState: storedCaseState ?? undefined,
+            stateSnapshot: storedCaseState
+              ? (toCanonicalCaseStateSnapshot(storedCaseState) ?? undefined)
+              : undefined,
             protocolEvents: [],
             activeSpecialist: caseActiveSpecialist,
             ui: {
@@ -647,6 +654,22 @@ export async function POST(request: Request): Promise<Response> {
         const specialistName = consensus.activeSpecialist?.displayName
         const activeSpecialistId = consensus.activeSpecialist?.id
         const specialistDomains = consensus.activeSpecialist?.domains
+        const nextCaseState =
+          consensus.caseState ??
+          (consensus.stateSnapshot
+            ? applyCanonicalSnapshotToLegacyCaseState({
+                snapshot: consensus.stateSnapshot,
+                current: storedCaseState,
+              })
+            : null)
+        const stateSnapshot =
+          consensus.stateSnapshot ??
+          (nextCaseState
+            ? (toCanonicalCaseStateSnapshot(nextCaseState) ?? undefined)
+            : undefined) ??
+          (storedCaseState
+            ? (toCanonicalCaseStateSnapshot(storedCaseState) ?? undefined)
+            : undefined)
 
         try {
           await persistence.persistChatTurn({
@@ -678,12 +701,12 @@ export async function POST(request: Request): Promise<Response> {
             metadata: { conversationId },
           })
         }
-        if (consensus.caseState) {
+        if (nextCaseState) {
           try {
             await persistence.persistCaseState({
               userId,
               conversationId,
-              caseState: consensus.caseState,
+              caseState: nextCaseState,
             })
           } catch (error) {
             console.error('[chat/send] persistCaseState failed, continuing in fallback mode', error)
@@ -730,7 +753,7 @@ export async function POST(request: Request): Promise<Response> {
         // ── Step 7: ui.state, tool results, complete ───────────────────────
         controller.enqueue(
           encoder.encode(
-            toSse({
+            `data: ${JSON.stringify({
               type: 'ui.state',
               domain: activeDomain,
               moodScore: consensus.ui.moodScore,
@@ -738,9 +761,10 @@ export async function POST(request: Request): Promise<Response> {
               specialistName,
               activeSpecialistId,
               specialistDomains,
+              stateSnapshot,
               // S1: Include conversationId so the client can sync newly-created conversations.
               conversationId,
-            }),
+            })}\n\n`,
           ),
         )
 

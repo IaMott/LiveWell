@@ -2,7 +2,10 @@ import path from 'node:path'
 import { z } from 'zod'
 import { getAuthUserId, getAuthRole, getAuthOwnerMode } from '@/lib/auth'
 import { errorResponse } from '@/lib/security/errorSchema'
-import { deriveActiveSpecialistFromCaseState } from '@/lib/ai/case/compat'
+import {
+  applyCanonicalSnapshotToLegacyCaseState,
+  toCanonicalCaseStateSnapshot,
+} from '@/lib/ai/case/compat'
 import { orchestrate } from '@/lib/ai/orchestrator/orchestrator'
 import { createLlmWithFallback } from '@/lib/ai/llmFactory'
 import { loadTeam } from '@/lib/ai/team/loader'
@@ -54,6 +57,9 @@ export async function POST(request: Request): Promise<Response> {
   const requestId = crypto.randomUUID()
   const contextPack = await persistence.buildContextPack({ userId, conversationId, role })
   const storedCaseState = await persistence.getCaseState({ conversationId })
+  const storedStateSnapshot = storedCaseState
+    ? (toCanonicalCaseStateSnapshot(storedCaseState) ?? undefined)
+    : undefined
   const teamDirAbsolute = path.resolve(process.cwd(), 'TEAM')
   const team = loadTeam({ teamDirAbsolute, allowEmpty: true })
 
@@ -64,6 +70,7 @@ export async function POST(request: Request): Promise<Response> {
     message: userMessage,
     contextPack,
     caseState: storedCaseState,
+    caseStateSnapshot: storedStateSnapshot,
   }
 
   const llm = createLlmWithFallback()
@@ -89,8 +96,21 @@ export async function POST(request: Request): Promise<Response> {
       writeAuditLog: async () => undefined,
     })
 
+    const liveStateSnapshot =
+      consensus.stateSnapshot ??
+      (consensus.caseState
+        ? (toCanonicalCaseStateSnapshot(consensus.caseState) ?? undefined)
+        : undefined) ??
+      storedStateSnapshot
+    const liveLeadPanel =
+      liveStateSnapshot?.domainPanels.find(
+        (panel) => panel.domain === liveStateSnapshot.leadDomain,
+      ) ?? liveStateSnapshot?.domainPanels[0]
     const capabilityAgentId =
-      consensus.activeSpecialist?.id ?? consensus.debug?.selectedAgents?.[0] ?? 'orchestratore'
+      liveLeadPanel?.selectedAgentId ??
+      consensus.activeSpecialist?.id ??
+      consensus.debug?.selectedAgents?.[0] ??
+      'orchestratore'
     const capabilityTools = (
       team.find((a) => a.id === capabilityAgentId)?.toolsAllowed ?? []
     ).filter(isAllowedToolName)
@@ -113,16 +133,34 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Persist updated case state
-  if (consensus.caseState) {
+  const nextCaseState =
+    consensus.caseState ??
+    (consensus.stateSnapshot
+      ? applyCanonicalSnapshotToLegacyCaseState({
+          snapshot: consensus.stateSnapshot,
+          current: storedCaseState,
+        })
+      : null)
+  if (nextCaseState) {
     try {
-      await persistence.persistCaseState({ userId, conversationId, caseState: consensus.caseState })
+      await persistence.persistCaseState({ userId, conversationId, caseState: nextCaseState })
     } catch {
       // best-effort
     }
   }
 
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      stateSnapshot:
+        consensus.stateSnapshot ??
+        (nextCaseState
+          ? (toCanonicalCaseStateSnapshot(nextCaseState) ?? undefined)
+          : storedStateSnapshot),
+    }),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    },
+  )
 }

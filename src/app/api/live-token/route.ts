@@ -10,6 +10,9 @@ import { logApiErrorEvent } from '@/lib/monitoring/apiErrorEvents'
 import * as fs from 'fs'
 import * as path from 'path'
 import { buildSharedAgentRules } from '@/lib/ai/orchestrator/agentPrompt'
+import { toCanonicalCaseStateSnapshot } from '@/lib/ai/case/compat'
+import { fromStoredCaseState } from '@/lib/ai/case/persistence'
+import type { CanonicalCaseStateSnapshot } from '@/lib/ai/types'
 
 const requestSchema = z.object({
   conversationId: z.string().min(1).optional(),
@@ -49,6 +52,11 @@ type AttrRow = {
   notes: string | null
 }
 
+type LiveCaseBootstrap = {
+  activeAgentId: string | null
+  stateSnapshot: CanonicalCaseStateSnapshot | null
+}
+
 function formatAttributesForPrompt(rows: AttrRow[]): string {
   if (rows.length === 0) return ''
 
@@ -81,6 +89,28 @@ function formatAttributesForPrompt(rows: AttrRow[]): string {
     }
   }
 
+  return lines.join('\n')
+}
+
+function formatPanelSummary(snapshot: CanonicalCaseStateSnapshot | null): string {
+  if (!snapshot) return ''
+
+  const lines: string[] = ['PANEL MULTI-DOMINIO ATTIVO PER QUESTA CONVERSAZIONE:']
+  lines.push(`leadDomain: ${snapshot.leadDomain ?? 'non-definito'}`)
+  lines.push(`speakerPolicy: ${snapshot.speakerPolicy}`)
+  if (snapshot.activeDomains.length > 0) {
+    lines.push(`activeDomains: ${snapshot.activeDomains.join(', ')}`)
+  }
+  for (const panel of snapshot.domainPanels) {
+    const selected = panel.selectedAgentId ?? 'non-assegnato'
+    const candidates = panel.candidateAgentIds.join(', ') || 'nessuno'
+    lines.push(
+      `- ${panel.domain}: selected=${selected}; status=${panel.status}; priority=${panel.priorityScore}; candidates=${candidates}`,
+    )
+  }
+  if (snapshot.sharedOpenQuestions.length > 0) {
+    lines.push(`sharedOpenQuestions: ${snapshot.sharedOpenQuestions.join(' | ')}`)
+  }
   return lines.join('\n')
 }
 
@@ -142,26 +172,33 @@ function loadAgentPrompt(agentId: string): { displayName: string; prompt: string
   return { displayName, prompt: fs.readFileSync(promptPath, 'utf-8') }
 }
 
-/**
- * Read the active agent from the CaseState table for a conversation.
- * Returns activeSpeakerAgentId ?? ownerAgentId ?? null.
- */
-async function getActiveAgentId(
+async function getLiveCaseBootstrap(
   userId: string,
   conversationId?: string | null,
-): Promise<string | null> {
+): Promise<LiveCaseBootstrap> {
   const cs = conversationId
     ? await prisma.caseState.findUnique({
         where: { conversationId },
-        select: { activeSpeakerAgentId: true, ownerAgentId: true },
       })
     : await prisma.caseState.findFirst({
         where: { conversation: { userId } },
         orderBy: { updatedAt: 'desc' },
-        select: { activeSpeakerAgentId: true, ownerAgentId: true },
       })
-  if (!cs) return null
-  return cs.activeSpeakerAgentId ?? cs.ownerAgentId ?? null
+  if (!cs) return { activeAgentId: null, stateSnapshot: null }
+  const caseState = fromStoredCaseState(cs)
+  if (!caseState) return { activeAgentId: null, stateSnapshot: null }
+  const stateSnapshot = toCanonicalCaseStateSnapshot(caseState)
+  const leadPanel =
+    stateSnapshot?.domainPanels.find((panel) => panel.domain === stateSnapshot.leadDomain) ??
+    stateSnapshot?.domainPanels[0]
+  return {
+    activeAgentId:
+      leadPanel?.selectedAgentId ??
+      caseState.activeSpeakerAgentId ??
+      caseState.ownerAgentId ??
+      null,
+    stateSnapshot,
+  }
 }
 
 /**
@@ -177,8 +214,8 @@ async function buildLiveSystemInstruction(
   const now = new Date()
 
   // Resolve active specialist in parallel with DB queries
-  const [activeAgentId, queryResults] = await Promise.all([
-    getActiveAgentId(userId, conversationId),
+  const [liveCaseBootstrap, queryResults] = await Promise.all([
+    getLiveCaseBootstrap(userId, conversationId),
     Promise.all([
       prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
       prisma.userProfile.findUnique({
@@ -229,6 +266,7 @@ async function buildLiveSystemInstruction(
     ]),
   ])
 
+  const { activeAgentId, stateSnapshot } = liveCaseBootstrap
   const [user, profile, recentMessages, workouts, meals, mindfulness, attrRows] = queryResults
 
   // ── Load active specialist prompt (if any) ─────────────────────────────────
@@ -253,6 +291,11 @@ async function buildLiveSystemInstruction(
         'Rispondi in italiano in modo naturale, conciso e conversazionale. ' +
         "Sei parte di un team multidisciplinare (nutrizionisti, allenatori, medici, psicologi) e hai pieno accesso al profilo e alla cronologia dell'utente.",
     )
+  }
+
+  const panelSummary = formatPanelSummary(stateSnapshot)
+  if (panelSummary) {
+    lines.push(`\n${panelSummary}`)
   }
 
   // ── Shared behavioral rules — exactly the same as the text-chat pipeline ──
@@ -412,6 +455,28 @@ export async function POST(request: Request): Promise<Response> {
     // Build context-aware system instruction (profile + history).
     // Wrapped in try-catch: if DB is unavailable (test env, cold-start error) we fall back
     // gracefully to a minimal prompt rather than blocking token creation.
+    const liveCaseBootstrap = await getLiveCaseBootstrap(userId, parsedBody.conversationId).catch(
+      async (err: unknown) => {
+        console.error('[live-token] live case bootstrap failed, using null snapshot:', err)
+        await logApiErrorEvent({
+          endpoint: '/api/live-token',
+          errorCode: 'FALLBACK_CASE_BOOTSTRAP',
+          statusCode: 200,
+          message: 'live case bootstrap failed, null snapshot used',
+          requestId,
+          userId,
+          metadata: {
+            fallbackPhase: 'CASE_BOOTSTRAP',
+            cause:
+              err instanceof Error
+                ? { name: err.name, message: err.message }
+                : { message: String(err) },
+          },
+        })
+        return { activeAgentId: null, stateSnapshot: null }
+      },
+    )
+
     const systemInstruction = await buildLiveSystemInstruction(
       userId,
       parsedBody.conversationId,
@@ -468,6 +533,7 @@ export async function POST(request: Request): Promise<Response> {
         expiresAt: toIsoInMinutes(40),
         conversationId: parsedBody.conversationId ?? null,
         systemInstruction,
+        stateSnapshot: liveCaseBootstrap.stateSnapshot,
       }),
       {
         status: 200,

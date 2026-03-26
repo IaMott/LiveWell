@@ -1,4 +1,6 @@
 import { getAuthUserId } from '@/lib/auth'
+import { toCanonicalCaseStateSnapshot } from '@/lib/ai/case/compat'
+import { fromStoredCaseState } from '@/lib/ai/case/persistence'
 import { decodeAssistantStoredContent } from '@/lib/chat/thinkingPersistence'
 import { prisma } from '@/lib/prisma'
 import { errorResponse } from '@/lib/security/errorSchema'
@@ -43,9 +45,15 @@ export async function GET(
   if (!conv || conv.userId !== userId)
     return errorResponse(404, 'NOT_FOUND', 'Conversation not found')
 
+  const caseStateRow = await prisma.caseState.findUnique({
+    where: { conversationId: conv.id },
+  })
+  const stateSnapshot = toCanonicalCaseStateSnapshot(fromStoredCaseState(caseStateRow))
+
   return Response.json({
     id: conv.id,
     title: conv.title ?? 'Conversazione',
+    stateSnapshot: stateSnapshot ?? undefined,
     messages: conv.messages.map((m) => ({
       ...(m.role === 'assistant'
         ? decodeAssistantStoredContent(m.content)

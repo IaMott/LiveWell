@@ -79,8 +79,13 @@ export async function executeAgentRounds(
   })
 
   const round2Results = await Promise.allSettled(
-    selectedAgents.map((agent) =>
-      withTimeout(
+    selectedAgents.map((agent, index) => {
+      const round1Proposal = round1Proposals[index]
+      if (round1Proposal?.confidence === 0) {
+        return Promise.resolve(round1Proposal)
+      }
+
+      return withTimeout(
         executeAgent({
           llm,
           agent,
@@ -90,8 +95,8 @@ export async function executeAgentRounds(
         }),
         timeoutMs,
         agent.id,
-      ),
-    ),
+      )
+    }),
   )
 
   const round2Proposals: AgentProposal[] = round2Results.map((result, i) => {

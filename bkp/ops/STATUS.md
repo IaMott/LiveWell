@@ -2,44 +2,51 @@ Stato progetto
 
 Obiettivo
 
-Allineare intake, profile extraction e live mode al piano operativo A+B+C: eta salvata come data di nascita approssimata, intake per dominio senza domande hardcoded verbatim, contesto live coerente con `conversationId` e specialista attivo.
+Chiudere davvero la Fase 1 shared text/live con persistenza canonica di `stateSnapshot`, read path canonical-first, compat layer ridotto a fallback controllato e campagna finale minima di test text/live/reload.
 
 Fatto
 
-- checkpoint locale creato in `bkp/backups/2026-03-25/2330_pre-a-b-c-live-fix`
-- `agentPrompt.ts` aggiornato con regole condivise su `birth_date`, profile extraction su tutti i `recentMessages` e separazione esplicita nutrition/training nei casi misti
-- `inputInference.ts` allineato: quando l'utente dichiara l'eta viene prodotto `birthDate` approssimato invece di `age`
-- `interviewFlow.ts` lasciato senza iniezione verbatim da `FIELD_QUESTIONS`; le domande contestuali restano responsabilita dell'LLM via checklist intake
-- `intakeQuestions.ts` aggiornato sui campi richiesti per dominio, con bridge `birthDate`/`birth_date` e rimozione dei residui di domande hardcoded inutilizzati
-- `live-token/route.ts` aggiornato con contesto esplicito dello specialista attivo per la conversazione
-- `LiveModal.tsx` e `ChatInput.tsx` aggiornati per passare `conversationId` a `/api/live-token` gia all'avvio della sessione live
-- test mirati verdi: `orchestrator-input-inference`, `multi-agent-execution`, `orchestrator-agent-prompt`, `live-token-fallback-observability`, `live-token-security`
-- `typecheck` verde
-- `build` verde
-- commit pubblicato: `1f527be` (`fix: align live intake and context handling`)
-- push su `origin/main` completato
-- deploy production Vercel completato su `https://livewell.mottisi.com`
-- smoke HTTP positivo su alias production
+- contratto canonico shared text/live introdotto in `src/lib/ai/types.ts`
+- state model multi-dominio introdotto in `src/lib/ai/case/state.ts`
+- compat layer introdotto in `src/lib/ai/case/compat.ts`
+- persistence helpers introdotti in `src/lib/ai/case/persistence.ts`
+- transport/runtime text-live allineati su `stateSnapshot`
+- reload conversazione, live-sync, cross-conversation e live post-turn riallineati
+- `stateSnapshot` ora persistito autonomamente su `CaseState` tramite `state_snapshot` in DB
+- `chatPersistence.ts` ora scrive il canonico come primary write path
+- `fromStoredCaseState()` ora legge in modalita canonical-first con legacy solo fallback/bridge
+- `live-token` ora usa il read path comune invece del mapper legacy manuale
+- copertura aggiunta:
+  - `tests/api/case-persistence.test.ts`
+  - `tests/api/conversation-stateSnapshot-route.test.ts`
+  - `tests/api/live-sync-stateSnapshot.test.ts`
+- fix prestazionali minimi gia` applicati:
+  - recovery client su primo `chat/send` in `ChatContext.tsx`
+  - eliminazione del doppio timeout round1+round2 in `agentRoundExecution.ts`
+- migrazioni DB rilevanti allineate:
+  - risolte incoerenze storiche Prisma su `20260316_message_reviews` e `20260318224000_add_case_states`
+  - applicata `20260326205200_add_case_state_snapshot`
+- validazioni finali verdi:
+  - `npx prisma generate`
+  - `npm run typecheck`
+  - `npm run test -- tests/api/conversation-stateSnapshot-route.test.ts tests/api/live-sync-stateSnapshot.test.ts tests/api/case-persistence.test.ts tests/api/chat-send-persistence.test.ts tests/api/domain-canonical-write-read.e2e.test.ts tests/api/live-token-fallback-observability.test.ts tests/api/live-token-security.test.ts tests/conversations-api.test.ts`
 
 In corso
 
-Pubblicazione remota del fix che impedisce di derivare `birthDate` da `age`.
+Nessun blocco aperto nel perimetro minimo Fase 1 shared text/live.
 
 Prossimo
 
-- commit del fix applicativo
-- push su `origin/main`
-- deploy production
-- smoke rapido post-deploy
+- follow-up solo se richiesto: ulteriore riduzione/rimozione del compat layer in fase successiva
+- follow-up solo se richiesto: hardening ulteriore della UX live reale con browser/microfono
 
 Rischi
 
-Rischi reali aperti:
-- il runtime interno conserva path legacy che leggono `age` e `birthDate` separatamente; questo step elimina l'invenzione della data completa ma non introduce ancora un modello `birthYear` dedicato
-- il deploy Vercel continua a segnalare warning infrastrutturali preesistenti (`middleware` deprecato, multiple lockfiles, vulnerabilita npm) non bloccanti per questo fix
-- dal terminale non e possibile verificare end-to-end in produzione la sessione live autenticata con microfono/browser; i punti 1 e 2 sono quindi verificabili solo a livello di wiring codice + test, non con prova UX reale
-- il fix corrente e solo locale finche commit/push/deploy non vengono completati
+- resta legacy temporaneo controllato: `ownerAgentId`, `activeSpeakerAgentId`, `protocolState` e i mapper di compatibilita` sopravvivono per dati storici e fallback
+- resta rischio non bloccante: il bootstrap/test live reale con microfono/browser non e` verificabile dal terminale; la chiusura Fase 1 e` supportata da route tests, integration tests e smoke HTTP locali
+- resta rischio non bloccante: agenti lenti possono ancora andare in timeout al `Round 1`, ma non pagano piu` il doppio timeout al `Round 2`
+- resta debito dichiarato per fase successiva: rimozione del compat layer residuo quando non serviranno piu` dati legacy
 
 Ultimo aggiornamento
 
-2026-03-26 00:19
+2026-03-26 21:17

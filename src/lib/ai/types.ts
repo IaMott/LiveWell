@@ -56,6 +56,55 @@ export type ActiveSpecialist = {
   runtimeCapabilities?: RuntimeCapabilityContract
 }
 
+export type DomainPanelStatus = 'active' | 'monitoring' | 'paused' | 'needs_input'
+
+/**
+ * Canonical per-domain panel shared by text chat and Gemini Live.
+ * Phase 1 introduces the contract only; runtime adoption is incremental.
+ */
+export type DomainPanel = {
+  domain: Domain
+  selectedAgentId: AgentId | null
+  candidateAgentIds: AgentId[]
+  status: DomainPanelStatus
+  priorityScore: number
+  lastReasoningAt: string | null
+  pendingNeeds: string[]
+}
+
+export type ConversationFocus = {
+  activeProblems: string[]
+  activeGoals: string[]
+  activeConstraints: string[]
+  summary: string | null
+}
+
+export type CoordinationState = {
+  crossDomainConflicts: string[]
+  dependencies: string[]
+  needsReview: boolean
+}
+
+export type SpeakerPolicy = 'team' | 'lead' | 'explicit_agent' | 'switch'
+
+/**
+ * Shared canonical case snapshot consumed by both text and live adapters.
+ * Legacy protocol fields remain in CaseState during the compatibility window.
+ */
+export type CanonicalCaseStateSnapshot = {
+  schemaVersion: number
+  conversationId: string
+  activeDomains: Domain[]
+  domainPanels: DomainPanel[]
+  leadDomain: Domain | null
+  speakerPolicy: SpeakerPolicy
+  conversationFocus: ConversationFocus
+  coordinationState: CoordinationState
+  sharedOpenQuestions: string[]
+  domainOpenQuestions: Partial<Record<Domain, string[]>>
+  updatedAt: string
+}
+
 export type AgentInput = {
   requestId: string
   userId: string
@@ -64,6 +113,8 @@ export type AgentInput = {
   domainHint?: Domain
   /** Canonical protocol state for the conversation. */
   caseState?: CaseState | null
+  /** Phase 1 shared canonical snapshot, optional during compatibility window. */
+  caseStateSnapshot?: CanonicalCaseStateSnapshot | null
   contextPack: ContextPack
   constraints?: {
     locale?: string
@@ -249,6 +300,8 @@ export type ConsensusResult = {
   activeSpecialist?: ActiveSpecialist
   /** Canonical case state after protocol evaluation for the current turn. */
   caseState?: CaseState
+  /** Phase 1 shared canonical snapshot for text/live transport and persistence. */
+  stateSnapshot?: CanonicalCaseStateSnapshot
   /** Protocol events emitted by the canonical case engine. */
   protocolEvents?: CaseProtocolEvent[]
   /** Quick-reply suggestions to display below the message (multi-domain triage, etc.) */

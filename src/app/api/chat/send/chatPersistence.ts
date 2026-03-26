@@ -1,7 +1,11 @@
 import { Prisma } from '@prisma/client'
-import { normalizeCaseState, type CaseState } from '@/lib/ai/case/state'
+import type { CaseState } from '@/lib/ai/case/state'
 import { buildContextPack } from '@/lib/ai/context/contextPackBuilder'
-import { toStoredCaseState } from '@/lib/ai/case/persistence'
+import {
+  fromStoredCaseState,
+  toStoredCaseState,
+  toStoredCaseStateWithCanonicalSnapshot,
+} from '@/lib/ai/case/persistence'
 import {
   encodeAssistantContentWithThinking,
   stripAssistantStoredMetadata,
@@ -126,20 +130,20 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       const row = await findUniqueIfAvailable<Record<string, unknown>>('caseState', {
         where: { conversationId },
       })
-      return normalizeCaseState(row)
+      return fromStoredCaseState(row)
     },
     persistCaseState: async ({ userId, conversationId, caseState }) => {
       const upsert = getUpsert('caseState')
       if (!upsert) return
-      const payload = toStoredCaseState(caseState)
+      const nextStored = toStoredCaseStateWithCanonicalSnapshot(caseState)
       await upsert({
         where: { conversationId },
         create: {
           userId,
           conversationId,
-          ...payload,
+          ...nextStored,
         },
-        update: payload,
+        update: nextStored,
       })
     },
     persistChatTurn: async ({

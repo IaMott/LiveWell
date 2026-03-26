@@ -154,6 +154,7 @@ model CaseState {
   takeoverTurns        Int          @default(0) @map("takeover_turns")
   loopCount            Int          @default(0) @map("loop_count")
   handoffCount         Int          @default(0) @map("handoff_count")
+  stateSnapshot        Json?        @map("state_snapshot")
   createdAt            DateTime     @default(now()) @map("created_at")
   updatedAt            DateTime     @updatedAt @map("updated_at")
 

@@ -4,6 +4,7 @@ import type React from 'react'
 import { GoogleGenAI, Modality } from '@google/genai'
 import type { LiveConnectConfig, LiveServerMessage, Session } from '@google/genai'
 import { useEffect, useRef, useState, useCallback } from 'react'
+import type { CanonicalCaseStateSnapshot } from '@/lib/ai/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,10 @@ interface Props {
 // for bidiGenerateContent with ephemeral tokens (tested 2026-03-10).
 
 const LIVE_MODEL_FALLBACKS = ['gemini-2.5-flash-native-audio-preview-12-2025']
+
+function stateSnapshotKeyForConversation(conversationId: string): string {
+  return `livewell_case_state_snapshot:${conversationId}`
+}
 
 // ── Audio / encoding helpers ──────────────────────────────────────────────────
 
@@ -166,6 +171,9 @@ export function LiveModal({
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
   const [currentCameraIdx, setCurrentCameraIdx] = useState(0)
   const [bars, setBars] = useState<number[]>(Array(5).fill(4))
+  const [bootstrapSnapshot, setBootstrapSnapshot] = useState<CanonicalCaseStateSnapshot | null>(
+    null,
+  )
 
   // ── PiP drag state ────────────────────────────────────────────────────────
   const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null)
@@ -199,6 +207,60 @@ export function LiveModal({
 
   // Tracks current facingMode for devices with a single camera (front/back toggle)
   const facingModeRef = useRef<'environment' | 'user'>('environment')
+  const bootstrapSnapshotRef = useRef<CanonicalCaseStateSnapshot | null>(null)
+  const conversationIdRef = useRef<string | null>(conversationId ?? null)
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId ?? null
+  }, [conversationId])
+
+  const persistSnapshot = useCallback(
+    (
+      snapshot: CanonicalCaseStateSnapshot | null | undefined,
+      preferredConversationId?: string | null,
+    ) => {
+      if (!snapshot) return
+      const targetConversationId = preferredConversationId ?? snapshot.conversationId
+      bootstrapSnapshotRef.current = snapshot
+      setBootstrapSnapshot(snapshot)
+      try {
+        if (targetConversationId) {
+          localStorage.setItem(
+            stateSnapshotKeyForConversation(targetConversationId),
+            JSON.stringify(snapshot),
+          )
+        }
+      } catch {
+        /* ignore localStorage write errors */
+      }
+    },
+    [],
+  )
+
+  const refreshSnapshotFromServer = useCallback(
+    async (targetConversationId?: string | null) => {
+      if (!targetConversationId) return
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 350))
+        }
+
+        try {
+          const res = await fetch(`/api/conversations/${targetConversationId}`)
+          if (!res.ok) continue
+          const data = (await res.json()) as { stateSnapshot?: CanonicalCaseStateSnapshot }
+          if (data.stateSnapshot) {
+            persistSnapshot(data.stateSnapshot, targetConversationId)
+            return
+          }
+        } catch {
+          /* best-effort */
+        }
+      }
+    },
+    [persistSnapshot],
+  )
 
   // ── Waveform animation (5 bars, ChatGPT-style) ────────────────────────────
 
@@ -358,6 +420,20 @@ export function LiveModal({
   // ── Connect to Gemini Live ────────────────────────────────────────────────
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!conversationId) return
+    const raw = localStorage.getItem(stateSnapshotKeyForConversation(conversationId))
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as CanonicalCaseStateSnapshot
+      bootstrapSnapshotRef.current = parsed
+      setBootstrapSnapshot(parsed)
+    } catch {
+      /* ignore invalid local snapshot */
+    }
+  }, [conversationId])
+
+  useEffect(() => {
     let mounted = true
 
     async function connect() {
@@ -376,9 +452,16 @@ export function LiveModal({
           token: string
           model: string
           systemInstruction?: string
+          stateSnapshot?: CanonicalCaseStateSnapshot | null
         }
         if (!tokenData.token) throw new Error('Servizio live non disponibile')
         if (!mounted) return
+
+        const resolvedSnapshot = tokenData.stateSnapshot ?? bootstrapSnapshotRef.current
+        persistSnapshot(
+          resolvedSnapshot,
+          conversationId ?? resolvedSnapshot?.conversationId ?? null,
+        )
 
         // 2. Get microphone access
         const micStream = await navigator.mediaDevices.getUserMedia({
@@ -419,10 +502,16 @@ export function LiveModal({
         const systemInstructionText =
           tokenData.systemInstruction ??
           'Sei un assistente AI per la salute e il benessere personale. Rispondi in italiano in modo naturale, conciso e conversazionale.'
+        const effectiveSnapshot = tokenData.stateSnapshot ?? bootstrapSnapshotRef.current
+        const effectiveLeadDomain = effectiveSnapshot?.leadDomain ?? bootstrapSnapshot?.leadDomain
+        const effectiveSystemInstruction =
+          effectiveLeadDomain && !systemInstructionText.includes('leadDomain:')
+            ? `${systemInstructionText}\n\nCONTESTO SHARED CLIENT: leadDomain=${effectiveLeadDomain}`
+            : systemInstructionText
 
         const liveConfig: LiveConnectConfig = {
           systemInstruction: {
-            parts: [{ text: systemInstructionText }],
+            parts: [{ text: effectiveSystemInstruction }],
           },
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -483,6 +572,11 @@ export function LiveModal({
                 if (aiSeg) {
                   onInterimTranscription?.('assistant', '') // clear assistant interim
                   onTranscription?.('assistant', aiSeg)
+                  void refreshSnapshotFromServer(
+                    conversationIdRef.current ??
+                      bootstrapSnapshotRef.current?.conversationId ??
+                      null,
+                  )
                 }
               }
             },
@@ -523,7 +617,7 @@ export function LiveModal({
       mounted = false
       cleanup()
     }
-  }, [conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conversationId, persistSnapshot, refreshSnapshotFromServer]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Start video stream with a specific device ─────────────────────────────
 

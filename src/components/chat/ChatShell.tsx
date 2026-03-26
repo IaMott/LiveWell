@@ -7,10 +7,15 @@ import { ChatInput } from './ChatInput'
 import { ConversationHistory } from './ConversationHistory'
 import { useChat } from '@/hooks/useChat'
 import type { ChatMessage } from '@/hooks/useChat'
+import type { CanonicalCaseStateSnapshot, Domain } from '@/lib/ai/types'
 import { getDomainColor } from '@/lib/ui/domainColors'
 
 /** Stable ID for the live interim message — never persisted, replaced on turn complete. */
 const LIVE_INTERIM_ID = 'live-interim'
+
+function stateSnapshotKeyForConversation(conversationId: string): string {
+  return `livewell_case_state_snapshot:${conversationId}`
+}
 
 type Props = {
   userInitials?: string
@@ -23,6 +28,13 @@ type LiveInterim = {
   role: 'user' | 'assistant'
   text: string
 } | null
+
+function formatAgentIdLabel(agentId?: string | null): string | undefined {
+  if (!agentId) return undefined
+  const normalized = agentId.trim().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ')
+  if (!normalized) return undefined
+  return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase())
+}
 
 export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
   const {
@@ -47,12 +59,42 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [liveActive, setLiveActive] = useState(false)
   const [liveInterim, setLiveInterim] = useState<LiveInterim>(null)
+  const [stateSnapshot, setStateSnapshot] = useState<CanonicalCaseStateSnapshot | null>(null)
   const lastSpokenIdRef = useRef<string | undefined>(undefined)
   // Ref so handleVoiceEnd closure always sees the latest conversationId
   const conversationIdRef = useRef(conversationId)
   useEffect(() => {
     conversationIdRef.current = conversationId
   }, [conversationId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const loadSnapshot = () => {
+      if (!conversationId) {
+        setStateSnapshot(null)
+        return
+      }
+      const raw = localStorage.getItem(stateSnapshotKeyForConversation(conversationId))
+      if (!raw) {
+        setStateSnapshot(null)
+        return
+      }
+      try {
+        setStateSnapshot(JSON.parse(raw) as CanonicalCaseStateSnapshot)
+      } catch {
+        setStateSnapshot(null)
+      }
+    }
+
+    loadSnapshot()
+    const onStorage = (event: StorageEvent) => {
+      if (!conversationId) return
+      if (event.key === stateSnapshotKeyForConversation(conversationId)) loadSnapshot()
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [conversationId, messages.length, liveActive])
 
   const handleVoiceStart = useCallback(() => {
     setLiveActive(true)
@@ -107,7 +149,14 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     [send, clearEditDraft],
   )
 
-  const specialistColor = getDomainColor(activeDomain)
+  const leadPanel =
+    stateSnapshot?.domainPanels.find((panel) => panel.domain === stateSnapshot.leadDomain) ??
+    stateSnapshot?.domainPanels[0]
+  const visualActiveDomain = (activeDomain ?? stateSnapshot?.leadDomain ?? null) as Domain | null
+  const visualSpecialistId = activeSpecialistId ?? leadPanel?.selectedAgentId ?? undefined
+  const visualSpecialistName =
+    activeSpecialistName ?? formatAgentIdLabel(leadPanel?.selectedAgentId) ?? undefined
+  const specialistColor = getDomainColor(visualActiveDomain)
 
   /** Merge confirmed messages with the live interim message (if any) so the text
    * grows word-by-word directly inside the chat bubble — same as text streaming. */
@@ -140,7 +189,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
       {/* Specialist mode banner — hidden during live session to avoid confusion:
           the live model runs as a single agent; the specialist mode is re-applied
           to text chat when the live session ends. */}
-      {activeSpecialistId && activeSpecialistName && !liveActive && (
+      {visualSpecialistId && visualSpecialistName && !liveActive && (
         <div
           style={{
             display: 'flex',
@@ -170,7 +219,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
                 letterSpacing: '0.04em',
               }}
             >
-              {activeSpecialistName.toUpperCase()}
+              {visualSpecialistName.toUpperCase()}
             </span>
             <span
               style={{
@@ -213,7 +262,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         onSend={handleSend}
         onHistory={() => setHistoryOpen(true)}
         disabled={isStreaming}
-        activeDomain={activeDomain}
+        activeDomain={visualActiveDomain}
         onVoiceStart={handleVoiceStart}
         onVoiceEnd={handleVoiceEnd}
         conversationId={conversationId}

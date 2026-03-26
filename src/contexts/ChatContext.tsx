@@ -9,7 +9,7 @@ import {
   useEffect,
   type ReactNode,
 } from 'react'
-import type { Domain } from '@/lib/ai/types'
+import type { CanonicalCaseStateSnapshot, Domain } from '@/lib/ai/types'
 
 export type ThinkingStep = {
   specialistName: string
@@ -68,9 +68,21 @@ type ChatContextValue = {
 const ChatContext = createContext<ChatContextValue | null>(null)
 
 const STORAGE_KEY = 'livewell_conversation_id'
-const SPECIALIST_KEY = 'livewell_active_specialist'
-const SPECIALIST_NAME_KEY = 'livewell_active_specialist_name'
 const LOAD_TIMEOUT_MS = 8000
+const SEND_RECOVERY_DELAY_MS = 1500
+const SEND_RECOVERY_TIMEOUT_MS = 12000
+
+function specialistKeyForConversation(conversationId: string): string {
+  return `livewell_active_specialist:${conversationId}`
+}
+
+function specialistNameKeyForConversation(conversationId: string): string {
+  return `livewell_active_specialist_name:${conversationId}`
+}
+
+function stateSnapshotKeyForConversation(conversationId: string): string {
+  return `livewell_case_state_snapshot:${conversationId}`
+}
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -79,6 +91,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeDomain, setActiveDomain] = useState<Domain | null>(null)
   const [activeSpecialistId, setActiveSpecialistId] = useState<string | undefined>(undefined)
   const [activeSpecialistName, setActiveSpecialistName] = useState<string | undefined>(undefined)
+  const [stateSnapshot, setStateSnapshot] = useState<CanonicalCaseStateSnapshot | null>(null)
   const [cartellaNotifications, setCartellaNotifications] = useState<CartellaNotification[]>([])
   const [editDraft, setEditDraft] = useState<string | undefined>(undefined)
 
@@ -88,6 +101,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const conversationIdRef = useRef<string | undefined>(undefined)
   const activeSpecialistIdRef = useRef<string | undefined>(undefined)
+  const stateSnapshotRef = useRef<CanonicalCaseStateSnapshot | null>(null)
   const isStreamingRef = useRef(false)
   // F5: AbortController ref so in-flight SSE streams can be cancelled on navigation/re-send.
   const sendAbortRef = useRef<AbortController | null>(null)
@@ -101,20 +115,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [activeSpecialistId])
 
   useEffect(() => {
+    stateSnapshotRef.current = stateSnapshot
+  }, [stateSnapshot])
+
+  useEffect(() => {
     isStreamingRef.current = isStreaming
   }, [isStreaming])
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedSpecialistId = localStorage.getItem(SPECIALIST_KEY)
-      const savedSpecialistName = localStorage.getItem(SPECIALIST_NAME_KEY)
-      if (savedSpecialistId) {
-        setActiveSpecialistId(savedSpecialistId)
-        activeSpecialistIdRef.current = savedSpecialistId
-      }
-      if (savedSpecialistName) setActiveSpecialistName(savedSpecialistName)
-    }
-
     const savedId = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
     if (savedId) {
       void loadConversation(savedId)
@@ -145,6 +153,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsStreaming(true)
     setMessages([])
     setActiveDomain(null)
+    setActiveSpecialistId(undefined)
+    setActiveSpecialistName(undefined)
+    setStateSnapshot(null)
+    activeSpecialistIdRef.current = undefined
+    stateSnapshotRef.current = null
+
+    if (typeof window !== 'undefined') {
+      const savedSpecialistId = localStorage.getItem(specialistKeyForConversation(id))
+      const savedSpecialistName = localStorage.getItem(specialistNameKeyForConversation(id))
+      const savedStateSnapshot = localStorage.getItem(stateSnapshotKeyForConversation(id))
+
+      if (savedSpecialistId) {
+        setActiveSpecialistId(savedSpecialistId)
+        activeSpecialistIdRef.current = savedSpecialistId
+      }
+      if (savedSpecialistName) {
+        setActiveSpecialistName(savedSpecialistName)
+      }
+      if (savedStateSnapshot) {
+        try {
+          const parsed = JSON.parse(savedStateSnapshot) as CanonicalCaseStateSnapshot
+          setStateSnapshot(parsed)
+          stateSnapshotRef.current = parsed
+        } catch {
+          localStorage.removeItem(stateSnapshotKeyForConversation(id))
+        }
+      }
+    }
 
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS)
@@ -164,6 +200,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           specialistName?: string
           thinkingSteps?: ThinkingStep[]
         }>
+        stateSnapshot?: CanonicalCaseStateSnapshot
       }
       setMessages(
         data.messages.map((m) => ({
@@ -179,12 +216,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       conversationIdRef.current = id
       localStorage.setItem(STORAGE_KEY, id)
 
+      if (data.stateSnapshot) {
+        setStateSnapshot(data.stateSnapshot)
+        stateSnapshotRef.current = data.stateSnapshot
+        localStorage.setItem(
+          stateSnapshotKeyForConversation(id),
+          JSON.stringify(data.stateSnapshot),
+        )
+      }
+
       const latestAssistantWithSpecialist = [...data.messages]
         .reverse()
         .find((m) => m.role === 'assistant' && m.specialistName)
       if (latestAssistantWithSpecialist?.specialistName) {
         setActiveSpecialistName(latestAssistantWithSpecialist.specialistName)
-        localStorage.setItem(SPECIALIST_NAME_KEY, latestAssistantWithSpecialist.specialistName)
+        localStorage.setItem(
+          specialistNameKeyForConversation(id),
+          latestAssistantWithSpecialist.specialistName,
+        )
       }
     } catch {
       localStorage.removeItem(STORAGE_KEY)
@@ -200,20 +249,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setActiveDomain(null)
     setActiveSpecialistId(undefined)
     setActiveSpecialistName(undefined)
+    setStateSnapshot(null)
     activeSpecialistIdRef.current = undefined
+    stateSnapshotRef.current = null
     setConversationId(newId)
     conversationIdRef.current = newId
     localStorage.setItem(STORAGE_KEY, newId)
-    localStorage.removeItem(SPECIALIST_KEY)
-    localStorage.removeItem(SPECIALIST_NAME_KEY)
+    localStorage.removeItem(specialistKeyForConversation(newId))
+    localStorage.removeItem(specialistNameKeyForConversation(newId))
+    localStorage.removeItem(stateSnapshotKeyForConversation(newId))
   }, [])
 
   const exitSpecialist = useCallback(() => {
     setActiveSpecialistId(undefined)
     setActiveSpecialistName(undefined)
     activeSpecialistIdRef.current = undefined
-    localStorage.removeItem(SPECIALIST_KEY)
-    localStorage.removeItem(SPECIALIST_NAME_KEY)
+    const currentConversationId = conversationIdRef.current
+    if (currentConversationId) {
+      localStorage.removeItem(specialistKeyForConversation(currentConversationId))
+      localStorage.removeItem(specialistNameKeyForConversation(currentConversationId))
+    }
   }, [])
 
   const stopStreaming = useCallback(() => {
@@ -262,227 +317,335 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [])
 
-  const send = useCallback(async (text: string, _domain?: Domain, files?: File[]) => {
-    const trimmed = text.trim()
-    if ((!trimmed && (!files || files.length === 0)) || isStreamingRef.current) return
-
-    if (!conversationIdRef.current) {
-      const newId = crypto.randomUUID()
-      conversationIdRef.current = newId
-      setConversationId(newId)
-      localStorage.setItem(STORAGE_KEY, newId)
-    }
-
-    let fileIds: string[] = []
-    if (files && files.length > 0) {
-      try {
-        const formData = new FormData()
-        formData.append('conversationId', conversationIdRef.current ?? '')
-        files.forEach((f) => formData.append('file', f))
-        const uploadRes = await fetch('/api/chat/upload', { method: 'POST', body: formData })
-        if (uploadRes.ok) {
-          const data = (await uploadRes.json()) as { files: Array<{ id: string }> }
-          fileIds = data.files.map((f) => f.id)
-        }
-      } catch {
-        // best-effort upload
-      }
-    }
-
-    setActiveDomain(null)
-
-    const filesSuffix =
-      files && files.length > 0 ? '\n' + files.map((f) => `📎 ${f.name}`).join('\n') : ''
-
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: trimmed + filesSuffix,
-    }
-    const assistantId = crypto.randomUUID()
-    let currentAssistantId = assistantId
-    const assistantMsg: ChatMessage = {
-      id: assistantId,
-      role: 'assistant',
-      content: '',
-      streaming: true,
-    }
-
-    setMessages((prev) => [...prev, userMsg, assistantMsg])
-    setIsStreaming(true)
-    isStreamingRef.current = true
-
-    // F5: Abort any in-flight SSE stream before starting a new one.
-    if (sendAbortRef.current) sendAbortRef.current.abort()
-    const sendAbort = new AbortController()
-    sendAbortRef.current = sendAbort
+  const recoverConversationAfterSendFailure = useCallback(async (id: string): Promise<boolean> => {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), SEND_RECOVERY_TIMEOUT_MS)
 
     try {
-      const res = await fetch('/api/chat/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: trimmed,
-          conversationId: conversationIdRef.current,
-          activeSpecialistId: activeSpecialistIdRef.current,
-          fileIds: fileIds.length > 0 ? fileIds : undefined,
-        }),
-        signal: sendAbort.signal,
-      })
+      const res = await fetch(`/api/conversations/${id}`, { signal: controller.signal })
+      if (!res.ok) return false
 
-      if (!res.ok || !res.body) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? { ...m, content: 'Si è verificato un errore. Riprova.', streaming: false }
-              : m,
-          ),
-        )
-        return
+      const data = (await res.json()) as {
+        messages: Array<{
+          id: string
+          role: string
+          content: string
+          domain?: string
+          specialistName?: string
+          thinkingSteps?: ThinkingStep[]
+        }>
+        stateSnapshot?: CanonicalCaseStateSnapshot
       }
 
-      const reader = res.body.getReader()
-      const dec = new TextDecoder()
-      let buf = ''
+      if (!Array.isArray(data.messages) || data.messages.length === 0) return false
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += dec.decode(value, { stream: true })
-        const lines = buf.split('\n')
-        buf = lines.pop() ?? ''
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          try {
-            const event = JSON.parse(line.slice(6)) as Record<string, unknown>
-            const serverMessageId =
-              typeof event.id === 'string' && event.id.trim().length > 0 ? event.id.trim() : null
-            if (serverMessageId && serverMessageId !== currentAssistantId) {
-              const previousAssistantId = currentAssistantId
-              currentAssistantId = serverMessageId
-              setMessages((prev) =>
-                prev.map((m) => (m.id === previousAssistantId ? { ...m, id: serverMessageId } : m)),
-              )
-            }
+      const recoveredMessages = data.messages.map((m) => ({
+        id: m.id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        domain: m.domain as Domain | undefined,
+        specialistName: m.specialistName,
+        thinkingSteps: m.thinkingSteps,
+      }))
 
-            if (event.type === 'message.delta') {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === currentAssistantId
-                    ? { ...m, content: m.content + String(event.delta ?? '') }
-                    : m,
-                ),
-              )
-            } else if (event.type === 'message.complete') {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === currentAssistantId
-                    ? {
-                        ...m,
-                        content: String(event.content ?? m.content),
-                        streaming: false,
-                      }
-                    : m,
-                ),
-              )
-            } else if (event.type === 'ui.state') {
-              const domain = event.domain as Domain | undefined
-              const specialistName = event.specialistName as string | undefined
-              const newSpecialistId = event.activeSpecialistId as string | undefined
+      setMessages(recoveredMessages)
 
-              if (domain) setActiveDomain(domain)
+      const latestAssistantWithSpecialist = [...recoveredMessages]
+        .reverse()
+        .find((m) => m.role === 'assistant' && m.specialistName)
+      if (latestAssistantWithSpecialist?.specialistName) {
+        setActiveSpecialistName(latestAssistantWithSpecialist.specialistName)
+        localStorage.setItem(
+          specialistNameKeyForConversation(id),
+          latestAssistantWithSpecialist.specialistName,
+        )
+      }
 
-              if (newSpecialistId && newSpecialistId !== activeSpecialistIdRef.current) {
-                setActiveSpecialistId(newSpecialistId)
-                setActiveSpecialistName(specialistName)
-                activeSpecialistIdRef.current = newSpecialistId
-                if (newSpecialistId) {
-                  localStorage.setItem(SPECIALIST_KEY, newSpecialistId)
-                  if (specialistName) localStorage.setItem(SPECIALIST_NAME_KEY, specialistName)
-                }
-              }
+      if (data.stateSnapshot) {
+        setStateSnapshot(data.stateSnapshot)
+        stateSnapshotRef.current = data.stateSnapshot
+        localStorage.setItem(
+          stateSnapshotKeyForConversation(id),
+          JSON.stringify(data.stateSnapshot),
+        )
+      }
 
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === currentAssistantId ? { ...m, domain, specialistName } : m,
-                ),
-              )
-            } else if (event.type === 'tool.result') {
-              // Fase 6: Show cartella notification for successful setAttribute saves
-              if (event.ok && typeof event.message === 'string' && event.message) {
-                const notifId = crypto.randomUUID()
-                setCartellaNotifications((prev) => [
-                  ...prev,
-                  { id: notifId, message: event.message as string },
-                ])
-                // Auto-dismiss after 4 seconds
-                setTimeout(() => {
-                  setCartellaNotifications((prev) => prev.filter((n) => n.id !== notifId))
-                }, 4000)
-              }
-            } else if (event.type === 'message.suggestions') {
-              const suggestions = event.suggestions as Array<{
-                id: string
-                label: string
-                text: string
-                emoji?: string
-                domain?: Domain
-              }>
-              if (Array.isArray(suggestions) && suggestions.length > 0) {
+      return recoveredMessages.some((m) => m.role === 'assistant' && m.content.trim().length > 0)
+    } catch {
+      return false
+    } finally {
+      clearTimeout(timeout)
+    }
+  }, [])
+
+  const send = useCallback(
+    async (text: string, _domain?: Domain, files?: File[]) => {
+      const trimmed = text.trim()
+      if ((!trimmed && (!files || files.length === 0)) || isStreamingRef.current) return
+
+      if (!conversationIdRef.current) {
+        const newId = crypto.randomUUID()
+        conversationIdRef.current = newId
+        setConversationId(newId)
+        localStorage.setItem(STORAGE_KEY, newId)
+      }
+
+      let fileIds: string[] = []
+      if (files && files.length > 0) {
+        try {
+          const formData = new FormData()
+          formData.append('conversationId', conversationIdRef.current ?? '')
+          files.forEach((f) => formData.append('file', f))
+          const uploadRes = await fetch('/api/chat/upload', { method: 'POST', body: formData })
+          if (uploadRes.ok) {
+            const data = (await uploadRes.json()) as { files: Array<{ id: string }> }
+            fileIds = data.files.map((f) => f.id)
+          }
+        } catch {
+          // best-effort upload
+        }
+      }
+
+      setActiveDomain(null)
+
+      const filesSuffix =
+        files && files.length > 0 ? '\n' + files.map((f) => `📎 ${f.name}`).join('\n') : ''
+
+      const userMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: trimmed + filesSuffix,
+      }
+      const assistantId = crypto.randomUUID()
+      let currentAssistantId = assistantId
+      const assistantMsg: ChatMessage = {
+        id: assistantId,
+        role: 'assistant',
+        content: '',
+        streaming: true,
+      }
+
+      setMessages((prev) => [...prev, userMsg, assistantMsg])
+      setIsStreaming(true)
+      isStreamingRef.current = true
+
+      // F5: Abort any in-flight SSE stream before starting a new one.
+      if (sendAbortRef.current) sendAbortRef.current.abort()
+      const sendAbort = new AbortController()
+      sendAbortRef.current = sendAbort
+
+      try {
+        const res = await fetch('/api/chat/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: trimmed,
+            conversationId: conversationIdRef.current,
+            activeSpecialistId: activeSpecialistIdRef.current,
+            fileIds: fileIds.length > 0 ? fileIds : undefined,
+          }),
+          signal: sendAbort.signal,
+        })
+
+        if (!res.ok || !res.body) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? { ...m, content: 'Si è verificato un errore. Riprova.', streaming: false }
+                : m,
+            ),
+          )
+          return
+        }
+
+        const reader = res.body.getReader()
+        const dec = new TextDecoder()
+        let buf = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += dec.decode(value, { stream: true })
+          const lines = buf.split('\n')
+          buf = lines.pop() ?? ''
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            try {
+              const event = JSON.parse(line.slice(6)) as Record<string, unknown>
+              const serverMessageId =
+                typeof event.id === 'string' && event.id.trim().length > 0 ? event.id.trim() : null
+              if (serverMessageId && serverMessageId !== currentAssistantId) {
+                const previousAssistantId = currentAssistantId
+                currentAssistantId = serverMessageId
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === currentAssistantId ? { ...m, quickReplies: suggestions } : m,
+                    m.id === previousAssistantId ? { ...m, id: serverMessageId } : m,
                   ),
                 )
               }
-            } else if (event.type === 'agent.thinking') {
-              const stepName = String(event.specialistName ?? '').trim()
-              const stepTitle = String(event.title ?? '').trim()
-              const stepThought =
-                event.thought != null ? String(event.thought).trim() || undefined : undefined
-              if (stepName || stepTitle) {
-                const newStep: ThinkingStep = {
-                  specialistName: stepName || 'Team',
-                  title: stepTitle || 'Elaborazione in corso',
-                  thought: stepThought,
-                }
+
+              if (event.type === 'message.delta') {
                 setMessages((prev) =>
-                  prev.map((m) => {
-                    if (m.id !== currentAssistantId) return m
-                    const existing = m.thinkingSteps ?? []
-                    // Deduplicate: skip if same specialist+title already present
-                    const isDupe = existing.some(
-                      (s) =>
-                        s.specialistName === newStep.specialistName && s.title === newStep.title,
-                    )
-                    if (isDupe) return m
-                    return {
-                      ...m,
-                      streaming: true,
-                      thinkingSteps: [...existing, newStep],
-                    }
-                  }),
+                  prev.map((m) =>
+                    m.id === currentAssistantId
+                      ? { ...m, content: m.content + String(event.delta ?? '') }
+                      : m,
+                  ),
                 )
+              } else if (event.type === 'message.complete') {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === currentAssistantId
+                      ? {
+                          ...m,
+                          content: String(event.content ?? m.content),
+                          streaming: false,
+                        }
+                      : m,
+                  ),
+                )
+              } else if (event.type === 'ui.state') {
+                const domain = event.domain as Domain | undefined
+                const specialistName = event.specialistName as string | undefined
+                const newSpecialistId = event.activeSpecialistId as string | undefined
+                const nextStateSnapshot =
+                  event.stateSnapshot != null
+                    ? (event.stateSnapshot as CanonicalCaseStateSnapshot)
+                    : undefined
+
+                if (domain) setActiveDomain(domain)
+                if (nextStateSnapshot) {
+                  setStateSnapshot(nextStateSnapshot)
+                  stateSnapshotRef.current = nextStateSnapshot
+                  const targetConversationId =
+                    typeof event.conversationId === 'string' &&
+                    event.conversationId.trim().length > 0
+                      ? event.conversationId.trim()
+                      : conversationIdRef.current
+                  if (targetConversationId) {
+                    localStorage.setItem(
+                      stateSnapshotKeyForConversation(targetConversationId),
+                      JSON.stringify(nextStateSnapshot),
+                    )
+                  }
+                }
+
+                if (newSpecialistId && newSpecialistId !== activeSpecialistIdRef.current) {
+                  setActiveSpecialistId(newSpecialistId)
+                  setActiveSpecialistName(specialistName)
+                  activeSpecialistIdRef.current = newSpecialistId
+                  const targetConversationId =
+                    typeof event.conversationId === 'string' &&
+                    event.conversationId.trim().length > 0
+                      ? event.conversationId.trim()
+                      : conversationIdRef.current
+                  if (newSpecialistId && targetConversationId) {
+                    localStorage.setItem(
+                      specialistKeyForConversation(targetConversationId),
+                      newSpecialistId,
+                    )
+                    if (specialistName) {
+                      localStorage.setItem(
+                        specialistNameKeyForConversation(targetConversationId),
+                        specialistName,
+                      )
+                    }
+                  }
+                }
+
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === currentAssistantId ? { ...m, domain, specialistName } : m,
+                  ),
+                )
+              } else if (event.type === 'tool.result') {
+                // Fase 6: Show cartella notification for successful setAttribute saves
+                if (event.ok && typeof event.message === 'string' && event.message) {
+                  const notifId = crypto.randomUUID()
+                  setCartellaNotifications((prev) => [
+                    ...prev,
+                    { id: notifId, message: event.message as string },
+                  ])
+                  // Auto-dismiss after 4 seconds
+                  setTimeout(() => {
+                    setCartellaNotifications((prev) => prev.filter((n) => n.id !== notifId))
+                  }, 4000)
+                }
+              } else if (event.type === 'message.suggestions') {
+                const suggestions = event.suggestions as Array<{
+                  id: string
+                  label: string
+                  text: string
+                  emoji?: string
+                  domain?: Domain
+                }>
+                if (Array.isArray(suggestions) && suggestions.length > 0) {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === currentAssistantId ? { ...m, quickReplies: suggestions } : m,
+                    ),
+                  )
+                }
+              } else if (event.type === 'agent.thinking') {
+                const stepName = String(event.specialistName ?? '').trim()
+                const stepTitle = String(event.title ?? '').trim()
+                const stepThought =
+                  event.thought != null ? String(event.thought).trim() || undefined : undefined
+                if (stepName || stepTitle) {
+                  const newStep: ThinkingStep = {
+                    specialistName: stepName || 'Team',
+                    title: stepTitle || 'Elaborazione in corso',
+                    thought: stepThought,
+                  }
+                  setMessages((prev) =>
+                    prev.map((m) => {
+                      if (m.id !== currentAssistantId) return m
+                      const existing = m.thinkingSteps ?? []
+                      // Deduplicate: skip if same specialist+title already present
+                      const isDupe = existing.some(
+                        (s) =>
+                          s.specialistName === newStep.specialistName && s.title === newStep.title,
+                      )
+                      if (isDupe) return m
+                      return {
+                        ...m,
+                        streaming: true,
+                        thinkingSteps: [...existing, newStep],
+                      }
+                    }),
+                  )
+                }
               }
+            } catch {
+              // ignore malformed SSE lines
             }
-          } catch {
-            // ignore malformed SSE lines
           }
         }
+      } catch {
+        const currentConversationId = conversationIdRef.current
+        let recovered = false
+
+        if (currentConversationId && !sendAbort.signal.aborted) {
+          await new Promise((resolve) => setTimeout(resolve, SEND_RECOVERY_DELAY_MS))
+          recovered = await recoverConversationAfterSendFailure(currentConversationId)
+        }
+
+        if (!recovered) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === currentAssistantId
+                ? { ...m, content: 'Connessione interrotta. Riprova.', streaming: false }
+                : m,
+            ),
+          )
+        }
+      } finally {
+        setIsStreaming(false)
+        isStreamingRef.current = false
       }
-    } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === currentAssistantId
-            ? { ...m, content: 'Connessione interrotta. Riprova.', streaming: false }
-            : m,
-        ),
-      )
-    } finally {
-      setIsStreaming(false)
-      isStreamingRef.current = false
-    }
-  }, [])
+    },
+    [recoverConversationAfterSendFailure],
+  )
 
   const appendLiveMessage = useCallback((role: 'user' | 'assistant', text: string) => {
     setMessages((prev) => [
