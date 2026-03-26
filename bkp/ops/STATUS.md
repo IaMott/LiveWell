@@ -87,14 +87,14 @@ Fatto
 
 In corso
 
+- cleanup track finale completata e review critica completata
 - nessun blocco implementativo obbligatorio aperto
-- restano solo compat legacy residui e warning infrastrutturali non bloccanti
 
 Prossimo
 
 - eventuali follow-up non bloccanti:
-  - ridurre ulteriormente il compat layer interno al protocol engine se emergera` un failure reale
-  - pulire warning infrastrutturali/applicativi residui non legati al runtime shared
+  - rimuovere il `middleware` deprecato o impostare `proxy` quando il warning Next entrera` nel perimetro
+  - ridurre il fallback storico `CaseState` solo se emergera` evidenza che nessun record legacy lo richiede piu`
 
 Rischi
 
@@ -106,8 +106,9 @@ Rischi
 - restano warning non bloccanti di build/runtime:
   - warning Next su workspace root multipli
   - deprecazione convenzione `middleware` -> `proxy`
+- resta compatibility locale non bloccante: `activeDomain`, `activeSpecialistId` e `specialistName` sopravvivono solo come derived fields/client fallback
 - resta rischio non bloccante: il live browser reale con microfono/camera non e` verificabile dal terminale, ma bootstrap/post-turn/tool semantics sono coperti da test di route e integrazione
 
 Ultimo aggiornamento
 
-2026-03-26 23:55
+2026-03-27 00:32

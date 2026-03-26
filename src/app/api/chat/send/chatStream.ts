@@ -1,4 +1,4 @@
-import type { AgentProposal, Domain } from '@/lib/ai/types'
+import type { AgentProposal, CanonicalCaseStateSnapshot, Domain } from '@/lib/ai/types'
 
 export type ChatStreamEvent =
   | { type: 'message.delta'; id: string; delta: string }
@@ -18,6 +18,7 @@ export type ChatStreamEvent =
       specialistName?: string
       activeSpecialistId?: string
       specialistDomains?: Domain[]
+      stateSnapshot?: CanonicalCaseStateSnapshot
       /** S1: Sent so the client can sync the conversationId for newly-created conversations. */
       conversationId?: string
     }

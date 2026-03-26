@@ -789,7 +789,7 @@ export async function POST(request: Request): Promise<Response> {
         // ── Step 7: ui.state, tool results, complete ───────────────────────
         controller.enqueue(
           encoder.encode(
-            `data: ${JSON.stringify({
+            toSse({
               type: 'ui.state',
               domain: activeDomain,
               moodScore: consensus.ui.moodScore,
@@ -800,7 +800,7 @@ export async function POST(request: Request): Promise<Response> {
               stateSnapshot,
               // S1: Include conversationId so the client can sync newly-created conversations.
               conversationId,
-            })}\n\n`,
+            }),
           ),
         )
 

@@ -505,7 +505,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({
             message: trimmed,
             conversationId: conversationIdRef.current,
-            activeSpecialistId: activeSpecialistIdRef.current,
             fileIds: fileIds.length > 0 ? fileIds : undefined,
           }),
           signal: sendAbort.signal,
