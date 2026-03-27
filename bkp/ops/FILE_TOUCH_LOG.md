@@ -423,3 +423,8 @@ File touch log (append-only)
 2026-03-27 23:46 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sul perimetro corretto del fix pack prodotto e sui gap che restano separati
 2026-03-27 23:46 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-61 del fix pack prodotto validato localmente
 2026-03-27 23:46 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=classificazione dei bug reali mitigati e del gap multi-reply ancora aperto
+2026-03-27 23:58 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=allineamento dello stato progetto dopo commit/push/deploy della baseline corretta
+2026-03-27 23:58 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del publish remoto e della verifica alias della baseline corretta
+2026-03-27 23:58 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=decisione finale di chiudere il turno con verdict `ISSUES FOUND`
+2026-03-27 23:58 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-62 con commit applicativo e deploy production
+2026-03-27 23:58 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=classificazione del residuo browser-side/E2E rimasto fuori dalla chiusura piena del prodotto

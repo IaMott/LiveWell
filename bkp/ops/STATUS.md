@@ -127,7 +127,7 @@ In corso
   - live bootstrap ora include documenti e artefatti recenti nel prompt team in `src/app/api/live-token/route.ts`
   - la chat live sincronizza subito il `conversationId` creato runtime nel context e in `localStorage`, riducendo mismatch su refresh/export
   - durante il reasoning non viene piu` mostrato in anticipo uno specialista non ancora consolidato sul messaggio
-- validazioni locali verdi sulla baseline del fix pack:
+- validazioni verdi sulla baseline del fix pack:
   - `npm run test -- tests/api/feedback-widget-refresh.test.ts tests/api/auth-public-pages.test.ts tests/api/forgot-password-url.test.ts tests/api/chat-transcript-route.test.ts tests/chat-input-live-ordering.test.tsx tests/api/live-sync-stateSnapshot.test.ts tests/api/chat-context-live-runtime.test.tsx tests/api/live-token-fallback-observability.test.ts tests/api/live-modal-bootstrap.test.ts`
   - `npm run typecheck`
   - `npm run lint`
@@ -135,8 +135,8 @@ In corso
 
 Prossimo
 
-- pubblicare questa baseline con commit/push/deploy
-- chiudere con verdict onesto: diversi bug reali sono corretti, ma il modello prodotto multi-caso/reply multiplo e la prova browser-side reale su alcuni flussi restano ancora da chiudere come track separata
+- nessun altro fix immediato in questo turno
+- chiudere con verdict onesto: baseline migliorata e pubblicata, ma il modello prodotto multi-caso/reply multiplo e alcune prove browser-side/E2E restano ancora da chiudere come track separata
 
 Rischi
 
@@ -152,4 +152,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 23:46
+2026-03-27 23:58
