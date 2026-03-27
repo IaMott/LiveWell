@@ -336,3 +336,10 @@ File touch log (append-only)
 2026-03-27 21:40 | ruolo=qa-expert | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto riallineato al verdetto QA production sui tre cluster
 2026-03-27 21:40 | ruolo=qa-expert | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append della verifica production con utente smoke reale
 2026-03-27 21:40 | ruolo=qa-expert | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione del verdetto PARTIAL sul cluster filtering dopo verifica production
+2026-03-27 20:54 | ruolo=backend-developer | file=src/lib/chat/userVisibleContent.ts | azione=modify | motivo=il sanitizer assistant ora rimuove anche payload strutturati inline in forma JSON o key:value legacy, preservando il testo visibile residuo
+2026-03-27 20:54 | ruolo=backend-developer | file=tests/api/chat-transcript-route.test.ts | azione=modify | motivo=guardrail sul caso production-like con payload inline e testo assistant sulla stessa riga
+2026-03-27 20:54 | ruolo=backend-developer | file=tests/api/conversation-thinking-export.test.ts | azione=modify | motivo=guardrail load/export sul caso stored content misto payload inline + testo visibile
+2026-03-27 20:54 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-53 della chiusura del cluster filtering
+2026-03-27 20:54 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto riallineato dopo chiusura e verifica production del follow-up filtering
+2026-03-27 20:54 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del fix finale sul transcript filtering misto
+2026-03-27 20:54 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sullo stripping del payload strutturato inline senza perdita del testo user-visible

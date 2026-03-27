@@ -99,20 +99,20 @@ Fatto
 
 In corso
 
-- verifica QA production del fix pack transcript/output/speaker completata
-- emerso un residuo nel filtering transcript assistant misto payload+testo visibile da correggere in un follow-up stretto
+- follow-up stretto sul cluster filtering transcript completato
+- nessuna implementazione aperta nel perimetro transcript/output del fix pack prioritario
 
 Prossimo
 
-- aprire un fix mirato sul sanitizer/transcript route per preservare il testo assistant visibile quando il messaggio contiene anche una riga `Payload:`
-- dopo il fix, ripetere la stessa verifica production sul transcript misto
+- attendere eventuali nuovi test reali utente sul live transcript
+- aprire un nuovo fix solo se emergono regressioni diverse da questo cluster gia` chiuso
 
 Rischi
 
 - resta legacy interno confinato ma non bloccante: `CaseState`, `fromStoredCaseState()` e `compatibilitySpeakerId` sopravvivono nell'engine/protocol per record storici e adapter interni, non piu` nei route hot-path di persistenza canonical-first
 - resta rischio non bloccante sul live reale: i test ora verificano piu` contenuto osservabile del bootstrap (`stateSnapshot`, history, attributes, systemInstruction), ma una integrazione browser/SDK non mockata non e` eseguibile dal terminale
 - rischio applicativo mitigato ma da monitorare in production: transcript live e speaker metadata dipendono ora da serializzazione client + sync live; se il close della sessione avviene in una finestra molto stretta resta possibile un gap non osservato dai test locali
-- rischio QA emerso in production: il leak di `Payload:` e` chiuso, ma un assistant transcript con riga interna + testo visibile puo` essere scartato interamente invece di preservare la parte user-visible
+- rischio QA sul transcript misto mitigato: production ora preserva il testo assistant visibile e continua a filtrare `Payload:`
 - restano solo debiti separati e fuori track:
   - advisory moderate dev-only sullo stack lint/toolchain
   - eventuale major Prisma
@@ -120,4 +120,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 21:40
+2026-03-27 20:54
