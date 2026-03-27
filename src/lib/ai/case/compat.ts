@@ -8,6 +8,7 @@ import type {
   DomainPanel,
   SpeakerPolicy,
 } from '../types'
+import { resolveAgentRuntimeDomain } from '../team/domainMapping'
 import { CaseState } from './state'
 
 function toCanonicalDomain(value: string | null | undefined): Domain | null {
@@ -218,7 +219,9 @@ export function deriveActiveSpecialistFromCaseState(
   return {
     id: agent.id,
     displayName: agent.displayName,
-    domain: (agent.domainTags[0] ?? 'general') as Domain,
+    domain: resolveAgentRuntimeDomain(agent, {
+      preferredDomain: leadPanel?.domain ?? snapshot?.leadDomain ?? null,
+    }),
     domains: agent.domainTags,
     runtimeCapabilities: agent.runtimeCapabilities,
   }

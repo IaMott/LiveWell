@@ -1,4 +1,5 @@
 import type { AgentProposal, CanonicalCaseStateSnapshot, Domain } from '@/lib/ai/types'
+import { resolveAgentRuntimeDomain } from '@/lib/ai/team/domainMapping'
 
 export type ChatStreamEvent =
   | { type: 'message.delta'; id: string; delta: string }
@@ -160,7 +161,7 @@ export function buildThinkingEvents(
       return {
         specialistName: agent?.displayName ?? agentId,
         title: 'Valutazione specialistica in corso',
-        domain: agent?.domainTags?.[0],
+        domain: resolveAgentRuntimeDomain(agent),
         thought: 'Elaborazione in corso',
       }
     })

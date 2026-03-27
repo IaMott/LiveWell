@@ -22,6 +22,56 @@ type PatternRule = {
   templates: ReplyTemplate[]
 }
 
+function normalizeMessage(value: string): string {
+  return value.replace(/\r\n/g, '\n').replace(/\s+/g, ' ').trim()
+}
+
+function extractLastQuestion(assistantMessage: string): string | null {
+  const normalized = normalizeMessage(assistantMessage)
+  if (!normalized.includes('?')) return null
+
+  const questionChunks = normalized.match(/[^?]+\?/g)
+  if (!questionChunks || questionChunks.length === 0) return null
+
+  const lastQuestion = normalizeMessage(questionChunks[questionChunks.length - 1] ?? '')
+  return lastQuestion.length > 0 ? lastQuestion : null
+}
+
+const QUESTION_DIMENSIONS: Array<{ key: string; pattern: RegExp }> = [
+  { key: 'frequency', pattern: /\b(quante?\s+volte|frequenza)\b/i },
+  { key: 'time', pattern: /\b(quando|orari?|a che ora|in che momento)\b/i },
+  { key: 'duration', pattern: /\b(quanto tempo|durata)\b/i },
+  { key: 'location', pattern: /\b(dove|in quale zona|in quale punto)\b/i },
+  { key: 'severity', pattern: /\b(intensit[aà]|scala|quanto.*?(intenso|forte))\b/i },
+  { key: 'modality', pattern: /\b(come|in che modo|che tipo)\b/i },
+]
+
+function isCompoundQuestion(question: string): boolean {
+  const matchedDimensions = QUESTION_DIMENSIONS.filter(({ pattern }) => pattern.test(question)).map(
+    ({ key }) => key,
+  )
+  if (new Set(matchedDimensions).size >= 2) return true
+
+  const conjunctionCount = (question.match(/\b(e|oppure|o)\b/gi) ?? []).length
+  if (question.length > 180 || conjunctionCount >= 3) return true
+
+  return false
+}
+
+function dedupeTemplates(templates: ReplyTemplate[]): ReplyTemplate[] {
+  const out: ReplyTemplate[] = []
+  const seen = new Set<string>()
+
+  for (const template of templates) {
+    const key = `${template.label.trim().toLowerCase()}::${template.text.trim().toLowerCase()}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(template)
+  }
+
+  return out
+}
+
 // ── Pattern catalogue ────────────────────────────────────────────────────────
 
 const RULES: PatternRule[] = [
@@ -306,17 +356,19 @@ const RULES: PatternRule[] = [
  * IDs are generated fresh per call — never reused across requests.
  */
 export function buildContextualQuickReplies(assistantMessage: string): QuickReply[] {
-  // Only trigger when the message contains a question mark
-  if (!assistantMessage.includes('?')) return []
+  const lastQuestion = extractLastQuestion(assistantMessage)
+  if (!lastQuestion) return []
+  if (isCompoundQuestion(lastQuestion)) return []
 
-  // Extract the last ~300 chars (where the question typically lives)
-  const tail = assistantMessage.slice(-300).toLowerCase()
+  const tail = lastQuestion.toLowerCase()
 
   for (const rule of RULES) {
     for (const pattern of rule.patterns) {
       if (pattern.test(tail)) {
-        // Generate fresh UUIDs here, not at module load time
-        return rule.templates.map((t) => ({
+        const templates = dedupeTemplates(rule.templates)
+        if (templates.length < 2) return []
+
+        return templates.map((t) => ({
           id: crypto.randomUUID(),
           label: t.label,
           text: t.text,

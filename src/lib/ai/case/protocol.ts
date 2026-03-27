@@ -1,4 +1,5 @@
 import type { AgentProfile, Domain } from '../types'
+import { resolveAgentRuntimeDomain } from '../team/domainMapping'
 import {
   findCapabilityConsultTarget,
   findPermanentHandoffTriggerReason,
@@ -615,10 +616,7 @@ export function getCaseRoutingDomain(
   if (fallbackDomain === 'general' && current?.domainTags.includes('coordination')) return 'general'
   if (current?.domainTags.includes(fallbackDomain)) return fallbackDomain
   if (fallbackDomain !== 'general') return fallbackDomain
-  const preferred = current?.domainTags.find(
-    (domain) => domain !== 'general' && domain !== 'coordination',
-  )
-  return (preferred ?? current?.domainTags[0] ?? fallbackDomain) as Domain
+  return resolveAgentRuntimeDomain(current, { fallbackDomain })
 }
 
 function shouldKeepConsultTargetActive(params: {

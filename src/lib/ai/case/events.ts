@@ -1,4 +1,5 @@
 import type { AgentProfile, Domain } from '../types'
+import { resolveAgentRuntimeDomain } from '../team/domainMapping'
 import { CaseProtocolEvent } from './state'
 
 export type CaseStreamThinkingEvent = {
@@ -15,7 +16,7 @@ export function buildCaseThinkingEvents(
   const getName = (agentId?: string) =>
     team.find((agent) => agent.id === agentId)?.displayName ?? agentId ?? 'Team'
   const getDomain = (agentId?: string) =>
-    (team.find((agent) => agent.id === agentId)?.domainTags[0] ?? 'general') as Domain
+    resolveAgentRuntimeDomain(team.find((agent) => agent.id === agentId))
 
   return events.map((event) => {
     switch (event.kind) {

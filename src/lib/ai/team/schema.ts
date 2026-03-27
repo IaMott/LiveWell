@@ -14,6 +14,7 @@ export const AgentProfileSchema = z.object({
   id: z.string().min(1),
   displayName: z.string().min(1),
   domainTags: z.array(DomainSchema).min(1),
+  primaryDomain: DomainSchema.optional(),
   systemPromptPath: z.string().min(1), // relative to agent folder
   toolsAllowed: z.array(z.string()).default([]),
   competenceKeywords: z.array(z.string()).optional(),

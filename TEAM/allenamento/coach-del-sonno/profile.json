@@ -2,6 +2,7 @@
   "id": "sleep-coach",
   "displayName": "Sleep Coach",
   "domainTags": ["health", "mindfulness"],
+  "primaryDomain": "mindfulness",
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",

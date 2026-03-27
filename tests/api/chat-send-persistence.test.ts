@@ -751,6 +751,104 @@ describe('/api/chat/send persistence integration', () => {
     })
   })
 
+  it('falls back to consensus quick replies when the assistant question is compound and contextual chips would be misleading', async () => {
+    prismaMock.caseState.findUnique.mockResolvedValue(null)
+
+    vi.resetModules()
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: vi.fn(async () => ({
+        domain: 'training',
+        finalMessageMarkdown:
+          'Per aiutarti bene, quante volte ti alleni e in quali orari della giornata?',
+        toolCallsToExecute: [],
+        stateSnapshot: {
+          schemaVersion: 1,
+          conversationId: 'conv-db-1',
+          activeDomains: ['training'],
+          domainPanels: [
+            {
+              domain: 'training',
+              selectedAgentId: 'persona-trainer',
+              candidateAgentIds: ['persona-trainer'],
+              status: 'active',
+              priorityScore: 9,
+              lastReasoningAt: null,
+              pendingNeeds: [],
+            },
+          ],
+          leadDomain: 'training',
+          speakerPolicy: 'lead',
+          conversationFocus: {
+            activeProblems: ['allenamento disordinato'],
+            activeGoals: ['riprendere palestra'],
+            activeConstraints: [],
+            summary: 'compound quick replies guard',
+          },
+          coordinationState: {
+            crossDomainConflicts: [],
+            dependencies: [],
+            needsReview: false,
+          },
+          sharedOpenQuestions: [],
+          domainOpenQuestions: {},
+          updatedAt: '2026-03-28T00:10:00.000Z',
+        },
+        caseState: undefined,
+        protocolEvents: [],
+        ui: { domainIcon: 'training', moodScore: 50, sectionScores: { training: 60 } },
+        safety: { escalation: 'none' },
+        debug: { selectedAgents: ['persona-trainer'], conflicts: [] },
+        quickReplies: [
+          {
+            id: 'qr-training-1',
+            label: '💪 Personal Trainer',
+            text: 'Vorrei parlare con il Personal Trainer',
+            emoji: '💪',
+            domain: 'training',
+          },
+          {
+            id: 'qr-training-2',
+            label: '📋 Riassunto',
+            text: 'Fammi un riassunto del piano di allenamento',
+            emoji: '📋',
+            domain: 'training',
+          },
+        ],
+      })),
+    }))
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const res = await POST(
+      new Request('http://localhost/api/chat/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'u-db',
+        },
+        body: JSON.stringify({ message: 'voglio rimettermi ad allenare bene' }),
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.text()
+    const suggestions = extractSseEvent(body, 'message.suggestions')
+
+    expect(suggestions).toMatchObject({
+      suggestions: [
+        expect.objectContaining({
+          label: '💪 Personal Trainer',
+          domain: 'training',
+        }),
+        expect.objectContaining({
+          label: '📋 Riassunto',
+          domain: 'training',
+        }),
+      ],
+    })
+    expect(body).not.toContain('1-2 volte/sett.')
+    expect(body).not.toContain('Quasi ogni giorno')
+  })
+
   it('routes text tool calls through the matching panel agent instead of one global capability agent', async () => {
     prismaMock.caseState.findUnique.mockResolvedValue(null)
 

@@ -34,6 +34,7 @@ export type AgentProfile = {
   id: AgentId
   displayName: string
   domainTags: Domain[]
+  primaryDomain?: Domain
   systemPrompt: string
   toolsAllowed: string[]
   competenceKeywords?: string[]

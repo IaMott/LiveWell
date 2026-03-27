@@ -126,21 +126,26 @@ In corso
   - live-sync ora emette `thinkingSteps` e il transcript live li persiste in `src/app/api/chat/live-sync/route.ts`, `src/app/api/chat/transcript/route.ts`, `src/components/chat/ChatInput.tsx`, `src/contexts/ChatContext.tsx`
   - live bootstrap ora include documenti e artefatti recenti nel prompt team in `src/app/api/live-token/route.ts`
   - la chat live sincronizza subito il `conversationId` creato runtime nel context e in `localStorage`, riducendo mismatch su refresh/export
-  - durante il reasoning non viene piu` mostrato in anticipo uno specialista non ancora consolidato sul messaggio
+- durante il reasoning non viene piu` mostrato in anticipo uno specialista non ancora consolidato sul messaggio
+- introdotto `src/lib/ai/team/domainMapping.ts` per un mapping canonico agente→dominio condiviso dai path production-facing
+- `sleep-coach` dichiara ora `primaryDomain=mindfulness`; stream/UI/persistenza non deducono piu` il dominio dal primo `domainTags[0]`
+- `contextualQuickReplies` usa l'ultima domanda utile e sopprime chip fuorvianti sulle domande composte, lasciando vincere il fallback `consensus.quickReplies`
 - validazioni verdi sulla baseline del fix pack:
   - `npm run test -- tests/api/feedback-widget-refresh.test.ts tests/api/auth-public-pages.test.ts tests/api/forgot-password-url.test.ts tests/api/chat-transcript-route.test.ts tests/chat-input-live-ordering.test.tsx tests/api/live-sync-stateSnapshot.test.ts tests/api/chat-context-live-runtime.test.tsx tests/api/live-token-fallback-observability.test.ts tests/api/live-modal-bootstrap.test.ts`
   - `npm run typecheck`
   - `npm run lint`
   - `npm run build`
+  - `npm run test -- tests/api/agent-domain-mapping.test.ts tests/api/contextual-quick-replies.test.ts tests/api/chat-send-persistence.test.ts`
+  - `npm run test -- tests/api/chat-orchestration.test.ts tests/api/chat-shell-domain-visuals.test.ts tests/api/chat-input-domain-highlights.test.ts tests/api/message-bubble-domain-color.test.ts tests/api/chat-routing.test.ts`
 
 Prossimo
 
-- nessun altro fix immediato in questo turno
-- chiudere con verdict onesto: baseline migliorata e pubblicata, ma il modello prodotto multi-caso/reply multiplo e alcune prove browser-side/E2E restano ancora da chiudere come track separata
+- pubblicare il fix pack dominio/quick replies e chiudere con verdict onesto: baseline migliorata e pubblicata, ma il modello prodotto multi-caso/reply multiplo e alcune prove browser-side/E2E restano ancora da chiudere come track separata
 
 Rischi
 
 - resta aperto un gap di prodotto non coperto da questo fix pack: il modello di reply dirette a messaggi/specialisti distinti e backlog multi-caso vivo non e` ancora implementato come thread/reply reale
+- la coerenza dominio→specialista nei path production-facing e` stata riallineata nel codice e nei test, ma resta comunque utile una verifica browser-side finale nei casi reali con specialisti multi-dominio
 - reasoning live molto migliorato nei path server e transcript, ma la completezza percepita nel browser richiede ancora verifica manuale production-side
 - transcript/export/refresh sono piu` allineati dopo il sync del `conversationId` live, ma il comportamento in close browser/SDK molto brusco resta solo mitigato e non provato E2E
 - il reset password e` nuovamente raggiungibile dal login; resta da verificare fuori terminale l'intero flusso email/token/reset page se si vuole chiuderlo come prova end-to-end
@@ -152,4 +157,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 23:58
+2026-03-28 00:13

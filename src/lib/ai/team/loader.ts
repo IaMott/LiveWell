@@ -57,6 +57,7 @@ function loadOneAgent(agentDir: string): AgentProfileType {
     id: parsed.id,
     displayName: parsed.displayName,
     domainTags: parsed.domainTags,
+    primaryDomain: parsed.primaryDomain,
     systemPrompt,
     toolsAllowed: mergeToolsAllowed(
       parsed.toolsAllowed ?? [],
@@ -191,6 +192,7 @@ export function getGenericFallbackAgent(): AgentProfile {
     id: 'generic-specialist',
     displayName: 'Assistente LiveWell',
     domainTags: ['general'],
+    primaryDomain: 'general',
     decisionStyle: 'team-led',
     disclaimerStyle: 'strict',
     toolsAllowed: [],

@@ -15,14 +15,8 @@ import { resolveRoutingCandidates } from '@/lib/ai/orchestrator/routing'
 import { detectDomainFromText, detectDomainsMulti } from '@/lib/ai/domain/domainDetection'
 import { createLlmWithFallback } from '@/lib/ai/llmFactory'
 import { loadTeam } from '@/lib/ai/team/loader'
-import type {
-  AgentInput,
-  AgentProfile,
-  AgentProposal,
-  Domain,
-  ToolCall,
-  ToolResult,
-} from '@/lib/ai/types'
+import { resolveAgentRuntimeDomain } from '@/lib/ai/team/domainMapping'
+import type { AgentInput, AgentProfile, AgentProposal, ToolCall, ToolResult } from '@/lib/ai/types'
 import { ALLOWED_TOOL_NAMES, isAllowedToolName } from '@/lib/tools/toolRegistry'
 import { createToolExecutor, type MutationAuditEvent } from '@/lib/tools/toolExecutor'
 import { realToolHandlers, stubToolHandlers } from '@/lib/tools/handlers'
@@ -443,6 +437,8 @@ export async function POST(request: Request): Promise<Response> {
     caseState: storedCaseState,
     caseStateSnapshot: storedCaseRuntimeState,
   })
+  const streamDomainHint =
+    storedCaseRuntimeState?.leadDomain ?? detectDomainFromText(parsedBody.message)
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream<Uint8Array>({
@@ -501,7 +497,10 @@ export async function POST(request: Request): Promise<Response> {
             {
               specialistName: agent.displayName,
               title: 'Analisi in corso',
-              domain: agent.domainTags[0] as Domain | undefined,
+              domain: resolveAgentRuntimeDomain(agent, {
+                preferredDomain: agentInput.caseStateSnapshot?.leadDomain ?? streamDomainHint,
+                fallbackDomain: streamDomainHint,
+              }),
               thought: 'Valutazione del caso in corso',
             },
             { persist: false },
@@ -523,7 +522,13 @@ export async function POST(request: Request): Promise<Response> {
             {
               specialistName: event.displayName,
               title: event.thought,
-              domain: team.find((a) => a.id === event.agentId)?.domainTags[0] as Domain | undefined,
+              domain: resolveAgentRuntimeDomain(
+                team.find((a) => a.id === event.agentId),
+                {
+                  preferredDomain: agentInput.caseStateSnapshot?.leadDomain ?? streamDomainHint,
+                  fallbackDomain: streamDomainHint,
+                },
+              ),
               thought: event.thought,
             },
             { persist: !isGeneric },
@@ -892,7 +897,8 @@ export async function POST(request: Request): Promise<Response> {
             ),
           )
         }
-      } catch {
+      } catch (error) {
+        console.error('[chat/send] stream failure', error)
         controller.enqueue(
           encoder.encode(
             toSse({
