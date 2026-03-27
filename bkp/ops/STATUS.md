@@ -106,21 +106,33 @@ Fatto
     - `npm run typecheck`
     - `npm run lint`
     - `npm run build`
+- fix UI domini riattivata nel perimetro chat:
+  - `src/components/chat/ChatInput.tsx` illumina ora i pulsanti dominio sia in monodominio sia in multi-dominio, con switch corretto quando cambia il dominio attivo
+  - `src/components/chat/ChatShell.tsx` rimuove il banner alto `modalità specialista attiva` e usa il dominio canonico corrente come priorità visuale, non l'ultimo assistant stale
+  - `src/components/chat/MessageBubble.tsx` colora le bolle assistant col dominio attivo quando il messaggio non ha ancora metadata dominio espliciti
+  - `src/components/chat/MessageList.tsx` propaga il dominio visuale corrente alle bolle
+  - aggiunti guardrail in `tests/api/chat-input-domain-highlights.test.ts`, `tests/api/chat-shell-domain-visuals.test.ts`, `tests/api/message-bubble-domain-color.test.ts`
+  - validazioni verdi:
+    - `npm run test -- tests/api/chat-shell-domain-visuals.test.ts tests/api/chat-input-domain-highlights.test.ts tests/api/message-bubble-domain-color.test.ts`
+    - `npm run typecheck`
+    - `npm run lint`
+    - `npm run build`
 
 In corso
 
-- closeout della track separata live/browser completato
-- nessuna implementazione aperta nel perimetro live/browser meno mock-heavy
+- fix UI domini completato localmente e pronto al publish remoto
+- nessuna altra implementazione aperta fuori dal perimetro domini/chat richiesto in questo step
 
 Prossimo
 
+- push + deploy del fix UI domini/chat e verifica rapida dell'alias production
 - non aprire ora cleanup legacy interno o hygiene toolchain/Prisma senza una richiesta esplicita separata
-- se si apre un'altra track separata, la priorita` residua e` il cleanup del legacy interno confinato
 
 Rischi
 
 - resta legacy interno confinato ma non bloccante: `CaseState`, `fromStoredCaseState()` e `compatibilitySpeakerId` sopravvivono nell'engine/protocol per record storici e adapter interni, non piu` nei route hot-path di persistenza canonical-first
 - resta rischio non bloccante sul live reale: i test ora verificano piu` contenuto osservabile del bootstrap (`stateSnapshot`, history, attributes, systemInstruction), ma una integrazione browser/SDK non mockata non e` eseguibile dal terminale
+- il fix attuale dei domini visuali e` validato localmente e con guardrail UI, ma non ancora verificato manualmente su production nel browser
 - rischio applicativo mitigato ma da monitorare in production: transcript live e speaker metadata dipendono ora da serializzazione client + sync live; se il close della sessione avviene in una finestra molto stretta resta possibile un gap non osservato dai test locali
 - rischio QA sul transcript misto mitigato: production ora preserva il testo assistant visibile e continua a filtrare `Payload:`
 - rischio live ridotto ma non azzerato: il nuovo guardrail browser-facing copre il contratto `LiveModal -> /api/live-token -> SDK config`, ma non sostituisce ancora una prova E2E con browser reale + SDK reale
@@ -131,4 +143,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 22:20
+2026-03-27 22:40

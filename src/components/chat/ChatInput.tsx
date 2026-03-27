@@ -180,6 +180,7 @@ interface Props {
   onHistory?: () => void
   disabled?: boolean
   activeDomain?: Domain | null
+  activeDomains?: Domain[]
   onVoiceStart?: () => void
   /** Called when the Live session closes; receives the conversation ID that was used
    * (may differ from the prop if a new conversation was auto-created during the session). */
@@ -210,6 +211,7 @@ export function ChatInput({
   onHistory,
   disabled,
   activeDomain,
+  activeDomains,
   onVoiceStart,
   onVoiceEnd,
   conversationId,
@@ -303,7 +305,11 @@ export function ChatInput({
     }
   }, [editDraft])
 
-  const currentColor = selectedDomain ? getDomainColor(selectedDomain) : '#8E8E93'
+  const highlightedDomains = new Set<Domain>()
+  for (const domain of activeDomains ?? []) highlightedDomains.add(domain)
+  if (activeDomain) highlightedDomains.add(activeDomain)
+
+  const currentColor = getDomainColor(selectedDomain ?? activeDomain ?? null)
 
   function autoResize() {
     const el = textareaRef.current
@@ -695,19 +701,23 @@ export function ChatInput({
 
             {/* Domain icons */}
             {DOMAINS.map(({ domain, Icon, label }) => {
-              const isActive = selectedDomain === domain
+              const isSelected = selectedDomain === domain
+              const isSystemActive = highlightedDomains.has(domain)
+              const isActive = isSelected || isSystemActive
               const isAnimating = animDomain === domain
-              const color = isActive
-                ? (DOMAIN_COLORS[domain] ?? '#8E8E93')
-                : 'var(--color-text-secondary, #8E8E93)'
+              const domainColor = DOMAIN_COLORS[domain] ?? '#8E8E93'
+              const color = isActive ? domainColor : 'var(--color-text-secondary, #8E8E93)'
               return (
                 <button
                   key={domain}
                   type="button"
                   aria-label={label}
+                  aria-pressed={isActive}
+                  data-domain={domain}
+                  data-active-domain={isActive ? 'true' : 'false'}
                   onClick={() => setSelectedDomain(isActive ? null : domain)}
                   className={isAnimating ? 'lw-domain-active' : undefined}
-                  style={iconBtnStyle(isActive)}
+                  style={iconBtnStyle(isActive, domainColor, isSelected)}
                 >
                   <Icon color={color} />
                 </button>
@@ -864,18 +874,30 @@ export function ChatInput({
   )
 }
 
-function iconBtnStyle(active: boolean): React.CSSProperties {
+function hexToRgba(hex: string, alpha: number): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  if (!result) return `rgba(142, 142, 147, ${alpha})`
+  return `rgba(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}, ${alpha})`
+}
+
+function iconBtnStyle(active: boolean, tone?: string, selected = false): React.CSSProperties {
   return {
     width: '2rem',
     height: '2rem',
     borderRadius: '50%',
     border: 'none',
-    backgroundColor: active ? 'var(--color-bg, #F2F2F7)' : 'transparent',
+    backgroundColor: active
+      ? tone
+        ? hexToRgba(tone, selected ? 0.2 : 0.12)
+        : 'var(--color-bg, #F2F2F7)'
+      : 'transparent',
+    boxShadow:
+      active && tone ? `inset 0 0 0 1px ${hexToRgba(tone, selected ? 0.42 : 0.28)}` : 'none',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    transition: 'background-color 0.15s',
+    transition: 'background-color 0.15s, box-shadow 0.15s',
   }
 }

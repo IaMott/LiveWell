@@ -1,35 +1,46 @@
+// @vitest-environment jsdom
+
+import React from 'react'
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatShell } from '@/components/chat/ChatShell'
 
 const useChatMock = vi.fn()
+const chatInputMock = vi.fn()
 
 vi.mock('@/hooks/useChat', () => ({
   useChat: () => useChatMock(),
 }))
 
 vi.mock('@/components/layout/TopBar', () => ({
-  TopBar: () => <div data-testid="topbar" />,
+  TopBar: () => React.createElement('div', { 'data-testid': 'topbar' }),
 }))
 
 vi.mock('@/components/chat/MessageList', () => ({
-  MessageList: () => <div data-testid="message-list" />,
+  MessageList: () => React.createElement('div', { 'data-testid': 'message-list' }),
 }))
 
 vi.mock('@/components/chat/ChatInput', () => ({
-  ChatInput: () => <div data-testid="chat-input" />,
+  ChatInput: (props: { activeDomain?: string | null; activeDomains?: string[] }) => {
+    chatInputMock(props)
+    return React.createElement(
+      'div',
+      { 'data-testid': 'chat-input' },
+      `activeDomain:${props.activeDomain ?? 'none'}|activeDomains:${(props.activeDomains ?? []).join(',')}`,
+    )
+  },
 }))
 
 vi.mock('@/components/chat/ConversationHistory', () => ({
   ConversationHistory: () => null,
 }))
 
-describe('ChatShell specialist banner', () => {
+describe('ChatShell domain visuals', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('prefers the latest assistant speaker label over the stale lead-panel specialist in the banner', () => {
+  it('removes the top specialist banner and prioritizes the current canonical domain over stale assistant metadata', () => {
     useChatMock.mockReturnValue({
       messages: [
         {
@@ -67,7 +78,7 @@ describe('ChatShell specialist banner', () => {
             pendingNeeds: [],
           },
         ],
-        leadDomain: 'health',
+        leadDomain: 'training',
         speakerPolicy: 'lead',
         conversationFocus: {
           activeProblems: ['spalla debole'],
@@ -99,9 +110,17 @@ describe('ChatShell specialist banner', () => {
       appendLiveMessage: vi.fn(),
     })
 
-    render(<ChatShell />)
+    render(React.createElement(ChatShell))
 
-    expect(screen.getByText('FISIOTERAPISTA')).toBeInTheDocument()
-    expect(screen.queryByText('MMG')).not.toBeInTheDocument()
+    expect(screen.queryByText(/modalità specialista attiva/i)).not.toBeInTheDocument()
+    expect(screen.getByTestId('chat-input')).toHaveTextContent(
+      'activeDomain:health|activeDomains:health,training',
+    )
+    expect(chatInputMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activeDomain: 'health',
+        activeDomains: ['health', 'training'],
+      }),
+    )
   })
 })

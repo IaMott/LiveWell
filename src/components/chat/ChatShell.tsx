@@ -8,7 +8,6 @@ import { ConversationHistory } from './ConversationHistory'
 import { useChat } from '@/hooks/useChat'
 import type { ChatMessage } from '@/hooks/useChat'
 import type { Domain } from '@/lib/ai/types'
-import { getDomainColor } from '@/lib/ui/domainColors'
 
 /** Stable ID for the live interim message — never persisted, replaced on turn complete. */
 const LIVE_INTERIM_ID = 'live-interim'
@@ -25,13 +24,6 @@ type LiveInterim = {
   text: string
 } | null
 
-function formatAgentIdLabel(agentId?: string | null): string | undefined {
-  if (!agentId) return undefined
-  const normalized = agentId.trim().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ')
-  if (!normalized) return undefined
-  return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase())
-}
-
 export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
   const {
     messages,
@@ -40,13 +32,10 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     conversationId,
     stateSnapshot,
     activeDomain,
-    activeSpecialistId,
-    activeSpecialistName,
     cartellaNotifications,
     loadConversation,
     newConversation,
     exportConversation,
-    exitSpecialist,
     stopStreaming,
     editDraft,
     startEdit,
@@ -54,7 +43,6 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     appendLiveMessage,
   } = useChat()
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [liveActive, setLiveActive] = useState(false)
   const [liveInterim, setLiveInterim] = useState<LiveInterim>(null)
   const lastSpokenIdRef = useRef<string | undefined>(undefined)
   // Ref so handleVoiceEnd closure always sees the latest conversationId
@@ -64,7 +52,6 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
   }, [conversationId])
 
   const handleVoiceStart = useCallback(() => {
-    setLiveActive(true)
     // Pin lastSpokenId to the current last message so the TTS effect does NOT
     // re-speak it when the modal opens. Only new messages will be spoken.
     lastSpokenIdRef.current = messages.at(-1)?.id
@@ -73,7 +60,6 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
   const handleVoiceEnd = useCallback(
     (liveConversationId?: string) => {
       // Clear any remaining interim bubble and live flag
-      setLiveActive(false)
       setLiveInterim(null)
       // Prefer the conversation used during the Live session (may be newly created)
       // over the one that was active before it started.
@@ -121,26 +107,24 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     [send, clearEditDraft],
   )
 
-  const leadPanel =
-    stateSnapshot?.domainPanels.find((panel) => panel.domain === stateSnapshot.leadDomain) ??
-    stateSnapshot?.domainPanels[0]
-  const latestAssistantWithSpecialist = [...messages]
+  const latestAssistantWithDomain = [...messages]
     .reverse()
-    .find((message) => message.role === 'assistant' && message.specialistName)
-  const visualActiveDomain = (latestAssistantWithSpecialist?.domain ??
+    .find((message) => message.role === 'assistant' && message.domain)
+  const visualActiveDomain = (activeDomain ??
     stateSnapshot?.leadDomain ??
-    activeDomain ??
+    latestAssistantWithDomain?.domain ??
     null) as Domain | null
-  const visualSpecialistName =
-    latestAssistantWithSpecialist?.specialistName ??
-    activeSpecialistName ??
-    formatAgentIdLabel(leadPanel?.selectedAgentId) ??
-    undefined
-  const specialistColor = getDomainColor(visualActiveDomain)
-  const showSpecialistBanner =
-    !liveActive &&
-    !!visualSpecialistName &&
-    !!(stateSnapshot || activeSpecialistId || activeSpecialistName)
+  const visualActiveDomains = useMemo(() => {
+    const ordered: Domain[] = []
+    const push = (domain: Domain | null | undefined) => {
+      if (!domain || ordered.includes(domain)) return
+      ordered.push(domain)
+    }
+    push(activeDomain)
+    for (const domain of stateSnapshot?.activeDomains ?? []) push(domain)
+    push(latestAssistantWithDomain?.domain)
+    return ordered
+  }, [latestAssistantWithDomain?.domain, stateSnapshot?.activeDomains, activeDomain])
 
   /** Merge confirmed messages with the live interim message (if any) so the text
    * grows word-by-word directly inside the chat bubble — same as text streaming. */
@@ -170,68 +154,6 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     >
       <TopBar userInitials={userInitials} userName={userName} userImage={userImage} />
 
-      {/* Specialist mode banner — hidden during live session to avoid duplicate
-          specialist chrome while the shared live turn is in progress.
-          The canonical state is still re-applied to text chat when live ends. */}
-      {showSpecialistBanner && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0.5rem 1rem',
-            backgroundColor: `${specialistColor}18`,
-            borderBottom: `1px solid ${specialistColor}40`,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: specialistColor,
-                display: 'inline-block',
-                flexShrink: 0,
-              }}
-            />
-            <span
-              style={{
-                fontSize: '0.8125rem',
-                fontWeight: 600,
-                color: specialistColor,
-                letterSpacing: '0.04em',
-              }}
-            >
-              {visualSpecialistName.toUpperCase()}
-            </span>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                color: 'var(--color-text-secondary, rgba(0,0,0,0.45))',
-              }}
-            >
-              — modalità specialista attiva
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={exitSpecialist}
-            style={{
-              fontSize: '0.75rem',
-              color: 'var(--color-text-secondary, rgba(0,0,0,0.45))',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '0.25rem 0.5rem',
-              borderRadius: '4px',
-            }}
-          >
-            Esci
-          </button>
-        </div>
-      )}
-
       {/* displayMessages merges confirmed messages with the live interim (if any).
           The interim appears as a streaming bubble directly in the chat flow,
           growing word-by-word with the ▋ cursor — same UX as text streaming. */}
@@ -240,6 +162,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         conversationId={conversationId}
         onSend={handleSend}
         onEdit={startEdit}
+        activeDomain={visualActiveDomain}
       />
 
       <ChatInput
@@ -247,6 +170,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         onHistory={() => setHistoryOpen(true)}
         disabled={isStreaming}
         activeDomain={visualActiveDomain}
+        activeDomains={visualActiveDomains}
         onVoiceStart={handleVoiceStart}
         onVoiceEnd={handleVoiceEnd}
         conversationId={conversationId}

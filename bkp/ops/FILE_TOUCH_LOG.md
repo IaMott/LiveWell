@@ -355,3 +355,19 @@ File touch log (append-only)
 2026-03-27 22:20 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto aggiornato dopo la chiusura della track separata live/browser
 2026-03-27 22:20 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append della chiusura della track separata live/browser
 2026-03-27 22:20 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sulla scelta di rafforzare il perimetro live solo con guardrail ad alto ROI
+2026-03-27 22:40 | ruolo=backend-developer | file=src/components/chat/ChatInput.tsx | azione=modify | motivo=riattivati highlight domini nella barra in basso con supporto multi-dominio e switch dinamico del dominio attivo
+2026-03-27 22:40 | ruolo=backend-developer | file=src/components/chat/ChatShell.tsx | azione=modify | motivo=rimossa la banner bar `modalità specialista attiva` e corretta la priorita` del dominio visuale sul canonico corrente
+2026-03-27 22:40 | ruolo=backend-developer | file=src/components/chat/MessageList.tsx | azione=modify | motivo=propagazione del dominio visuale attivo alle bolle assistant
+2026-03-27 22:40 | ruolo=backend-developer | file=src/components/chat/MessageBubble.tsx | azione=modify | motivo=colorazione delle bolle assistant sul dominio attivo quando il messaggio non ha ancora metadata dominio
+2026-03-27 22:40 | ruolo=backend-developer | file=tests/api/chat-shell-domain-visuals.test.ts | azione=create | motivo=guardrail sulla rimozione del banner alto e sulla priorita` del dominio canonico corrente
+2026-03-27 22:40 | ruolo=backend-developer | file=tests/api/chat-input-domain-highlights.test.ts | azione=create | motivo=guardrail su highlight multi-dominio e switch dei pulsanti dominio nella barra in basso
+2026-03-27 22:40 | ruolo=backend-developer | file=tests/api/message-bubble-domain-color.test.ts | azione=create | motivo=guardrail sulla colorazione delle bolle assistant col dominio attivo
+2026-03-27 22:40 | ruolo=backend-developer | file=tests/chat-shell-specialist-banner.test.tsx | azione=delete | motivo=il vecchio test top-level non veniva piu` raccolto dal pattern Vitest del repo ed e` stato sostituito da un guardrail in tests/api
+2026-03-27 22:40 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-56 del fix UI domini/chat validato localmente
+2026-03-27 22:40 | ruolo=backend-developer | file=bkp/ops/FILE_TOUCH_LOG.md | azione=modify | motivo=append dei file toccati nel fix UI domini/chat
+2026-03-27 22:40 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=aggiornamento del rischio reale sulla regressione visiva dei domini dopo il multi-dominio
+2026-03-27 22:40 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto aggiornato dopo la validazione locale del fix UI domini/chat
+2026-03-27 22:40 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del fix UI domini/chat
+2026-03-27 22:40 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sulla priorita` visuale del dominio canonico e sulla rimozione del banner alto
+2026-03-27 22:40 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/2240_backend-developer_domain-ui-reactivation-local.md | azione=create | motivo=storico resumable del fix UI domini/chat validato localmente
+2026-03-27 22:40 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/2240_chatlog.md | azione=create | motivo=chatlog sintetico del fix UI domini/chat

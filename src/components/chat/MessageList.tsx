@@ -3,15 +3,17 @@
 import { useEffect, useRef } from 'react'
 import { MessageBubble } from './MessageBubble'
 import type { ChatMessage } from '@/hooks/useChat'
+import type { Domain } from '@/lib/ai/types'
 
 type Props = {
   messages: ChatMessage[]
   conversationId?: string
   onSend?: (text: string) => void
   onEdit?: (messageId: string) => void
+  activeDomain?: Domain | null
 }
 
-export function MessageList({ messages, conversationId, onSend, onEdit }: Props) {
+export function MessageList({ messages, conversationId, onSend, onEdit, activeDomain }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -73,6 +75,7 @@ export function MessageList({ messages, conversationId, onSend, onEdit }: Props)
           conversationId={conversationId}
           onSend={onSend}
           onEdit={onEdit ? () => onEdit(msg.id) : undefined}
+          activeDomain={activeDomain}
         />
       ))}
       <div ref={bottomRef} />

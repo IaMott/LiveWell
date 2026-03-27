@@ -24,20 +24,22 @@ type Props = {
   conversationId?: string
   onSend?: (text: string) => void
   onEdit?: () => void
+  activeDomain?: Domain | null
 }
 
-export function MessageBubble({ message, conversationId, onSend, onEdit }: Props) {
+export function MessageBubble({ message, conversationId, onSend, onEdit, activeDomain }: Props) {
   const isUser = message.role === 'user'
   const [hovered, setHovered] = useState(false)
   // Reasoning accordion: open while streaming (no content yet), closed once content arrives
   const hasContent = message.content.length > 0
   const [reasoningOpen, setReasoningOpen] = useState(false)
-  const domainColor = message.domain ? DOMAIN_COLORS[message.domain] : undefined
+  const resolvedDomain = !isUser ? (message.domain ?? activeDomain ?? undefined) : undefined
+  const domainColor = resolvedDomain ? DOMAIN_COLORS[resolvedDomain] : undefined
   const specialistLabel =
     !isUser && message.specialistName
       ? message.specialistName
-      : !isUser && message.domain && DOMAIN_LABELS[message.domain]
-        ? DOMAIN_LABELS[message.domain]
+      : !isUser && resolvedDomain && DOMAIN_LABELS[resolvedDomain]
+        ? DOMAIN_LABELS[resolvedDomain]
         : null
 
   const thinkingSteps: ThinkingStep[] = message.thinkingSteps ?? []
@@ -154,6 +156,8 @@ export function MessageBubble({ message, conversationId, onSend, onEdit }: Props
           }}
         >
           <div
+            data-testid={!isUser ? 'assistant-bubble' : 'user-bubble'}
+            data-domain={resolvedDomain ?? ''}
             style={{
               maxWidth: '72%',
               backgroundColor:
@@ -253,7 +257,7 @@ export function MessageBubble({ message, conversationId, onSend, onEdit }: Props
           messageId={message.id}
           conversationId={conversationId}
           agentName={message.specialistName ?? specialistLabel ?? undefined}
-          domain={message.domain}
+          domain={resolvedDomain}
         />
       )}
     </div>
