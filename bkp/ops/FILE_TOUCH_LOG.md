@@ -395,3 +395,11 @@ File touch log (append-only)
 2026-03-27 23:08 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sullo snapshot canonico arricchito nel path orchestrator
 2026-03-27 23:08 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/2308_backend-developer_domain-state-production-path-fix.md | azione=create | motivo=storico resumable del fix backend domini
 2026-03-27 23:08 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/2308_chatlog.md | azione=create | motivo=chatlog sintetico del fix backend domini
+2026-03-27 23:28 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-60 del publish+smoke production del fix backend domini
+2026-03-27 23:28 | ruolo=backend-developer | file=bkp/ops/FILE_TOUCH_LOG.md | azione=modify | motivo=append dei file memoria toccati dal closeout finale del fix backend domini
+2026-03-27 23:28 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=chiusura production del rischio high R-QA-058 sui domini ancora serializzati come general
+2026-03-27 23:28 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto aggiornato con publish e smoke production PASS del fix backend domini
+2026-03-27 23:28 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del publish e della smoke production PASS del fix backend domini
+2026-03-27 23:28 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR finale di chiusura del bug production-facing domini/chat
+2026-03-27 23:28 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/2328_backend-developer_domain-state-production-publish.md | azione=create | motivo=storico resumable del publish e della verifica production del fix backend domini
+2026-03-27 23:28 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/2328_chatlog.md | azione=create | motivo=chatlog sintetico del closeout production del fix backend domini
