@@ -371,3 +371,8 @@ File touch log (append-only)
 2026-03-27 22:40 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sulla priorita` visuale del dominio canonico e sulla rimozione del banner alto
 2026-03-27 22:40 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/2240_backend-developer_domain-ui-reactivation-local.md | azione=create | motivo=storico resumable del fix UI domini/chat validato localmente
 2026-03-27 22:40 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/2240_chatlog.md | azione=create | motivo=chatlog sintetico del fix UI domini/chat
+2026-03-27 22:45 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-57 con push/deploy del fix UI domini/chat
+2026-03-27 22:45 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto aggiornato dopo il publish remoto del fix UI domini/chat
+2026-03-27 22:45 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del publish remoto del fix UI domini/chat
+2026-03-27 22:45 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/2245_backend-developer_domain-ui-reactivation-publish.md | azione=create | motivo=storico resumable del publish del fix UI domini/chat
+2026-03-27 22:45 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/2245_chatlog.md | azione=create | motivo=chatlog sintetico del publish del fix UI domini/chat

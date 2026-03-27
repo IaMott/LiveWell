@@ -120,19 +120,19 @@ Fatto
 
 In corso
 
-- fix UI domini completato localmente e pronto al publish remoto
+- fix UI domini/chat pubblicato e verificato sull'alias production
 - nessuna altra implementazione aperta fuori dal perimetro domini/chat richiesto in questo step
 
 Prossimo
 
-- push + deploy del fix UI domini/chat e verifica rapida dell'alias production
+- se emerge feedback reale nuovo, verificare in production il comportamento visivo di domini, pulsanti e bolle assistant
 - non aprire ora cleanup legacy interno o hygiene toolchain/Prisma senza una richiesta esplicita separata
 
 Rischi
 
 - resta legacy interno confinato ma non bloccante: `CaseState`, `fromStoredCaseState()` e `compatibilitySpeakerId` sopravvivono nell'engine/protocol per record storici e adapter interni, non piu` nei route hot-path di persistenza canonical-first
 - resta rischio non bloccante sul live reale: i test ora verificano piu` contenuto osservabile del bootstrap (`stateSnapshot`, history, attributes, systemInstruction), ma una integrazione browser/SDK non mockata non e` eseguibile dal terminale
-- il fix attuale dei domini visuali e` validato localmente e con guardrail UI, ma non ancora verificato manualmente su production nel browser
+- il fix attuale dei domini visuali e` validato localmente e deployato; manca solo eventuale verifica manuale browser-side della resa finale
 - rischio applicativo mitigato ma da monitorare in production: transcript live e speaker metadata dipendono ora da serializzazione client + sync live; se il close della sessione avviene in una finestra molto stretta resta possibile un gap non osservato dai test locali
 - rischio QA sul transcript misto mitigato: production ora preserva il testo assistant visibile e continua a filtrare `Payload:`
 - rischio live ridotto ma non azzerato: il nuovo guardrail browser-facing copre il contratto `LiveModal -> /api/live-token -> SDK config`, ma non sostituisce ancora una prova E2E con browser reale + SDK reale
@@ -143,4 +143,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 22:40
+2026-03-27 22:45
