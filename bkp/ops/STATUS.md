@@ -99,13 +99,13 @@ Fatto
 
 In corso
 
-- verifica QA production rerun del fix pack transcript/output/speaker completata
+- closeout finale del fix pack transcript/output/speaker completato
 - nessuna implementazione aperta nel perimetro del fix pack prioritario
 
 Prossimo
 
-- attendere eventuali nuovi test reali utente su production
-- aprire un nuovo fix solo se emergono regressioni reali non coperte da questa rerun QA
+- se si apre una track separata, priorita` consigliata: integrazione live/browser meno mock-heavy
+- non aprire ora cleanup legacy interno o hygiene toolchain/Prisma senza una richiesta esplicita separata
 
 Rischi
 
@@ -120,4 +120,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 21:56
+2026-03-27 22:11
