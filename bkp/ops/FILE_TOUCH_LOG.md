@@ -332,3 +332,7 @@ File touch log (append-only)
 2026-03-27 20:49 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=stato finale allineato dopo push/deploy del fix pack prioritario
 2026-03-27 20:49 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del publish remoto del fix pack prioritario
 2026-03-27 20:49 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione della decisione runtime-first sul fix pack emerso dal feedback reale
+2026-03-27 21:40 | ruolo=qa-expert | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-52 della verifica production del fix pack
+2026-03-27 21:40 | ruolo=qa-expert | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto riallineato al verdetto QA production sui tre cluster
+2026-03-27 21:40 | ruolo=qa-expert | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append della verifica production con utente smoke reale
+2026-03-27 21:40 | ruolo=qa-expert | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione del verdetto PARTIAL sul cluster filtering dopo verifica production
