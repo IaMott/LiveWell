@@ -99,13 +99,13 @@ Fatto
 
 In corso
 
-- follow-up stretto sul cluster filtering transcript completato
-- nessuna implementazione aperta nel perimetro transcript/output del fix pack prioritario
+- verifica QA production rerun del fix pack transcript/output/speaker completata
+- nessuna implementazione aperta nel perimetro del fix pack prioritario
 
 Prossimo
 
-- attendere eventuali nuovi test reali utente sul live transcript
-- aprire un nuovo fix solo se emergono regressioni diverse da questo cluster gia` chiuso
+- attendere eventuali nuovi test reali utente su production
+- aprire un nuovo fix solo se emergono regressioni reali non coperte da questa rerun QA
 
 Rischi
 
@@ -120,4 +120,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 20:54
+2026-03-27 21:56

@@ -343,3 +343,7 @@ File touch log (append-only)
 2026-03-27 20:54 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto riallineato dopo chiusura e verifica production del follow-up filtering
 2026-03-27 20:54 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del fix finale sul transcript filtering misto
 2026-03-27 20:54 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sullo stripping del payload strutturato inline senza perdita del testo user-visible
+2026-03-27 21:56 | ruolo=qa-expert | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-54 della rerun QA production post-fix
+2026-03-27 21:56 | ruolo=qa-expert | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto riallineato alla verifica production finale del fix pack
+2026-03-27 21:56 | ruolo=qa-expert | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append della rerun QA production con esito finale PASS sui quattro controlli
+2026-03-27 21:56 | ruolo=qa-expert | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione della chiusura QA production del fix pack transcript/output/speaker
