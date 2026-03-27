@@ -140,7 +140,8 @@ In corso
 
 Prossimo
 
-- pubblicare il fix pack dominio/quick replies e chiudere con verdict onesto: baseline migliorata e pubblicata, ma il modello prodotto multi-caso/reply multiplo e alcune prove browser-side/E2E restano ancora da chiudere come track separata
+- nessun altro fix immediato in questo turno
+- chiudere con verdict onesto: fix pack dominio/quick replies pubblicato, ma il modello prodotto multi-caso/reply multiplo e alcune prove browser-side/E2E restano ancora da chiudere come track separata
 
 Rischi
 
@@ -157,4 +158,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-28 00:13
+2026-03-28 00:20

@@ -444,3 +444,7 @@ File touch log (append-only)
 2026-03-28 00:13 | step=CP-63 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/api/agent-domain-mapping.test.ts` | action=completed | contract=test | note=`guardrail sui casi sleep-coach, lead panel canonico e thinking fallback production-facing`
 2026-03-28 00:13 | step=CP-63 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/api/contextual-quick-replies.test.ts` | action=completed | contract=test | note=`guardrail su quick replies semplici, domande composte e ultima domanda utile`
 2026-03-28 00:13 | step=CP-63 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/api/chat-send-persistence.test.ts` | action=completed | contract=test | note=`guardrail production-facing sul fallback alle quick replies del consenso quando quelle contestuali sarebbero fuorvianti`
+2026-03-28 00:20 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=allineamento stato progetto dopo commit/push/deploy del fix pack dominio/quick replies`
+2026-03-28 00:20 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del publish remoto e della verifica alias del fix pack dominio/quick replies`
+2026-03-28 00:20 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=decisione finale sul perimetro chiuso vs gap di prodotto ancora aperti`
+2026-03-28 00:20 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-64 con commit applicativo e deploy production`
