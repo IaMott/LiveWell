@@ -569,10 +569,13 @@ export function selectAgentsForRequest(
   message = '',
   caseContext = '',
   agentFeedbackScores: Record<string, number> = {},
+  options: { preferredAgentIds?: string[] } = {},
 ): AgentProfile[] {
   const secondary = allDomains.filter((d) => d !== domain && d !== 'general')
   const lowerMessage = message.toLowerCase()
   const msgTokens = textToTokens(message)
+  const preferredAgentOrder = options.preferredAgentIds ?? []
+  const preferredAgentRanks = new Map(preferredAgentOrder.map((id, index) => [id, index]))
 
   // Scoring is fully general — same rules for every agent:
   //   +4  primary domain match
@@ -590,24 +593,28 @@ export function selectAgentsForRequest(
       if (a.domainTags.includes(domain)) s += 4
       if (a.domainTags.includes('general')) s += 1
       for (const d of secondary) if (a.domainTags.includes(d)) s += 2
+      const preferredRank = preferredAgentRanks.get(a.id)
+      if (preferredRank !== undefined) {
+        s += Math.max(6, 10 - preferredRank * 2)
+      }
       if (lowerMessage.includes(a.id.toLowerCase())) s += 2
       if (lowerMessage.includes(a.displayName.toLowerCase())) s += 2
 
       const competenceHints = a.competenceKeywords ?? AGENT_COMPETENCE_HINTS[a.id] ?? []
-      // Score against current message (weight: +3 per match)
+      // Competence hints remain a booster, not the main routing driver.
       const msgMatches = competenceHints.filter((h) =>
         h.includes(' ') ? lowerMessage.includes(h) : msgTokens.has(h),
       ).length
-      if (msgMatches > 0) s += msgMatches * 3
+      if (msgMatches > 0) s += msgMatches
 
-      // Score against accumulated case context (weight: +2 per match — slightly lower)
+      // Case-context matches are stabilizers, not the core selection engine.
       if (caseContext) {
         const lowerCase = caseContext.toLowerCase()
         const caseTokens = textToTokens(caseContext)
         const caseMatches = competenceHints.filter((h) =>
           h.includes(' ') ? lowerCase.includes(h) : caseTokens.has(h),
         ).length
-        if (caseMatches > 0) s += caseMatches * 2
+        if (caseMatches > 0) s += caseMatches
       }
 
       // Feedback scoring: +2 if highly rated (≥4.0), -2 if poorly rated (≤2.0)

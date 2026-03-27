@@ -15,7 +15,12 @@ export function buildDomainDetectedTraceEvent(params: {
   step: number
   detectedDomain: Domain
   allDomains: Domain[]
-  source: 'input.domainHint' | 'domainDetection'
+  source:
+    | 'input.domainHint'
+    | 'llm_context'
+    | 'snapshot_context'
+    | 'history_context'
+    | 'domainDetection'
 }): DecisionTraceEvent {
   const { step, detectedDomain, allDomains, source } = params
   return createDecisionTraceEvent(

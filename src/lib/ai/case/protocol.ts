@@ -63,6 +63,20 @@ const TAKEOVER_CONTINUITY_PATTERNS = [
   /\bproseguiamo\s+con\s+lei\b/i,
 ]
 
+const CONTEXT_CONTINUATION_PATTERNS = [
+  /\bcontinuiamo\b/i,
+  /\bcontinua\b/i,
+  /\bproseguiamo\b/i,
+  /\bprosegui\b/i,
+  /\briprendiamo\b/i,
+  /\briprendi\b/i,
+  /\btorniamo\b/i,
+  /\bda dove eravamo rimasti\b/i,
+  /\bcontinua pure\b/i,
+  /\brestiamo\b/i,
+  /\bandiamo avanti\b/i,
+]
+
 const HANDOFF_CONTINUITY_PATTERNS = [
   /\bvorrei\s+che\s+mi\s+seguisse\b/i,
   /\bvorrei\s+che\s+fosse\s+lui\s+a\s+seguirmi(?:\s+da\s+ora)?\b/i,
@@ -125,12 +139,24 @@ function isNaturalTakeoverContinuation(message: string): boolean {
   return TAKEOVER_CONTINUITY_PATTERNS.some((pattern) => pattern.test(trimmed))
 }
 
+function isContextContinuationMessage(message: string): boolean {
+  const trimmed = message.trim()
+  if (!trimmed) return false
+  return (
+    CONTEXT_CONTINUATION_PATTERNS.some((pattern) => pattern.test(trimmed)) ||
+    (!NEW_TOPIC_PATTERN.test(trimmed) && trimmed.split(/\s+/).length <= 6)
+  )
+}
+
 function isMeaningfulHandoffContinuation(message: string): boolean {
   const trimmed = message.trim()
   if (!trimmed) return false
   if (/^(ok|okay|va bene|perfetto|grazie|thanks|thank you)[!.,\s]*$/i.test(trimmed)) return false
   return trimmed.split(/\s+/).length > 3 || HANDOFF_CONTINUITY_PATTERNS.some((p) => p.test(trimmed))
 }
+
+const NEW_TOPIC_PATTERN =
+  /\b(cambiamo argomento|passiamo a|ora invece|un'altra cosa|altro tema|nuovo problema|parliamo di altro)\b/i
 
 function hasConsultFocusSignal(agentId: string | undefined, message: string): boolean {
   if (!agentId) return false
@@ -656,8 +682,16 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
   }
 
   const requestedAgentId = detectRequestedAgentId(message, team)
+  const currentSpeaker = current
+    ? team.find((agent) => agent.id === current.activeSpeakerAgentId)
+    : undefined
+  const preserveCurrentSpeaker =
+    current?.protocolState === 'owner_active' &&
+    !requestedAgentId &&
+    agentSupportsDetectedDomain(currentSpeaker, detectedDomain) &&
+    (current.activeSpeakerAgentId !== current.ownerAgentId || isContextContinuationMessage(message))
   const capabilityConsult =
-    current.protocolState === 'owner_active' && !requestedAgentId
+    current.protocolState === 'owner_active' && !requestedAgentId && !preserveCurrentSpeaker
       ? findCapabilityConsultTarget({
           team,
           ownerAgentId: current.ownerAgentId,
@@ -849,7 +883,13 @@ export function advanceCaseState(params: AdvanceCaseStateParams): AdvanceCaseSta
     !isMultiDomainMessage
   ) {
     const currentOwner = team.find((a) => a.id === current.ownerAgentId)
-    if (currentOwner && !agentSupportsDetectedDomain(currentOwner, detectedDomain)) {
+    const currentSpeaker = team.find((a) => a.id === current.activeSpeakerAgentId)
+    const currentRoutingAgent =
+      currentSpeaker && agentSupportsDetectedDomain(currentSpeaker, detectedDomain)
+        ? currentSpeaker
+        : currentOwner
+
+    if (currentRoutingAgent && !agentSupportsDetectedDomain(currentRoutingAgent, detectedDomain)) {
       const newOwnerId = chooseInitialOwner({ message, detectedDomain, allDomains, team })
       if (newOwnerId !== current.ownerAgentId) {
         const next: CaseState = {

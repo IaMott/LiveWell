@@ -20,6 +20,7 @@ import {
 } from './decisionTrace'
 import { tryAgeQuestionFastPath, isGenericMessage } from './fastPaths'
 import { applyInterviewFlow } from './interviewFlow'
+import { inferRoutingWithLlm, resolveContextualRouting } from './contextualRouting'
 import { resolveRoutingCandidates } from './routing'
 import { synthesizeRawResponse } from './synthesis'
 import { hardenFinalAnswer } from './finalAnswer'
@@ -73,23 +74,45 @@ export async function orchestrate(
   const fastPath = tryAgeQuestionFastPath(input)
   if (fastPath.handled) return fastPath.result
 
-  const detectedDomain = input.domainHint ?? detectDomainFromText(input.message)
-  const allDomains = detectDomainsMulti(input.message).map((d) => d.domain)
-  const significantDomains = detectSignificantDomains(input.message).map((d) => d.domain)
+  const heuristicDetectedDomain = input.domainHint ?? detectDomainFromText(input.message)
+  const heuristicAllDomains = detectDomainsMulti(input.message).map((d) => d.domain)
 
   // Launch LLM extraction IN PARALLEL with the rest of orchestration.
   // This lightweight Gemini Flash call (~1s) extracts structured data from any Italian text
   // without depending on regex patterns. Result is awaited only before planToolCalls().
   const { llmExtractAttributes } = await import('./llmExtraction')
-  const llmExtractionPromise = llmExtractAttributes(deps.llm, input.message, detectedDomain).catch(
-    () => [] as import('../types').ToolCall[],
-  )
+  const llmExtractionPromise = llmExtractAttributes(
+    deps.llm,
+    input.message,
+    heuristicDetectedDomain,
+  ).catch(() => [] as import('../types').ToolCall[])
+  const llmRoutingPromise = inferRoutingWithLlm({
+    llm: deps.llm,
+    team: deps.team,
+    input,
+    heuristicDetectedDomain,
+    heuristicAllDomains,
+  }).catch(() => null)
+  const [llmExtractedAttributes, llmRouting] = await Promise.all([
+    llmExtractionPromise,
+    llmRoutingPromise,
+  ])
+  const routingResolution = resolveContextualRouting({
+    input,
+    heuristicDetectedDomain,
+    heuristicAllDomains,
+    llmExtractionCalls: llmExtractedAttributes,
+    llmRouting,
+  })
+  const detectedDomain = routingResolution.detectedDomain
+  const allDomains = routingResolution.allDomains
+  const significantDomains = detectSignificantDomains(input.message).map((d) => d.domain)
   const decisionTrace = [
     buildDomainDetectedTraceEvent({
       step: 1,
       detectedDomain,
       allDomains,
-      source: input.domainHint ? 'input.domainHint' : 'domainDetection',
+      source: routingResolution.source,
     }),
   ]
 
@@ -136,6 +159,7 @@ export async function orchestrate(
     allDomains,
     currentSpeakerId: activeSpecialist?.id,
     contextPack: input.contextPack,
+    preferredAgentIds: routingResolution.preferredAgentIds,
   })
   decisionTrace.push(...routingDecisionTrace)
 
@@ -272,10 +296,9 @@ export async function orchestrate(
       thought: 'Messaggio multi-dominio rilevato — preparo la selezione degli specialisti',
     })
 
-    const llmExtractedToolCalls = await llmExtractionPromise
     const toolCallPlan = planToolCalls({
       consensusToolCalls: consensusOutcome.toolCallsToExecute,
-      llmExtractedToolCalls,
+      llmExtractedToolCalls: llmExtractedAttributes,
       message: input.message,
       domainHint,
       activeSpecialist: undefined,
@@ -342,12 +365,9 @@ export async function orchestrate(
       ? deps.retryGuardWindowMs
       : getRetryGuardWindowMs()
 
-  // Await the LLM extraction that was launched in parallel at the start
-  const llmExtractedToolCalls = await llmExtractionPromise
-
   const toolCallPlan = planToolCalls({
     consensusToolCalls: consensusOutcome.toolCallsToExecute,
-    llmExtractedToolCalls,
+    llmExtractedToolCalls: llmExtractedAttributes,
     message: input.message,
     domainHint,
     activeSpecialist: effectiveSpecialist,

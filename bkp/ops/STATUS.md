@@ -87,18 +87,15 @@ Fatto
 
 In corso
 
-- nessun blocco implementativo attivo nel working tree
-- riconciliazione storica A/B completata e pubblicata
-- review finale ancora aperta sul blocco D multi-dominio, perche` il routing resta keyword-heavy nei punti chiave
+- nessun blocco implementativo attivo nel working tree oltre al publish della track corrente
+- track obbligatoria sul routing multi-dominio context-first chiusa localmente e validata
+- review finale totale ancora aperta solo per verificare publish e assenza di nuove track obbligatorie residue
 
 Prossimo
 
-- formalizzare il verdetto finale della riconciliazione storica:
-  - blocco A `done`
-  - blocco B `done` dopo i fix su semantica `birthDate`, derivazione `currentAge` e note obbligatorie
-  - blocco C `done`
-  - blocco D ancora `partial` per routing/preselezione dominio troppo euristici
-- pianificare solo se richiesto una track separata sul cuore multi-dominio context-first / LLM-first
+- commit, push e deploy della chiusura context-first / LLM-first
+- rieseguire review finale avversariale dell'intero progetto
+- dichiarare `DONE` o `DONE WITH RESIDUAL RECOMMENDATIONS` solo se non restano piu` track obbligatorie
 
 Rischi
 
@@ -145,9 +142,9 @@ Rischi
   - il protocol engine interno usa ancora adapter legacy controllati (`CaseState`, `applyCanonicalSnapshotToLegacyCaseState`, `compatibilitySpeakerId`) ma non piu` come driver dei route principali
   - il bootstrap/security live resta coperto soprattutto da test mock-heavy; gap di integrazione reale non blocking ma ancora presente
   - resta un warning lint non bloccante su `src/components/profile/UserAvatar.tsx`
-- residuo storico ancora aperto:
-  - il cuore multi-dominio non e` ancora pienamente context-first / LLM-first e continua a dipendere da keyword/hints statici in `src/lib/ai/domain/domainDetection.ts`, `src/lib/ai/orchestrator/routing.ts` e `src/lib/ai/orchestrator/agentSelection.ts`
+- le euristiche statiche (`KEYWORDS`, `SPECIALIST_KEYWORDS`, `AGENT_COMPETENCE_HINTS`) restano nel codice come supporto/fallback; la review finale deve confermare che non siano piu` il motore principale del path production
+- resta un gap non bloccante da tenere sotto osservazione: bootstrap live/sicurezza ancora coperti soprattutto da test mock-heavy, senza integrazione browser/SDK reale dal terminale
 
 Ultimo aggiornamento
 
-2026-03-27 15:26
+2026-03-27 16:16

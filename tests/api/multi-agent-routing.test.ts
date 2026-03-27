@@ -424,6 +424,20 @@ describe('resolveRoutingCandidates', () => {
     expect(selectedAgents.length).toBeLessThanOrEqual(3)
   })
 
+  it('preferisce gli agenti indicati dal contesto anche senza keyword forti nel messaggio', () => {
+    const { selectedAgents } = resolveRoutingCandidates({
+      team: FULL_TEAM,
+      message: 'continuiamo pure',
+      detectedDomain: 'nutrition',
+      allDomains: ['nutrition', 'health'],
+      preferredAgentIds: ['dietista', 'cardiologo'],
+    })
+
+    const ids = selectedAgents.map((a) => a.id)
+    expect(ids[0]).toBe('dietista')
+    expect(ids).toContain('cardiologo')
+  })
+
   it('decisionTrace non è vuoto', () => {
     const { decisionTrace } = resolveRoutingCandidates({
       team: FULL_TEAM,
@@ -517,5 +531,20 @@ describe('selectAgentsForRequest — scoring', () => {
     // They should be selected without any hardcoded bonus — just competence hints
     expect(ids).toContain('fisioterapista')
     expect(ids).toContain('fisiatra')
+  })
+
+  it('prioritizes preferredAgentIds over competence-hint-only boosts', () => {
+    const agents = selectAgentsForRequest(
+      FULL_TEAM,
+      'nutrition',
+      4,
+      ['nutrition', 'health'],
+      'continuiamo pure',
+      '',
+      {},
+      { preferredAgentIds: ['dietista'] },
+    )
+
+    expect(agents[0]?.id).toBe('dietista')
   })
 })

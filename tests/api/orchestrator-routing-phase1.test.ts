@@ -84,6 +84,18 @@ describe('resolveRoutingCandidates — production path', () => {
     expect(selectedAgents.some((a) => a.id === 'dietista')).toBe(true)
   })
 
+  it('uses preferredAgentIds as primary ranking signal for follow-up turns', () => {
+    const { selectedAgents } = resolveRoutingCandidates({
+      team,
+      message: 'continuiamo pure',
+      detectedDomain: 'nutrition',
+      allDomains: ['nutrition'],
+      preferredAgentIds: ['dietista'],
+    })
+
+    expect(selectedAgents[0]?.id).toBe('dietista')
+  })
+
   it('selects mindfulness agents for a stress/sleep query', () => {
     const { selectedAgents } = resolveRoutingCandidates({
       team,

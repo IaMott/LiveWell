@@ -249,3 +249,18 @@ File touch log (append-only)
 2026-03-27 15:26 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append della riconciliazione storica con gap A/B chiusi e blocco D ancora parziale
 2026-03-27 15:26 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione ADR sui fix Dynamic DB e sul residuo keyword-heavy del routing
 2026-03-27 15:26 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=registrazione del rischio residuo obbligatorio sul routing multi-dominio ancora euristico
+2026-03-27 16:16 | ruolo=backend-developer | file=src/lib/ai/orchestrator/contextualRouting.ts | azione=create | motivo=introdotto resolver contestuale che usa LLM, snapshot e history prima del fallback euristico keyword-based
+2026-03-27 16:16 | ruolo=backend-developer | file=src/lib/ai/orchestrator/orchestrator.ts | azione=modify | motivo=il cuore del routing ora usa il resolver context-first e passa preferredAgentIds ordinati al ranking dei candidati
+2026-03-27 16:16 | ruolo=backend-developer | file=src/lib/ai/orchestrator/routing.ts | azione=modify | motivo=resolveRoutingCandidates supporta preferredAgentIds come segnale primario del panel contestuale
+2026-03-27 16:16 | ruolo=backend-developer | file=src/lib/ai/orchestrator/agentSelection.ts | azione=modify | motivo=AGENT_COMPETENCE_HINTS ridotti a booster; preferredAgentIds ordinati diventano il segnale piu forte del ranking
+2026-03-27 16:16 | ruolo=backend-developer | file=src/lib/ai/orchestrator/decisionTrace.ts | azione=modify | motivo=decision trace esteso a llm_context, snapshot_context e history_context
+2026-03-27 16:16 | ruolo=backend-developer | file=src/lib/ai/case/protocol.ts | azione=modify | motivo=il protocol preserva lo speaker/panel corrente nei follow-up contestuali invece di aprire consult takeover guidati dal legacy/euristiche
+2026-03-27 16:16 | ruolo=backend-developer | file=tests/api/multi-agent-routing.test.ts | azione=modify | motivo=guardrail sul ranking context-first e sui preferredAgentIds
+2026-03-27 16:16 | ruolo=backend-developer | file=tests/api/orchestrator-routing-phase1.test.ts | azione=modify | motivo=prova del ranking primario guidato dai preferredAgentIds nel path production resolveRoutingCandidates
+2026-03-27 16:16 | ruolo=backend-developer | file=tests/api/chat-orchestration.test.ts | azione=modify | motivo=prova end-to-end del source llm_context e della continuita snapshot-first nel path orchestrate
+2026-03-27 16:16 | ruolo=backend-developer | file=src/components/profile/UserAvatar.tsx | azione=modify | motivo=chiuso warning lint residuo sostituendo img con next/image
+2026-03-27 16:16 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-46 del routing context-first validato localmente
+2026-03-27 16:16 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=allineamento stato progetto dopo la chiusura locale della track obbligatoria residua
+2026-03-27 16:16 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append della chiusura locale del routing multi-dominio context-first
+2026-03-27 16:16 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sulla retrocessione delle euristiche a fallback/supporto nel routing
+2026-03-27 16:16 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=mitigazione del rischio high sul routing keyword-heavy e chiusura del warning lint residuo

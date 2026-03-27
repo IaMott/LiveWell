@@ -1242,8 +1242,17 @@ export function resolveRoutingCandidates(params: {
   allDomains: Domain[]
   currentSpeakerId?: string
   contextPack?: ContextPack
+  preferredAgentIds?: string[]
 }): RoutingCandidateResolution {
-  const { team, message, detectedDomain, allDomains, currentSpeakerId, contextPack } = params
+  const {
+    team,
+    message,
+    detectedDomain,
+    allDomains,
+    currentSpeakerId,
+    contextPack,
+    preferredAgentIds = [],
+  } = params
   const clusterMatch = detectMultiSpecialistNeed(message, team)
   const domainHint = detectedDomain
 
@@ -1269,6 +1278,7 @@ export function resolveRoutingCandidates(params: {
             message,
             caseContext,
             agentFeedbackScores,
+            { preferredAgentIds },
           )
           const clusterIds = new Set(clusterMatch.specialists.map((s) => s.id))
           const clusterFirst: AgentProfile[] =
@@ -1286,6 +1296,7 @@ export function resolveRoutingCandidates(params: {
           message,
           caseContext,
           agentFeedbackScores,
+          { preferredAgentIds },
         )
 
   return {

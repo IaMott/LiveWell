@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 
 type Props = {
@@ -38,6 +39,7 @@ function AvatarCore({
       aria-label={ariaLabel}
       title={name ?? 'Profilo utente'}
       style={{
+        position: 'relative',
         width: `${size}px`,
         height: `${size}px`,
         borderRadius: '50%',
@@ -56,12 +58,13 @@ function AvatarCore({
       }}
     >
       {imageUrl ? (
-        <img
+        <Image
           src={imageUrl}
           alt={name ? `Immagine profilo di ${name}` : 'Immagine profilo'}
+          fill
+          unoptimized
+          sizes={`${size}px`}
           style={{
-            width: '100%',
-            height: '100%',
             objectFit: 'cover',
             display: 'block',
           }}

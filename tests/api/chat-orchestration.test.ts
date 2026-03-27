@@ -248,6 +248,18 @@ const TEST_TEAM: AgentProfile[] = [
     ['inspiration', 'coordination'],
     ['user.setAttribute', 'artifacts.saveRecommendation'],
   ),
+  makeAgent(
+    'life-organizer',
+    'Life Organizer',
+    ['coordination'],
+    ['user.setAttribute', 'artifacts.saveRecommendation'],
+  ),
+  makeAgent(
+    'analista-contesto',
+    'Analista di Contesto',
+    ['coordination', 'general'],
+    ['user.setAttribute', 'artifacts.saveRecommendation'],
+  ),
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -879,8 +891,98 @@ describe('chat orchestration — pipeline completa', () => {
       }),
     )
 
-    expect(result.activeSpecialist?.id).toBe('dietista')
     expect(result.stateSnapshot?.leadDomain).toBe('nutrition')
+    expect(result.debug?.decisionTrace?.[1]?.data).toMatchObject({
+      activeSpecialistId: 'dietista',
+    })
+    expect(result.debug?.decisionTrace?.[2]?.data).toMatchObject({
+      domainHint: 'nutrition',
+      selectedAgentIds: ['dietista'],
+    })
+  })
+
+  it('22c. usa routing context-first LLM-driven prima del fallback keyword-based', async () => {
+    const llm = {
+      complete: vi
+        .fn()
+        .mockImplementation(async ({ system, format }: { system: string; format?: string }) => {
+          if (format === 'text' && system.includes('router multi-dominio')) {
+            return {
+              text: JSON.stringify({
+                primaryDomain: 'coordination',
+                allDomains: ['coordination', 'inspiration'],
+                preferredAgentIds: ['life-organizer', 'analista-contesto'],
+                confidence: 0.92,
+                reasoning: 'Follow-up organizzativo con panel multi-dominio attivo.',
+              }),
+            }
+          }
+          if (format === 'text') {
+            return { text: 'Procediamo dal piano di coordinamento.' }
+          }
+          return { text: agentProposal({ domain: 'coordination' }) }
+        }),
+    }
+
+    const result = await orchestrate(
+      makeOrchDeps(llm),
+      makeInput('continuiamo da dove eravamo rimasti', {
+        caseStateSnapshot: {
+          schemaVersion: 1,
+          conversationId: 'conv-test',
+          activeDomains: ['coordination', 'inspiration'],
+          domainPanels: [
+            {
+              domain: 'coordination',
+              selectedAgentId: 'life-organizer',
+              candidateAgentIds: ['life-organizer', 'analista-contesto'],
+              status: 'active',
+              priorityScore: 10,
+              lastReasoningAt: null,
+              pendingNeeds: ['riallineare priorita'],
+            },
+            {
+              domain: 'inspiration',
+              selectedAgentId: 'analista-contesto',
+              candidateAgentIds: ['analista-contesto'],
+              status: 'monitoring',
+              priorityScore: 6,
+              lastReasoningAt: null,
+              pendingNeeds: [],
+            },
+          ],
+          leadDomain: 'coordination',
+          speakerPolicy: 'lead',
+          conversationFocus: {
+            activeProblems: ['priorita frammentate'],
+            activeGoals: ['riordinare il piano'],
+            activeConstraints: [],
+            summary: 'coordinamento multi-dominio',
+          },
+          coordinationState: {
+            crossDomainConflicts: [],
+            dependencies: [],
+            needsReview: false,
+          },
+          sharedOpenQuestions: ['Quale obiettivo viene prima?'],
+          domainOpenQuestions: {
+            coordination: ['Quale e il prossimo passo concreto?'],
+          },
+          updatedAt: '2026-03-27T15:40:00.000Z',
+        },
+      }),
+    )
+
+    expect(result.domain).toBe('coordination')
+    expect(result.debug?.decisionTrace?.[0]?.data).toMatchObject({
+      detectedDomain: 'coordination',
+      source: 'llm_context',
+    })
+    expect(result.debug?.decisionTrace?.[2]?.data).toMatchObject({
+      domainHint: 'coordination',
+    })
+    expect(result.debug?.decisionTrace?.[2]?.data.selectedAgentIds).toContain('life-organizer')
+    expect(result.debug?.decisionTrace?.[2]?.data.selectedAgentIds[0]).toBe('life-organizer')
   })
 
   // ── 23. Agente timeout → fallback proposal, risposta prodotta ─────────────
