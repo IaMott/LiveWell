@@ -87,7 +87,6 @@ Fatto
 
 In corso
 
-- cleanup track finale completata e review critica completata
 - nessun blocco implementativo obbligatorio aperto
 
 Prossimo
@@ -111,4 +110,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 00:32
+2026-03-27 08:16

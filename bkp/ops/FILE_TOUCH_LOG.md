@@ -193,3 +193,7 @@ File touch log (append-only)
 2026-03-27 00:32 | step=CP-33 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/WORKLOG.md` | action=completed | contract=temporary | note=`append worklog cleanup track finale`
 2026-03-27 00:32 | step=CP-33 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/DECISIONS.md` | action=completed | contract=temporary | note=`append ADR sul cleanup finale guidato da evidenze forti`
 2026-03-27 00:32 | step=CP-33 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/RISK_LOG.md` | action=completed | contract=temporary | note=`registrati i residui legacy accettati e i warning infrastrutturali futuri`
+2026-03-27 08:16 | step=CP-34 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/CHECKPOINTS.md` | action=completed | contract=temporary | note=`append checkpoint CP-34 con publish remoto e verifica alias`
+2026-03-27 08:16 | step=CP-34 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/STATUS.md` | action=completed | contract=temporary | note=`aggiornato stato finale dopo push/deploy production`
+2026-03-27 08:16 | step=CP-34 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/WORKLOG.md` | action=completed | contract=temporary | note=`append worklog publish finale`
+2026-03-27 08:16 | step=CP-34 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/DECISIONS.md` | action=completed | contract=temporary | note=`append ADR sul verdict finale done-with-residual-recommendations`
