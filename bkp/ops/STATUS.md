@@ -87,11 +87,10 @@ Fatto
 
 In corso
 
-- track toolchain/dependency hygiene completata localmente e in attesa di publish finale
+- nessun blocco implementativo obbligatorio aperto
 
 Prossimo
 
-- publish finale della track toolchain/dependency hygiene
 - eventuali follow-up non bloccanti:
   - valutare una track separata per `eslint@10` e stack lint collegato
   - valutare una track separata per Prisma `7.x`
@@ -121,6 +120,10 @@ Rischi
   - override `picomatch` fissato a `4.0.4`
   - test live-token stabilizzati per il nuovo modello di mocking
   - audit ridotto a `9` vulnerabilita` moderate e `0 high`
+- publish finale della track toolchain completato:
+  - commit `a3c925a` pushato su `origin/main`
+  - deploy Vercel production `https://livewell-bx4pz8th3-iamotts-projects.vercel.app`
+  - alias `https://livewell.mottisi.com` verificato con redirect auth atteso
 - residui infra/toolchain ora limitati a:
   - advisory moderate solo su stack `eslint`/`minimatch`
   - update Prisma major disponibile ma fuori perimetro della track
@@ -128,4 +131,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 10:55
+2026-03-27 11:24

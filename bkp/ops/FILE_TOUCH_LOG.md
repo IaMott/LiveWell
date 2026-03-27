@@ -211,3 +211,7 @@ File touch log (append-only)
 2026-03-27 10:40 | ruolo=backend-developer | file=package-lock.json | azione=modify | motivo=lockfile riallineato dopo `npm install` della nuova baseline toolchain
 2026-03-27 10:52 | ruolo=backend-developer | file=tests/api/live-token-security.test.ts | azione=modify | motivo=stabilizzazione compatibilita` `vitest@4` con mock lazy import + prisma mock
 2026-03-27 10:52 | ruolo=backend-developer | file=tests/api/live-token-fallback-observability.test.ts | azione=modify | motivo=allineamento mock constructor-style per compatibilita` `vitest@4`
+2026-03-27 11:24 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione publish finale della track toolchain
+2026-03-27 11:24 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=allineamento stato progetto dopo commit/push/deploy della track toolchain
+2026-03-27 11:24 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del publish finale e verifica alias production
+2026-03-27 11:24 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione verdict finale della track toolchain
