@@ -27,9 +27,10 @@ import type {
 import { ALLOWED_TOOL_NAMES, isAllowedToolName } from '@/lib/tools/toolRegistry'
 import { createToolExecutor, type MutationAuditEvent } from '@/lib/tools/toolExecutor'
 import { realToolHandlers, stubToolHandlers } from '@/lib/tools/handlers'
+import { resolveToolExecutionAgent } from '@/lib/tools/toolExecutionRouting'
 import { logChatFallbackEvent, buildSafeFallbackResponse } from './chatFallback'
 import { moderateText, persistModerationLog } from '@/lib/ai/contentModeration'
-import { toSse, buildThinkingEvents, mergeThinkingEvents } from './chatStream'
+import { toSse, buildThinkingEvents } from './chatStream'
 import {
   isDbPersistenceEnabled,
   createDbPersistenceDeps,
@@ -134,20 +135,27 @@ function buildToolExecutor(
 function getImmediateThinkingAgents(
   team: AgentProfile[],
   message: string,
-  caseState: Parameters<typeof deriveActiveSpecialistFromCaseState>[0],
+  input: {
+    caseState: Parameters<typeof deriveActiveSpecialistFromCaseState>[0]
+    caseStateSnapshot?: AgentInput['caseStateSnapshot']
+  },
 ): AgentProfile[] {
   const detectedDomain = detectDomainFromText(message)
   const allDomains = detectDomainsMulti(message).map((d) => d.domain)
 
-  // Determine active specialist from case state (mirrors orchestrate logic)
-  const activeSpecialist = deriveActiveSpecialistFromCaseState(caseState, team)
+  const leadPanel =
+    input.caseStateSnapshot?.domainPanels.find(
+      (panel) => panel.domain === input.caseStateSnapshot?.leadDomain,
+    ) ?? input.caseStateSnapshot?.domainPanels[0]
+  const activeSpecialistId =
+    leadPanel?.selectedAgentId ?? deriveActiveSpecialistFromCaseState(input.caseState, team)?.id
 
   const { selectedAgents } = resolveRoutingCandidates({
     team,
     message,
     detectedDomain,
     allDomains,
-    currentSpeakerId: activeSpecialist?.id,
+    currentSpeakerId: activeSpecialistId,
   })
 
   // Return up to 2 agents for the immediate animation
@@ -391,14 +399,29 @@ export async function POST(request: Request): Promise<Response> {
   })
   const storedCaseRuntimeState = await persistence.getCaseRuntimeState({ conversationId })
   const storedCaseState = storedCaseRuntimeState
-    ? applyCanonicalSnapshotToLegacyCaseState({
-        snapshot: storedCaseRuntimeState,
-        current: await persistence.getCaseState({ conversationId }),
-      })
+    ? null
     : await persistence.getCaseState({ conversationId })
   const teamDirAbsolute = path.resolve(process.cwd(), 'TEAM')
   const team = loadTeam({ teamDirAbsolute, allowEmpty: true })
-  const caseActiveSpecialist = deriveActiveSpecialistFromCaseState(storedCaseState, team)
+  const leadPanel =
+    storedCaseRuntimeState?.domainPanels.find(
+      (panel) => panel.domain === storedCaseRuntimeState?.leadDomain,
+    ) ?? storedCaseRuntimeState?.domainPanels[0]
+  const caseActiveSpecialist =
+    leadPanel?.selectedAgentId != null
+      ? (() => {
+          const teamAgent = team.find((agent) => agent.id === leadPanel.selectedAgentId)
+          return teamAgent
+            ? {
+                id: teamAgent.id,
+                displayName: teamAgent.displayName,
+                domain: leadPanel.domain,
+                domains: teamAgent.domainTags,
+                runtimeCapabilities: teamAgent.runtimeCapabilities,
+              }
+            : undefined
+        })()
+      : deriveActiveSpecialistFromCaseState(storedCaseState, team)
 
   const agentInput: AgentInput = {
     requestId,
@@ -416,7 +439,10 @@ export async function POST(request: Request): Promise<Response> {
       : createLlmWithFallback()
 
   // Use the same routing logic as orchestrate() for accurate immediate agents
-  const immediateAgents = getImmediateThinkingAgents(team, parsedBody.message, storedCaseState)
+  const immediateAgents = getImmediateThinkingAgents(team, parsedBody.message, {
+    caseState: storedCaseState,
+    caseStateSnapshot: storedCaseRuntimeState,
+  })
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream<Uint8Array>({
@@ -559,14 +585,25 @@ export async function POST(request: Request): Promise<Response> {
             ? consensus.toolCallsToExecute
             : requestedToolCalls
         const isDirectToolDirective = requestedToolCalls.length > 0
-        const capabilityAgentId =
-          consensus.activeSpecialist?.id ?? consensus.debug?.selectedAgents?.[0] ?? 'orchestratore'
-        const capabilityTools = (
-          team.find((a) => a.id === capabilityAgentId)?.toolsAllowed ?? []
-        ).filter(isAllowedToolName)
+        const toolExecutionSnapshot =
+          consensus.stateSnapshot ??
+          (consensus.caseState
+            ? (toCanonicalCaseStateSnapshot(consensus.caseState) ?? undefined)
+            : undefined) ??
+          storedCaseRuntimeState ??
+          undefined
 
         const toolResults: ToolResult[] = []
         for (const call of toolCallsToExecute) {
+          const selectedAgent = isDirectToolDirective
+            ? undefined
+            : resolveToolExecutionAgent({
+                call,
+                team,
+                stateSnapshot: toolExecutionSnapshot,
+                activeSpecialistId: consensus.activeSpecialist?.id,
+                selectedAgentIds: consensus.debug?.selectedAgents,
+              })
           try {
             const result = await executor.executeToolCall(call, {
               requestId: agentInput.requestId,
@@ -576,12 +613,12 @@ export async function POST(request: Request): Promise<Response> {
                 role,
                 ownerModeEnabled,
               },
-              agent: isDirectToolDirective
-                ? undefined
-                : {
-                    id: capabilityAgentId,
-                    toolsAllowed: capabilityTools,
-                  },
+              agent: selectedAgent
+                ? {
+                    id: selectedAgent.id,
+                    toolsAllowed: selectedAgent.toolsAllowed.filter(isAllowedToolName),
+                  }
+                : undefined,
               source: 'assistant',
               confirmedByUser: parsedBody.confirmedByUser ?? false,
               confirmToken: parsedBody.confirmToken,

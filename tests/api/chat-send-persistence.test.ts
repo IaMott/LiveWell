@@ -36,6 +36,9 @@ const prismaMock = {
   bodyMetricEntry: {
     create: vi.fn(),
   },
+  clinicalEvent: {
+    create: vi.fn(),
+  },
   // Required by realToolHandlers: user.setAttribute calls prisma.userAttribute.create
   userAttribute: {
     findFirst: vi.fn(),
@@ -69,6 +72,8 @@ function extractSseEvent(body: string, type: string): Record<string, unknown> | 
 describe('/api/chat/send persistence integration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.doUnmock('@/lib/ai/team/loader')
+    vi.doUnmock('@/lib/tools/toolExecutor')
     process.env.ENABLE_DB_IN_TEST = '1'
 
     prismaMock.conversation.findUnique.mockResolvedValue(null)
@@ -86,6 +91,7 @@ describe('/api/chat/send persistence integration', () => {
     prismaMock.caseState.findUnique.mockResolvedValue(null)
     prismaMock.caseState.upsert.mockResolvedValue({ id: 'case-1' })
     prismaMock.bodyMetricEntry.create.mockResolvedValue({ id: 'metric-1' })
+    prismaMock.clinicalEvent.create.mockResolvedValue({ id: 'clinical-1' })
     prismaMock.userAttribute.create.mockResolvedValue({ id: 'attr-1' })
     prismaMock.userAttribute.findFirst.mockResolvedValue(null)
     prismaMock.userAttribute.findMany.mockResolvedValue([])
@@ -390,7 +396,7 @@ describe('/api/chat/send persistence integration', () => {
     })
   })
 
-  it('passes canonical caseStateSnapshot to orchestrate while keeping a legacy adapter for caseState', async () => {
+  it('passes canonical caseStateSnapshot to orchestrate without rebuilding a legacy adapter in the route hot path', async () => {
     prismaMock.caseState.findUnique.mockResolvedValue({
       conversationId: 'conv-db-1',
       ownerAgentId: 'legacy-owner',
@@ -466,10 +472,7 @@ describe('/api/chat/send persistence integration', () => {
       leadDomain: 'nutrition',
       activeDomains: ['nutrition'],
     })
-    expect(orchestrateMock.mock.calls[0]?.[1].caseState).toMatchObject({
-      ownerAgentId: 'legacy-owner',
-      activeSpeakerAgentId: 'dietista',
-    })
+    expect(orchestrateMock.mock.calls[0]?.[1].caseState).toBeNull()
   })
 
   it('derives ui.state compatibility fields from the canonical lead panel when activeSpecialist is absent', async () => {
@@ -554,6 +557,131 @@ describe('/api/chat/send persistence integration', () => {
       stateSnapshot: expect.objectContaining({
         leadDomain: 'nutrition',
       }),
+    })
+  })
+
+  it('routes text tool calls through the matching panel agent instead of one global capability agent', async () => {
+    prismaMock.caseState.findUnique.mockResolvedValue(null)
+
+    const executeToolCallMock = vi.fn(async (call) => ({
+      toolCallId: call.id,
+      ok: true,
+    }))
+
+    vi.resetModules()
+    vi.doMock('@/lib/ai/team/loader', () => ({
+      loadTeam: vi.fn(() => [
+        {
+          id: 'medico',
+          displayName: 'Medico',
+          domainTags: ['health'],
+          systemPrompt: 'health',
+          toolsAllowed: ['health.addMetric'],
+          decisionStyle: 'team-led',
+        },
+        {
+          id: 'dietista',
+          displayName: 'Dietista',
+          domainTags: ['nutrition'],
+          systemPrompt: 'nutrition',
+          toolsAllowed: ['user.setAttribute'],
+          decisionStyle: 'team-led',
+        },
+      ]),
+    }))
+    vi.doMock('@/lib/tools/toolExecutor', async () => {
+      const actual = await vi.importActual<typeof import('@/lib/tools/toolExecutor')>(
+        '@/lib/tools/toolExecutor',
+      )
+      return {
+        ...actual,
+        createToolExecutor: vi.fn(() => ({
+          executeToolCall: executeToolCallMock,
+        })),
+      }
+    })
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: vi.fn(async () => ({
+        domain: 'general',
+        finalMessageMarkdown: 'ok',
+        toolCallsToExecute: [
+          { id: 'call-health', name: 'health.addMetric', args: { metricType: 'pain', value: 7 } },
+          {
+            id: 'call-nutrition',
+            name: 'user.setAttribute',
+            args: { domain: 'nutrition', key: 'food_triggers', value: 'latticini' },
+          },
+        ],
+        stateSnapshot: {
+          schemaVersion: 1,
+          conversationId: 'conv-db-1',
+          activeDomains: ['health', 'nutrition'],
+          domainPanels: [
+            {
+              domain: 'health',
+              selectedAgentId: 'medico',
+              candidateAgentIds: ['medico'],
+              status: 'active',
+              priorityScore: 0.9,
+              lastReasoningAt: null,
+              pendingNeeds: [],
+            },
+            {
+              domain: 'nutrition',
+              selectedAgentId: 'dietista',
+              candidateAgentIds: ['dietista'],
+              status: 'active',
+              priorityScore: 0.8,
+              lastReasoningAt: null,
+              pendingNeeds: [],
+            },
+          ],
+          leadDomain: 'health',
+          speakerPolicy: 'lead',
+          conversationFocus: {
+            activeProblems: ['dolore e gonfiore'],
+            activeGoals: ['stare meglio'],
+            activeConstraints: [],
+            summary: 'multi-domain',
+          },
+          coordinationState: {
+            crossDomainConflicts: [],
+            dependencies: [],
+            needsReview: false,
+          },
+          sharedOpenQuestions: [],
+          domainOpenQuestions: {},
+          updatedAt: '2026-03-27T12:00:00.000Z',
+        },
+        protocolEvents: [],
+        activeSpecialist: null,
+        ui: { domainIcon: 'general', moodScore: 50, sectionScores: { general: 50 } },
+        safety: { escalation: 'none' },
+        debug: { selectedAgents: ['medico'], conflicts: [] },
+      })),
+    }))
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const res = await POST(
+      new Request('http://localhost/api/chat/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'u-db',
+        },
+        body: JSON.stringify({ message: 'dolore e gonfiore dopo i pasti' }),
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    await res.text()
+
+    expect(executeToolCallMock).toHaveBeenCalledTimes(2)
+    expect(executeToolCallMock.mock.calls[0]?.[1]).toMatchObject({
+      agent: { id: 'medico', toolsAllowed: ['health.addMetric'] },
+    })
+    expect(executeToolCallMock.mock.calls[1]?.[1]).toMatchObject({
+      agent: { id: 'dietista', toolsAllowed: ['user.setAttribute'] },
     })
   })
 

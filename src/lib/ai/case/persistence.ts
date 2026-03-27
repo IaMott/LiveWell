@@ -1,4 +1,5 @@
 import type { CanonicalCaseStateSnapshot } from '../types'
+import { z } from 'zod'
 import { applyCanonicalSnapshotToLegacyCaseState, toCanonicalCaseStateSnapshot } from './compat'
 import { normalizeCaseState, type CaseState } from './state'
 
@@ -17,6 +18,52 @@ export type StoredCaseStateRecord = Record<string, unknown> & {
   stateSnapshot?: Record<string, unknown> | null
 }
 
+const domainSchema = z.enum([
+  'general',
+  'nutrition',
+  'health',
+  'training',
+  'mindfulness',
+  'inspiration',
+  'coordination',
+])
+
+const domainPanelStatusSchema = z.enum(['active', 'monitoring', 'paused', 'needs_input'])
+const speakerPolicySchema = z.enum(['team', 'lead', 'explicit_agent', 'switch'])
+
+const canonicalSnapshotSchema = z.object({
+  schemaVersion: z.number(),
+  conversationId: z.string().min(1),
+  activeDomains: z.array(domainSchema),
+  domainPanels: z.array(
+    z.object({
+      domain: domainSchema,
+      selectedAgentId: z.string().min(1).nullable(),
+      candidateAgentIds: z.array(z.string()),
+      status: domainPanelStatusSchema,
+      priorityScore: z.number(),
+      lastReasoningAt: z.string().nullable(),
+      pendingNeeds: z.array(z.string()),
+    }),
+  ),
+  leadDomain: domainSchema.nullable(),
+  speakerPolicy: speakerPolicySchema,
+  conversationFocus: z.object({
+    activeProblems: z.array(z.string()),
+    activeGoals: z.array(z.string()),
+    activeConstraints: z.array(z.string()),
+    summary: z.string().nullable(),
+  }),
+  coordinationState: z.object({
+    crossDomainConflicts: z.array(z.string()),
+    dependencies: z.array(z.string()),
+    needsReview: z.boolean(),
+  }),
+  sharedOpenQuestions: z.array(z.string()),
+  domainOpenQuestions: z.record(z.array(z.string())),
+  updatedAt: z.string().min(1),
+})
+
 function serializeCanonicalSnapshot(snapshot: CanonicalCaseStateSnapshot): Record<string, unknown> {
   return {
     schemaVersion: snapshot.schemaVersion,
@@ -33,25 +80,9 @@ function serializeCanonicalSnapshot(snapshot: CanonicalCaseStateSnapshot): Recor
   }
 }
 
-function parseStoredCanonicalSnapshot(
-  rawSnapshot: unknown,
-  conversationIdFallback?: string,
-): CanonicalCaseRuntimeState | null {
-  if (!rawSnapshot || typeof rawSnapshot !== 'object') return null
-
-  const normalizedSnapshot = normalizeCaseState({
-    ownerAgentId: 'orchestratore',
-    activeSpeakerAgentId: 'orchestratore',
-    protocolState: 'owner_active',
-    conversationId:
-      typeof (rawSnapshot as { conversationId?: unknown }).conversationId === 'string'
-        ? (rawSnapshot as { conversationId: string }).conversationId
-        : conversationIdFallback,
-    ...rawSnapshot,
-  })
-  if (!normalizedSnapshot) return null
-
-  return toCanonicalCaseStateSnapshot(normalizedSnapshot)
+function parseStoredCanonicalSnapshot(rawSnapshot: unknown): CanonicalCaseRuntimeState | null {
+  const parsed = canonicalSnapshotSchema.safeParse(rawSnapshot)
+  return parsed.success ? parsed.data : null
 }
 
 function readLegacyCaseState(value: unknown): CaseState | null {
@@ -62,10 +93,12 @@ export function readCanonicalCaseRuntimeState(value: unknown): CanonicalCaseRunt
   if (!value || typeof value !== 'object') return null
 
   const record = value as StoredCaseStateRecord
-  const legacy = readLegacyCaseState(value)
-  const snapshot = parseStoredCanonicalSnapshot(record.stateSnapshot, legacy?.conversationId)
-  if (snapshot) return snapshot
+  const hasStoredSnapshot = record.stateSnapshot != null
+  if (hasStoredSnapshot) {
+    return parseStoredCanonicalSnapshot(record.stateSnapshot)
+  }
 
+  const legacy = readLegacyCaseState(value)
   return toCanonicalCaseStateSnapshot(legacy)
 }
 
@@ -108,8 +141,10 @@ export function toStoredCaseStateWithCanonicalSnapshot(
  *   remains the primary source of truth
  */
 export function fromStoredCaseState(value: unknown): CaseState | null {
+  const record = value && typeof value === 'object' ? (value as StoredCaseStateRecord) : null
+  const hasStoredSnapshot = record?.stateSnapshot != null
   const legacy = readLegacyCaseState(value)
   const canonical = readCanonicalCaseRuntimeState(value)
-  if (!canonical) return legacy
+  if (!canonical) return hasStoredSnapshot ? null : legacy
   return applyCanonicalSnapshotToLegacyCaseState({ snapshot: canonical, current: legacy })
 }

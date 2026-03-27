@@ -153,9 +153,9 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     >
       <TopBar userInitials={userInitials} userName={userName} userImage={userImage} />
 
-      {/* Specialist mode banner — hidden during live session to avoid confusion:
-          the live model runs as a single agent; the specialist mode is re-applied
-          to text chat when the live session ends. */}
+      {/* Specialist mode banner — hidden during live session to avoid duplicate
+          specialist chrome while the shared live turn is in progress.
+          The canonical state is still re-applied to text chat when live ends. */}
       {visualSpecialistId && visualSpecialistName && !liveActive && (
         <div
           style={{

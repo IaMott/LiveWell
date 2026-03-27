@@ -106,6 +106,22 @@ describe('case persistence canonical-first read path', () => {
     expect(readCanonicalCaseRuntimeState(null)).toBeNull()
   })
 
+  it('returns null when stateSnapshot is malformed even if legacy fields are present', () => {
+    const restored = readCanonicalCaseRuntimeState({
+      conversationId: 'conv-canonical-1',
+      ownerAgentId: 'legacy-owner',
+      activeSpeakerAgentId: 'legacy-speaker',
+      protocolState: 'owner_active',
+      stateSnapshot: {
+        schemaVersion: 1,
+        conversationId: 'conv-canonical-1',
+        leadDomain: 'health',
+      },
+    })
+
+    expect(restored).toBeNull()
+  })
+
   it('fromStoredCaseState still returns CaseState for legacy consumers', () => {
     const restored = fromStoredCaseState({
       conversationId: 'conv-legacy-2',
@@ -146,5 +162,21 @@ describe('case persistence canonical-first read path', () => {
     expect(restored?.ownerAgentId).toBe('legacy-owner')
     expect(restored?.activeSpeakerAgentId).toBe('fisiatra')
     expect(restored?.leadDomain).toBe('health')
+  })
+
+  it('fromStoredCaseState does not silently fall back to legacy when snapshot is malformed', () => {
+    const restored = fromStoredCaseState({
+      conversationId: 'conv-canonical-1',
+      ownerAgentId: 'legacy-owner',
+      activeSpeakerAgentId: 'legacy-speaker',
+      protocolState: 'owner_active',
+      stateSnapshot: {
+        schemaVersion: 1,
+        conversationId: 'conv-canonical-1',
+        leadDomain: 'health',
+      },
+    })
+
+    expect(restored).toBeNull()
   })
 })
