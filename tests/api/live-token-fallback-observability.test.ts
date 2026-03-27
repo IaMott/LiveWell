@@ -29,12 +29,14 @@ vi.mock('@/lib/prisma', () => ({
 }))
 
 vi.mock('@google/genai', () => ({
-  GoogleGenAI: vi.fn().mockImplementation(() => ({
-    authTokens: {
-      create: vi.fn().mockResolvedValue({ name: 'auth_tokens/test-live-fallback-token' }),
-    },
-    tokens: undefined,
-  })),
+  GoogleGenAI: vi.fn().mockImplementation(function MockGoogleGenAI() {
+    return {
+      authTokens: {
+        create: vi.fn().mockResolvedValue({ name: 'auth_tokens/test-live-fallback-token' }),
+      },
+      tokens: undefined,
+    }
+  }),
 }))
 
 describe('/api/live-token fallback observability', () => {

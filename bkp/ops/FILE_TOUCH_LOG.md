@@ -207,3 +207,7 @@ File touch log (append-only)
 2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/WORKLOG.md` | action=completed | contract=temporary | note=`append worklog triage/fix infra-security`
 2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/DECISIONS.md` | action=completed | contract=temporary | note=`append ADR su fix low-risk e residui audit accettati`
 2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/RISK_LOG.md` | action=completed | contract=temporary | note=`classificati warning Next risolti e residue advisory dev-toolchain`
+2026-03-27 10:40 | ruolo=backend-developer | file=package.json | azione=modify | motivo=major toolchain upgrade mirato `lint-staged@16` + `vitest@4` e override `picomatch`
+2026-03-27 10:40 | ruolo=backend-developer | file=package-lock.json | azione=modify | motivo=lockfile riallineato dopo `npm install` della nuova baseline toolchain
+2026-03-27 10:52 | ruolo=backend-developer | file=tests/api/live-token-security.test.ts | azione=modify | motivo=stabilizzazione compatibilita` `vitest@4` con mock lazy import + prisma mock
+2026-03-27 10:52 | ruolo=backend-developer | file=tests/api/live-token-fallback-observability.test.ts | azione=modify | motivo=allineamento mock constructor-style per compatibilita` `vitest@4`

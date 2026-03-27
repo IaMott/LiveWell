@@ -87,13 +87,14 @@ Fatto
 
 In corso
 
-- nessun blocco implementativo obbligatorio aperto
+- track toolchain/dependency hygiene completata localmente e in attesa di publish finale
 
 Prossimo
 
+- publish finale della track toolchain/dependency hygiene
 - eventuali follow-up non bloccanti:
-  - rimuovere il `middleware` deprecato o impostare `proxy` quando il warning Next entrera` nel perimetro
-  - ridurre il fallback storico `CaseState` solo se emergera` evidenza che nessun record legacy lo richiede piu`
+  - valutare una track separata per `eslint@10` e stack lint collegato
+  - valutare una track separata per Prisma `7.x`
 
 Rischi
 
@@ -114,11 +115,17 @@ Rischi
   - `next.config.ts` ora definisce `turbopack.root`
   - overrides mirati applicati a `gaxios`, `google-auth-library`, `flatted`, `yaml`
   - audit ridotto da `17` vulnerabilita` (`15 moderate`, `2 high`) a `10` (`9 moderate`, `1 high`)
-- residui infra/security ora limitati a:
-  - advisory dev-toolchain su `picomatch` via `lint-staged`/`vitest` e su `minimatch` via stack `eslint`
+- track toolchain/dependency hygiene completata localmente:
+  - `lint-staged` aggiornato a `16.4.0`
+  - `vitest` aggiornato a `4.1.2`
+  - override `picomatch` fissato a `4.0.4`
+  - test live-token stabilizzati per il nuovo modello di mocking
+  - audit ridotto a `9` vulnerabilita` moderate e `0 high`
+- residui infra/toolchain ora limitati a:
+  - advisory moderate solo su stack `eslint`/`minimatch`
   - update Prisma major disponibile ma fuori perimetro della track
-  - warning deprecati Vercel/npm di terze parti senza impatto runtime diretto
+  - patch/minor opzionali (`@google/genai`, `tailwindcss`, `react`) senza urgenza operativa
 
 Ultimo aggiornamento
 
-2026-03-27 10:35
+2026-03-27 10:55
