@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react'
 import type React from 'react'
 import type { CanonicalCaseStateSnapshot, Domain } from '@/lib/ai/types'
+import { sanitizeAssistantVisibleContent } from '@/lib/chat/userVisibleContent'
 import { DOMAIN_COLORS, getDomainColor } from '@/lib/ui/domainColors'
 import { LiveModal } from './live/LiveModal'
 
@@ -10,6 +11,13 @@ const ALLOWED_UPLOAD_TYPES = 'image/*,.pdf,.txt,.md,.doc,.docx,.csv,.json'
 
 function stateSnapshotKeyForConversation(conversationId: string): string {
   return `livewell_case_state_snapshot:${conversationId}`
+}
+
+function formatAgentIdLabel(agentId?: string | null): string | undefined {
+  if (!agentId) return undefined
+  const normalized = agentId.trim().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ')
+  if (!normalized) return undefined
+  return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
 // ── Icons from design/icons/ ──────────────────────────────────────────────────
@@ -184,7 +192,12 @@ interface Props {
   editDraft?: string
   /** Called when a live transcript message is confirmed and saved to DB.
    * Used by parent to append the message to the chat immediately. */
-  onLiveMessage?: (role: 'user' | 'assistant', text: string) => void
+  onLiveMessage?: (message: {
+    role: 'user' | 'assistant'
+    text: string
+    domain?: Domain
+    specialistName?: string
+  }) => void
   /** Real-time partial transcript from live session (growing text before turnComplete).
    * Pass empty string to clear the interim bubble for that role. */
   onInterimTranscription?: (role: 'user' | 'assistant', text: string) => void
@@ -215,6 +228,7 @@ export function ChatInput({
   // Tracks the conversation used during the current Live session — may be a newly
   // auto-created one if the user started Live with no prior text conversation.
   const liveConversationIdRef = useRef<string | null>(conversationId ?? null)
+  const transcriptQueueRef = useRef<Promise<void>>(Promise.resolve())
   // Buffers the last user turn from Live so we can send it to live-sync after the AI responds
   const lastLiveUserMsgRef = useRef<string | null>(null)
   // Tracks whether at least one transcript turn was saved — used to decide if
@@ -345,6 +359,91 @@ export function ChatInput({
     setPendingFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
+  function readStoredSnapshot(
+    targetConversationId?: string | null,
+  ): CanonicalCaseStateSnapshot | null {
+    if (!targetConversationId) return null
+    try {
+      const raw = localStorage.getItem(stateSnapshotKeyForConversation(targetConversationId))
+      if (!raw) return null
+      return JSON.parse(raw) as CanonicalCaseStateSnapshot
+    } catch {
+      return null
+    }
+  }
+
+  async function persistTranscriptMessages(
+    messages: Array<{
+      role: 'user' | 'assistant'
+      text: string
+      domain?: Domain
+      specialistName?: string
+    }>,
+  ): Promise<{
+    conversationId: string | null
+    savedMessages: Array<{
+      role: 'user' | 'assistant'
+      content: string
+      domain?: Domain
+      specialistName?: string
+    }>
+  } | null> {
+    const normalizedMessages = messages
+      .map((message) => ({
+        role: message.role,
+        content:
+          message.role === 'assistant'
+            ? sanitizeAssistantVisibleContent(message.text)
+            : message.text.trim(),
+        domain: message.domain,
+        specialistName: message.specialistName,
+      }))
+      .filter((message) => message.content.length > 0)
+
+    const res = await fetch('/api/chat/transcript', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversationId: liveConversationIdRef.current ?? null,
+        messages: normalizedMessages,
+      }),
+    })
+    if (!res.ok) return null
+
+    const data = (await res.json()) as {
+      conversationId?: string | null
+      savedMessages?: Array<{
+        role: 'user' | 'assistant'
+        content: string
+        domain?: Domain
+        specialistName?: string
+      }>
+    }
+    const nextConversationId =
+      typeof data.conversationId === 'string' && data.conversationId.trim().length > 0
+        ? data.conversationId
+        : null
+    if (nextConversationId) {
+      liveConversationIdRef.current = nextConversationId
+    }
+
+    const savedMessages = Array.isArray(data.savedMessages)
+      ? data.savedMessages
+      : normalizedMessages
+    if (savedMessages.length > 0) {
+      liveHasDataRef.current = true
+    }
+
+    return {
+      conversationId: nextConversationId,
+      savedMessages,
+    }
+  }
+
+  function enqueueTranscriptTask(task: () => Promise<void>) {
+    transcriptQueueRef.current = transcriptQueueRef.current.catch(() => undefined).then(task)
+  }
+
   /**
    * Called by LiveModal with each completed transcript turn.
    * Saves the message to the current conversation and, after each assistant turn,
@@ -355,71 +454,84 @@ export function ChatInput({
     const trimmed = text.trim()
     if (!trimmed) return
 
-    // Buffer user turn so we can pass it to live-sync after the AI responds
     if (role === 'user') {
       lastLiveUserMsgRef.current = trimmed
+      enqueueTranscriptTask(async () => {
+        const persisted = await persistTranscriptMessages([{ role: 'user', text: trimmed }])
+        if (!persisted) return
+        persisted.savedMessages.forEach((message) =>
+          onLiveMessage?.({
+            role: message.role,
+            text: message.content,
+            domain: message.domain,
+            specialistName: message.specialistName,
+          }),
+        )
+      })
+      return
     }
 
-    void fetch('/api/chat/transcript', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        conversationId: liveConversationIdRef.current ?? null,
-        messages: [{ role, content: trimmed }],
-      }),
-    })
-      .then((res) => res.json())
-      .then((data: unknown) => {
-        // If a new conversation was created, persist its ID for subsequent calls
-        const id = (data as { conversationId?: string }).conversationId
-        if (id && !liveConversationIdRef.current) {
-          liveConversationIdRef.current = id
-        }
-        // Mark that at least one message was saved (triggers end-of-session sync)
-        liveHasDataRef.current = true
+    enqueueTranscriptTask(async () => {
+      const convIdBeforeSync = liveConversationIdRef.current
+      const userMsg = lastLiveUserMsgRef.current
+      let effectiveSnapshot = readStoredSnapshot(convIdBeforeSync)
 
-        // Append confirmed message to chat immediately (no need to wait for session end)
-        onLiveMessage?.(role, trimmed)
-
-        // After assistant turn: fire background orchestration for tool calls + case state
-        if (role === 'assistant') {
-          const convId =
-            liveConversationIdRef.current ?? (data as { conversationId?: string }).conversationId
-          const userMsg = lastLiveUserMsgRef.current
-          lastLiveUserMsgRef.current = null
-          if (convId && userMsg) {
-            void fetch('/api/chat/live-sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ conversationId: convId, userMessage: userMsg }),
-            })
-              .then((res) => (res.ok ? res.json() : null))
-              .then((syncData: { stateSnapshot?: CanonicalCaseStateSnapshot } | null) => {
-                if (!syncData?.stateSnapshot) return
-                const storageKey = stateSnapshotKeyForConversation(convId)
-                const serialized = JSON.stringify(syncData.stateSnapshot)
-                try {
-                  localStorage.setItem(storageKey, serialized)
-                  window.dispatchEvent(
-                    new StorageEvent('storage', {
-                      key: storageKey,
-                      newValue: serialized,
-                      storageArea: localStorage,
-                    }),
-                  )
-                } catch {
-                  /* best-effort */
-                }
-              })
-              .catch(() => {
-                /* best-effort */
-              })
+      if (convIdBeforeSync && userMsg) {
+        try {
+          const res = await fetch('/api/chat/live-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conversationId: convIdBeforeSync, userMessage: userMsg }),
+          })
+          const syncData = res.ok
+            ? ((await res.json()) as { stateSnapshot?: CanonicalCaseStateSnapshot })
+            : null
+          if (syncData?.stateSnapshot) {
+            effectiveSnapshot = syncData.stateSnapshot
+            const storageKey = stateSnapshotKeyForConversation(convIdBeforeSync)
+            const serialized = JSON.stringify(syncData.stateSnapshot)
+            try {
+              localStorage.setItem(storageKey, serialized)
+              window.dispatchEvent(
+                new StorageEvent('storage', {
+                  key: storageKey,
+                  newValue: serialized,
+                  storageArea: localStorage,
+                }),
+              )
+            } catch {
+              /* best-effort */
+            }
           }
+        } catch {
+          /* best-effort */
         }
-      })
-      .catch(() => {
-        /* best-effort */
-      })
+      }
+
+      lastLiveUserMsgRef.current = null
+
+      const leadPanel =
+        effectiveSnapshot?.domainPanels.find(
+          (panel) => panel.domain === effectiveSnapshot.leadDomain,
+        ) ?? effectiveSnapshot?.domainPanels[0]
+      const persisted = await persistTranscriptMessages([
+        {
+          role: 'assistant',
+          text: trimmed,
+          domain: effectiveSnapshot?.leadDomain ?? leadPanel?.domain,
+          specialistName: formatAgentIdLabel(leadPanel?.selectedAgentId),
+        },
+      ])
+      if (!persisted) return
+      persisted.savedMessages.forEach((message) =>
+        onLiveMessage?.({
+          role: message.role,
+          text: message.content,
+          domain: message.domain,
+          specialistName: message.specialistName,
+        }),
+      )
+    })
   }
 
   return (

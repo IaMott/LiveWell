@@ -84,22 +84,34 @@ Fatto
   - `npm run build`
   - `npm run test -- tests/api/chat-orchestration.test.ts tests/api/multi-agent-execution.test.ts tests/api/chat-send-persistence.test.ts tests/api/live-sync-stateSnapshot.test.ts tests/api/live-token-fallback-observability.test.ts tests/api/conversation-stateSnapshot-route.test.ts tests/api/case-persistence.test.ts`
   - `npm run test -- tests/api/chat-send-security.test.ts tests/api/live-token-security.test.ts tests/api/domain-canonical-write-read.e2e.test.ts`
+- fix pack prioritario post-feedback reale implementato:
+  - transcript live serializzato e reso metadata-aware in `src/app/api/chat/transcript/route.ts` e `src/components/chat/ChatInput.tsx`
+  - payload/tool interni filtrati dai contenuti assistant visibili via `src/lib/chat/userVisibleContent.ts`
+  - banner specialista riallineato allo speaker reale dell'ultimo messaggio assistant in `src/components/chat/ChatShell.tsx`
+  - `chat/send` usa ora la label dello speaker corrente prima del lead panel per il messaggio assistant
+  - aggiunti test mirati su transcript route, ordering live client, banner specialista e sanitizzazione export/load
+- validazioni locali del fix pack verdi:
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run build`
+  - `npm run test -- tests/api/chat-transcript-route.test.ts tests/api/conversation-thinking-export.test.ts tests/api/chat-send-persistence.test.ts tests/chat-input-live-ordering.test.tsx tests/chat-shell-specialist-banner.test.tsx`
+  - `npm run test -- tests/chat-input-live-ordering.test.tsx tests/chat-shell-specialist-banner.test.tsx tests/api/chat-transcript-route.test.ts`
 
 In corso
 
-- nessun blocco implementativo attivo nel working tree
-- review finale aperta solo per la consegna del verdetto conclusivo all'utente
+- publish remoto del fix pack prioritario post-feedback reale
+- aggiornamento memoria finale del passo con commit/push/deploy
 
 Prossimo
 
-- consegnare il verdetto finale unico
-- distinguere chiaramente residual recommendations da future track separate
-- non riaprire nuove implementazioni senza un nuovo finding reale
+- completare commit, push e deploy del fix pack validato localmente
+- consegnare esito finale con rischi residui non bloccanti
 
 Rischi
 
 - resta legacy interno confinato ma non bloccante: `CaseState`, `fromStoredCaseState()` e `compatibilitySpeakerId` sopravvivono nell'engine/protocol per record storici e adapter interni, non piu` nei route hot-path di persistenza canonical-first
 - resta rischio non bloccante sul live reale: i test ora verificano piu` contenuto osservabile del bootstrap (`stateSnapshot`, history, attributes, systemInstruction), ma una integrazione browser/SDK non mockata non e` eseguibile dal terminale
+- rischio applicativo mitigato ma da monitorare in production: transcript live e speaker metadata dipendono ora da serializzazione client + sync live; se il close della sessione avviene in una finestra molto stretta resta possibile un gap non osservato dai test locali
 - restano solo debiti separati e fuori track:
   - advisory moderate dev-only sullo stack lint/toolchain
   - eventuale major Prisma
@@ -107,4 +119,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 16:57
+2026-03-27 20:43

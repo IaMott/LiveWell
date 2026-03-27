@@ -100,10 +100,15 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
 
   /** Confirmed message handler: append to local messages immediately (no session-end wait). */
   const handleLiveMessage = useCallback(
-    (role: 'user' | 'assistant', text: string) => {
+    (message: {
+      role: 'user' | 'assistant'
+      text: string
+      domain?: Domain
+      specialistName?: string
+    }) => {
       // Clear interim for this role — it's now confirmed
-      setLiveInterim((prev) => (prev?.role === role ? null : prev))
-      appendLiveMessage(role, text)
+      setLiveInterim((prev) => (prev?.role === message.role ? null : prev))
+      appendLiveMessage(message)
     },
     [appendLiveMessage],
   )
@@ -119,11 +124,23 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
   const leadPanel =
     stateSnapshot?.domainPanels.find((panel) => panel.domain === stateSnapshot.leadDomain) ??
     stateSnapshot?.domainPanels[0]
-  const visualActiveDomain = (stateSnapshot?.leadDomain ?? activeDomain ?? null) as Domain | null
-  const visualSpecialistId = leadPanel?.selectedAgentId ?? activeSpecialistId ?? undefined
+  const latestAssistantWithSpecialist = [...messages]
+    .reverse()
+    .find((message) => message.role === 'assistant' && message.specialistName)
+  const visualActiveDomain = (latestAssistantWithSpecialist?.domain ??
+    stateSnapshot?.leadDomain ??
+    activeDomain ??
+    null) as Domain | null
   const visualSpecialistName =
-    formatAgentIdLabel(leadPanel?.selectedAgentId) ?? activeSpecialistName ?? undefined
+    latestAssistantWithSpecialist?.specialistName ??
+    activeSpecialistName ??
+    formatAgentIdLabel(leadPanel?.selectedAgentId) ??
+    undefined
   const specialistColor = getDomainColor(visualActiveDomain)
+  const showSpecialistBanner =
+    !liveActive &&
+    !!visualSpecialistName &&
+    !!(stateSnapshot || activeSpecialistId || activeSpecialistName)
 
   /** Merge confirmed messages with the live interim message (if any) so the text
    * grows word-by-word directly inside the chat bubble — same as text streaming. */
@@ -156,7 +173,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
       {/* Specialist mode banner — hidden during live session to avoid duplicate
           specialist chrome while the shared live turn is in progress.
           The canonical state is still re-applied to text chat when live ends. */}
-      {visualSpecialistId && visualSpecialistName && !liveActive && (
+      {showSpecialistBanner && (
         <div
           style={{
             display: 'flex',

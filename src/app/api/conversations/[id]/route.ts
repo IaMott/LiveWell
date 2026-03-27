@@ -1,6 +1,7 @@
 import { getAuthUserId } from '@/lib/auth'
 import { readCanonicalCaseRuntimeState } from '@/lib/ai/case/persistence'
 import { decodeAssistantStoredContent } from '@/lib/chat/thinkingPersistence'
+import { sanitizeAssistantVisibleContent } from '@/lib/chat/userVisibleContent'
 import { prisma } from '@/lib/prisma'
 import { errorResponse } from '@/lib/security/errorSchema'
 import { checkRateLimit, getClientIp } from '@/lib/security/httpGuards'
@@ -53,15 +54,37 @@ export async function GET(
     id: conv.id,
     title: conv.title ?? 'Conversazione',
     stateSnapshot: stateSnapshot ?? undefined,
-    messages: conv.messages.map((m) => ({
-      ...(m.role === 'assistant'
-        ? decodeAssistantStoredContent(m.content)
-        : { content: m.content }),
-      id: m.id,
-      role: m.role,
-      domain: m.domain ?? undefined,
-      specialistName: m.specialistName ?? undefined,
-      createdAt: m.createdAt.toISOString(),
-    })),
+    messages: conv.messages.flatMap((m) => {
+      if (m.role !== 'assistant') {
+        return [
+          {
+            content: m.content,
+            id: m.id,
+            role: m.role,
+            domain: m.domain ?? undefined,
+            specialistName: m.specialistName ?? undefined,
+            createdAt: m.createdAt.toISOString(),
+          },
+        ]
+      }
+
+      const decoded = decodeAssistantStoredContent(m.content)
+      const sanitizedContent = sanitizeAssistantVisibleContent(decoded.content)
+      if (!sanitizedContent && !(decoded.thinkingSteps && decoded.thinkingSteps.length > 0)) {
+        return []
+      }
+
+      return [
+        {
+          content: sanitizedContent,
+          thinkingSteps: decoded.thinkingSteps,
+          id: m.id,
+          role: m.role,
+          domain: m.domain ?? undefined,
+          specialistName: m.specialistName ?? undefined,
+          createdAt: m.createdAt.toISOString(),
+        },
+      ]
+    }),
   })
 }

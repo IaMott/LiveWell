@@ -651,6 +651,99 @@ describe('/api/chat/send persistence integration', () => {
     })
   })
 
+  it('uses the current speaking specialist label for the assistant message even when the lead panel lags behind', async () => {
+    prismaMock.caseState.findUnique.mockResolvedValue(null)
+
+    vi.resetModules()
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: vi.fn(async () => ({
+        domain: 'health',
+        finalMessageMarkdown: 'Il Fisioterapista è qui disponibile per approfondire la spalla.',
+        toolCallsToExecute: [],
+        stateSnapshot: {
+          schemaVersion: 1,
+          conversationId: 'conv-db-1',
+          activeDomains: ['health', 'training'],
+          domainPanels: [
+            {
+              domain: 'health',
+              selectedAgentId: 'mmg',
+              candidateAgentIds: ['mmg'],
+              status: 'active',
+              priorityScore: 0.9,
+              lastReasoningAt: null,
+              pendingNeeds: [],
+            },
+            {
+              domain: 'training',
+              selectedAgentId: 'fisioterapista',
+              candidateAgentIds: ['fisioterapista'],
+              status: 'monitoring',
+              priorityScore: 0.7,
+              lastReasoningAt: null,
+              pendingNeeds: [],
+            },
+          ],
+          leadDomain: 'health',
+          speakerPolicy: 'lead',
+          conversationFocus: {
+            activeProblems: ['spalla sinistra debole'],
+            activeGoals: ['ricomposizione corporea'],
+            activeConstraints: [],
+            summary: 'speaker mismatch guard',
+          },
+          coordinationState: {
+            crossDomainConflicts: [],
+            dependencies: [],
+            needsReview: false,
+          },
+          sharedOpenQuestions: [],
+          domainOpenQuestions: {},
+          updatedAt: '2026-03-27T20:40:00.000Z',
+        },
+        caseState: undefined,
+        protocolEvents: [],
+        activeSpecialist: {
+          id: 'fisioterapista',
+          displayName: 'Fisioterapista',
+          domain: 'training',
+          domains: ['training', 'health'],
+        },
+        ui: { domainIcon: 'health', moodScore: 50, sectionScores: { health: 60, general: 50 } },
+        safety: { escalation: 'none' },
+        debug: { selectedAgents: ['fisioterapista', 'mmg'], conflicts: [] },
+      })),
+    }))
+
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const res = await POST(
+      new Request('http://localhost/api/chat/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'u-db',
+        },
+        body: JSON.stringify({ message: 'va bene, procediamo' }),
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    const body = await res.text()
+    const uiState = extractSseEvent(body, 'ui.state')
+
+    expect(uiState).toMatchObject({
+      domain: 'health',
+      specialistName: 'Fisioterapista',
+    })
+    expect(prismaMock.message.create.mock.calls[1]?.[0]).toMatchObject({
+      data: expect.objectContaining({
+        role: 'assistant',
+        specialistName: 'Fisioterapista',
+      }),
+    })
+  })
+
   it('routes text tool calls through the matching panel agent instead of one global capability agent', async () => {
     prismaMock.caseState.findUnique.mockResolvedValue(null)
 

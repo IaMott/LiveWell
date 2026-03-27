@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createHash } from 'crypto'
 import { getAuthUserId } from '@/lib/auth'
 import { decodeAssistantStoredContent } from '@/lib/chat/thinkingPersistence'
+import { sanitizeAssistantVisibleContent } from '@/lib/chat/userVisibleContent'
 import { prisma } from '@/lib/prisma'
 
 function hashUserId(userId: string): string {
@@ -70,7 +71,12 @@ export async function GET(
       orderBy: { createdAt: 'asc' },
       select: { messageId: true, rating: true, comment: true, agentName: true, createdAt: true },
     })
-    const assistantMessages = conversation.messages.filter((m) => m.role === 'assistant')
+    const assistantMessages = conversation.messages
+      .filter((m) => m.role === 'assistant')
+      .filter((m) => {
+        const decoded = decodeAssistantStoredContent(m.content)
+        return sanitizeAssistantVisibleContent(decoded.content).length > 0
+      })
     const exactMatchedMessageIds = new Set<string>()
     const unmatchedReviews: FeedbackReview[] = []
 
@@ -125,7 +131,13 @@ export async function GET(
 
   for (const m of conversation.messages) {
     const decoded = m.role === 'assistant' ? decodeAssistantStoredContent(m.content) : null
-    const messageContent = decoded?.content ?? m.content
+    const messageContent =
+      m.role === 'assistant'
+        ? sanitizeAssistantVisibleContent(decoded?.content ?? m.content)
+        : m.content
+    if (m.role === 'assistant' && !messageContent && !(decoded?.thinkingSteps?.length ?? 0)) {
+      continue
+    }
     const who = m.role === 'user' ? 'Tu' : 'LiveWell'
     const ts = new Date(m.createdAt).toLocaleString('it-IT', {
       dateStyle: 'short',

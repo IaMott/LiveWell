@@ -1,5 +1,6 @@
 import { getAuthUserId } from '@/lib/auth'
 import { stripAssistantStoredMetadata } from '@/lib/chat/thinkingPersistence'
+import { sanitizeAssistantVisibleContent } from '@/lib/chat/userVisibleContent'
 import { prisma } from '@/lib/prisma'
 import { errorResponse } from '@/lib/security/errorSchema'
 import { checkRateLimit, getClientIp } from '@/lib/security/httpGuards'
@@ -37,7 +38,7 @@ export async function GET(request: Request): Promise<Response> {
         const assistantMsg = c.messages.find((m) => m.role === 'assistant')
         const previewContent =
           lastMsg?.role === 'assistant'
-            ? stripAssistantStoredMetadata(lastMsg.content)
+            ? sanitizeAssistantVisibleContent(stripAssistantStoredMetadata(lastMsg.content))
             : (lastMsg?.content ?? '')
         return {
           id: c.id,
@@ -72,7 +73,7 @@ export async function GET(request: Request): Promise<Response> {
           title: c.title ?? 'Conversazione',
           updatedAt: c.updatedAt.toISOString(),
           preview: (c.messages[0]?.role === 'assistant'
-            ? stripAssistantStoredMetadata(c.messages[0].content)
+            ? sanitizeAssistantVisibleContent(stripAssistantStoredMetadata(c.messages[0].content))
             : (c.messages[0]?.content ?? '')
           ).slice(0, 80),
           specialist: null,

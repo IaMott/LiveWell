@@ -1,5 +1,23 @@
 File touch log (append-only)
 
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/lib/chat/userVisibleContent.ts` | action=completed | contract=canonical | note=`nuovo filtro condiviso dei contenuti assistant visibili per eliminare syntax interna e payload backend`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/app/api/chat/transcript/route.ts` | action=completed | contract=canonical | note=`transcript live reso sequential write, metadata-aware e con sanitizzazione assistant`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/components/chat/ChatInput.tsx` | action=completed | contract=canonical | note=`queue locale per serializzare i save live e sync assistant post-live-sync con speaker metadata`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/contexts/ChatContext.tsx` | action=completed | contract=canonical | note=`appendLiveMessage esteso con domain/specialistName e fallback specialistName corretto lato SSE`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/components/chat/ChatShell.tsx` | action=completed | contract=canonical | note=`banner specialista riallineato allo speaker dell'ultimo messaggio assistant`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/app/api/chat/send/route.ts` | action=completed | contract=canonical | note=`speaker label assistant resa coerente con activeSpecialist prima del lead-panel stale`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/app/api/conversations/[id]/route.ts` | action=completed | contract=canonical | note=`load conversazione sanificato contro payload assistant interni`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/app/api/conversations/[id]/export/route.ts` | action=completed | contract=canonical | note=`export conversazione sanificato contro payload assistant interni`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/app/api/conversations/route.ts` | action=completed | contract=canonical | note=`preview lista conversazioni sanificato contro payload assistant interni`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/api/chat-transcript-route.test.ts` | action=completed | contract=test | note=`copertura su ordering persistito, metadata assistant e drop dei payload-only assistant`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/chat-input-live-ordering.test.tsx` | action=completed | contract=test | note=`guardrail client sulla serializzazione del transcript live user->assistant`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/chat-shell-specialist-banner.test.tsx` | action=completed | contract=test | note=`guardrail UI sul banner specialista rispetto all'ultimo speaker assistant`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/api/conversation-thinking-export.test.ts` | action=completed | contract=test | note=`copertura su load/export sanificati dei payload assistant interni`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/api/chat-send-persistence.test.ts` | action=completed | contract=test | note=`guardrail sulla label specialistName assistant quando il lead panel e` stale`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/CHECKPOINTS.md` | action=completed | contract=temporary | note=`append checkpoint locale validato`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/FILE_TOUCH_LOG.md` | action=completed | contract=temporary | note=`ledger aggiornato per il fix pack prioritario`
+2026-03-27 20:43 | step=CP-50 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/RISK_LOG.md` | action=completed | contract=temporary | note=`rischi aggiornati sul fix pack post-feedback`
+
 2026-03-26 21:17 | step=CP-23 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/api/conversation-stateSnapshot-route.test.ts` | action=completed | contract=canonical | note=`copertura del reload conversazione con stateSnapshot persistito`
 2026-03-26 21:17 | step=CP-23 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/api/live-sync-stateSnapshot.test.ts` | action=completed | contract=canonical | note=`copertura della response live-sync con stateSnapshot canonical-first`
 2026-03-26 21:17 | step=CP-23 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/STATUS.md` | action=completed | contract=temporary | note=`stato finale Fase 1 aggiornato a chiusura effettiva`

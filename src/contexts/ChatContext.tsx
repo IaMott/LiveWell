@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { CanonicalCaseStateSnapshot, Domain } from '@/lib/ai/types'
+import { sanitizeAssistantVisibleContent } from '@/lib/chat/userVisibleContent'
 
 export type ThinkingStep = {
   specialistName: string
@@ -63,7 +64,12 @@ type ChatContextValue = {
   exportConversation: (id?: string) => Promise<void>
   /** Append a confirmed live-session message to the local message list immediately,
    * without waiting for loadConversation to reload from DB. */
-  appendLiveMessage: (role: 'user' | 'assistant', text: string) => void
+  appendLiveMessage: (input: {
+    role: 'user' | 'assistant'
+    text: string
+    domain?: Domain
+    specialistName?: string
+  }) => void
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -584,7 +590,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 const resolvedSpecialistId =
                   leadPanel?.selectedAgentId ?? newSpecialistId ?? activeSpecialistIdRef.current
                 const resolvedSpecialistName =
-                  formatAgentIdLabel(leadPanel?.selectedAgentId) ?? specialistName
+                  specialistName ??
+                  formatAgentIdLabel(leadPanel?.selectedAgentId ?? newSpecialistId)
 
                 if (resolvedDomain) setActiveDomain(resolvedDomain)
                 if (nextStateSnapshot) {
@@ -729,12 +736,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [recoverConversationAfterSendFailure],
   )
 
-  const appendLiveMessage = useCallback((role: 'user' | 'assistant', text: string) => {
-    setMessages((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), role, content: text, streaming: false },
-    ])
-  }, [])
+  const appendLiveMessage = useCallback(
+    ({
+      role,
+      text,
+      domain,
+      specialistName,
+    }: {
+      role: 'user' | 'assistant'
+      text: string
+      domain?: Domain
+      specialistName?: string
+    }) => {
+      const content = role === 'assistant' ? sanitizeAssistantVisibleContent(text) : text.trim()
+      if (!content) return
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role, content, domain, specialistName, streaming: false },
+      ])
+    },
+    [],
+  )
 
   const value: ChatContextValue = {
     messages,

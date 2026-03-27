@@ -160,4 +160,63 @@ describe('conversation thinking persistence and export', () => {
     )
     expect(text).toContain('- Nutrizionista [nutrition]: Confronto tra specialisti')
   })
+
+  it('strips leaked internal payload lines from loaded and exported assistant content', async () => {
+    const leakedStoredAssistantContent = encodeAssistantContentWithThinking(
+      'Payload: user.setAttribute domain:"health" key:"pathologies_notes" value:"spalla"\n\nRisposta clinica utile',
+      [],
+    )
+
+    prismaMock.conversation.findUnique.mockResolvedValue({
+      id: 'conv-2',
+      title: 'Conversazione',
+      userId: 'user-1',
+      messages: [
+        {
+          id: 'msg-2',
+          role: 'assistant',
+          content: leakedStoredAssistantContent,
+          domain: 'health',
+          specialistName: 'Fisioterapista',
+          createdAt: new Date('2026-03-23T18:00:00.000Z'),
+        },
+      ],
+    })
+
+    prismaMock.conversation.findFirst.mockResolvedValue({
+      id: 'conv-2',
+      userId: 'user-1',
+      messages: [
+        {
+          id: 'msg-2',
+          role: 'assistant',
+          content: leakedStoredAssistantContent,
+          createdAt: new Date('2026-03-23T18:00:00.000Z'),
+        },
+      ],
+    })
+
+    vi.resetModules()
+    const { GET: getConversation } = await import('@/app/api/conversations/[id]/route')
+    const { GET: exportConversation } = await import('@/app/api/conversations/[id]/export/route')
+
+    const loadRes = await getConversation(
+      new Request('http://localhost/api/conversations/conv-2'),
+      {
+        params: Promise.resolve({ id: 'conv-2' }),
+      },
+    )
+    const loadBody = await loadRes.json()
+
+    const exportRes = await exportConversation(
+      new Request('http://localhost/api/conversations/conv-2/export'),
+      { params: Promise.resolve({ id: 'conv-2' }) },
+    )
+    const exportText = await exportRes.text()
+
+    expect(loadRes.status).toBe(200)
+    expect(loadBody.messages[0].content).toBe('Risposta clinica utile')
+    expect(exportText).toContain('Risposta clinica utile')
+    expect(exportText).not.toContain('Payload: user.setAttribute')
+  })
 })

@@ -1,7 +1,18 @@
 import { z } from 'zod'
 import { getAuthUserId } from '@/lib/auth'
+import { sanitizeAssistantVisibleContent } from '@/lib/chat/userVisibleContent'
 import { errorResponse } from '@/lib/security/errorSchema'
 import { prisma } from '@/lib/prisma'
+
+const TRANSCRIPT_DOMAINS = [
+  'general',
+  'nutrition',
+  'health',
+  'training',
+  'mindfulness',
+  'inspiration',
+  'coordination',
+] as const
 
 const bodySchema = z.object({
   /**
@@ -16,6 +27,8 @@ const bodySchema = z.object({
       z.object({
         role: z.enum(['user', 'assistant']),
         content: z.string().min(1).max(4000),
+        domain: z.enum(TRANSCRIPT_DOMAINS).optional(),
+        specialistName: z.string().trim().min(1).max(120).optional(),
       }),
     )
     .min(1)
@@ -59,27 +72,56 @@ export async function POST(request: Request): Promise<Response> {
     conversationId = created.id
   }
 
-  // De-duplicate: skip messages whose (role, content) pair already exists in this conversation.
-  // Prevents duplicate rows when the client calls the endpoint multiple times with the same messages.
   const existingMessages = await prisma.message.findMany({
     where: { conversationId: conversationId as string },
-    select: { role: true, content: true },
+    select: { role: true, content: true, domain: true, specialistName: true },
   })
-  const existingSet = new Set(existingMessages.map((m) => `${m.role}::${m.content}`))
+  const existingSet = new Set(
+    existingMessages.map((m) => {
+      const normalizedContent =
+        m.role === 'assistant' ? sanitizeAssistantVisibleContent(m.content) : m.content.trim()
+      return `${m.role}::${normalizedContent}::${m.domain ?? ''}::${m.specialistName ?? ''}`
+    }),
+  )
 
-  const newMessages = body.messages.filter((m) => !existingSet.has(`${m.role}::${m.content}`))
+  const normalizedMessages = body.messages
+    .map((message) => {
+      const content =
+        message.role === 'assistant'
+          ? sanitizeAssistantVisibleContent(message.content)
+          : message.content.trim()
+
+      return {
+        role: message.role,
+        content,
+        domain: message.role === 'assistant' ? message.domain : undefined,
+        specialistName: message.role === 'assistant' ? message.specialistName : undefined,
+      }
+    })
+    .filter((message) => message.content.length > 0)
+
+  const newMessages = normalizedMessages.filter(
+    (message) =>
+      !existingSet.has(
+        `${message.role}::${message.content}::${message.domain ?? ''}::${message.specialistName ?? ''}`,
+      ),
+  )
 
   if (newMessages.length > 0) {
-    await prisma.message.createMany({
-      data: newMessages.map((m) => ({
-        conversationId: conversationId as string,
-        role: m.role,
-        content: m.content,
-      })),
-    })
+    for (const message of newMessages) {
+      await prisma.message.create({
+        data: {
+          conversationId: conversationId as string,
+          role: message.role,
+          content: message.content,
+          ...(message.domain ? { domain: message.domain } : {}),
+          ...(message.specialistName ? { specialistName: message.specialistName } : {}),
+        },
+      })
+    }
   }
 
-  return new Response(JSON.stringify({ ok: true, conversationId }), {
+  return new Response(JSON.stringify({ ok: true, conversationId, savedMessages: newMessages }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   })

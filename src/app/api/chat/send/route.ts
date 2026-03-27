@@ -37,6 +37,7 @@ import {
 } from './chatPersistence'
 import { checkAndCreateCheckpointNotifications } from '@/lib/ai/program/checkpoints'
 import type { PersistedThinkingStep } from '@/lib/chat/thinkingPersistence'
+import { sanitizeAssistantVisibleContent } from '@/lib/chat/userVisibleContent'
 
 export { buildDefaultContextPack } from './chatPersistence'
 
@@ -697,7 +698,10 @@ export async function POST(request: Request): Promise<Response> {
         }))
         const persistedToolExecutionTrace = [...toolExecutionTrace, ...blockedToolExecutionTrace]
 
-        const responseText = consensus.finalMessageMarkdown
+        const rawResponseText = consensus.finalMessageMarkdown
+        const responseText =
+          sanitizeAssistantVisibleContent(rawResponseText) ||
+          'Ho registrato le informazioni principali. Possiamo continuare.'
         const nextCaseState = consensus.caseState ?? null
         const canonicalStateSnapshot =
           consensus.stateSnapshot ??
@@ -710,7 +714,7 @@ export async function POST(request: Request): Promise<Response> {
           stateSnapshot?.leadDomain ?? consensus.activeSpecialist?.domain ?? consensus.ui.domainIcon
         const activeSpecialistId = leadPanel?.selectedAgentId ?? consensus.activeSpecialist?.id
         const specialistName =
-          formatAgentIdLabel(leadPanel?.selectedAgentId) ?? consensus.activeSpecialist?.displayName
+          consensus.activeSpecialist?.displayName ?? formatAgentIdLabel(leadPanel?.selectedAgentId)
         const specialistDomains = leadPanel?.domain
           ? [leadPanel.domain]
           : consensus.activeSpecialist?.domains
