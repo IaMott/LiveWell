@@ -69,6 +69,8 @@ type ChatContextValue = {
     text: string
     domain?: Domain
     specialistName?: string
+    thinkingSteps?: ThinkingStep[]
+    conversationId?: string
   }) => void
 }
 
@@ -124,6 +126,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const conversationIdRef = useRef<string | undefined>(undefined)
   const activeSpecialistIdRef = useRef<string | undefined>(undefined)
+  const activeSpecialistNameRef = useRef<string | undefined>(undefined)
   const stateSnapshotRef = useRef<CanonicalCaseStateSnapshot | null>(null)
   const isStreamingRef = useRef(false)
   // F5: AbortController ref so in-flight SSE streams can be cancelled on navigation/re-send.
@@ -136,6 +139,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     activeSpecialistIdRef.current = activeSpecialistId
   }, [activeSpecialistId])
+
+  useEffect(() => {
+    activeSpecialistNameRef.current = activeSpecialistName
+  }, [activeSpecialistName])
 
   useEffect(() => {
     stateSnapshotRef.current = stateSnapshot
@@ -154,11 +161,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const nextSpecialistName = formatAgentIdLabel(nextSpecialistId)
       setActiveSpecialistId(nextSpecialistId)
       activeSpecialistIdRef.current = nextSpecialistId
-      if (nextSpecialistName) setActiveSpecialistName(nextSpecialistName)
+      if (nextSpecialistName) {
+        setActiveSpecialistName(nextSpecialistName)
+        activeSpecialistNameRef.current = nextSpecialistName
+      }
     } else if (!stateSnapshot) {
       setActiveSpecialistId(undefined)
       setActiveSpecialistName(undefined)
       activeSpecialistIdRef.current = undefined
+      activeSpecialistNameRef.current = undefined
     }
   }, [stateSnapshot])
 
@@ -562,12 +573,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   ),
                 )
               } else if (event.type === 'message.complete') {
+                const completedLeadPanel = getLeadPanel(stateSnapshotRef.current)
+                const completedDomain = stateSnapshotRef.current?.leadDomain
+                const completedSpecialistName =
+                  activeSpecialistNameRef.current ??
+                  formatAgentIdLabel(
+                    completedLeadPanel?.selectedAgentId ?? activeSpecialistIdRef.current,
+                  )
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === currentAssistantId
                       ? {
                           ...m,
                           content: String(event.content ?? m.content),
+                          domain: m.domain ?? completedDomain ?? undefined,
+                          specialistName: m.specialistName ?? completedSpecialistName,
                           streaming: false,
                         }
                       : m,
@@ -617,6 +637,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   setActiveSpecialistId(resolvedSpecialistId)
                   setActiveSpecialistName(resolvedSpecialistName)
                   activeSpecialistIdRef.current = resolvedSpecialistId
+                  activeSpecialistNameRef.current = resolvedSpecialistName
                   const targetConversationId =
                     typeof event.conversationId === 'string' &&
                     event.conversationId.trim().length > 0
@@ -642,7 +663,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                       ? {
                           ...m,
                           domain: resolvedDomain ?? undefined,
-                          specialistName: resolvedSpecialistName,
+                          specialistName:
+                            m.content.trim().length > 0 || !m.streaming
+                              ? resolvedSpecialistName
+                              : m.specialistName,
                         }
                       : m,
                   ),
@@ -742,17 +766,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       text,
       domain,
       specialistName,
+      thinkingSteps,
+      conversationId: nextConversationId,
     }: {
       role: 'user' | 'assistant'
       text: string
       domain?: Domain
       specialistName?: string
+      thinkingSteps?: ThinkingStep[]
+      conversationId?: string
     }) => {
       const content = role === 'assistant' ? sanitizeAssistantVisibleContent(text) : text.trim()
       if (!content) return
+      if (nextConversationId && nextConversationId !== conversationIdRef.current) {
+        conversationIdRef.current = nextConversationId
+        setConversationId(nextConversationId)
+        localStorage.setItem(STORAGE_KEY, nextConversationId)
+      }
       setMessages((prev) => [
         ...prev,
-        { id: crypto.randomUUID(), role, content, domain, specialistName, streaming: false },
+        {
+          id: crypto.randomUUID(),
+          role,
+          content,
+          domain,
+          specialistName,
+          thinkingSteps,
+          streaming: false,
+        },
       ])
     },
     [],

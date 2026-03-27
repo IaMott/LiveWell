@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import { getAuthUserId } from '@/lib/auth'
+import {
+  encodeAssistantContentWithThinking,
+  normalizeThinkingSteps,
+} from '@/lib/chat/thinkingPersistence'
 import { sanitizeAssistantVisibleContent } from '@/lib/chat/userVisibleContent'
 import { errorResponse } from '@/lib/security/errorSchema'
 import { prisma } from '@/lib/prisma'
@@ -29,6 +33,17 @@ const bodySchema = z.object({
         content: z.string().min(1).max(4000),
         domain: z.enum(TRANSCRIPT_DOMAINS).optional(),
         specialistName: z.string().trim().min(1).max(120).optional(),
+        thinkingSteps: z
+          .array(
+            z.object({
+              specialistName: z.string().trim().min(1).max(120),
+              title: z.string().trim().min(1).max(240),
+              thought: z.string().trim().min(1).max(4000).optional(),
+              domain: z.enum(TRANSCRIPT_DOMAINS).optional(),
+            }),
+          )
+          .max(20)
+          .optional(),
       }),
     )
     .min(1)
@@ -96,6 +111,8 @@ export async function POST(request: Request): Promise<Response> {
         content,
         domain: message.role === 'assistant' ? message.domain : undefined,
         specialistName: message.role === 'assistant' ? message.specialistName : undefined,
+        thinkingSteps:
+          message.role === 'assistant' ? normalizeThinkingSteps(message.thinkingSteps) : undefined,
       }
     })
     .filter((message) => message.content.length > 0)
@@ -113,7 +130,10 @@ export async function POST(request: Request): Promise<Response> {
         data: {
           conversationId: conversationId as string,
           role: message.role,
-          content: message.content,
+          content:
+            message.role === 'assistant'
+              ? encodeAssistantContentWithThinking(message.content, message.thinkingSteps)
+              : message.content,
           ...(message.domain ? { domain: message.domain } : {}),
           ...(message.specialistName ? { specialistName: message.specialistName } : {}),
         },

@@ -120,39 +120,36 @@ Fatto
 
 In corso
 
-- nessun fix obbligatorio aperto nel perimetro domini/chat di questa track
-- follow-up backend chiuso end-to-end:
-  - `src/lib/ai/orchestrator/orchestrator.ts` arricchisce il `stateSnapshot` canonico con `leadDomain`, `activeDomains` e `domainPanels` coerenti con routing, speaker corrente, snapshot precedente e domini attivi multi-dominio
-  - `tests/api/chat-orchestration.test.ts` copre prompt monodominio training e follow-up health+training
-  - `tests/api/chat-send-persistence.test.ts` blocca `assistant.domain` allineato al `leadDomain` canonico
-- pubblicazione completata:
-  - commit applicativo `507bbb9`
-  - deploy production `https://livewell-kpaijav1b-iamotts-projects.vercel.app`
-  - alias `https://livewell.mottisi.com`
-- smoke production PASS sugli scenari QA che fallivano:
-  - monodominio training -> `ui.state.domain=training`, `leadDomain=training`, `activeDomains=['training']`, `assistant.domain=training`
-  - follow-up health+training -> `ui.state.domain=health`, `leadDomain=health`, `activeDomains` contiene `health` e `training`, `assistant.domain=health`
+- triage/fix pack di prodotto su problemi reali emersi da uso utente e review avversariale:
+  - feedback persistito e reidratato al refresh in `src/components/chat/FeedbackWidget.tsx`
+  - reset password dal login riaperto lato auth public routes in `src/lib/auth.config.ts`
+  - live-sync ora emette `thinkingSteps` e il transcript live li persiste in `src/app/api/chat/live-sync/route.ts`, `src/app/api/chat/transcript/route.ts`, `src/components/chat/ChatInput.tsx`, `src/contexts/ChatContext.tsx`
+  - live bootstrap ora include documenti e artefatti recenti nel prompt team in `src/app/api/live-token/route.ts`
+  - la chat live sincronizza subito il `conversationId` creato runtime nel context e in `localStorage`, riducendo mismatch su refresh/export
+  - durante il reasoning non viene piu` mostrato in anticipo uno specialista non ancora consolidato sul messaggio
+- validazioni locali verdi sulla baseline del fix pack:
+  - `npm run test -- tests/api/feedback-widget-refresh.test.ts tests/api/auth-public-pages.test.ts tests/api/forgot-password-url.test.ts tests/api/chat-transcript-route.test.ts tests/chat-input-live-ordering.test.tsx tests/api/live-sync-stateSnapshot.test.ts tests/api/chat-context-live-runtime.test.tsx tests/api/live-token-fallback-observability.test.ts tests/api/live-modal-bootstrap.test.ts`
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run build`
 
 Prossimo
 
-- nessun follow-up obbligatorio aperto su questo bug
-- eventuale QA browser-side solo come conferma visiva finale dei pulsanti dominio e delle bolle chat
+- pubblicare questa baseline con commit/push/deploy
+- chiudere con verdict onesto: diversi bug reali sono corretti, ma il modello prodotto multi-caso/reply multiplo e la prova browser-side reale su alcuni flussi restano ancora da chiudere come track separata
 
 Rischi
 
+- resta aperto un gap di prodotto non coperto da questo fix pack: il modello di reply dirette a messaggi/specialisti distinti e backlog multi-caso vivo non e` ancora implementato come thread/reply reale
+- reasoning live molto migliorato nei path server e transcript, ma la completezza percepita nel browser richiede ancora verifica manuale production-side
+- transcript/export/refresh sono piu` allineati dopo il sync del `conversationId` live, ma il comportamento in close browser/SDK molto brusco resta solo mitigato e non provato E2E
+- il reset password e` nuovamente raggiungibile dal login; resta da verificare fuori terminale l'intero flusso email/token/reset page se si vuole chiuderlo come prova end-to-end
 - resta legacy interno confinato ma non bloccante: `CaseState`, `fromStoredCaseState()` e `compatibilitySpeakerId` sopravvivono nell'engine/protocol per record storici e adapter interni, non piu` nei route hot-path di persistenza canonical-first
-- resta rischio non bloccante sul live reale: i test ora verificano piu` contenuto osservabile del bootstrap (`stateSnapshot`, history, attributes, systemInstruction), ma una integrazione browser/SDK non mockata non e` eseguibile dal terminale
-- il fix attuale dei domini visuali e` validato localmente e deployato; manca solo eventuale verifica manuale browser-side della resa finale
-- Safari locale non consente WebDriver senza `Allow remote automation`; il blocco QA browser-DOM e` esterno alla app, ma non impedisce di verificare il problema via route production autenticati
-- rischio originario sul dominio `general` production-facing mitigato anche in production sugli stessi scenari QA
-- rischio applicativo mitigato ma da monitorare in production: transcript live e speaker metadata dipendono ora da serializzazione client + sync live; se il close della sessione avviene in una finestra molto stretta resta possibile un gap non osservato dai test locali
-- rischio QA sul transcript misto mitigato: production ora preserva il testo assistant visibile e continua a filtrare `Payload:`
-- rischio live ridotto ma non azzerato: il nuovo guardrail browser-facing copre il contratto `LiveModal -> /api/live-token -> SDK config`, ma non sostituisce ancora una prova E2E con browser reale + SDK reale
-- restano solo debiti separati e fuori track:
+- restano debiti separati e fuori track:
   - advisory moderate dev-only sullo stack lint/toolchain
   - eventuale major Prisma
   - cleanup interno piu` profondo del protocol engine legacy solo se il ROI giustifica una nuova track
 
 Ultimo aggiornamento
 
-2026-03-27 23:28
+2026-03-27 23:46

@@ -139,6 +139,7 @@ describe('/api/chat/live-sync stateSnapshot response', () => {
         leadDomain: 'health',
         activeDomains: ['health', 'training'],
       },
+      thinkingSteps: [],
     })
     expect(persistenceMock.persistCaseRuntimeState).toHaveBeenCalledTimes(1)
     expect(persistenceMock.persistCaseRuntimeState.mock.calls[0][0]).toMatchObject({
@@ -151,6 +152,110 @@ describe('/api/chat/live-sync stateSnapshot response', () => {
       }),
     })
     expect(persistenceMock.persistCaseState).not.toHaveBeenCalled()
+  })
+
+  it('returns proposal-derived thinking steps for live transcript persistence', async () => {
+    const { getAuthUserId, getAuthRole, getAuthOwnerMode } = await import('@/lib/auth')
+    const { loadTeam } = await import('@/lib/ai/team/loader')
+    vi.mocked(getAuthUserId).mockResolvedValue('u1')
+    vi.mocked(getAuthRole).mockResolvedValue('OWNER')
+    vi.mocked(getAuthOwnerMode).mockResolvedValue(true)
+    vi.mocked(loadTeam).mockReturnValue([
+      {
+        id: 'fisioterapista',
+        displayName: 'Fisioterapista',
+        domainTags: ['health'],
+        systemPrompt: 'health',
+        toolsAllowed: ['user.setAttribute'],
+        decisionStyle: 'team-led',
+      },
+    ])
+
+    persistenceMock.findConversationById.mockResolvedValue({ id: 'conv-1', userId: 'u1' })
+    persistenceMock.buildContextPack.mockResolvedValue({
+      user: { id: 'u1', role: 'OWNER', profile: {} },
+      history: { recentMessages: [], recentArtifacts: [] },
+      trackers: {},
+      notifications: { unreadCount: 0 },
+      files: [],
+      ui: { moodScore: 50, sectionScores: { general: 50 } },
+    })
+    persistenceMock.getCaseRuntimeState.mockResolvedValue(null)
+    persistenceMock.getCaseState.mockResolvedValue(null)
+    persistenceMock.persistCaseRuntimeState.mockResolvedValue(undefined)
+    persistenceMock.persistCaseState.mockResolvedValue(undefined)
+
+    orchestrateMock.mockResolvedValue({
+      toolCallsToExecute: [],
+      stateSnapshot: {
+        schemaVersion: 1,
+        conversationId: 'conv-1',
+        activeDomains: ['health'],
+        domainPanels: [
+          {
+            domain: 'health',
+            selectedAgentId: 'fisioterapista',
+            candidateAgentIds: ['fisioterapista'],
+            status: 'active',
+            priorityScore: 1,
+            lastReasoningAt: '2026-03-27T22:00:00.000Z',
+            pendingNeeds: [],
+          },
+        ],
+        leadDomain: 'health',
+        speakerPolicy: 'lead',
+        conversationFocus: {
+          activeProblems: ['dolore al ginocchio'],
+          activeGoals: ['allenarsi senza dolore'],
+          activeConstraints: [],
+          summary: 'live',
+        },
+        coordinationState: {
+          crossDomainConflicts: [],
+          dependencies: [],
+          needsReview: false,
+        },
+        sharedOpenQuestions: [],
+        domainOpenQuestions: {},
+        updatedAt: '2026-03-27T22:00:00.000Z',
+      },
+      caseState: undefined,
+      activeSpecialist: null,
+      debug: {
+        selectedAgents: ['fisioterapista'],
+        proposals: [
+          {
+            agentId: 'fisioterapista',
+            domain: 'health',
+            summary: 'Valutazione del dolore al ginocchio',
+            reasoning: 'Collego il dolore ai trigger di squat e corsa.',
+            confidence: 0.88,
+          },
+        ],
+      },
+    })
+
+    const { POST } = await import('@/app/api/chat/live-sync/route')
+
+    const res = await POST(
+      new Request('http://localhost/api/chat/live-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: 'conv-1', userMessage: 'Mi fa male il ginocchio' }),
+      }),
+    )
+
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.thinkingSteps).toEqual([
+      expect.objectContaining({
+        specialistName: 'Fisioterapista',
+        title: 'Valutazione del dolore al ginocchio',
+        thought: 'Collego il dolore ai trigger di squat e corsa.',
+        domain: 'health',
+      }),
+    ])
   })
 
   it('routes live tool calls through the matching panel agent instead of one global capability agent', async () => {

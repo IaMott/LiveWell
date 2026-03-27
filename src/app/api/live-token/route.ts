@@ -51,6 +51,21 @@ type AttrRow = {
   notes: string | null
 }
 
+type FilePromptRow = {
+  id: string
+  filename: string
+  mimeType: string
+  extractedText: string | null
+  createdAt: Date
+}
+
+type ArtifactPromptRow = {
+  id: string
+  title: string
+  contentMarkdown: string
+  createdAt: Date
+}
+
 type LiveCaseBootstrap = {
   activeAgentId: string | null
   stateSnapshot: CanonicalCaseStateSnapshot | null
@@ -88,6 +103,51 @@ function formatAttributesForPrompt(rows: AttrRow[]): string {
     }
   }
 
+  return lines.join('\n')
+}
+
+function readRefId(value: unknown, key: 'fileAssetId' | 'artifactId'): string | null {
+  if (!value || typeof value !== 'object') return null
+  const candidate = (value as Record<string, unknown>)[key]
+  return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null
+}
+
+function formatFilesForPrompt(
+  files: FilePromptRow[],
+  notesById: Map<string, string>,
+  label: string,
+): string {
+  if (files.length === 0) return ''
+
+  const lines = [label]
+  for (const file of files) {
+    const note = notesById.get(file.id)
+    const snippet = file.extractedText
+      ? file.extractedText.replace(/\s+/g, ' ').slice(0, 220)
+      : 'contenuto testuale non disponibile'
+    lines.push(
+      `- ${file.filename} (${file.mimeType}, ${file.createdAt.toISOString().slice(0, 10)})${note ? ` — ${note}` : ''}`,
+    )
+    lines.push(`  Estratto: ${snippet}`)
+  }
+  return lines.join('\n')
+}
+
+function formatArtifactsForPrompt(
+  artifacts: ArtifactPromptRow[],
+  notesById: Map<string, string>,
+): string {
+  if (artifacts.length === 0) return ''
+
+  const lines = ['ARTEFATTI GENERATI RECENTI:']
+  for (const artifact of artifacts) {
+    const note = notesById.get(artifact.id)
+    const snippet = artifact.contentMarkdown.replace(/\s+/g, ' ').slice(0, 220)
+    lines.push(
+      `- ${artifact.title} (${artifact.createdAt.toISOString().slice(0, 10)})${note ? ` — ${note}` : ''}`,
+    )
+    lines.push(`  Contenuto: ${snippet}`)
+  }
   return lines.join('\n')
 }
 
@@ -257,11 +317,35 @@ async function buildLiveSystemInstruction(
         take: 100,
         select: { domain: true, key: true, value: true, unit: true, recordedAt: true, notes: true },
       }),
+      prisma.fileAsset.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        select: {
+          id: true,
+          filename: true,
+          mimeType: true,
+          extractedText: true,
+          createdAt: true,
+        },
+      }),
+      prisma.recommendationArtifact.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          title: true,
+          contentMarkdown: true,
+          createdAt: true,
+        },
+      }),
     ]),
   ])
 
   const { activeAgentId, stateSnapshot } = liveCaseBootstrap
-  const [user, profile, recentMessages, workouts, meals, mindfulness, attrRows] = queryResults
+  const [user, profile, recentMessages, workouts, meals, mindfulness, attrRows, files, artifacts] =
+    queryResults
 
   // ── Load active specialist prompt (if any) ─────────────────────────────────
   const agentInfo = activeAgentId ? loadAgentPrompt(activeAgentId) : null
@@ -348,6 +432,30 @@ async function buildLiveSystemInstruction(
     const attrs = formatAttributesForPrompt(attrRows)
     if (attrs) lines.push(`\n${attrs}`)
   }
+
+  const fileNotesById = new Map<string, string>()
+  const artifactNotesById = new Map<string, string>()
+  for (const row of attrRows) {
+    if (row.key === 'attachment_file' && row.notes) {
+      const fileAssetId = readRefId(row.value, 'fileAssetId')
+      if (fileAssetId && !fileNotesById.has(fileAssetId)) fileNotesById.set(fileAssetId, row.notes)
+    }
+    if (row.key === 'generated_artifact' && row.notes) {
+      const artifactId = readRefId(row.value, 'artifactId')
+      if (artifactId && !artifactNotesById.has(artifactId))
+        artifactNotesById.set(artifactId, row.notes)
+    }
+  }
+
+  const filesSummary = formatFilesForPrompt(
+    files.filter((file) => !!file.extractedText).slice(0, 4),
+    fileNotesById,
+    'DOCUMENTI / ALLEGATI RECENTI:',
+  )
+  if (filesSummary) lines.push(`\n${filesSummary}`)
+
+  const artifactsSummary = formatArtifactsForPrompt(artifacts.slice(0, 3), artifactNotesById)
+  if (artifactsSummary) lines.push(`\n${artifactsSummary}`)
 
   // ── Tracker summary (last 7 days) ──────────────────────────────────────────
   const trackerParts: string[] = []

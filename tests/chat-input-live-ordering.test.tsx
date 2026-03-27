@@ -83,7 +83,11 @@ describe('ChatInput live transcript ordering', () => {
       const url = String(input)
       if (url === '/api/chat/transcript') {
         const body = JSON.parse(String(init?.body)) as {
-          messages: Array<{ role: 'user' | 'assistant'; content: string }>
+          messages: Array<{
+            role: 'user' | 'assistant'
+            content: string
+            thinkingSteps?: Array<{ title: string }>
+          }>
         }
         const role = body.messages[0]?.role
         if (role === 'user') {
@@ -106,10 +110,23 @@ describe('ChatInput live transcript ordering', () => {
 
       if (url === '/api/chat/live-sync') {
         return Promise.resolve(
-          new Response(JSON.stringify({ stateSnapshot }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          }),
+          new Response(
+            JSON.stringify({
+              stateSnapshot,
+              thinkingSteps: [
+                {
+                  specialistName: 'Fisioterapista',
+                  title: 'Valutazione del dolore',
+                  thought: 'Collego sintomo e allenamento.',
+                  domain: 'health',
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          ),
         )
       }
 
@@ -154,12 +171,26 @@ describe('ChatInput live transcript ordering', () => {
     expect(String(assistantTranscriptCall?.[0])).toBe('/api/chat/transcript')
 
     const assistantBody = JSON.parse(String(assistantTranscriptCall?.[1]?.body)) as {
-      messages: Array<{ role: string; specialistName?: string }>
+      messages: Array<{
+        role: string
+        specialistName?: string
+        thinkingSteps?: Array<{ title: string }>
+      }>
     }
     expect(assistantBody.messages[0]).toMatchObject({
       role: 'assistant',
       specialistName: 'Fisioterapista',
+      thinkingSteps: [expect.objectContaining({ title: 'Valutazione del dolore' })],
     })
     expect(onLiveMessage.mock.calls.map((call) => call[0].role)).toEqual(['user', 'assistant'])
+    expect(onLiveMessage.mock.calls[0]?.[0]).toMatchObject({
+      role: 'user',
+      conversationId: 'conv-live-1',
+    })
+    expect(onLiveMessage.mock.calls[1]?.[0]).toMatchObject({
+      role: 'assistant',
+      conversationId: 'conv-live-1',
+      thinkingSteps: [expect.objectContaining({ title: 'Valutazione del dolore' })],
+    })
   })
 })

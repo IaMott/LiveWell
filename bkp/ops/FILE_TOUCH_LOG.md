@@ -403,3 +403,23 @@ File touch log (append-only)
 2026-03-27 23:28 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR finale di chiusura del bug production-facing domini/chat
 2026-03-27 23:28 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/2328_backend-developer_domain-state-production-publish.md | azione=create | motivo=storico resumable del publish e della verifica production del fix backend domini
 2026-03-27 23:28 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/2328_chatlog.md | azione=create | motivo=chatlog sintetico del closeout production del fix backend domini
+2026-03-27 23:46 | ruolo=backend-developer | file=src/components/chat/FeedbackWidget.tsx | azione=modify | motivo=reidratazione del feedback persistito al refresh via GET `/api/feedback`
+2026-03-27 23:46 | ruolo=backend-developer | file=src/lib/auth.config.ts | azione=modify | motivo=riapertura delle route pubbliche `/forgot-password` e `/reset-password`
+2026-03-27 23:46 | ruolo=backend-developer | file=src/app/api/chat/live-sync/route.ts | azione=modify | motivo=emissione `thinkingSteps` production-facing dal live sync
+2026-03-27 23:46 | ruolo=backend-developer | file=src/app/api/chat/transcript/route.ts | azione=modify | motivo=persistenza transcript assistant con `thinkingSteps`
+2026-03-27 23:46 | ruolo=backend-developer | file=src/components/chat/ChatInput.tsx | azione=modify | motivo=forward di `thinkingSteps` e `conversationId` live nel transcript/runtime condiviso
+2026-03-27 23:46 | ruolo=backend-developer | file=src/components/chat/ChatShell.tsx | azione=modify | motivo=forward del `conversationId` e dei `thinkingSteps` live verso il context
+2026-03-27 23:46 | ruolo=backend-developer | file=src/contexts/ChatContext.tsx | azione=modify | motivo=sync del `conversationId` live e soppressione dello specialista predetto durante reasoning incompleto
+2026-03-27 23:46 | ruolo=backend-developer | file=src/app/api/live-token/route.ts | azione=modify | motivo=bootstrap live arricchito con documenti, artefatti e note correlate dal DB
+2026-03-27 23:46 | ruolo=backend-developer | file=tests/api/feedback-widget-refresh.test.ts | azione=create | motivo=guardrail sul feedback persistito che sopravvive al refresh
+2026-03-27 23:46 | ruolo=backend-developer | file=tests/api/auth-public-pages.test.ts | azione=create | motivo=guardrail sul public routing di forgot/reset password
+2026-03-27 23:46 | ruolo=backend-developer | file=tests/api/chat-transcript-route.test.ts | azione=modify | motivo=guardrail sulla persistenza transcript assistant con `thinkingSteps`
+2026-03-27 23:46 | ruolo=backend-developer | file=tests/chat-input-live-ordering.test.tsx | azione=modify | motivo=guardrail sul forward di `conversationId` e `thinkingSteps` nel live transcript
+2026-03-27 23:46 | ruolo=backend-developer | file=tests/api/live-sync-stateSnapshot.test.ts | azione=modify | motivo=guardrail su `thinkingSteps` emessi dal route live-sync
+2026-03-27 23:46 | ruolo=backend-developer | file=tests/api/chat-context-live-runtime.test.tsx | azione=create | motivo=guardrail su sync del conversationId live e specialist activation solo dopo completion
+2026-03-27 23:46 | ruolo=backend-developer | file=tests/api/live-token-fallback-observability.test.ts | azione=modify | motivo=guardrail sull'inclusione di documenti/artefatti recenti nel bootstrap live
+2026-03-27 23:46 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=allineamento stato progetto dopo il fix pack prodotto locale
+2026-03-27 23:46 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del fix pack prodotto locale e delle validazioni finali
+2026-03-27 23:46 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sul perimetro corretto del fix pack prodotto e sui gap che restano separati
+2026-03-27 23:46 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-61 del fix pack prodotto validato localmente
+2026-03-27 23:46 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=classificazione dei bug reali mitigati e del gap multi-reply ancora aperto

@@ -91,6 +91,8 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
       text: string
       domain?: Domain
       specialistName?: string
+      thinkingSteps?: ChatMessage['thinkingSteps']
+      conversationId?: string
     }) => {
       // Clear interim for this role — it's now confirmed
       setLiveInterim((prev) => (prev?.role === message.role ? null : prev))

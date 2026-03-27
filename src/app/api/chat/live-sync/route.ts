@@ -15,11 +15,82 @@ import {
   isDbPersistenceEnabled,
   createDbPersistenceDeps,
 } from '@/app/api/chat/send/chatPersistence'
+import type { AgentProfile, AgentProposal, Domain } from '@/lib/ai/types'
+import type { PersistedThinkingStep } from '@/lib/chat/thinkingPersistence'
 
 const bodySchema = z.object({
   conversationId: z.string().min(1),
   userMessage: z.string().trim().min(1).max(4000),
 })
+
+function normalizeThinkingText(value?: string): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.replace(/\r\n/g, '\n').trim()
+  return normalized.length > 0 ? normalized : undefined
+}
+
+function dedupeThinkingSteps(steps: PersistedThinkingStep[]): PersistedThinkingStep[] {
+  const out: PersistedThinkingStep[] = []
+  const seen = new Set<string>()
+
+  for (const step of steps) {
+    const specialistName = step.specialistName.trim()
+    const title = step.title.trim()
+    const thought = normalizeThinkingText(step.thought)
+    const domain = step.domain
+    if (!specialistName || !title) continue
+
+    const key = `${specialistName}:${title}:${thought ?? ''}:${domain ?? ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ specialistName, title, thought, domain })
+  }
+
+  return out
+}
+
+function buildProposalThinkingTrace(
+  proposals: AgentProposal[] | undefined,
+  team: AgentProfile[],
+): PersistedThinkingStep[] {
+  const steps: PersistedThinkingStep[] = []
+
+  for (const proposal of proposals ?? []) {
+    if ((proposal.confidence ?? 0) === 0) continue
+
+    const agent = team.find((a) => a.id === proposal.agentId)
+    if (!agent) continue
+
+    let title = normalizeThinkingText(proposal.summary)
+    let thought = normalizeThinkingText(proposal.reasoning)
+
+    if (title?.toLowerCase().includes('[unavailable]')) title = undefined
+    if (thought?.toLowerCase().includes('[unavailable]')) thought = undefined
+
+    if (!title && proposal.recommendations && proposal.recommendations.length > 0) {
+      const rec = proposal.recommendations[0]
+      title = normalizeThinkingText(rec.title)
+      thought =
+        normalizeThinkingText(rec.rationale) ?? normalizeThinkingText(rec.steps?.[0]) ?? title
+    }
+
+    if (!title && proposal.questions && proposal.questions.length > 0) {
+      title = `Da valutare: ${proposal.questions[0]}`
+      thought = proposal.questions.join(' | ')
+    }
+
+    if (!title) continue
+
+    steps.push({
+      specialistName: agent.displayName,
+      title,
+      thought: thought ?? title,
+      domain: proposal.domain as Domain,
+    })
+  }
+
+  return dedupeThinkingSteps(steps)
+}
 
 /**
  * POST /api/chat/live-sync
@@ -154,10 +225,13 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
+  const thinkingSteps = buildProposalThinkingTrace(consensus.debug?.proposals, team)
+
   return new Response(
     JSON.stringify({
       ok: true,
       stateSnapshot: canonicalStateSnapshot ?? storedStateSnapshot,
+      thinkingSteps,
     }),
     {
       status: 200,

@@ -5,7 +5,7 @@
  * Strumento di studio: i dati vanno in MessageReview, isolato dal profilo utente.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 type Props = {
   messageId: string
@@ -17,6 +17,11 @@ type Props = {
 
 type State = 'idle' | 'comment' | 'loading' | 'done' | 'error'
 
+type PersistedReview = {
+  rating: number
+  comment?: string | null
+}
+
 const STAR_LABELS = ['Pessimo', 'Scarso', 'Nella media', 'Buono', 'Ottimo']
 
 export function FeedbackWidget({ messageId, conversationId, agentId, agentName, domain }: Props) {
@@ -24,6 +29,29 @@ export function FeedbackWidget({ messageId, conversationId, agentId, agentName, 
   const [selected, setSelected] = useState(0)
   const [comment, setComment] = useState('')
   const [state, setState] = useState<State>('idle')
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadExistingReview() {
+      try {
+        const res = await fetch(`/api/feedback?messageId=${encodeURIComponent(messageId)}`)
+        if (!res.ok) return
+        const data = (await res.json()) as { review?: PersistedReview | null }
+        if (!mounted || !data.review) return
+        setSelected(data.review.rating)
+        setComment(data.review.comment ?? '')
+        setState('done')
+      } catch {
+        /* best-effort hydration */
+      }
+    }
+
+    void loadExistingReview()
+    return () => {
+      mounted = false
+    }
+  }, [messageId])
 
   function selectRating(rating: number) {
     if (state === 'loading' || state === 'done') return
@@ -57,11 +85,13 @@ export function FeedbackWidget({ messageId, conversationId, agentId, agentName, 
   }
 
   if (state === 'done') {
+    const stars = '★'.repeat(selected) + '☆'.repeat(Math.max(0, 5 - selected))
     return (
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
           gap: '0.375rem',
           fontSize: '0.75rem',
           color: 'var(--color-text-secondary)',
@@ -69,8 +99,30 @@ export function FeedbackWidget({ messageId, conversationId, agentId, agentName, 
           marginLeft: '0.375rem',
         }}
       >
-        <span style={{ color: '#34C759' }}>✓</span>
-        Grazie per il feedback!
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+          <span style={{ color: '#34C759' }}>✓</span>
+          <span>Grazie per il feedback!</span>
+          {selected > 0 && (
+            <span
+              aria-label={`Valutazione salvata: ${selected} stelle`}
+              style={{ color: '#FF9F0A', letterSpacing: '0.04em' }}
+            >
+              {stars}
+            </span>
+          )}
+        </div>
+        {comment.trim().length > 0 && (
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.75rem',
+              color: 'var(--color-text-secondary)',
+              opacity: 0.85,
+            }}
+          >
+            “{comment.trim()}”
+          </p>
+        )}
       </div>
     )
   }

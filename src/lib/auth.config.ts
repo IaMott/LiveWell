@@ -28,6 +28,8 @@ export const authConfig: NextAuthConfig = {
       const isPublicPage =
         pathname.startsWith('/login') ||
         pathname.startsWith('/register') ||
+        pathname.startsWith('/forgot-password') ||
+        pathname.startsWith('/reset-password') ||
         pathname.startsWith('/api/auth')
       if (isPublicPage) return true
       // All other app routes require login

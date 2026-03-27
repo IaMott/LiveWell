@@ -14,6 +14,8 @@ const prismaMock = {
   meal: { findMany: vi.fn(async () => []) },
   mindfulnessEntry: { findMany: vi.fn(async () => []) },
   userAttribute: { findMany: vi.fn(async () => []) },
+  fileAsset: { findMany: vi.fn(async () => []) },
+  recommendationArtifact: { findMany: vi.fn(async () => []) },
   caseState: {
     findUnique: vi.fn(async () => null),
     findFirst: vi.fn(async () => null),
@@ -175,6 +177,39 @@ describe('/api/live-token fallback observability', () => {
         recordedAt: new Date('2026-03-26T10:00:00.000Z'),
         notes: 'annotato dal dietista',
       },
+      {
+        domain: 'general',
+        key: 'attachment_file',
+        value: { fileAssetId: 'file-1' },
+        unit: null,
+        recordedAt: new Date('2026-03-26T11:00:00.000Z'),
+        notes: 'referto caricato dal team salute',
+      },
+      {
+        domain: 'nutrition',
+        key: 'generated_artifact',
+        value: { artifactId: 'artifact-1' },
+        unit: null,
+        recordedAt: new Date('2026-03-26T12:00:00.000Z'),
+        notes: 'sintesi nutrizionale generata dal team',
+      },
+    ])
+    prismaMock.fileAsset.findMany.mockResolvedValue([
+      {
+        id: 'file-1',
+        filename: 'referto.pdf',
+        mimeType: 'application/pdf',
+        extractedText: 'RM lombare: protrusione L4-L5, ridurre i trigger meccanici.',
+        createdAt: new Date('2026-03-26T11:00:00.000Z'),
+      },
+    ])
+    prismaMock.recommendationArtifact.findMany.mockResolvedValue([
+      {
+        id: 'artifact-1',
+        title: 'Piano alimentare',
+        contentMarkdown: 'Riduci latticini per 7 giorni e monitora il gonfiore.',
+        createdAt: new Date('2026-03-26T12:00:00.000Z'),
+      },
     ])
     prismaMock.caseState.findUnique.mockResolvedValue({
       conversationId: 'c1',
@@ -235,6 +270,12 @@ describe('/api/live-token fallback observability', () => {
     expect(json.systemInstruction).toContain('leadDomain: nutrition')
     expect(json.systemInstruction).toContain('ATTRIBUTI REGISTRATI DAGLI AGENTI:')
     expect(json.systemInstruction).toContain('food_triggers: latticini')
+    expect(json.systemInstruction).toContain('DOCUMENTI / ALLEGATI RECENTI:')
+    expect(json.systemInstruction).toContain('referto.pdf')
+    expect(json.systemInstruction).toContain('referto caricato dal team salute')
+    expect(json.systemInstruction).toContain('ARTEFATTI GENERATI RECENTI:')
+    expect(json.systemInstruction).toContain('Piano alimentare')
+    expect(json.systemInstruction).toContain('sintesi nutrizionale generata dal team')
     expect(json.systemInstruction).toContain('CRONOLOGIA CHAT RECENTE')
     expect(json.systemInstruction).toContain('Utente: Dopo yogurt e latte ho molto gonfiore.')
     expect(json.systemInstruction).toContain(

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, type KeyboardEvent, type ChangeEvent } from 'react'
 import type React from 'react'
 import type { CanonicalCaseStateSnapshot, Domain } from '@/lib/ai/types'
+import type { ThinkingStep } from '@/contexts/ChatContext'
 import { sanitizeAssistantVisibleContent } from '@/lib/chat/userVisibleContent'
 import { DOMAIN_COLORS, getDomainColor } from '@/lib/ui/domainColors'
 import { LiveModal } from './live/LiveModal'
@@ -198,6 +199,8 @@ interface Props {
     text: string
     domain?: Domain
     specialistName?: string
+    thinkingSteps?: ThinkingStep[]
+    conversationId?: string
   }) => void
   /** Real-time partial transcript from live session (growing text before turnComplete).
    * Pass empty string to clear the interim bubble for that role. */
@@ -384,6 +387,7 @@ export function ChatInput({
       text: string
       domain?: Domain
       specialistName?: string
+      thinkingSteps?: ThinkingStep[]
     }>,
   ): Promise<{
     conversationId: string | null
@@ -392,6 +396,7 @@ export function ChatInput({
       content: string
       domain?: Domain
       specialistName?: string
+      thinkingSteps?: ThinkingStep[]
     }>
   } | null> {
     const normalizedMessages = messages
@@ -403,6 +408,7 @@ export function ChatInput({
             : message.text.trim(),
         domain: message.domain,
         specialistName: message.specialistName,
+        thinkingSteps: message.thinkingSteps,
       }))
       .filter((message) => message.content.length > 0)
 
@@ -423,6 +429,7 @@ export function ChatInput({
         content: string
         domain?: Domain
         specialistName?: string
+        thinkingSteps?: ThinkingStep[]
       }>
     }
     const nextConversationId =
@@ -471,6 +478,8 @@ export function ChatInput({
             text: message.content,
             domain: message.domain,
             specialistName: message.specialistName,
+            thinkingSteps: message.thinkingSteps,
+            conversationId: persisted.conversationId ?? liveConversationIdRef.current ?? undefined,
           }),
         )
       })
@@ -481,6 +490,10 @@ export function ChatInput({
       const convIdBeforeSync = liveConversationIdRef.current
       const userMsg = lastLiveUserMsgRef.current
       let effectiveSnapshot = readStoredSnapshot(convIdBeforeSync)
+      let syncData: {
+        stateSnapshot?: CanonicalCaseStateSnapshot
+        thinkingSteps?: ThinkingStep[]
+      } | null = null
 
       if (convIdBeforeSync && userMsg) {
         try {
@@ -489,8 +502,11 @@ export function ChatInput({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ conversationId: convIdBeforeSync, userMessage: userMsg }),
           })
-          const syncData = res.ok
-            ? ((await res.json()) as { stateSnapshot?: CanonicalCaseStateSnapshot })
+          syncData = res.ok
+            ? ((await res.json()) as {
+                stateSnapshot?: CanonicalCaseStateSnapshot
+                thinkingSteps?: ThinkingStep[]
+              })
             : null
           if (syncData?.stateSnapshot) {
             effectiveSnapshot = syncData.stateSnapshot
@@ -526,6 +542,7 @@ export function ChatInput({
           text: trimmed,
           domain: effectiveSnapshot?.leadDomain ?? leadPanel?.domain,
           specialistName: formatAgentIdLabel(leadPanel?.selectedAgentId),
+          thinkingSteps: syncData?.thinkingSteps,
         },
       ])
       if (!persisted) return
@@ -535,6 +552,8 @@ export function ChatInput({
           text: message.content,
           domain: message.domain,
           specialistName: message.specialistName,
+          thinkingSteps: message.thinkingSteps,
+          conversationId: persisted.conversationId ?? liveConversationIdRef.current ?? undefined,
         }),
       )
     })

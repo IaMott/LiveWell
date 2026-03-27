@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { decodeAssistantStoredContent } from '@/lib/chat/thinkingPersistence'
 
 const prismaMock = {
   conversation: {
@@ -171,6 +172,67 @@ describe('/api/chat/transcript', () => {
           domain: 'health',
           specialistName: 'Fisioterapista',
         },
+      ],
+    })
+  })
+
+  it('persists assistant thinking steps alongside the sanitized transcript text', async () => {
+    prismaMock.conversation.findFirst.mockResolvedValue({ id: 'conv-1' })
+
+    vi.resetModules()
+    const { POST } = await import('@/app/api/chat/transcript/route')
+
+    const res = await POST(
+      new Request('http://localhost/api/chat/transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: 'conv-1',
+          messages: [
+            {
+              role: 'assistant',
+              content: 'Ti aiuto a capire il problema al ginocchio.',
+              domain: 'health',
+              specialistName: 'Fisioterapista',
+              thinkingSteps: [
+                {
+                  specialistName: 'Fisioterapista',
+                  title: 'Valutazione del dolore',
+                  thought: 'Collego sintomo, trigger e obiettivo di allenamento.',
+                  domain: 'health',
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    )
+
+    const body = await res.json()
+    const storedAssistant = prismaMock.message.create.mock.calls[0][0].data.content as string
+    const decoded = decodeAssistantStoredContent(storedAssistant)
+
+    expect(res.status).toBe(200)
+    expect(decoded.content).toBe('Ti aiuto a capire il problema al ginocchio.')
+    expect(decoded.thinkingSteps).toEqual([
+      expect.objectContaining({
+        specialistName: 'Fisioterapista',
+        title: 'Valutazione del dolore',
+        thought: 'Collego sintomo, trigger e obiettivo di allenamento.',
+        domain: 'health',
+      }),
+    ])
+    expect(body.savedMessages[0]).toMatchObject({
+      role: 'assistant',
+      content: 'Ti aiuto a capire il problema al ginocchio.',
+      domain: 'health',
+      specialistName: 'Fisioterapista',
+      thinkingSteps: [
+        expect.objectContaining({
+          specialistName: 'Fisioterapista',
+          title: 'Valutazione del dolore',
+          domain: 'health',
+        }),
       ],
     })
   })
