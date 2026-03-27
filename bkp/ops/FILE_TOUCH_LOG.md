@@ -307,3 +307,28 @@ File touch log (append-only)
 2026-03-27 16:57 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione del verdict finale `DONE WITH RESIDUAL RECOMMENDATIONS`
 2026-03-27 16:57 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/1657_backend-developer_residual-cleanup-publish.md | azione=create | motivo=storico resumable del publish finale del cleanup residuo
 2026-03-27 16:57 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/1657_chatlog.md | azione=create | motivo=chatlog sintetico del publish finale del cleanup residuo
+2026-03-27 20:43 | ruolo=backend-developer | file=src/lib/chat/userVisibleContent.ts | azione=create | motivo=introdotto sanitizer condiviso per rimuovere payload/tool interni dai contenuti assistant visibili
+2026-03-27 20:43 | ruolo=backend-developer | file=src/app/api/chat/transcript/route.ts | azione=modify | motivo=transcript live ordinato e metadata-aware; assistant sanitizzato e persistenza resa sequenziale per preservare l'ordine
+2026-03-27 20:43 | ruolo=backend-developer | file=src/components/chat/ChatInput.tsx | azione=modify | motivo=serializzazione client delle write transcript live e sync live prima della persistenza assistant
+2026-03-27 20:43 | ruolo=backend-developer | file=src/contexts/ChatContext.tsx | azione=modify | motivo=appendLiveMessage ora conserva domain e specialistName dell'assistant dopo sanitizzazione
+2026-03-27 20:43 | ruolo=backend-developer | file=src/components/chat/ChatShell.tsx | azione=modify | motivo=il banner specialista segue l'ultimo messaggio assistant con speaker reale invece del lead panel stale
+2026-03-27 20:43 | ruolo=backend-developer | file=src/app/api/chat/send/route.ts | azione=modify | motivo=il messaggio assistant usa la label dello speaker corrente e il contenuto visibile viene sanitizzato prima di stream/persist
+2026-03-27 20:43 | ruolo=backend-developer | file=src/app/api/conversations/[id]/route.ts | azione=modify | motivo=load conversazione sanitizza i contenuti assistant e scarta righe interne vuote
+2026-03-27 20:43 | ruolo=backend-developer | file=src/app/api/conversations/[id]/export/route.ts | azione=modify | motivo=export txt filtra payload/tool interni e usa solo contenuti assistant realmente visibili
+2026-03-27 20:43 | ruolo=backend-developer | file=src/app/api/conversations/route.ts | azione=modify | motivo=lista conversazioni usa preview assistant sanitizzata
+2026-03-27 20:43 | ruolo=backend-developer | file=tests/api/chat-transcript-route.test.ts | azione=create | motivo=guardrail su ordering transcript live, sanitizzazione assistant e metadata specialist/domain
+2026-03-27 20:43 | ruolo=backend-developer | file=tests/chat-input-live-ordering.test.tsx | azione=create | motivo=verifica serializzazione client dei turni live e ordering user->assistant con sync live intermedio
+2026-03-27 20:43 | ruolo=backend-developer | file=tests/chat-shell-specialist-banner.test.tsx | azione=create | motivo=guardrail sul banner che deve seguire lo speaker reale dell'ultimo messaggio assistant
+2026-03-27 20:43 | ruolo=backend-developer | file=tests/api/conversation-thinking-export.test.ts | azione=modify | motivo=prova che load/export eliminano righe leaked `Payload:` dai messaggi assistant
+2026-03-27 20:43 | ruolo=backend-developer | file=tests/api/chat-send-persistence.test.ts | azione=modify | motivo=guardrail sulla label speaker corrente quando il lead panel e` indietro rispetto al messaggio assistant
+2026-03-27 20:43 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint locale CP-50 del fix pack post-feedback
+2026-03-27 20:43 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto aggiornato dopo validazione locale del fix pack prioritario
+2026-03-27 20:43 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append della validazione locale del fix pack prioritario
+2026-03-27 20:43 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sul trattamento del fix come boundary runtime e non come polish UI
+2026-03-27 20:43 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=registrazione dei rischi mitigati su ordering, leakage payload e mismatch speaker/banner
+2026-03-27 20:43 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/2043_backend-developer_feedback-fix-pack.md | azione=create | motivo=storico resumable del fix pack prioritario post-feedback
+2026-03-27 20:43 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/2043_chatlog.md | azione=create | motivo=chatlog sintetico del fix pack prioritario post-feedback
+2026-03-27 20:49 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-51 con publish remoto e verifica alias del fix pack prioritario
+2026-03-27 20:49 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=stato finale allineato dopo push/deploy del fix pack prioritario
+2026-03-27 20:49 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del publish remoto del fix pack prioritario
+2026-03-27 20:49 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione della decisione runtime-first sul fix pack emerso dal feedback reale

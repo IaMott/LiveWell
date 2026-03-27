@@ -99,13 +99,13 @@ Fatto
 
 In corso
 
-- publish remoto del fix pack prioritario post-feedback reale
-- aggiornamento memoria finale del passo con commit/push/deploy
+- nessuna implementazione aperta nel perimetro del fix pack prioritario
+- monitoraggio post-deploy del fix transcript/output/speaker in production
 
 Prossimo
 
-- completare commit, push e deploy del fix pack validato localmente
-- consegnare esito finale con rischi residui non bloccanti
+- raccogliere un nuovo test reale utente sul transcript live per confermare ordering, assenza di payload interni e coerenza speaker/banner
+- aprire solo eventuali fix successivi se emergono regressioni reali fuori da questo step
 
 Rischi
 
@@ -119,4 +119,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 20:43
+2026-03-27 20:49
