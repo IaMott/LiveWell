@@ -96,16 +96,26 @@ Fatto
   - `npm run build`
   - `npm run test -- tests/api/chat-transcript-route.test.ts tests/api/conversation-thinking-export.test.ts tests/api/chat-send-persistence.test.ts tests/chat-input-live-ordering.test.tsx tests/chat-shell-specialist-banner.test.tsx`
   - `npm run test -- tests/chat-input-live-ordering.test.tsx tests/chat-shell-specialist-banner.test.tsx tests/api/chat-transcript-route.test.ts`
+- track separata `integrazione live/browser meno mock-heavy` chiusa nel perimetro stretto:
+  - aggiunto test browser-facing `tests/api/live-modal-bootstrap.test.ts` sul boundary `LiveModal -> /api/live-token -> GoogleGenAI.live.connect`
+  - verificato fallback snapshot client-side quando il route non restituisce `stateSnapshot`
+  - verificata persistenza del `stateSnapshot` server in `localStorage` lato browser
+  - aggiunto guardrail puro `tests/api/contextual-routing.test.ts` sui source `snapshot_context` e `history_context`
+  - validazioni verdi:
+    - `npm run test -- tests/api/live-token-security.test.ts tests/api/live-token-fallback-observability.test.ts tests/api/live-modal-bootstrap.test.ts tests/api/contextual-routing.test.ts`
+    - `npm run typecheck`
+    - `npm run lint`
+    - `npm run build`
 
 In corso
 
-- closeout finale del fix pack transcript/output/speaker completato
-- nessuna implementazione aperta nel perimetro del fix pack prioritario
+- closeout della track separata live/browser completato
+- nessuna implementazione aperta nel perimetro live/browser meno mock-heavy
 
 Prossimo
 
-- se si apre una track separata, priorita` consigliata: integrazione live/browser meno mock-heavy
 - non aprire ora cleanup legacy interno o hygiene toolchain/Prisma senza una richiesta esplicita separata
+- se si apre un'altra track separata, la priorita` residua e` il cleanup del legacy interno confinato
 
 Rischi
 
@@ -113,6 +123,7 @@ Rischi
 - resta rischio non bloccante sul live reale: i test ora verificano piu` contenuto osservabile del bootstrap (`stateSnapshot`, history, attributes, systemInstruction), ma una integrazione browser/SDK non mockata non e` eseguibile dal terminale
 - rischio applicativo mitigato ma da monitorare in production: transcript live e speaker metadata dipendono ora da serializzazione client + sync live; se il close della sessione avviene in una finestra molto stretta resta possibile un gap non osservato dai test locali
 - rischio QA sul transcript misto mitigato: production ora preserva il testo assistant visibile e continua a filtrare `Payload:`
+- rischio live ridotto ma non azzerato: il nuovo guardrail browser-facing copre il contratto `LiveModal -> /api/live-token -> SDK config`, ma non sostituisce ancora una prova E2E con browser reale + SDK reale
 - restano solo debiti separati e fuori track:
   - advisory moderate dev-only sullo stack lint/toolchain
   - eventuale major Prisma
@@ -120,4 +131,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 22:11
+2026-03-27 22:20

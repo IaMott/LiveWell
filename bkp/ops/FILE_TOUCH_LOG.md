@@ -347,3 +347,11 @@ File touch log (append-only)
 2026-03-27 21:56 | ruolo=qa-expert | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto riallineato alla verifica production finale del fix pack
 2026-03-27 21:56 | ruolo=qa-expert | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append della rerun QA production con esito finale PASS sui quattro controlli
 2026-03-27 21:56 | ruolo=qa-expert | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione della chiusura QA production del fix pack transcript/output/speaker
+2026-03-27 22:20 | ruolo=backend-developer | file=tests/api/live-modal-bootstrap.test.ts | azione=create | motivo=guardrail browser-facing sul boundary `LiveModal -> /api/live-token -> GoogleGenAI.live.connect`, con fallback snapshot client-side e persistenza dello snapshot server
+2026-03-27 22:20 | ruolo=backend-developer | file=tests/api/contextual-routing.test.ts | azione=create | motivo=guardrail puro sui source di continuity `snapshot_context` e `history_context` per evitare regressioni verso il fallback euristico
+2026-03-27 22:20 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-55 della track separata live/browser meno mock-heavy
+2026-03-27 22:20 | ruolo=backend-developer | file=bkp/ops/FILE_TOUCH_LOG.md | azione=modify | motivo=append dei file toccati nella track separata live/browser
+2026-03-27 22:20 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=aggiornamento dei rischi live residui dopo l'aggiunta dei nuovi guardrail
+2026-03-27 22:20 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto aggiornato dopo la chiusura della track separata live/browser
+2026-03-27 22:20 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append della chiusura della track separata live/browser
+2026-03-27 22:20 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sulla scelta di rafforzare il perimetro live solo con guardrail ad alto ROI
