@@ -197,3 +197,13 @@ File touch log (append-only)
 2026-03-27 08:16 | step=CP-34 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/STATUS.md` | action=completed | contract=temporary | note=`aggiornato stato finale dopo push/deploy production`
 2026-03-27 08:16 | step=CP-34 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/WORKLOG.md` | action=completed | contract=temporary | note=`append worklog publish finale`
 2026-03-27 08:16 | step=CP-34 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/DECISIONS.md` | action=completed | contract=temporary | note=`append ADR sul verdict finale done-with-residual-recommendations`
+2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/package.json` | action=completed | contract=infra | note=`bump sicuro di next/eslint/eslint-config-next e overrides mirati per ridurre advisory runtime/dev patchabili`
+2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/package-lock.json` | action=completed | contract=infra | note=`lockfile riallineato a upgrade patch e overrides infra/security`
+2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/next.config.ts` | action=completed | contract=infra | note=`aggiunto turbopack.root per eliminare il warning workspace root multipli`
+2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/proxy.ts` | action=completed | contract=infra | note=`migrazione middleware -> proxy per Next 16`
+2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/middleware.ts` | action=deleted | contract=infra | note=`rimosso file deprecato dopo migrazione a proxy.ts`
+2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/CHECKPOINTS.md` | action=completed | contract=temporary | note=`append checkpoint CP-35`
+2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/STATUS.md` | action=completed | contract=temporary | note=`aggiornamento stato track infra/security locale`
+2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/WORKLOG.md` | action=completed | contract=temporary | note=`append worklog triage/fix infra-security`
+2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/DECISIONS.md` | action=completed | contract=temporary | note=`append ADR su fix low-risk e residui audit accettati`
+2026-03-27 10:35 | step=CP-35 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/RISK_LOG.md` | action=completed | contract=temporary | note=`classificati warning Next risolti e residue advisory dev-toolchain`

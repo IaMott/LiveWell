@@ -107,7 +107,18 @@ Rischi
   - deprecazione convenzione `middleware` -> `proxy`
 - resta compatibility locale non bloccante: `activeDomain`, `activeSpecialistId` e `specialistName` sopravvivono solo come derived fields/client fallback
 - resta rischio non bloccante: il live browser reale con microfono/camera non e` verificabile dal terminale, ma bootstrap/post-turn/tool semantics sono coperti da test di route e integrazione
+- track infra/security completata:
+  - `next` ed `eslint-config-next` aggiornati a `16.2.1`
+  - `eslint` aggiornato a `9.39.4`
+  - `src/middleware.ts` migrato a `src/proxy.ts`
+  - `next.config.ts` ora definisce `turbopack.root`
+  - overrides mirati applicati a `gaxios`, `google-auth-library`, `flatted`, `yaml`
+  - audit ridotto da `17` vulnerabilita` (`15 moderate`, `2 high`) a `10` (`9 moderate`, `1 high`)
+- residui infra/security ora limitati a:
+  - advisory dev-toolchain su `picomatch` via `lint-staged`/`vitest` e su `minimatch` via stack `eslint`
+  - update Prisma major disponibile ma fuori perimetro della track
+  - warning deprecati Vercel/npm di terze parti senza impatto runtime diretto
 
 Ultimo aggiornamento
 
-2026-03-27 08:16
+2026-03-27 10:35
