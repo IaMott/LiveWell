@@ -87,62 +87,25 @@ Fatto
 
 In corso
 
-- nessun blocco implementativo attivo nel working tree
-- review finale totale ancora aperta solo per il verdetto conclusivo e la classificazione dei residui non obbligatori
+- cleanup residuo locale completato e validato
+- publish remoto del cleanup residuo ancora da eseguire
+- review finale totale aperta solo per la classificazione conclusiva dei residual recommendations dopo publish
 
 Prossimo
 
-- formalizzare il verdetto finale unico
-- distinguere chiaramente residui non obbligatori vs track future separate
-- non aprire nuove implementazioni senza evidenza di gap blocking/high
+- commit mirato del cleanup residuo
+- push su `origin/main`, deploy production e verifica alias
+- chiusura finale con review non autoassolutoria dei residui rimasti
 
 Rischi
 
-- resta legacy temporaneo controllato: `ownerAgentId`, `activeSpeakerAgentId`, `protocolState` e i mapper di compatibilita` sopravvivono per dati storici e fallback
-- resta rischio non bloccante: il bootstrap/test live reale con microfono/browser non e` verificabile dal terminale; la chiusura Fase 1 e` supportata da route tests, integration tests e smoke HTTP locali
-- resta rischio non bloccante: agenti lenti possono ancora andare in timeout al `Round 1`, ma non pagano piu` il doppio timeout al `Round 2`
-- resta debito dichiarato per fase successiva: rimozione del compat layer residuo quando non serviranno piu` dati legacy
-- resta compat legacy residuo non bloccante: `CaseState` sopravvive come adapter interno per continuity del protocol e per record storici senza snapshot
-- restano warning non bloccanti di build/runtime:
-  - warning Next su workspace root multipli
-  - deprecazione convenzione `middleware` -> `proxy`
-- resta compatibility locale non bloccante: `activeDomain`, `activeSpecialistId` e `specialistName` sopravvivono solo come derived fields/client fallback
-- resta rischio non bloccante: il live browser reale con microfono/camera non e` verificabile dal terminale, ma bootstrap/post-turn/tool semantics sono coperti da test di route e integrazione
-- track infra/security completata:
-  - `next` ed `eslint-config-next` aggiornati a `16.2.1`
-  - `eslint` aggiornato a `9.39.4`
-  - `src/middleware.ts` migrato a `src/proxy.ts`
-  - `next.config.ts` ora definisce `turbopack.root`
-  - overrides mirati applicati a `gaxios`, `google-auth-library`, `flatted`, `yaml`
-  - audit ridotto da `17` vulnerabilita` (`15 moderate`, `2 high`) a `10` (`9 moderate`, `1 high`)
-- track toolchain/dependency hygiene completata localmente:
-  - `lint-staged` aggiornato a `16.4.0`
-  - `vitest` aggiornato a `4.1.2`
-  - override `picomatch` fissato a `4.0.4`
-  - test live-token stabilizzati per il nuovo modello di mocking
-  - audit ridotto a `9` vulnerabilita` moderate e `0 high`
-- publish finale della track toolchain completato:
-  - commit `a3c925a` pushato su `origin/main`
-  - deploy Vercel production `https://livewell-bx4pz8th3-iamotts-projects.vercel.app`
-  - alias `https://livewell.mottisi.com` verificato con redirect auth atteso
-- residui infra/toolchain ora limitati a:
-  - advisory moderate solo su stack `eslint`/`minimatch`
-  - update Prisma major disponibile ma fuori perimetro della track
-  - patch/minor opzionali (`@google/genai`, `tailwindcss`, `react`) senza urgenza operativa
-- track correttiva obbligatoria applicata localmente:
-  - `chat/send` e `live-sync` convergono ora sullo stesso resolver tool panel-aware/per-call
-  - `persistence.ts` rifiuta snapshot canonici malformed senza downgrade silenzioso verso il legacy
-  - i route hot-path non ricostruiscono piu` `CaseState` quando il runtime canonico e` gia` disponibile
-- publish finale delle correzioni obbligatorie completato:
-  - commit `0f050b7` pushato su `origin/main`
-  - deploy Vercel production `https://livewell-irtjcirg2-iamotts-projects.vercel.app`
-  - alias `https://livewell.mottisi.com` verificato con redirect auth atteso
-- residui dopo la correzione:
-  - il protocol engine interno usa ancora adapter legacy controllati (`CaseState`, `applyCanonicalSnapshotToLegacyCaseState`, `compatibilitySpeakerId`) ma non piu` come driver dei route principali
-  - il bootstrap/security live resta coperto soprattutto da test mock-heavy; gap di integrazione reale non blocking ma ancora presente
-- le euristiche statiche (`KEYWORDS`, `SPECIALIST_KEYWORDS`, `AGENT_COMPETENCE_HINTS`) restano nel codice come supporto/fallback; la review finale deve confermare che non siano piu` il motore principale del path production
-- resta un gap non bloccante da tenere sotto osservazione: bootstrap live/sicurezza ancora coperti soprattutto da test mock-heavy, senza integrazione browser/SDK reale dal terminale
+- resta legacy interno confinato ma non bloccante: `CaseState`, `fromStoredCaseState()` e `compatibilitySpeakerId` sopravvivono nell'engine/protocol per record storici e adapter interni, non piu` nei route hot-path di persistenza canonical-first
+- resta rischio non bloccante sul live reale: i test ora verificano piu` contenuto osservabile del bootstrap (`stateSnapshot`, history, attributes, systemInstruction), ma una integrazione browser/SDK non mockata non e` eseguibile dal terminale
+- restano solo debiti separati e fuori track:
+  - advisory moderate dev-only sullo stack lint/toolchain
+  - eventuale major Prisma
+  - cleanup interno piu` profondo del protocol engine legacy solo se il ROI giustifica una nuova track
 
 Ultimo aggiornamento
 
-2026-03-27 16:22
+2026-03-27 16:49

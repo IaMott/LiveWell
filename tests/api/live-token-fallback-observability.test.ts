@@ -140,4 +140,109 @@ describe('/api/live-token fallback observability', () => {
       activeDomains: ['nutrition'],
     })
   })
+
+  it('builds a context-rich systemInstruction from canonical snapshot, attributes and recent history', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ name: 'Alice' })
+    prismaMock.userProfile.findUnique.mockResolvedValue({
+      birthDate: new Date('1990-04-03T00:00:00.000Z'),
+      gender: 'female',
+      height: 168,
+      weight: 62,
+      health: { conditions: 'colon irritabile' },
+      nutrition: { preferences: 'low FODMAP' },
+      training: { frequency: 3 },
+      mindfulness: null,
+      goals: { objectives: 'ridurre gonfiore e migliorare energia' },
+    })
+    prismaMock.message.findMany.mockResolvedValue([
+      {
+        role: 'assistant',
+        content: 'Ti suggerisco di osservare i latticini per una settimana.',
+        createdAt: new Date('2026-03-27T08:00:00.000Z'),
+      },
+      {
+        role: 'user',
+        content: 'Dopo yogurt e latte ho molto gonfiore.',
+        createdAt: new Date('2026-03-27T07:59:00.000Z'),
+      },
+    ])
+    prismaMock.userAttribute.findMany.mockResolvedValue([
+      {
+        domain: 'nutrition',
+        key: 'food_triggers',
+        value: 'latticini',
+        unit: null,
+        recordedAt: new Date('2026-03-26T10:00:00.000Z'),
+        notes: 'annotato dal dietista',
+      },
+    ])
+    prismaMock.caseState.findUnique.mockResolvedValue({
+      conversationId: 'c1',
+      ownerAgentId: 'legacy-owner',
+      activeSpeakerAgentId: 'legacy-speaker',
+      protocolState: 'owner_active',
+      stateSnapshot: {
+        schemaVersion: 1,
+        conversationId: 'c1',
+        activeDomains: ['nutrition', 'health'],
+        domainPanels: [
+          {
+            domain: 'nutrition',
+            selectedAgentId: 'dietista',
+            candidateAgentIds: ['dietista', 'medico'],
+            status: 'active',
+            priorityScore: 9,
+            lastReasoningAt: '2026-03-27T09:00:00.000Z',
+            pendingNeeds: ['diario sintomi'],
+          },
+        ],
+        leadDomain: 'nutrition',
+        speakerPolicy: 'lead',
+        conversationFocus: {
+          activeProblems: ['gonfiore'],
+          activeGoals: ['ridurre sintomi'],
+          activeConstraints: ['evitare trigger alimentari'],
+          summary: 'focus nutrizione',
+        },
+        coordinationState: {
+          crossDomainConflicts: [],
+          dependencies: ['monitorare sintomi post pasti'],
+          needsReview: false,
+        },
+        sharedOpenQuestions: ['quali alimenti peggiorano i sintomi?'],
+        domainOpenQuestions: { nutrition: ['latticini o frumento?'] },
+        updatedAt: '2026-03-27T09:00:00.000Z',
+      },
+    })
+
+    const { POST } = await import('@/app/api/live-token/route')
+
+    const res = await POST(
+      new Request('http://localhost/api/live-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'u1',
+        },
+        body: JSON.stringify({ conversationId: 'c1' }),
+      }),
+    )
+
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.systemInstruction).toContain('PANEL MULTI-DOMINIO ATTIVO PER QUESTA CONVERSAZIONE')
+    expect(json.systemInstruction).toContain('leadDomain: nutrition')
+    expect(json.systemInstruction).toContain('ATTRIBUTI REGISTRATI DAGLI AGENTI:')
+    expect(json.systemInstruction).toContain('food_triggers: latticini')
+    expect(json.systemInstruction).toContain('CRONOLOGIA CHAT RECENTE')
+    expect(json.systemInstruction).toContain('Utente: Dopo yogurt e latte ho molto gonfiore.')
+    expect(json.systemInstruction).toContain(
+      'Assistente: Ti suggerisco di osservare i latticini per una settimana.',
+    )
+    expect(json.stateSnapshot).toMatchObject({
+      leadDomain: 'nutrition',
+      activeDomains: ['nutrition', 'health'],
+    })
+  })
 })

@@ -1,16 +1,13 @@
 import { Prisma } from '@prisma/client'
 import type { CaseState } from '@/lib/ai/case/state'
-import {
-  applyCanonicalSnapshotToLegacyCaseState,
-  toCanonicalCaseStateSnapshot,
-} from '@/lib/ai/case/compat'
+import { toCanonicalCaseStateSnapshot } from '@/lib/ai/case/compat'
 import { buildContextPack } from '@/lib/ai/context/contextPackBuilder'
 import {
   type CanonicalCaseRuntimeState,
   fromStoredCaseState,
   readCanonicalCaseRuntimeState,
   toStoredCaseState,
-  toStoredCaseStateWithCanonicalSnapshot,
+  toStoredCaseRuntimeState,
 } from '@/lib/ai/case/persistence'
 import {
   encodeAssistantContentWithThinking,
@@ -174,21 +171,13 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       return fromStoredCaseState(row)
     },
     persistCaseRuntimeState: async ({ userId, conversationId, caseState }) => {
-      const legacyCaseState = applyCanonicalSnapshotToLegacyCaseState({
-        snapshot: caseState,
-        current: null,
-      })
-      const nextStored = toStoredCaseStateWithCanonicalSnapshot(legacyCaseState)
+      const nextStored = toStoredCaseRuntimeState(caseState)
       await upsertStoredCaseState(conversationId, userId, nextStored)
     },
     persistCaseState: async ({ userId, conversationId, caseState }) => {
       const canonicalCaseState = toCanonicalCaseStateSnapshot(caseState)
       if (canonicalCaseState) {
-        const legacyCaseState = applyCanonicalSnapshotToLegacyCaseState({
-          snapshot: canonicalCaseState,
-          current: caseState,
-        })
-        const nextStored = toStoredCaseStateWithCanonicalSnapshot(legacyCaseState)
+        const nextStored = toStoredCaseRuntimeState(canonicalCaseState, caseState)
         await upsertStoredCaseState(conversationId, userId, nextStored)
         return
       }

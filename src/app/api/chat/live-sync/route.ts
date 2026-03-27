@@ -2,10 +2,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import { getAuthUserId, getAuthRole, getAuthOwnerMode } from '@/lib/auth'
 import { errorResponse } from '@/lib/security/errorSchema'
-import {
-  applyCanonicalSnapshotToLegacyCaseState,
-  toCanonicalCaseStateSnapshot,
-} from '@/lib/ai/case/compat'
+import { toCanonicalCaseStateSnapshot } from '@/lib/ai/case/compat'
 import { orchestrate } from '@/lib/ai/orchestrator/orchestrator'
 import { createLlmWithFallback } from '@/lib/ai/llmFactory'
 import { loadTeam } from '@/lib/ai/team/loader'
@@ -135,27 +132,23 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Persist updated case state
-  const nextCaseState =
-    consensus.caseState ??
-    (consensus.stateSnapshot
-      ? applyCanonicalSnapshotToLegacyCaseState({
-          snapshot: consensus.stateSnapshot,
-          current: storedCaseState,
-        })
-      : null)
-  if (nextCaseState) {
-    try {
-      await persistence.persistCaseState({ userId, conversationId, caseState: nextCaseState })
-    } catch {
-      // best-effort
-    }
-  } else if (consensus.stateSnapshot) {
+  const nextCaseState = consensus.caseState ?? null
+  const canonicalStateSnapshot =
+    consensus.stateSnapshot ??
+    (nextCaseState ? (toCanonicalCaseStateSnapshot(nextCaseState) ?? undefined) : undefined)
+  if (canonicalStateSnapshot) {
     try {
       await persistence.persistCaseRuntimeState({
         userId,
         conversationId,
-        caseState: consensus.stateSnapshot,
+        caseState: canonicalStateSnapshot,
       })
+    } catch {
+      // best-effort
+    }
+  } else if (nextCaseState) {
+    try {
+      await persistence.persistCaseState({ userId, conversationId, caseState: nextCaseState })
     } catch {
       // best-effort
     }
@@ -164,11 +157,7 @@ export async function POST(request: Request): Promise<Response> {
   return new Response(
     JSON.stringify({
       ok: true,
-      stateSnapshot:
-        consensus.stateSnapshot ??
-        (nextCaseState
-          ? (toCanonicalCaseStateSnapshot(nextCaseState) ?? undefined)
-          : storedStateSnapshot),
+      stateSnapshot: canonicalStateSnapshot ?? storedStateSnapshot,
     }),
     {
       status: 200,

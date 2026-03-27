@@ -475,6 +475,97 @@ describe('/api/chat/send persistence integration', () => {
     expect(orchestrateMock.mock.calls[0]?.[1].caseState).toBeNull()
   })
 
+  it('persists the canonical runtime payload directly when orchestrate already returns stateSnapshot', async () => {
+    prismaMock.caseState.findUnique.mockResolvedValue(null)
+
+    vi.resetModules()
+    vi.doMock('@/lib/ai/orchestrator/orchestrator', () => ({
+      orchestrate: vi.fn(async () => ({
+        domain: 'nutrition',
+        finalMessageMarkdown: 'ok',
+        toolCallsToExecute: [],
+        caseState: undefined,
+        stateSnapshot: {
+          schemaVersion: 1,
+          conversationId: 'conv-db-1',
+          activeDomains: ['nutrition'],
+          domainPanels: [
+            {
+              domain: 'nutrition',
+              selectedAgentId: 'dietista',
+              candidateAgentIds: ['dietista'],
+              status: 'active',
+              priorityScore: 9,
+              lastReasoningAt: null,
+              pendingNeeds: [],
+            },
+          ],
+          leadDomain: 'nutrition',
+          speakerPolicy: 'lead',
+          conversationFocus: {
+            activeProblems: ['gonfiore'],
+            activeGoals: ['capire la causa'],
+            activeConstraints: [],
+            summary: 'focus panel',
+          },
+          coordinationState: {
+            crossDomainConflicts: [],
+            dependencies: [],
+            needsReview: false,
+          },
+          sharedOpenQuestions: [],
+          domainOpenQuestions: {},
+          updatedAt: '2026-03-27T16:30:00.000Z',
+        },
+        protocolEvents: [],
+        activeSpecialist: undefined,
+        ui: {
+          domainIcon: 'nutrition',
+          moodScore: 50,
+          sectionScores: { nutrition: 60, general: 50 },
+        },
+        safety: { escalation: 'none' },
+        debug: { selectedAgents: [], conflicts: [] },
+      })),
+      ORCHESTRATION_BUDGET_MS: 30000,
+    }))
+
+    const { POST } = await import('@/app/api/chat/send/route')
+
+    const res = await POST(
+      new Request('http://localhost/api/chat/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'u-db',
+        },
+        body: JSON.stringify({ message: 'ho gonfiore dopo i pasti' }),
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    await res.text()
+
+    expect(prismaMock.caseState.upsert).toHaveBeenCalledTimes(1)
+    expect(prismaMock.caseState.upsert.mock.calls[0]?.[0]).toMatchObject({
+      where: { conversationId: 'conv-db-1' },
+      create: expect.objectContaining({
+        stateSnapshot: expect.objectContaining({
+          leadDomain: 'nutrition',
+          activeDomains: ['nutrition'],
+        }),
+        ownerAgentId: 'dietista',
+        activeSpeakerAgentId: 'dietista',
+      }),
+      update: expect.objectContaining({
+        stateSnapshot: expect.objectContaining({
+          leadDomain: 'nutrition',
+          activeDomains: ['nutrition'],
+        }),
+      }),
+    })
+  })
+
   it('derives ui.state compatibility fields from the canonical lead panel when activeSpecialist is absent', async () => {
     prismaMock.caseState.findUnique.mockResolvedValue(null)
 
@@ -826,12 +917,12 @@ describe('/api/chat/send persistence integration', () => {
       where: { conversationId: expect.any(String) },
       create: {
         userId: 'u-db',
-        ownerAgentId: 'dietista',
+        ownerAgentId: 'fisioterapista',
         activeSpeakerAgentId: 'fisioterapista',
         protocolState: 'consult_active_takeover',
       },
       update: {
-        ownerAgentId: 'dietista',
+        ownerAgentId: 'fisioterapista',
         activeSpeakerAgentId: 'fisioterapista',
         protocolState: 'consult_active_takeover',
       },

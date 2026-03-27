@@ -48,7 +48,7 @@ describe('/api/chat/live-sync stateSnapshot response', () => {
     vi.clearAllMocks()
   })
 
-  it('returns canonical stateSnapshot and persists a caseState derived from it', async () => {
+  it('returns canonical stateSnapshot and persists the canonical runtime payload when snapshot is available', async () => {
     const { getAuthUserId, getAuthRole, getAuthOwnerMode } = await import('@/lib/auth')
     vi.mocked(getAuthUserId).mockResolvedValue('u1')
     vi.mocked(getAuthRole).mockResolvedValue('OWNER')
@@ -140,16 +140,17 @@ describe('/api/chat/live-sync stateSnapshot response', () => {
         activeDomains: ['health', 'training'],
       },
     })
-    expect(persistenceMock.persistCaseState).toHaveBeenCalledTimes(1)
-    expect(persistenceMock.persistCaseState.mock.calls[0][0]).toMatchObject({
+    expect(persistenceMock.persistCaseRuntimeState).toHaveBeenCalledTimes(1)
+    expect(persistenceMock.persistCaseRuntimeState.mock.calls[0][0]).toMatchObject({
       userId: 'u1',
       conversationId: 'conv-1',
       caseState: expect.objectContaining({
         conversationId: 'conv-1',
-        ownerAgentId: 'medico',
-        activeSpeakerAgentId: 'medico',
+        leadDomain: 'health',
+        activeDomains: ['health', 'training'],
       }),
     })
+    expect(persistenceMock.persistCaseState).not.toHaveBeenCalled()
   })
 
   it('routes live tool calls through the matching panel agent instead of one global capability agent', async () => {
@@ -303,7 +304,7 @@ describe('/api/chat/live-sync stateSnapshot response', () => {
     expect(executeToolCallMock).toHaveBeenCalledTimes(2)
     expect(executeToolCallMock.mock.calls[0]?.[1]?.agent).toMatchObject({ id: 'medico' })
     expect(executeToolCallMock.mock.calls[1]?.[1]?.agent).toMatchObject({ id: 'dietista' })
-    expect(persistenceMock.persistCaseState).toHaveBeenCalledTimes(1)
-    expect(persistenceMock.persistCaseRuntimeState).not.toHaveBeenCalled()
+    expect(persistenceMock.persistCaseRuntimeState).toHaveBeenCalledTimes(1)
+    expect(persistenceMock.persistCaseState).not.toHaveBeenCalled()
   })
 })

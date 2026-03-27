@@ -82,4 +82,68 @@ describe('/api/live-token security baseline', () => {
     // apiKey field must not be present
     expect(body.apiKey).toBeUndefined()
   })
+
+  it('uses the latest user snapshot bootstrap when conversationId is omitted', async () => {
+    prismaMock.caseState.findFirst.mockResolvedValue({
+      conversationId: 'c-latest',
+      ownerAgentId: 'legacy-owner',
+      activeSpeakerAgentId: 'legacy-speaker',
+      protocolState: 'owner_active',
+      stateSnapshot: {
+        schemaVersion: 1,
+        conversationId: 'c-latest',
+        activeDomains: ['health'],
+        domainPanels: [
+          {
+            domain: 'health',
+            selectedAgentId: 'medico',
+            candidateAgentIds: ['medico'],
+            status: 'active',
+            priorityScore: 7,
+            lastReasoningAt: null,
+            pendingNeeds: [],
+          },
+        ],
+        leadDomain: 'health',
+        speakerPolicy: 'lead',
+        conversationFocus: {
+          activeProblems: ['dolore cervicale'],
+          activeGoals: ['ridurre dolore'],
+          activeConstraints: [],
+          summary: 'focus clinico',
+        },
+        coordinationState: {
+          crossDomainConflicts: [],
+          dependencies: [],
+          needsReview: false,
+        },
+        sharedOpenQuestions: [],
+        domainOpenQuestions: {},
+        updatedAt: '2026-03-27T16:35:00.000Z',
+      },
+    })
+
+    const { POST } = await import('@/app/api/live-token/route')
+
+    const req = new Request('http://localhost/api/live-token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': 'u1',
+      },
+      body: JSON.stringify({}),
+    })
+
+    const res = await POST(req)
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(prismaMock.caseState.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.caseState.findFirst).toHaveBeenCalled()
+    expect(body.stateSnapshot).toMatchObject({
+      conversationId: 'c-latest',
+      leadDomain: 'health',
+      activeDomains: ['health'],
+    })
+  })
 })

@@ -80,6 +80,43 @@ function serializeCanonicalSnapshot(snapshot: CanonicalCaseStateSnapshot): Recor
   }
 }
 
+function inferStoredProtocolState(snapshot: CanonicalCaseRuntimeState): CaseState['protocolState'] {
+  if (snapshot.speakerPolicy === 'explicit_agent' || snapshot.speakerPolicy === 'switch') {
+    return 'consult_active_takeover'
+  }
+  return 'owner_active'
+}
+
+function buildStoredLegacyEnvelope(
+  snapshot: CanonicalCaseRuntimeState,
+  current?: CaseState | null,
+): Record<string, unknown> {
+  const leadPanel =
+    snapshot.domainPanels.find((panel) => panel.domain === snapshot.leadDomain) ??
+    snapshot.domainPanels[0]
+  const activeSpeakerAgentId =
+    leadPanel?.selectedAgentId ??
+    current?.activeSpeakerAgentId ??
+    current?.ownerAgentId ??
+    'orchestratore'
+  const ownerAgentId = current?.ownerAgentId ?? activeSpeakerAgentId
+
+  return {
+    conversationId: snapshot.conversationId,
+    ownerAgentId,
+    activeSpeakerAgentId,
+    protocolState: current?.protocolState ?? inferStoredProtocolState(snapshot),
+    consultTargetAgentId: current?.consultTargetAgentId ?? null,
+    returnTargetAgentId: current?.returnTargetAgentId ?? null,
+    consultReason: current?.consultReason ?? null,
+    pendingHandoffAgentId: current?.pendingHandoffAgentId ?? null,
+    checkpointReason: current?.checkpointReason ?? null,
+    takeoverTurns: current?.takeoverTurns ?? 0,
+    loopCount: current?.loopCount ?? 0,
+    handoffCount: current?.handoffCount ?? 0,
+  }
+}
+
 function parseStoredCanonicalSnapshot(rawSnapshot: unknown): CanonicalCaseRuntimeState | null {
   const parsed = canonicalSnapshotSchema.safeParse(rawSnapshot)
   return parsed.success ? parsed.data : null
@@ -119,6 +156,16 @@ export function toStoredCaseState(caseState: CaseState): Record<string, unknown>
   }
 }
 
+export function toStoredCaseRuntimeState(
+  caseState: CanonicalCaseRuntimeState,
+  current?: CaseState | null,
+): StoredCaseStateRecord {
+  return {
+    ...buildStoredLegacyEnvelope(caseState, current),
+    stateSnapshot: serializeCanonicalSnapshot(caseState),
+  }
+}
+
 /**
  * Phase 1 canonical envelope for stores that can persist a shadow snapshot
  * alongside the legacy case-state columns. Not yet wired into Prisma callers.
@@ -126,12 +173,9 @@ export function toStoredCaseState(caseState: CaseState): Record<string, unknown>
 export function toStoredCaseStateWithCanonicalSnapshot(
   caseState: CaseState,
 ): StoredCaseStateRecord {
-  const legacy = toStoredCaseState(caseState)
   const snapshot = toCanonicalCaseStateSnapshot(caseState)
-  return {
-    ...legacy,
-    ...(snapshot ? { stateSnapshot: serializeCanonicalSnapshot(snapshot) } : {}),
-  }
+  if (!snapshot) return toStoredCaseState(caseState)
+  return toStoredCaseRuntimeState(snapshot, caseState)
 }
 
 /**

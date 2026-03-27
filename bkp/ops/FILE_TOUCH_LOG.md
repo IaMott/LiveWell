@@ -268,3 +268,18 @@ File touch log (append-only)
 2026-03-27 16:22 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=allineamento stato progetto dopo commit/push/deploy della track context-first
 2026-03-27 16:22 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del publish remoto della track obbligatoria residua
 2026-03-27 16:22 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione del verdict finale dopo la chiusura e pubblicazione della track context-first
+2026-03-27 16:49 | ruolo=backend-developer | file=src/lib/ai/case/persistence.ts | azione=modify | motivo=introdotto writer snapshot-first per confinare la ricostruzione legacy ai soli casi necessari
+2026-03-27 16:49 | ruolo=backend-developer | file=src/app/api/chat/send/chatPersistence.ts | azione=modify | motivo=RoutePersistenceDeps persiste ora il runtime canonico direttamente senza ricostruire `CaseState` per il path normale
+2026-03-27 16:49 | ruolo=backend-developer | file=src/app/api/chat/send/route.ts | azione=modify | motivo=il route text persiste lo snapshot canonico come primary payload quando il consenso lo espone o lo rende derivabile
+2026-03-27 16:49 | ruolo=backend-developer | file=src/app/api/chat/live-sync/route.ts | azione=modify | motivo=live-sync persiste il runtime canonico senza ricostruire legacy nel path snapshot-first
+2026-03-27 16:49 | ruolo=backend-developer | file=tests/api/chat-send-persistence.test.ts | azione=modify | motivo=guardrail sul writer snapshot-first del route text
+2026-03-27 16:49 | ruolo=backend-developer | file=tests/api/live-sync-stateSnapshot.test.ts | azione=modify | motivo=guardrail sul writer snapshot-first del route live-sync
+2026-03-27 16:49 | ruolo=backend-developer | file=tests/api/live-token-security.test.ts | azione=modify | motivo=copertura sul bootstrap da latest user snapshot quando conversationId manca
+2026-03-27 16:49 | ruolo=backend-developer | file=tests/api/live-token-fallback-observability.test.ts | azione=modify | motivo=verifica del contenuto reale di systemInstruction su snapshot canonico, attributi e cronologia
+2026-03-27 16:49 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-48 del cleanup residuo locale validato
+2026-03-27 16:49 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=aggiornamento stato progetto dopo il cleanup residuo locale
+2026-03-27 16:49 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del cleanup residuo locale su legacy interno e test live
+2026-03-27 16:49 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sul confinamento del legacy writer e sul livello massimo ragionevole di hardening live in questa track
+2026-03-27 16:49 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=mitigazione del residuo legacy hot-path e riduzione del gap live mock-heavy
+2026-03-27 16:49 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/1649_backend-developer_residual-cleanup-local.md | azione=create | motivo=storico resumable del cleanup residuo locale
+2026-03-27 16:49 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/1649_chatlog.md | azione=create | motivo=chatlog sintetico del cleanup residuo locale

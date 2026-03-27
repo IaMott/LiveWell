@@ -5,7 +5,6 @@ import { getAuthUserId, getAuthRole, getAuthOwnerMode } from '@/lib/auth'
 import { errorResponse } from '@/lib/security/errorSchema'
 import { logApiErrorEvent } from '@/lib/monitoring/apiErrorEvents'
 import {
-  applyCanonicalSnapshotToLegacyCaseState,
   deriveActiveSpecialistFromCaseState,
   toCanonicalCaseStateSnapshot,
 } from '@/lib/ai/case/compat'
@@ -699,21 +698,11 @@ export async function POST(request: Request): Promise<Response> {
         const persistedToolExecutionTrace = [...toolExecutionTrace, ...blockedToolExecutionTrace]
 
         const responseText = consensus.finalMessageMarkdown
-        const nextCaseState =
-          consensus.caseState ??
-          (consensus.stateSnapshot
-            ? applyCanonicalSnapshotToLegacyCaseState({
-                snapshot: consensus.stateSnapshot,
-                current: storedCaseState,
-              })
-            : null)
-        const stateSnapshot =
+        const nextCaseState = consensus.caseState ?? null
+        const canonicalStateSnapshot =
           consensus.stateSnapshot ??
-          (nextCaseState
-            ? (toCanonicalCaseStateSnapshot(nextCaseState) ?? undefined)
-            : undefined) ??
-          storedCaseRuntimeState ??
-          undefined
+          (nextCaseState ? (toCanonicalCaseStateSnapshot(nextCaseState) ?? undefined) : undefined)
+        const stateSnapshot = canonicalStateSnapshot ?? storedCaseRuntimeState ?? undefined
         const leadPanel =
           stateSnapshot?.domainPanels.find((panel) => panel.domain === stateSnapshot.leadDomain) ??
           stateSnapshot?.domainPanels[0]
@@ -756,7 +745,25 @@ export async function POST(request: Request): Promise<Response> {
             metadata: { conversationId },
           })
         }
-        if (nextCaseState) {
+        if (canonicalStateSnapshot) {
+          try {
+            await persistence.persistCaseRuntimeState({
+              userId,
+              conversationId,
+              caseState: canonicalStateSnapshot,
+            })
+          } catch (error) {
+            console.error('[chat/send] persistCaseState failed, continuing in fallback mode', error)
+            await logChatFallbackEvent({
+              phase: 'PERSIST_CHAT_TURN',
+              requestId,
+              userId,
+              message: 'persistCaseState failed, response still streamed',
+              error,
+              metadata: { conversationId, layer: 'case_state_runtime' },
+            })
+          }
+        } else if (nextCaseState) {
           try {
             await persistence.persistCaseState({
               userId,
@@ -771,25 +778,7 @@ export async function POST(request: Request): Promise<Response> {
               userId,
               message: 'persistCaseState failed, response still streamed',
               error,
-              metadata: { conversationId, layer: 'case_state' },
-            })
-          }
-        } else if (stateSnapshot) {
-          try {
-            await persistence.persistCaseRuntimeState({
-              userId,
-              conversationId,
-              caseState: stateSnapshot,
-            })
-          } catch (error) {
-            console.error('[chat/send] persistCaseState failed, continuing in fallback mode', error)
-            await logChatFallbackEvent({
-              phase: 'PERSIST_CHAT_TURN',
-              requestId,
-              userId,
-              message: 'persistCaseState failed, response still streamed',
-              error,
-              metadata: { conversationId, layer: 'case_state_runtime_fallback' },
+              metadata: { conversationId, layer: 'case_state_legacy_fallback' },
             })
           }
         }
