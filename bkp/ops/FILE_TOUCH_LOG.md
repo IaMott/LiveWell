@@ -264,3 +264,7 @@ File touch log (append-only)
 2026-03-27 16:16 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append della chiusura locale del routing multi-dominio context-first
 2026-03-27 16:16 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sulla retrocessione delle euristiche a fallback/supporto nel routing
 2026-03-27 16:16 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=mitigazione del rischio high sul routing keyword-heavy e chiusura del warning lint residuo
+2026-03-27 16:22 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-47 con publish remoto e verifica alias
+2026-03-27 16:22 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=allineamento stato progetto dopo commit/push/deploy della track context-first
+2026-03-27 16:22 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del publish remoto della track obbligatoria residua
+2026-03-27 16:22 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione del verdict finale dopo la chiusura e pubblicazione della track context-first

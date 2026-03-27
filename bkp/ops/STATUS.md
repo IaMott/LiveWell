@@ -87,15 +87,14 @@ Fatto
 
 In corso
 
-- nessun blocco implementativo attivo nel working tree oltre al publish della track corrente
-- track obbligatoria sul routing multi-dominio context-first chiusa localmente e validata
-- review finale totale ancora aperta solo per verificare publish e assenza di nuove track obbligatorie residue
+- nessun blocco implementativo attivo nel working tree
+- review finale totale ancora aperta solo per il verdetto conclusivo e la classificazione dei residui non obbligatori
 
 Prossimo
 
-- commit, push e deploy della chiusura context-first / LLM-first
-- rieseguire review finale avversariale dell'intero progetto
-- dichiarare `DONE` o `DONE WITH RESIDUAL RECOMMENDATIONS` solo se non restano piu` track obbligatorie
+- formalizzare il verdetto finale unico
+- distinguere chiaramente residui non obbligatori vs track future separate
+- non aprire nuove implementazioni senza evidenza di gap blocking/high
 
 Rischi
 
@@ -141,10 +140,9 @@ Rischi
 - residui dopo la correzione:
   - il protocol engine interno usa ancora adapter legacy controllati (`CaseState`, `applyCanonicalSnapshotToLegacyCaseState`, `compatibilitySpeakerId`) ma non piu` come driver dei route principali
   - il bootstrap/security live resta coperto soprattutto da test mock-heavy; gap di integrazione reale non blocking ma ancora presente
-  - resta un warning lint non bloccante su `src/components/profile/UserAvatar.tsx`
 - le euristiche statiche (`KEYWORDS`, `SPECIALIST_KEYWORDS`, `AGENT_COMPETENCE_HINTS`) restano nel codice come supporto/fallback; la review finale deve confermare che non siano piu` il motore principale del path production
 - resta un gap non bloccante da tenere sotto osservazione: bootstrap live/sicurezza ancora coperti soprattutto da test mock-heavy, senza integrazione browser/SDK reale dal terminale
 
 Ultimo aggiornamento
 
-2026-03-27 16:16
+2026-03-27 16:22
