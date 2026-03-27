@@ -238,3 +238,14 @@ File touch log (append-only)
 2026-03-27 12:59 | step=CP-43 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/STATUS.md` | action=completed | contract=temporary | note=`stato finale aggiornato dopo push/deploy delle track correttive`
 2026-03-27 12:59 | step=CP-43 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/WORKLOG.md` | action=completed | contract=temporary | note=`append worklog publish finale post-review avversariale`
 2026-03-27 12:59 | step=CP-43 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/DECISIONS.md` | action=completed | contract=temporary | note=`append ADR sul verdict finale done-with-residual-recommendations post-fix obbligatori`
+2026-03-27 13:10 | ruolo=backend-developer | file=src/lib/dynamicDb/semantics.ts | azione=modify | motivo=riconciliazione blocco A: `birthDate` riportato a dato statico canonico, distinto dai dati derivati nel tempo
+2026-03-27 13:10 | ruolo=backend-developer | file=src/app/api/profile/dynamic-db/route.ts | azione=modify | motivo=riconciliazione blocco B: `currentAge` derivato anche dagli attributi personali storicizzati quando `UserProfile.birthDate` manca
+2026-03-27 13:10 | ruolo=backend-developer | file=src/lib/tools/handlers.ts | azione=modify | motivo=riconciliazione blocco B: note agentiche rese obbligatorie sui principali write-path Dynamic DB
+2026-03-27 13:10 | ruolo=backend-developer | file=tests/api/profile-dynamic-db-route.test.ts | azione=modify | motivo=copertura su semantica statica di `birthDate` e derivazione di `currentAge` dagli attributi
+2026-03-27 13:10 | ruolo=backend-developer | file=tests/api/cartella-clinica.test.ts | azione=modify | motivo=copertura sull'obbligatorieta` delle note agentiche nei tool clinici
+2026-03-27 13:10 | ruolo=backend-developer | file=tests/api/dynamic-db-agent-notes.test.ts | azione=create | motivo=guardrail sui tool Dynamic DB che devono salvare note non vuote
+2026-03-27 15:26 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-44/CP-45 della riconciliazione storica
+2026-03-27 15:26 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=allineamento stato progetto dopo la riconciliazione storica e il publish dei fix A/B
+2026-03-27 15:26 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append della riconciliazione storica con gap A/B chiusi e blocco D ancora parziale
+2026-03-27 15:26 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione ADR sui fix Dynamic DB e sul residuo keyword-heavy del routing
+2026-03-27 15:26 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=registrazione del rischio residuo obbligatorio sul routing multi-dominio ancora euristico

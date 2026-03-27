@@ -87,16 +87,18 @@ Fatto
 
 In corso
 
-- nessun blocco implementativo in corso
-- track obbligatorie post-review avversariale corrette, validate e pubblicate
-- review finale completata senza finding blocking/high residui
+- nessun blocco implementativo attivo nel working tree
+- riconciliazione storica A/B completata e pubblicata
+- review finale ancora aperta sul blocco D multi-dominio, perche` il routing resta keyword-heavy nei punti chiave
 
 Prossimo
 
-- follow-up non bloccanti separati:
-  - valutare una track separata per `eslint@10` e stack lint collegato
-  - valutare una track separata per Prisma `7.x`
-  - rafforzare in futuro l'integrazione live reale oltre i test mock-heavy
+- formalizzare il verdetto finale della riconciliazione storica:
+  - blocco A `done`
+  - blocco B `done` dopo i fix su semantica `birthDate`, derivazione `currentAge` e note obbligatorie
+  - blocco C `done`
+  - blocco D ancora `partial` per routing/preselezione dominio troppo euristici
+- pianificare solo se richiesto una track separata sul cuore multi-dominio context-first / LLM-first
 
 Rischi
 
@@ -143,7 +145,9 @@ Rischi
   - il protocol engine interno usa ancora adapter legacy controllati (`CaseState`, `applyCanonicalSnapshotToLegacyCaseState`, `compatibilitySpeakerId`) ma non piu` come driver dei route principali
   - il bootstrap/security live resta coperto soprattutto da test mock-heavy; gap di integrazione reale non blocking ma ancora presente
   - resta un warning lint non bloccante su `src/components/profile/UserAvatar.tsx`
+- residuo storico ancora aperto:
+  - il cuore multi-dominio non e` ancora pienamente context-first / LLM-first e continua a dipendere da keyword/hints statici in `src/lib/ai/domain/domainDetection.ts`, `src/lib/ai/orchestrator/routing.ts` e `src/lib/ai/orchestrator/agentSelection.ts`
 
 Ultimo aggiornamento
 
-2026-03-27 12:59
+2026-03-27 15:26
