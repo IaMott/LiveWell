@@ -2,7 +2,7 @@ import NextAuth from 'next-auth'
 import { authConfig } from '@/lib/auth.config'
 
 /**
- * Central middleware — protects all app routes automatically.
+ * Central proxy — protects all app routes automatically.
  *
  * Uses the Edge-compatible authConfig (no Prisma, no bcrypt).
  * The `authorized` callback in auth.config.ts decides which paths
