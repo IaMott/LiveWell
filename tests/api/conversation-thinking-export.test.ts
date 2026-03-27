@@ -219,4 +219,83 @@ describe('conversation thinking persistence and export', () => {
     expect(exportText).toContain('Risposta clinica utile')
     expect(exportText).not.toContain('Payload: user.setAttribute')
   })
+
+  it('keeps visible assistant text when stored content mixes payload and message on the same line', async () => {
+    const assistantContent =
+      'Payload: user.setAttribute {"domain":"health","key":"goal","value":"forza"} Ti aiuto a impostare il percorso.'
+
+    prismaMock.conversation.findUnique.mockResolvedValue({
+      id: 'conv-export-inline',
+      title: 'Conversazione test',
+      userId: 'user-1',
+      messages: [
+        {
+          id: 'msg-user-inline',
+          role: 'user',
+          content: 'va bene',
+          domain: null,
+          specialistName: null,
+          createdAt: new Date('2026-03-27T20:36:15.527Z'),
+        },
+        {
+          id: 'msg-assistant-inline',
+          role: 'assistant',
+          content: assistantContent,
+          domain: 'training',
+          specialistName: 'Fisioterapista',
+          createdAt: new Date('2026-03-27T20:37:38.919Z'),
+        },
+      ],
+    })
+
+    prismaMock.conversation.findFirst.mockResolvedValue({
+      id: 'conv-export-inline',
+      title: 'Conversazione test',
+      userId: 'user-1',
+      messages: [
+        {
+          id: 'msg-user-inline',
+          role: 'user',
+          content: 'va bene',
+          createdAt: new Date('2026-03-27T20:36:15.527Z'),
+          attachments: [],
+        },
+        {
+          id: 'msg-assistant-inline',
+          role: 'assistant',
+          content: assistantContent,
+          createdAt: new Date('2026-03-27T20:37:38.919Z'),
+          attachments: [],
+        },
+      ],
+    })
+
+    const { GET: getConversation } = await import('@/app/api/conversations/[id]/route')
+    const conversationRes = await getConversation(new Request('http://localhost'), {
+      params: Promise.resolve({ id: 'conv-export-inline' }),
+    })
+    const conversationBody = await conversationRes.json()
+
+    const { GET: getExport } = await import('@/app/api/conversations/[id]/export/route')
+    const exportRes = await getExport(
+      new Request('http://localhost/api/conversations/conv-export-inline/export'),
+      {
+        params: Promise.resolve({ id: 'conv-export-inline' }),
+      },
+    )
+    const exportText = await exportRes.text()
+
+    expect(conversationBody.messages).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        content: 'va bene',
+      }),
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Ti aiuto a impostare il percorso.',
+      }),
+    ])
+    expect(exportText).toContain('Ti aiuto a impostare il percorso.')
+    expect(exportText).not.toContain('Payload: user.setAttribute')
+  })
 })

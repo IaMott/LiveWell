@@ -122,4 +122,56 @@ describe('/api/chat/transcript', () => {
       savedMessages: [],
     })
   })
+
+  it('preserves visible assistant text when an internal payload and visible text share the same line', async () => {
+    prismaMock.conversation.findFirst.mockResolvedValue({ id: 'conv-1' })
+
+    vi.resetModules()
+    const { POST } = await import('@/app/api/chat/transcript/route')
+
+    const res = await POST(
+      new Request('http://localhost/api/chat/transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: 'conv-1',
+          messages: [
+            {
+              role: 'assistant',
+              content:
+                'Payload: user.setAttribute {"domain":"health","key":"goal","value":"forza"} Ti aiuto a impostare il percorso.',
+              domain: 'health',
+              specialistName: 'Fisioterapista',
+            },
+          ],
+        }),
+      }),
+    )
+
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(prismaMock.message.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.message.create).toHaveBeenCalledWith({
+      data: {
+        conversationId: 'conv-1',
+        role: 'assistant',
+        content: 'Ti aiuto a impostare il percorso.',
+        domain: 'health',
+        specialistName: 'Fisioterapista',
+      },
+    })
+    expect(body).toMatchObject({
+      ok: true,
+      conversationId: 'conv-1',
+      savedMessages: [
+        {
+          role: 'assistant',
+          content: 'Ti aiuto a impostare il percorso.',
+          domain: 'health',
+          specialistName: 'Fisioterapista',
+        },
+      ],
+    })
+  })
 })
