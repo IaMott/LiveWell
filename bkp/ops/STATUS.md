@@ -120,19 +120,30 @@ Fatto
 
 In corso
 
-- fix UI domini/chat pubblicato e verificato sull'alias production
-- nessuna altra implementazione aperta fuori dal perimetro domini/chat richiesto in questo step
+- follow-up backend sul path dominio production-facing implementato localmente
+- `src/lib/ai/orchestrator/orchestrator.ts` arricchisce ora il `stateSnapshot` canonico con `leadDomain`, `activeDomains` e `domainPanels` coerenti con routing, speaker corrente, snapshot precedente e domini attivi multi-dominio
+- `tests/api/chat-orchestration.test.ts` copre:
+  - prompt monodominio training -> `leadDomain=training`, `activeDomains=['training']`
+  - follow-up health+training -> `leadDomain=health`, `activeDomains` contiene `health` e `training`, pannello training preservato
+- `tests/api/chat-send-persistence.test.ts` blocca la persistenza production-facing di `assistant.domain` allineata al `leadDomain` canonico
+- validazioni locali verdi:
+  - `npm run test -- tests/api/chat-orchestration.test.ts tests/api/chat-send-persistence.test.ts tests/api/chat-shell-domain-visuals.test.ts tests/api/chat-input-domain-highlights.test.ts tests/api/message-bubble-domain-color.test.ts`
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run build`
 
 Prossimo
 
-- se emerge feedback reale nuovo, verificare in production il comportamento visivo di domini, pulsanti e bolle assistant
-- non aprire ora cleanup legacy interno o hygiene toolchain/Prisma senza una richiesta esplicita separata
+- commit, push e deploy del fix backend domini
+- rieseguire smoke production sugli stessi scenari `training` e `health+training`
 
 Rischi
 
 - resta legacy interno confinato ma non bloccante: `CaseState`, `fromStoredCaseState()` e `compatibilitySpeakerId` sopravvivono nell'engine/protocol per record storici e adapter interni, non piu` nei route hot-path di persistenza canonical-first
 - resta rischio non bloccante sul live reale: i test ora verificano piu` contenuto osservabile del bootstrap (`stateSnapshot`, history, attributes, systemInstruction), ma una integrazione browser/SDK non mockata non e` eseguibile dal terminale
 - il fix attuale dei domini visuali e` validato localmente e deployato; manca solo eventuale verifica manuale browser-side della resa finale
+- Safari locale non consente WebDriver senza `Allow remote automation`; il blocco QA browser-DOM e` esterno alla app, ma non impedisce di verificare il problema via route production autenticati
+- rischio originario sul dominio `general` production-facing mitigato localmente; resta da confermare in production post-deploy sugli stessi scenari QA
 - rischio applicativo mitigato ma da monitorare in production: transcript live e speaker metadata dipendono ora da serializzazione client + sync live; se il close della sessione avviene in una finestra molto stretta resta possibile un gap non osservato dai test locali
 - rischio QA sul transcript misto mitigato: production ora preserva il testo assistant visibile e continua a filtrare `Payload:`
 - rischio live ridotto ma non azzerato: il nuovo guardrail browser-facing copre il contratto `LiveModal -> /api/live-token -> SDK config`, ma non sostituisce ancora una prova E2E con browser reale + SDK reale
@@ -143,4 +154,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 22:45
+2026-03-27 23:08

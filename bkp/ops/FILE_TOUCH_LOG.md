@@ -376,3 +376,22 @@ File touch log (append-only)
 2026-03-27 22:45 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del publish remoto del fix UI domini/chat
 2026-03-27 22:45 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/2245_backend-developer_domain-ui-reactivation-publish.md | azione=create | motivo=storico resumable del publish del fix UI domini/chat
 2026-03-27 22:45 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/2245_chatlog.md | azione=create | motivo=chatlog sintetico del publish del fix UI domini/chat
+2026-03-27 22:59 | ruolo=qa-expert | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-58 della QA production sul fix UI domini/chat
+2026-03-27 22:59 | ruolo=qa-expert | file=bkp/ops/FILE_TOUCH_LOG.md | azione=modify | motivo=append dei file memoria toccati dalla QA production
+2026-03-27 22:59 | ruolo=qa-expert | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=apertura del finding production sullo stato dominio ancora serializzato come general
+2026-03-27 22:59 | ruolo=qa-expert | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto aggiornato con esito FAIL/PASS della QA production domini/chat
+2026-03-27 22:59 | ruolo=qa-expert | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append della QA production sul fix UI domini/chat
+2026-03-27 22:59 | ruolo=qa-expert | file=bkp/ops/DECISIONS.md | azione=modify | motivo=decisione di non riaprire la UI pura e spostare il follow-up sul backend che emette lo stato dominio
+2026-03-27 22:59 | ruolo=qa-expert | file=bkp/ops/journal/2026-03-27/2259_qa-expert_domain-ui-production-verification.md | azione=create | motivo=storico resumable della verifica production domini/chat
+2026-03-27 22:59 | ruolo=qa-expert | file=bkp/ops/chatlogs/2026-03-27/2259_chatlog.md | azione=create | motivo=chatlog sintetico della QA production domini/chat
+2026-03-27 23:08 | ruolo=backend-developer | file=src/lib/ai/orchestrator/orchestrator.ts | azione=modify | motivo=arricchimento dello snapshot canonico production-facing con `leadDomain`, `activeDomains` e `domainPanels` coerenti col routing reale
+2026-03-27 23:08 | ruolo=backend-developer | file=tests/api/chat-orchestration.test.ts | azione=modify | motivo=guardrail sui casi reali `training` e `health+training` che prima degradavano a `general`
+2026-03-27 23:08 | ruolo=backend-developer | file=tests/api/chat-send-persistence.test.ts | azione=modify | motivo=guardrail sulla persistenza del `assistant.domain` allineata al `leadDomain` canonico production-facing
+2026-03-27 23:08 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-59 del fix backend domini
+2026-03-27 23:08 | ruolo=backend-developer | file=bkp/ops/FILE_TOUCH_LOG.md | azione=modify | motivo=append dei file toccati dal fix backend domini
+2026-03-27 23:08 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=chiusura locale del rischio high sullo stato dominio ancora generalizzato
+2026-03-27 23:08 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=stato progetto aggiornato dopo implementazione e validazione locale del fix backend domini
+2026-03-27 23:08 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append dell'implementazione locale del fix backend domini
+2026-03-27 23:08 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR sullo snapshot canonico arricchito nel path orchestrator
+2026-03-27 23:08 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/2308_backend-developer_domain-state-production-path-fix.md | azione=create | motivo=storico resumable del fix backend domini
+2026-03-27 23:08 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/2308_chatlog.md | azione=create | motivo=chatlog sintetico del fix backend domini

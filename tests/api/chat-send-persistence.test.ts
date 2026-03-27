@@ -649,6 +649,12 @@ describe('/api/chat/send persistence integration', () => {
         leadDomain: 'nutrition',
       }),
     })
+    expect(prismaMock.message.create.mock.calls[1]?.[0]).toMatchObject({
+      data: expect.objectContaining({
+        role: 'assistant',
+        domain: 'nutrition',
+      }),
+    })
   })
 
   it('uses the current speaking specialist label for the assistant message even when the lead panel lags behind', async () => {
@@ -739,6 +745,7 @@ describe('/api/chat/send persistence integration', () => {
     expect(prismaMock.message.create.mock.calls[1]?.[0]).toMatchObject({
       data: expect.objectContaining({
         role: 'assistant',
+        domain: 'health',
         specialistName: 'Fisioterapista',
       }),
     })

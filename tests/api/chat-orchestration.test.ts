@@ -985,6 +985,125 @@ describe('chat orchestration — pipeline completa', () => {
     expect(result.debug?.decisionTrace?.[2]?.data.selectedAgentIds[0]).toBe('life-organizer')
   })
 
+  it('22d. serializza un snapshot canonico training-first per prompt monodominio palestra', async () => {
+    const llm = makeMockLlm('Prepariamo la tua scheda di allenamento.', { domain: 'training' })
+
+    const result = await orchestrate(
+      makeOrchDeps(llm),
+      makeInput('Mi serve una scheda per ricominciare ad allenarmi in palestra.'),
+    )
+
+    expect(result.domain).toBe('training')
+    expect(result.ui.domainIcon).toBe('training')
+    expect(result.stateSnapshot).toMatchObject({
+      leadDomain: 'training',
+      activeDomains: ['training'],
+    })
+    expect(result.stateSnapshot?.domainPanels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: 'training',
+          selectedAgentId: 'persona-trainer',
+          status: 'active',
+        }),
+      ]),
+    )
+  })
+
+  it('22e. mantiene training attivo ma sposta il leadDomain a health nel follow-up health+training', async () => {
+    const llm = {
+      complete: vi
+        .fn()
+        .mockImplementation(async ({ system, format }: { system: string; format?: string }) => {
+          if (format === 'text' && system.includes('router multi-dominio')) {
+            return {
+              text: JSON.stringify({
+                primaryDomain: 'health',
+                allDomains: ['health', 'training'],
+                preferredAgentIds: ['fisioterapista', 'persona-trainer'],
+                confidence: 0.93,
+                reasoning: 'Il ginocchio diventa il focus, ma l’allenamento resta attivo.',
+              }),
+            }
+          }
+          if (format === 'text') {
+            return { text: 'Dobbiamo capire meglio il dolore al ginocchio senza perdere il focus.' }
+          }
+          return { text: agentProposal({ domain: 'health' }) }
+        }),
+    }
+
+    const result = await orchestrate(
+      makeOrchDeps(llm),
+      makeInput(
+        "Ora però il problema principale è il dolore al ginocchio quando faccio squat e corsa, senza perdere il focus sull'allenamento.",
+        {
+          caseState: {
+            conversationId: 'conv-training-health',
+            ownerAgentId: 'persona-trainer',
+            activeSpeakerAgentId: 'persona-trainer',
+            protocolState: 'owner_active',
+            takeoverTurns: 0,
+            loopCount: 0,
+            handoffCount: 0,
+          },
+          caseStateSnapshot: {
+            schemaVersion: 1,
+            conversationId: 'conv-training-health',
+            activeDomains: ['training'],
+            domainPanels: [
+              {
+                domain: 'training',
+                selectedAgentId: 'persona-trainer',
+                candidateAgentIds: ['persona-trainer'],
+                status: 'active',
+                priorityScore: 0.9,
+                lastReasoningAt: null,
+                pendingNeeds: [],
+              },
+            ],
+            leadDomain: 'training',
+            speakerPolicy: 'lead',
+            conversationFocus: {
+              activeProblems: [],
+              activeGoals: ['riprendere ad allenarsi'],
+              activeConstraints: [],
+              summary: 'focus training',
+            },
+            coordinationState: {
+              crossDomainConflicts: [],
+              dependencies: [],
+              needsReview: false,
+            },
+            sharedOpenQuestions: [],
+            domainOpenQuestions: {},
+            updatedAt: '2026-03-27T22:00:00.000Z',
+          },
+        },
+      ),
+    )
+
+    expect(result.domain).toBe('health')
+    expect(result.ui.domainIcon).toBe('health')
+    expect(result.stateSnapshot).toMatchObject({
+      leadDomain: 'health',
+      activeDomains: expect.arrayContaining(['health', 'training']),
+    })
+    expect(result.stateSnapshot?.domainPanels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: 'health',
+          selectedAgentId: 'fisioterapista',
+          status: 'active',
+        }),
+        expect.objectContaining({
+          domain: 'training',
+          selectedAgentId: 'persona-trainer',
+        }),
+      ]),
+    )
+  })
+
   // ── 23. Agente timeout → fallback proposal, risposta prodotta ─────────────
   it('23. Agente con timeout → fallback, finalMessageMarkdown prodotto lo stesso', async () => {
     let callCount = 0

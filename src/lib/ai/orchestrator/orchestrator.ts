@@ -1,9 +1,18 @@
-import { AgentProfile, AgentInput, ConsensusResult } from '../types'
+import {
+  ActiveSpecialist,
+  AgentProfile,
+  AgentInput,
+  CanonicalCaseStateSnapshot,
+  ConsensusResult,
+  Domain,
+  DomainPanel,
+} from '../types'
 import {
   applyCanonicalSnapshotToLegacyCaseState,
   deriveActiveSpecialistFromCaseState,
   toCanonicalCaseStateSnapshot,
 } from '../case/compat'
+import type { CaseState } from '../case/state'
 import { advanceCaseState, detectRequestedAgentId, getCaseRoutingDomain } from '../case/protocol'
 import {
   detectDomainFromText,
@@ -65,6 +74,131 @@ export type OrchestratorDeps = {
 function getRetryGuardWindowMs(): number {
   const env = getServerEnv()
   return env.ORCH_RETRY_GUARD_WINDOW_MS ?? 2 * 60 * 1000
+}
+
+function uniqueDomains(values: Array<Domain | null | undefined>, includeGeneral = false): Domain[] {
+  const out: Domain[] = []
+  for (const value of values) {
+    if (!value) continue
+    if (!includeGeneral && value === 'general') continue
+    if (!out.includes(value)) out.push(value)
+  }
+  return out
+}
+
+function agentSupportsDomain(
+  team: AgentProfile[],
+  agentId: string | null | undefined,
+  domain: Domain,
+) {
+  if (!agentId) return false
+  const agent = team.find((candidate) => candidate.id === agentId)
+  if (!agent) return false
+  return domain === 'general' ? true : agent.domainTags.includes(domain)
+}
+
+function buildCanonicalRoutingSnapshot(params: {
+  input: AgentInput
+  caseState: CaseState
+  team: AgentProfile[]
+  detectedDomain: Domain
+  allDomains: Domain[]
+  selectedAgents: AgentProfile[]
+  activeSpecialist?: ActiveSpecialist
+}): CanonicalCaseStateSnapshot | undefined {
+  const { input, caseState, team, detectedDomain, allDomains, selectedAgents, activeSpecialist } =
+    params
+  const baseSnapshot = toCanonicalCaseStateSnapshot(caseState)
+  if (!baseSnapshot) return undefined
+
+  const previousSnapshot = input.caseStateSnapshot ?? baseSnapshot
+  const specialistSpecificDomains = uniqueDomains([
+    activeSpecialist?.domain,
+    ...(activeSpecialist?.domains ?? []),
+  ])
+  const previousSpecificDomains = uniqueDomains([
+    previousSnapshot.leadDomain,
+    ...(previousSnapshot.activeDomains ?? []),
+    ...previousSnapshot.domainPanels.map((panel) => panel.domain),
+  ])
+  const routingSpecificDomains = uniqueDomains([detectedDomain, ...allDomains])
+  const effectiveLeadDomain =
+    detectedDomain !== 'general'
+      ? detectedDomain
+      : previousSnapshot.leadDomain && previousSnapshot.leadDomain !== 'general'
+        ? previousSnapshot.leadDomain
+        : specialistSpecificDomains[0]
+  const activeDomains = uniqueDomains([
+    effectiveLeadDomain ?? undefined,
+    ...routingSpecificDomains,
+    ...previousSpecificDomains,
+  ])
+
+  if (activeDomains.length === 0) return baseSnapshot
+
+  const leadDomain = effectiveLeadDomain ?? activeDomains[0] ?? null
+  if (!leadDomain) return baseSnapshot
+
+  const nowIso = new Date().toISOString()
+  const orderedDomains = uniqueDomains([leadDomain, ...activeDomains])
+
+  const domainPanels: DomainPanel[] = orderedDomains.map((domain, index) => {
+    const previousPanel = previousSnapshot.domainPanels.find((panel) => panel.domain === domain)
+    const candidateAgentIds: string[] = []
+    const pushCandidate = (agentId?: string | null) => {
+      if (!agentId || candidateAgentIds.includes(agentId)) return
+      if (!agentSupportsDomain(team, agentId, domain)) return
+      candidateAgentIds.push(agentId)
+    }
+
+    if (domain === leadDomain) {
+      pushCandidate(caseState.activeSpeakerAgentId)
+      pushCandidate(activeSpecialist?.id)
+    }
+
+    pushCandidate(previousPanel?.selectedAgentId)
+    for (const agentId of previousPanel?.candidateAgentIds ?? []) pushCandidate(agentId)
+
+    for (const agent of selectedAgents) {
+      if (domain === 'general' || agent.domainTags.includes(domain)) pushCandidate(agent.id)
+    }
+
+    pushCandidate(caseState.ownerAgentId)
+
+    for (const agent of team) {
+      if (domain === 'general' || agent.domainTags.includes(domain)) pushCandidate(agent.id)
+    }
+
+    const selectedAgentId =
+      domain !== leadDomain &&
+      previousPanel?.selectedAgentId &&
+      candidateAgentIds.includes(previousPanel.selectedAgentId)
+        ? previousPanel.selectedAgentId
+        : (candidateAgentIds[0] ?? previousPanel?.selectedAgentId ?? null)
+
+    return {
+      domain,
+      selectedAgentId,
+      candidateAgentIds,
+      status: domain === leadDomain ? 'active' : (previousPanel?.status ?? 'monitoring'),
+      priorityScore:
+        previousPanel?.priorityScore ?? (index === 0 ? 1 : Math.max(0.35, 0.85 - index * 0.2)),
+      lastReasoningAt: nowIso,
+      pendingNeeds: previousPanel?.pendingNeeds ?? [],
+    }
+  })
+
+  return {
+    ...baseSnapshot,
+    activeDomains,
+    domainPanels,
+    leadDomain,
+    speakerPolicy:
+      caseState.activeSpeakerAgentId !== caseState.ownerAgentId
+        ? 'explicit_agent'
+        : baseSnapshot.speakerPolicy,
+    updatedAt: nowIso,
+  }
 }
 
 export async function orchestrate(
@@ -281,6 +415,22 @@ export async function orchestrate(
     }
   }
 
+  const canonicalRoutingSnapshot = buildCanonicalRoutingSnapshot({
+    input,
+    caseState: caseProtocol.caseState,
+    team: deps.team,
+    detectedDomain: domainHint,
+    allDomains,
+    selectedAgents,
+    activeSpecialist: effectiveSpecialist,
+  })
+  const enrichedCaseState = canonicalRoutingSnapshot
+    ? applyCanonicalSnapshotToLegacyCaseState({
+        snapshot: canonicalRoutingSnapshot,
+        current: caseProtocol.caseState,
+      })
+    : caseProtocol.caseState
+
   // ── Multi-domain triage ──────────────────────────────────────────────
   // When the message spans 2+ distinct domains and no specialist is locked in,
   // generate a triage response with quick-reply buttons instead of a blended
@@ -311,13 +461,19 @@ export async function orchestrate(
 
     return {
       ...consensusOutcome.baseConsensus,
-      caseState: caseProtocol.caseState,
-      stateSnapshot: nextStateSnapshot,
+      domain: canonicalRoutingSnapshot?.leadDomain ?? consensusOutcome.baseConsensus.domain,
+      caseState: enrichedCaseState,
+      stateSnapshot: canonicalRoutingSnapshot ?? nextStateSnapshot,
       protocolEvents: caseProtocol.events,
       finalMessageMarkdown: triage.message,
       quickReplies: triage.quickReplies,
       toolCallsToExecute: toolCallPlan.toolCallsToExecute,
       activeSpecialist: undefined,
+      ui: {
+        ...consensusOutcome.baseConsensus.ui,
+        domainIcon:
+          canonicalRoutingSnapshot?.leadDomain ?? consensusOutcome.baseConsensus.ui.domainIcon,
+      },
       debug: {
         selectedAgents:
           consensusOutcome.selectedAgentsFromConsensus.length > 0
@@ -377,13 +533,19 @@ export async function orchestrate(
 
   return {
     ...consensusOutcome.baseConsensus,
-    caseState: caseProtocol.caseState,
-    stateSnapshot: nextStateSnapshot,
+    domain: canonicalRoutingSnapshot?.leadDomain ?? consensusOutcome.baseConsensus.domain,
+    caseState: enrichedCaseState,
+    stateSnapshot: canonicalRoutingSnapshot ?? nextStateSnapshot,
     protocolEvents: caseProtocol.events,
     gatingQuestions: finalInterviewQuestions,
     toolCallsToExecute: toolCallPlan.toolCallsToExecute,
     finalMessageMarkdown: finalAnswer.finalText,
     activeSpecialist: effectiveSpecialist,
+    ui: {
+      ...consensusOutcome.baseConsensus.ui,
+      domainIcon:
+        canonicalRoutingSnapshot?.leadDomain ?? consensusOutcome.baseConsensus.ui.domainIcon,
+    },
     debug: {
       selectedAgents:
         consensusOutcome.selectedAgentsFromConsensus.length > 0
