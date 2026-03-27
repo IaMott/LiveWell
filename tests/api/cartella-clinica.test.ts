@@ -283,6 +283,36 @@ describe('cartella clinica — tool handlers', () => {
     expect(memEvents[0]!.metadata).toEqual({ glucose: 95, totalCholesterol: 180 })
   })
 
+  it('health.logDiagnosis without notes still persists a non-empty clinical note', async () => {
+    const executor = makeExecutor()
+    await executor.executeToolCall(
+      {
+        id: 'tc2b',
+        name: 'health.logDiagnosis',
+        args: { condition: 'Ipertensione' },
+      },
+      makeCtx(),
+    )
+
+    expect(memAttrs[0]!.notes).toBeTruthy()
+    expect(memEvents[0]!.description).toBeTruthy()
+  })
+
+  it('health.logBloodwork without notes still persists a non-empty clinical note', async () => {
+    const executor = makeExecutor()
+    await executor.executeToolCall(
+      {
+        id: 'tc2c',
+        name: 'health.logBloodwork',
+        args: { values: { glucose: 101 } },
+      },
+      makeCtx(),
+    )
+
+    expect(memAttrs[0]!.notes).toBeTruthy()
+    expect(memEvents[0]!.description).toBeTruthy()
+  })
+
   // 3. attributeId nel result è quello di UserAttribute (non di ClinicalEvent)
   it('result.attributeId è id di UserAttribute, non di ClinicalEvent', async () => {
     const executor = makeExecutor()

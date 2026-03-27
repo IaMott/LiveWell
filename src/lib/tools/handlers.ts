@@ -680,6 +680,10 @@ const healthLogBodyComposition: Handler = async (args, ctx) => {
     recordedAt?: string
     notes?: string
   }
+  const normalizedNotes = ensureDynamicNote(
+    a.notes,
+    'Composizione corporea registrata dall’agente; interpretare il dato nel contesto clinico e della data di rilevazione.',
+  )
   const row = await prisma.userAttribute.create({
     data: {
       userId: ctx.actor.userId,
@@ -691,7 +695,7 @@ const healthLogBodyComposition: Handler = async (args, ctx) => {
         waistCm: a.waistCm,
         bmi: a.bmi,
       } as Prisma.InputJsonValue,
-      notes: a.notes ?? null,
+      notes: normalizedNotes,
       source: 'agent',
       conversationId: ctx.conversationId,
       recordedAt: a.recordedAt ? new Date(a.recordedAt) : new Date(),
@@ -707,6 +711,10 @@ const healthLogBloodwork: Handler = async (args, ctx) => {
     notes?: string
   }
   const eventDate = a.testDate ? new Date(a.testDate) : new Date()
+  const normalizedNotes = ensureDynamicNote(
+    a.notes,
+    'Esami ematici registrati dall’agente; valori da leggere come osservazione datata, non come stato permanente.',
+  )
 
   const [row] = await Promise.all([
     // Backward-compat: attribute key/value time-series
@@ -716,7 +724,7 @@ const healthLogBloodwork: Handler = async (args, ctx) => {
         domain: 'health',
         key: 'bloodwork',
         value: a.values as Prisma.InputJsonValue,
-        notes: a.notes ?? null,
+        notes: normalizedNotes,
         source: 'agent',
         conversationId: ctx.conversationId,
         recordedAt: eventDate,
@@ -728,7 +736,7 @@ const healthLogBloodwork: Handler = async (args, ctx) => {
         userId: ctx.actor.userId,
         eventType: 'bloodwork',
         title: 'Esame del sangue',
-        description: a.notes ?? null,
+        description: normalizedNotes,
         domain: 'health',
         agentId: ctx.agent?.id ?? null,
         conversationId: ctx.conversationId ?? null,
@@ -750,6 +758,10 @@ const healthLogDiagnosis: Handler = async (args, ctx) => {
     notes?: string
   }
   const eventDate = a.diagnosedAt ? new Date(a.diagnosedAt) : new Date()
+  const normalizedNotes = ensureDynamicNote(
+    a.notes,
+    'Diagnosi registrata dall’agente; richiede contestualizzazione clinica e verifica dello stato nel tempo.',
+  )
 
   const [row] = await Promise.all([
     // Backward-compat: attribute key/value time-series
@@ -764,7 +776,7 @@ const healthLogDiagnosis: Handler = async (args, ctx) => {
           status: a.status ?? 'active',
           diagnosedAt: a.diagnosedAt,
         } as Prisma.InputJsonValue,
-        notes: a.notes ?? null,
+        notes: normalizedNotes,
         source: 'agent',
         conversationId: ctx.conversationId,
         recordedAt: eventDate,
@@ -776,7 +788,7 @@ const healthLogDiagnosis: Handler = async (args, ctx) => {
         userId: ctx.actor.userId,
         eventType: 'diagnosis',
         title: a.condition,
-        description: a.notes ?? null,
+        description: normalizedNotes,
         domain: 'health',
         agentId: ctx.agent?.id ?? null,
         conversationId: ctx.conversationId ?? null,
@@ -801,12 +813,17 @@ const healthUpdateMedications: Handler = async (args, ctx) => {
       notes?: string
     }>
   }
+  const normalizedNotes = ensureDynamicNote(
+    a.medications.map((med) => med.notes).find((note) => typeof note === 'string'),
+    'Terapia registrata dall’agente; verificare dosaggi, frequenza e aggiornamenti al follow-up.',
+  )
   const row = await prisma.userAttribute.create({
     data: {
       userId: ctx.actor.userId,
       domain: 'health',
       key: 'medications',
       value: a.medications as Prisma.InputJsonValue,
+      notes: normalizedNotes,
       source: 'agent',
       conversationId: ctx.conversationId,
     },
@@ -823,6 +840,7 @@ const nutritionLogWater: Handler = async (args, ctx) => {
       key: 'waterIntake',
       value: a.amountMl as Prisma.InputJsonValue,
       unit: 'ml',
+      notes: `Idratazione registrata dall’agente: ${a.amountMl} ml dichiarati per questa rilevazione.`,
       source: 'agent',
       conversationId: ctx.conversationId,
       recordedAt: a.date ? new Date(a.date) : new Date(),
@@ -839,6 +857,10 @@ const nutritionSetCalorieGoal: Handler = async (args, ctx) => {
     fatPct?: number
     notes?: string
   }
+  const normalizedNotes = ensureDynamicNote(
+    a.notes,
+    'Target calorico registrato dall’agente; da rivalutare in base ad andamento, aderenza e obiettivi.',
+  )
   const row = await prisma.userAttribute.create({
     data: {
       userId: ctx.actor.userId,
@@ -851,7 +873,7 @@ const nutritionSetCalorieGoal: Handler = async (args, ctx) => {
         fatPct: a.fatPct,
       } as Prisma.InputJsonValue,
       unit: 'kcal',
-      notes: a.notes ?? null,
+      notes: normalizedNotes,
       source: 'agent',
       conversationId: ctx.conversationId,
     },
@@ -868,6 +890,10 @@ const trainingLogInjury: Handler = async (args, ctx) => {
     status?: string
     notes?: string
   }
+  const normalizedNotes = ensureDynamicNote(
+    a.notes,
+    'Infortunio registrato dall’agente; monitorare evoluzione, limitazioni e criteri di rientro.',
+  )
   const row = await prisma.userAttribute.create({
     data: {
       userId: ctx.actor.userId,
@@ -879,7 +905,7 @@ const trainingLogInjury: Handler = async (args, ctx) => {
         type: a.type,
         status: a.status ?? 'active',
       } as Prisma.InputJsonValue,
-      notes: a.notes ?? null,
+      notes: normalizedNotes,
       source: 'agent',
       conversationId: ctx.conversationId,
       recordedAt: a.since ? new Date(a.since) : new Date(),
@@ -894,6 +920,10 @@ const trainingUpdatePlan: Handler = async (args, ctx) => {
     goal?: string
     notes?: string
   }
+  const normalizedNotes = ensureDynamicNote(
+    a.notes,
+    'Piano di allenamento registrato dall’agente; richiede verifica periodica di carico, tolleranza e progressione.',
+  )
   const row = await prisma.userAttribute.create({
     data: {
       userId: ctx.actor.userId,
@@ -903,7 +933,7 @@ const trainingUpdatePlan: Handler = async (args, ctx) => {
         sessions: a.sessions,
         goal: a.goal,
       } as Prisma.InputJsonValue,
-      notes: a.notes ?? null,
+      notes: normalizedNotes,
       source: 'agent',
       conversationId: ctx.conversationId,
     },

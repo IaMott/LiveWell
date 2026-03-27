@@ -52,20 +52,13 @@ export function getDynamicFieldDescriptor(key: string): DynamicFieldDescriptor {
   if (STATIC_IDENTITY_KEYS.has(normalized)) {
     return {
       key,
-      semantics:
-        normalized === 'birthdate' || normalized === 'birth_date'
-          ? 'derived_temporal'
-          : 'static_identity',
-      mutableOverTime: normalized === 'birthdate' || normalized === 'birth_date',
-      derivedFrom:
-        normalized === 'birthdate' || normalized === 'birth_date'
-          ? ['birthDate', 'now']
-          : undefined,
+      semantics: 'static_identity',
+      mutableOverTime: false,
       displayLabel:
         normalized === 'birthdate' || normalized === 'birth_date' ? 'Data di nascita' : undefined,
       promptHint:
         normalized === 'birthdate' || normalized === 'birth_date'
-          ? 'dato base per derivare età e altri calcoli temporali'
+          ? 'dato base stabile osservato; da qui il sistema puo` derivare nel tempo l’eta` corrente'
           : 'dato identitario relativamente stabile',
     }
   }

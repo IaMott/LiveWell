@@ -14,6 +14,19 @@ function readRefId(value: unknown, key: 'fileAssetId' | 'artifactId'): string | 
   return typeof raw === 'string' && raw.length > 0 ? raw : null
 }
 
+function readBirthDateFromAttributes(
+  attributes: Array<{ domain: string; key: string; value: unknown }>,
+): string | null {
+  const birthAttr = attributes.find(
+    (attr) =>
+      attr.domain === 'personal' &&
+      (attr.key === 'birthDate' || attr.key.toLowerCase() === 'birthdate') &&
+      typeof attr.value === 'string' &&
+      attr.value.trim().length > 0,
+  )
+  return birthAttr && typeof birthAttr.value === 'string' ? birthAttr.value : null
+}
+
 export async function GET(request: Request): Promise<Response> {
   const userId = await getAuthUserId(request)
   if (!userId) return errorResponse(401, 'UNAUTHORIZED', 'Authentication required')
@@ -155,7 +168,8 @@ export async function GET(request: Request): Promise<Response> {
     })
   }
 
-  const derivedCurrentAge = computeAgeFromBirthDate(profile?.birthDate ?? null)
+  const mergedBirthDate = profile?.birthDate ?? readBirthDateFromAttributes(attributes)
+  const derivedCurrentAge = computeAgeFromBirthDate(mergedBirthDate ?? null)
 
   return Response.json({
     exportedAt: new Date().toISOString(),

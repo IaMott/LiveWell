@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDynamicFieldDescriptor } from '@/lib/dynamicDb/semantics'
 
 const prismaMock = {
   user: { findUnique: vi.fn() },
@@ -91,6 +92,7 @@ describe('/api/profile/dynamic-db', () => {
     }
     expect(json.profile.birthDate).toBe('1991-06-26T00:00:00.000Z')
     expect(json.dynamicDb.attributes[0]?.key).toBe('birthDate')
+    expect(json.dynamicDb.attributes[0]?.semantics).toBe('static_identity')
     expect(json.dynamicDb.schemaVersion).toBe('clinical-record-v2')
     expect(json.dynamicDb.domains.personal.birthDate.current.value).toBe('1991-06-26')
     expect(json.dynamicDb.derived.currentAge?.value).toBeTypeOf('number')
@@ -98,5 +100,35 @@ describe('/api/profile/dynamic-db', () => {
     expect(json.dynamicDb.documents.generatedArtifacts[0]?.id).toBe('ra1')
     expect(JSON.stringify(json)).not.toContain('round1Proposal')
     expect(JSON.stringify(json)).not.toContain('round2Proposal')
+  })
+
+  it('derives currentAge from personal.birthDate attribute even when UserProfile.birthDate is missing', async () => {
+    prismaMock.userProfile.findUnique.mockResolvedValueOnce({
+      birthDate: null,
+      gender: 'M',
+      height: 168,
+      weight: 89,
+      updatedAt: new Date('2026-03-11T10:00:00Z'),
+    })
+
+    const { GET } = await import('@/app/api/profile/dynamic-db/route')
+    const res = await GET(new Request('http://localhost/api/profile/dynamic-db'))
+    expect(res.status).toBe(200)
+    const json = (await res.json()) as {
+      dynamicDb: { derived: { currentAge?: { value: number } } }
+    }
+
+    expect(json.dynamicDb.derived.currentAge?.value).toBeTypeOf('number')
+  })
+
+  it('classifies birthDate as static identity and age as observed temporal snapshot', () => {
+    expect(getDynamicFieldDescriptor('birthDate')).toMatchObject({
+      semantics: 'static_identity',
+      mutableOverTime: false,
+    })
+    expect(getDynamicFieldDescriptor('age')).toMatchObject({
+      semantics: 'observed_temporal_snapshot',
+      mutableOverTime: true,
+    })
   })
 })
