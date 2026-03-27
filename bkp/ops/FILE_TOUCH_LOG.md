@@ -283,3 +283,9 @@ File touch log (append-only)
 2026-03-27 16:49 | ruolo=backend-developer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=mitigazione del residuo legacy hot-path e riduzione del gap live mock-heavy
 2026-03-27 16:49 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/1649_backend-developer_residual-cleanup-local.md | azione=create | motivo=storico resumable del cleanup residuo locale
 2026-03-27 16:49 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/1649_chatlog.md | azione=create | motivo=chatlog sintetico del cleanup residuo locale
+2026-03-27 16:57 | ruolo=backend-developer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=registrazione checkpoint CP-49 con publish remoto e verifica alias del cleanup residuo
+2026-03-27 16:57 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=stato finale allineato dopo push/deploy del cleanup residuo
+2026-03-27 16:57 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del publish remoto del cleanup residuo
+2026-03-27 16:57 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione del verdict finale `DONE WITH RESIDUAL RECOMMENDATIONS`
+2026-03-27 16:57 | ruolo=backend-developer | file=bkp/ops/journal/2026-03-27/1657_backend-developer_residual-cleanup-publish.md | azione=create | motivo=storico resumable del publish finale del cleanup residuo
+2026-03-27 16:57 | ruolo=backend-developer | file=bkp/ops/chatlogs/2026-03-27/1657_chatlog.md | azione=create | motivo=chatlog sintetico del publish finale del cleanup residuo

@@ -87,15 +87,14 @@ Fatto
 
 In corso
 
-- cleanup residuo locale completato e validato
-- publish remoto del cleanup residuo ancora da eseguire
-- review finale totale aperta solo per la classificazione conclusiva dei residual recommendations dopo publish
+- nessun blocco implementativo attivo nel working tree
+- review finale aperta solo per la consegna del verdetto conclusivo all'utente
 
 Prossimo
 
-- commit mirato del cleanup residuo
-- push su `origin/main`, deploy production e verifica alias
-- chiusura finale con review non autoassolutoria dei residui rimasti
+- consegnare il verdetto finale unico
+- distinguere chiaramente residual recommendations da future track separate
+- non riaprire nuove implementazioni senza un nuovo finding reale
 
 Rischi
 
@@ -108,4 +107,4 @@ Rischi
 
 Ultimo aggiornamento
 
-2026-03-27 16:49
+2026-03-27 16:57
