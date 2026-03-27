@@ -215,3 +215,26 @@ File touch log (append-only)
 2026-03-27 11:24 | ruolo=backend-developer | file=bkp/ops/STATUS.md | azione=modify | motivo=allineamento stato progetto dopo commit/push/deploy della track toolchain
 2026-03-27 11:24 | ruolo=backend-developer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=append del publish finale e verifica alias production
 2026-03-27 11:24 | ruolo=backend-developer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=cristallizzazione verdict finale della track toolchain
+2026-03-27 12:08 | ruolo=code-reviewer | file=bkp/ops/CHECKPOINTS.md | azione=modify | motivo=append checkpoint CP-40 per review avversariale completa
+2026-03-27 12:08 | ruolo=code-reviewer | file=bkp/ops/WORKLOG.md | azione=modify | motivo=registrazione esito review ostile post-closeout
+2026-03-27 12:08 | ruolo=code-reviewer | file=bkp/ops/DECISIONS.md | azione=modify | motivo=ADR che nega il verdetto implicito di progetto pulito
+2026-03-27 12:08 | ruolo=code-reviewer | file=bkp/ops/RISK_LOG.md | azione=modify | motivo=classificazione dei rischi reali emersi dalla review totale
+2026-03-27 12:08 | ruolo=code-reviewer | file=bkp/ops/STATUS.md | azione=modify | motivo=aggiornamento stato progetto dopo review avversariale
+2026-03-27 12:08 | ruolo=code-reviewer | file=bkp/ops/journal/2026-03-27/1208_code-reviewer_adversarial-project-review.md | azione=create | motivo=storico resumable della review completa
+2026-03-27 12:08 | ruolo=code-reviewer | file=bkp/ops/chatlogs/2026-03-27/1208_chatlog.md | azione=create | motivo=chatlog sintetico della review avversariale
+2026-03-27 12:53 | step=CP-42 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/lib/tools/toolExecutionRouting.ts` | action=created | contract=canonical | note=`helper condiviso per la selezione agent tool per-call/panel-aware usato da text e live`
+2026-03-27 12:53 | step=CP-42 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/app/api/chat/send/route.ts` | action=completed | contract=canonical | note=`tool execution text riallineata al resolver condiviso per-call; route non ricostruisce piu` `CaseState` se esiste `stateSnapshot``
+2026-03-27 12:53 | step=CP-42 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/app/api/chat/live-sync/route.ts` | action=completed | contract=canonical | note=`live-sync usa il resolver condiviso e non ricostruisce il legacy nel path caldo quando il runtime canonico esiste`
+2026-03-27 12:53 | step=CP-42 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/lib/ai/case/persistence.ts` | action=completed | contract=canonical | note=`boundary canonico fail-closed su snapshot malformed; nessun fallback legacy silenzioso se lo snapshot esiste ma e` invalido`
+2026-03-27 12:53 | step=CP-42 | file=`/Users/mattiamottisi/Desktop/LiveWell/src/components/chat/ChatShell.tsx` | action=completed | contract=canonical | note=`rimossa la narrativa single-agent dal commento live per evitare contraddizioni semantiche`
+2026-03-27 12:53 | step=CP-42 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/api/case-persistence.test.ts` | action=completed | contract=test | note=`aggiunti test negativi per snapshot malformed senza downgrade al legacy`
+2026-03-27 12:53 | step=CP-42 | file=`/Users/mattiamottisi/Desktop/LiveWell/tests/api/chat-send-persistence.test.ts` | action=completed | contract=test | note=`aggiunto test che dimostra il routing tool text per-call su agenti diversi in base al panel/domain`
+2026-03-27 12:53 | step=CP-42 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/CHECKPOINTS.md` | action=completed | contract=temporary | note=`append checkpoint CP-42`
+2026-03-27 12:53 | step=CP-42 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/STATUS.md` | action=completed | contract=temporary | note=`stato aggiornato dopo la chiusura locale delle track correttive obbligatorie`
+2026-03-27 12:53 | step=CP-42 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/WORKLOG.md` | action=completed | contract=temporary | note=`append worklog sulle correzioni post-review avversariale`
+2026-03-27 12:53 | step=CP-42 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/DECISIONS.md` | action=completed | contract=temporary | note=`append ADR sul fix minimo corretto per tool semantics e boundary canonico`
+2026-03-27 12:53 | step=CP-42 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/RISK_LOG.md` | action=completed | contract=temporary | note=`mitigati i risk item CP-40/41 e ridotto il residuo legacy del path caldo`
+2026-03-27 12:59 | step=CP-43 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/CHECKPOINTS.md` | action=completed | contract=temporary | note=`append checkpoint CP-43 con publish remoto e verifica alias`
+2026-03-27 12:59 | step=CP-43 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/STATUS.md` | action=completed | contract=temporary | note=`stato finale aggiornato dopo push/deploy delle track correttive`
+2026-03-27 12:59 | step=CP-43 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/WORKLOG.md` | action=completed | contract=temporary | note=`append worklog publish finale post-review avversariale`
+2026-03-27 12:59 | step=CP-43 | file=`/Users/mattiamottisi/Desktop/LiveWell/bkp/ops/DECISIONS.md` | action=completed | contract=temporary | note=`append ADR sul verdict finale done-with-residual-recommendations post-fix obbligatori`

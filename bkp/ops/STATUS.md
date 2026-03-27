@@ -87,13 +87,16 @@ Fatto
 
 In corso
 
-- nessun blocco implementativo obbligatorio aperto
+- nessun blocco implementativo in corso
+- track obbligatorie post-review avversariale corrette, validate e pubblicate
+- review finale completata senza finding blocking/high residui
 
 Prossimo
 
-- eventuali follow-up non bloccanti:
+- follow-up non bloccanti separati:
   - valutare una track separata per `eslint@10` e stack lint collegato
   - valutare una track separata per Prisma `7.x`
+  - rafforzare in futuro l'integrazione live reale oltre i test mock-heavy
 
 Rischi
 
@@ -128,7 +131,19 @@ Rischi
   - advisory moderate solo su stack `eslint`/`minimatch`
   - update Prisma major disponibile ma fuori perimetro della track
   - patch/minor opzionali (`@google/genai`, `tailwindcss`, `react`) senza urgenza operativa
+- track correttiva obbligatoria applicata localmente:
+  - `chat/send` e `live-sync` convergono ora sullo stesso resolver tool panel-aware/per-call
+  - `persistence.ts` rifiuta snapshot canonici malformed senza downgrade silenzioso verso il legacy
+  - i route hot-path non ricostruiscono piu` `CaseState` quando il runtime canonico e` gia` disponibile
+- publish finale delle correzioni obbligatorie completato:
+  - commit `0f050b7` pushato su `origin/main`
+  - deploy Vercel production `https://livewell-irtjcirg2-iamotts-projects.vercel.app`
+  - alias `https://livewell.mottisi.com` verificato con redirect auth atteso
+- residui dopo la correzione:
+  - il protocol engine interno usa ancora adapter legacy controllati (`CaseState`, `applyCanonicalSnapshotToLegacyCaseState`, `compatibilitySpeakerId`) ma non piu` come driver dei route principali
+  - il bootstrap/security live resta coperto soprattutto da test mock-heavy; gap di integrazione reale non blocking ma ancora presente
+  - resta un warning lint non bloccante su `src/components/profile/UserAvatar.tsx`
 
 Ultimo aggiornamento
 
-2026-03-27 11:24
+2026-03-27 12:59
