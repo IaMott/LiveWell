@@ -9,7 +9,45 @@ type ConvPreview = {
   preview: string
   updatedAt: string
   specialist?: string | null
+  caseStatus?: string | null
+  casePriority?: string | null
 }
+
+// ── Status helpers ──────────────────────────────────────────────────────────
+
+const STATUS_LABEL: Record<string, string> = {
+  open: 'Aperta',
+  active: 'Attiva',
+  pending: 'In attesa',
+  completed: 'Conclusa',
+  archived: 'Archiviata',
+}
+
+const STATUS_COLOR: Record<string, string> = {
+  open: '#007AFF',
+  active: '#34C759',
+  pending: '#FF9500',
+  completed: '#8E8E93',
+  archived: '#636366',
+}
+
+const PRIORITY_LABEL: Record<string, string> = {
+  urgent: 'Urgente',
+  high: 'Alta',
+  normal: '',
+  low: 'Bassa',
+  backlog: 'Backlog',
+}
+
+const PRIORITY_COLOR: Record<string, string> = {
+  urgent: '#FF3B30',
+  high: '#FF9500',
+  normal: '',
+  low: '#8E8E93',
+  backlog: '#636366',
+}
+
+type StatusFilter = 'all' | 'active' | 'archived'
 
 type Props = {
   open: boolean
@@ -33,6 +71,7 @@ export function ConversationHistory({
   const [deleting, setDeleting] = useState<string | null>(null)
   const [exporting, setExporting] = useState<string | null>(null)
   const [exportingFeedback, setExportingFeedback] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
   useEffect(() => {
     if (!open) return
@@ -89,6 +128,20 @@ export function ConversationHistory({
   }
 
   if (!open) return null
+
+  const filteredConvs = convs.filter((c) => {
+    if (statusFilter === 'active')
+      return c.caseStatus !== 'completed' && c.caseStatus !== 'archived'
+    if (statusFilter === 'archived')
+      return c.caseStatus === 'completed' || c.caseStatus === 'archived'
+    return true
+  })
+
+  const TABS: { key: StatusFilter; label: string }[] = [
+    { key: 'all', label: 'Tutte' },
+    { key: 'active', label: 'Backlog vivo' },
+    { key: 'archived', label: 'Archivio' },
+  ]
 
   return (
     <>
@@ -190,6 +243,38 @@ export function ConversationHistory({
           </div>
         </div>
 
+        {/* Filter tabs */}
+        <div
+          style={{
+            display: 'flex',
+            gap: '0.25rem',
+            padding: '0.5rem 1rem',
+            borderBottom: '1px solid var(--color-separator)',
+            overflowX: 'auto',
+          }}
+        >
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setStatusFilter(tab.key)}
+              style={{
+                padding: '0.25rem 0.75rem',
+                borderRadius: '9999px',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '0.8125rem',
+                fontWeight: statusFilter === tab.key ? 600 : 400,
+                background: statusFilter === tab.key ? 'var(--color-accent)' : 'var(--color-bg)',
+                color: statusFilter === tab.key ? '#fff' : 'var(--color-text-secondary)',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* List */}
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {loading && (
@@ -204,7 +289,7 @@ export function ConversationHistory({
               Caricamento…
             </p>
           )}
-          {!loading && convs.length === 0 && (
+          {!loading && filteredConvs.length === 0 && (
             <div
               style={{
                 display: 'flex',
@@ -216,11 +301,15 @@ export function ConversationHistory({
               }}
             >
               <MessageSquare size={32} strokeWidth={1.5} />
-              <p style={{ margin: 0, fontSize: '0.875rem' }}>Nessuna conversazione salvata</p>
+              <p style={{ margin: 0, fontSize: '0.875rem' }}>
+                {convs.length === 0
+                  ? 'Nessuna conversazione salvata'
+                  : 'Nessuna conversazione in questa categoria'}
+              </p>
             </div>
           )}
           {!loading &&
-            convs.map((c) => (
+            filteredConvs.map((c) => (
               <button
                 key={c.id}
                 onClick={() => {
@@ -290,6 +379,54 @@ export function ConversationHistory({
                     >
                       {c.preview}
                     </p>
+                  )}
+                  {/* Status / Priority badges */}
+                  {(c.caseStatus || c.casePriority) && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '0.25rem',
+                        marginTop: '0.25rem',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      {c.caseStatus && c.caseStatus !== 'active' && (
+                        <span
+                          style={{
+                            fontSize: '0.625rem',
+                            fontWeight: 600,
+                            letterSpacing: '0.04em',
+                            textTransform: 'uppercase',
+                            color: STATUS_COLOR[c.caseStatus] ?? '#8E8E93',
+                            background: `${STATUS_COLOR[c.caseStatus] ?? '#8E8E93'}18`,
+                            borderRadius: '4px',
+                            padding: '0.1rem 0.35rem',
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {STATUS_LABEL[c.caseStatus] ?? c.caseStatus}
+                        </span>
+                      )}
+                      {c.casePriority &&
+                        c.casePriority !== 'normal' &&
+                        PRIORITY_LABEL[c.casePriority] && (
+                          <span
+                            style={{
+                              fontSize: '0.625rem',
+                              fontWeight: 600,
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                              color: PRIORITY_COLOR[c.casePriority] ?? '#8E8E93',
+                              background: `${PRIORITY_COLOR[c.casePriority] ?? '#8E8E93'}18`,
+                              borderRadius: '4px',
+                              padding: '0.1rem 0.35rem',
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {PRIORITY_LABEL[c.casePriority]}
+                          </span>
+                        )}
+                    </div>
                   )}
                 </div>
                 <span
