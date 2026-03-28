@@ -58,8 +58,10 @@ function isMidConversationFiller(message: string): boolean {
  */
 export function isGenericMessage(input: AgentInput): boolean {
   const trimmed = input.message.trim()
+  // Compute domain once — reused for both tool-call inference and the short-message guard (A3).
+  const detectedDomain = input.domainHint ?? detectDomainFromText(trimmed)
   const inferredToolCalls = inferAttributeToolCallsFromMessage(trimmed, {
-    domainHint: input.domainHint ?? detectDomainFromText(trimmed),
+    domainHint: detectedDomain,
   })
   if (inferredToolCalls.length > 0) return false
   // Greeting (first message or mid-conversation)
@@ -68,10 +70,11 @@ export function isGenericMessage(input: AgentInput): boolean {
   // Only applies when there IS history (otherwise the short-message guard below handles it).
   const hasHistory = input.contextPack.history.recentMessages.length > 0
   if (hasHistory && isMidConversationFiller(trimmed)) return true
-  // Very short (≤4 words), no domain keywords, no history
+  // Very short (≤4 words), no domain keywords, no history.
+  // A4: detectedDomain guard ensures clinical short messages like "ho mal di testa"
+  // (which resolve to 'health') are NOT incorrectly skipped here.
   const wordCount = trimmed.split(/\s+/).length
   const hasNoHistory = !hasHistory
-  const detectedDomain = detectDomainFromText(trimmed)
   if (wordCount <= 4 && hasNoHistory && detectedDomain === 'general') return true
   return false
 }

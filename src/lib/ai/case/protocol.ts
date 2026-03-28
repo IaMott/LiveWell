@@ -6,6 +6,7 @@ import {
   shouldTriggerPermanentHandoff,
 } from '../capabilities/registry'
 import { selectAgentsForRequest } from '../orchestrator/agentSelection'
+import { NEW_TOPIC_PATTERN } from '../orchestrator/routingConstants'
 import { CaseProtocolEvent, CaseState } from './state'
 
 const MAX_CONSULT_LOOPS = 3
@@ -155,9 +156,6 @@ function isMeaningfulHandoffContinuation(message: string): boolean {
   if (/^(ok|okay|va bene|perfetto|grazie|thanks|thank you)[!.,\s]*$/i.test(trimmed)) return false
   return trimmed.split(/\s+/).length > 3 || HANDOFF_CONTINUITY_PATTERNS.some((p) => p.test(trimmed))
 }
-
-const NEW_TOPIC_PATTERN =
-  /\b(cambiamo argomento|passiamo a|ora invece|un'altra cosa|altro tema|nuovo problema|parliamo di altro)\b/i
 
 function hasConsultFocusSignal(agentId: string | undefined, message: string): boolean {
   if (!agentId) return false

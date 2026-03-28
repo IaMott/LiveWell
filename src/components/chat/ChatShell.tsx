@@ -113,6 +113,14 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     [send, clearEditDraft],
   )
 
+  /** D1: Called when live-sync orchestration fails.
+   * The ChatInput already logs console.error — here we could show a UI notice in the future.
+   * Kept as a named handler to make the data-flow explicit and testable. */
+  const handleLiveSyncFailed = useCallback(() => {
+    // Future: dispatch to a toast/notification store.
+    // ChatInput already calls console.error so DevTools will capture the failure.
+  }, [])
+
   const latestAssistantWithDomain = [...messages]
     .reverse()
     .find((message) => message.role === 'assistant' && message.domain)
@@ -184,6 +192,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         onStop={stopStreaming}
         editDraft={editDraft}
         onLiveMessage={handleLiveMessage}
+        onLiveSyncFailed={handleLiveSyncFailed}
         onInterimTranscription={handleInterimTranscription}
         replyToMessageId={replyToMessageId}
         replyToContent={replyToContent}

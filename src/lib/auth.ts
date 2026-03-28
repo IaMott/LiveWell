@@ -56,7 +56,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
  * persistence. Disabled in production (C4).
  */
 export async function getAuthUserId(request?: Request): Promise<string | null> {
-  if (process.env.NODE_ENV === 'test' && request) {
+  // F1: Test-mode header bypass is guarded by BOTH NODE_ENV and an explicit opt-in flag.
+  // This prevents accidental bypass if NODE_ENV is misconfigured in a staging/production deploy.
+  // The flag AUTH_ALLOW_TEST_HEADERS must be explicitly set to 'true' AND NODE_ENV must be 'test'.
+  const allowTestHeaders =
+    process.env.NODE_ENV === 'test' && process.env.AUTH_ALLOW_TEST_HEADERS === 'true'
+  if (allowTestHeaders && request) {
     return request.headers.get('x-user-id')?.trim() || null
   }
   const session = await auth()
@@ -107,7 +112,9 @@ export async function getAuthUserId(request?: Request): Promise<string | null> {
  * In production: reads from JWT session.
  */
 export async function getAuthRole(request?: Request): Promise<Role> {
-  if (process.env.NODE_ENV === 'test' && request) {
+  const allowTestHeaders =
+    process.env.NODE_ENV === 'test' && process.env.AUTH_ALLOW_TEST_HEADERS === 'true'
+  if (allowTestHeaders && request) {
     const role = request.headers.get('x-user-role')?.trim()
     if (role === 'OWNER' || role === 'ADMIN' || role === 'USER') return role
     return 'USER'
@@ -125,7 +132,10 @@ export async function getAuthRole(request?: Request): Promise<Role> {
  * In production: always false unless explicitly set via secure mechanism.
  */
 export async function getAuthOwnerMode(request?: Request): Promise<boolean> {
-  if (process.env.NODE_ENV === 'test' && request) {
+  // F1: Same double-guard pattern as getAuthUserId / getAuthRole.
+  const allowTestHeaders =
+    process.env.NODE_ENV === 'test' && process.env.AUTH_ALLOW_TEST_HEADERS === 'true'
+  if (allowTestHeaders && request) {
     const v = request.headers.get('x-owner-mode-enabled')
     return v === '1' || v === 'true'
   }

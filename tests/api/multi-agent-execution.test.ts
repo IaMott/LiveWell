@@ -550,6 +550,31 @@ describe('isGenericMessage — fast path detection', () => {
       }),
     ).toBe(true)
   })
+
+  // A4 regression — clinical short messages must NOT be skipped even if ≤4 words and no history.
+  it('"ho mal di testa" (4 parole, no history) → NON generic (dominio health)', () => {
+    expect(
+      isGenericMessage({
+        requestId: 'r',
+        userId: 'u',
+        conversationId: 'c',
+        message: 'ho mal di testa',
+        contextPack: noHistoryCtx,
+      }),
+    ).toBe(false)
+  })
+
+  it('"mi fa male" (3 parole, no history) → NON generic (segnale clinico)', () => {
+    expect(
+      isGenericMessage({
+        requestId: 'r',
+        userId: 'u',
+        conversationId: 'c',
+        message: 'mi fa male',
+        contextPack: noHistoryCtx,
+      }),
+    ).toBe(false)
+  })
 })
 
 describe('tryAgeQuestionFastPath', () => {

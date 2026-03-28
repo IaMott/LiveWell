@@ -152,11 +152,16 @@ export async function POST(request: Request): Promise<Response> {
       agentInput,
     )
   } catch {
-    // Live-sync is best-effort — silently succeed if orchestration fails
-    return new Response(JSON.stringify({ ok: true, skipped: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    // D1: Live-sync is best-effort but returns a detectable failure signal (503)
+    // so the client can show a quality-degraded indicator instead of silently
+    // assuming the turn was processed correctly.
+    return new Response(
+      JSON.stringify({ ok: false, skipped: true, reason: 'orchestration_failed' }),
+      {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    )
   }
 
   // Execute tool calls (setAttribute etc.) — the core reason for live-sync

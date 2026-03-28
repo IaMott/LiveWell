@@ -174,6 +174,9 @@ export type ContextPack = {
     profile?: Record<string, unknown>
     attributes?: UserAttributes
     attributeHistory?: Record<string, Record<string, Array<{ value: unknown; recordedAt: string }>>>
+    /** G2: True when the EAV query hit the take:200 limit — some older attributes may be absent.
+     * Agents should note this and avoid making completeness claims about historical data. */
+    hasMoreAttributes?: boolean
     /** Completeness analysis across domains — populated by contextPackBuilder */
     medicalRecord?: MedicalRecord
   }

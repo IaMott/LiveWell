@@ -129,10 +129,11 @@ function buildAttributeMapWithHistory(rows: RawAttribute[]): {
   for (const row of rows) {
     const composite = `${row.domain}:${row.key}`
 
-    // History: keep last 4 values per key (rows already sorted desc by recordedAt)
+    // History: keep last 12 values per key (rows already sorted desc by recordedAt).
+    // G1: 12 gives 3 months of weekly entries for clinical metrics like weight/pressure.
     if (!history[row.domain]) history[row.domain] = {}
     if (!history[row.domain][row.key]) history[row.domain][row.key] = []
-    if (history[row.domain][row.key].length < 4) {
+    if (history[row.domain][row.key].length < 12) {
       history[row.domain][row.key].push({
         value: row.value,
         recordedAt: new Date(row.recordedAt).toISOString(),
@@ -323,6 +324,8 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
     userAttributes = builtAttributes
     userAttributeHistory = builtHistory
   }
+  // G2: Signal when the EAV query hit the take:200 limit so agents know history may be incomplete.
+  const hasMoreAttributes = attributeRows.length >= 200
 
   const fileNotesById = new Map<string, string>()
   const artifactNotesById = new Map<string, string>()
@@ -450,6 +453,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
       attributes: Object.keys(userAttributes).length > 0 ? userAttributes : undefined,
       attributeHistory:
         Object.keys(userAttributeHistory).length > 0 ? userAttributeHistory : undefined,
+      hasMoreAttributes: hasMoreAttributes || undefined,
       medicalRecord,
     },
     history: {

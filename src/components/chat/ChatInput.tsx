@@ -192,6 +192,9 @@ interface Props {
   onStop?: () => void
   /** Pre-fill text for editing a previous message. */
   editDraft?: string
+  /** D1: Called when the live-sync orchestration call fails (server returns non-2xx).
+   * Parent can use this to surface a quality-degraded indicator to the user. */
+  onLiveSyncFailed?: () => void
   /** Called when a live transcript message is confirmed and saved to DB.
    * Used by parent to append the message to the chat immediately. */
   onLiveMessage?: (message: {
@@ -228,6 +231,7 @@ export function ChatInput({
   editDraft,
   onLiveMessage,
   onInterimTranscription,
+  onLiveSyncFailed,
   replyToMessageId,
   replyToContent,
   onCancelReply,
@@ -511,12 +515,16 @@ export function ChatInput({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ conversationId: convIdBeforeSync, userMessage: userMsg }),
           })
-          syncData = res.ok
-            ? ((await res.json()) as {
-                stateSnapshot?: CanonicalCaseStateSnapshot
-                thinkingSteps?: ThinkingStep[]
-              })
-            : null
+          if (res.ok) {
+            syncData = (await res.json()) as {
+              stateSnapshot?: CanonicalCaseStateSnapshot
+              thinkingSteps?: ThinkingStep[]
+            }
+          } else {
+            // D1: Orchestration failed — surface the failure signal.
+            console.error('[LiveWell] live-sync orchestration failed', res.status)
+            onLiveSyncFailed?.()
+          }
           if (syncData?.stateSnapshot) {
             effectiveSnapshot = syncData.stateSnapshot
             const storageKey = stateSnapshotKeyForConversation(convIdBeforeSync)

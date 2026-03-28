@@ -7,6 +7,7 @@ import type {
   ToolCall,
 } from '../types'
 import type { LlmClient } from './agentExecution'
+import { NEW_TOPIC_PATTERN } from './routingConstants'
 
 export type RoutingResolutionSource =
   | 'input.domainHint'
@@ -45,9 +46,6 @@ const ROUTING_LLM_TIMEOUT_MS = 2500
 
 const CONTINUATION_PATTERN =
   /\b(continuiamo|continua|proseguiamo|prosegui|riprendiamo|riprendi|torniamo|torniamo lì|restiamo|come dicevi|da dove eravamo rimasti|continua pure)\b/i
-
-const NEW_TOPIC_PATTERN =
-  /\b(cambiamo argomento|passiamo a|ora invece|un'altra cosa|altro tema|nuovo problema|parliamo di altro)\b/i
 
 const ROUTING_SYSTEM_PROMPT = `Sei un router multi-dominio per LiveWell.
 Scegli il dominio principale e gli eventuali domini secondari per il turno corrente.
