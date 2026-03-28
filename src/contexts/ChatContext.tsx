@@ -448,11 +448,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           domain?: string
           specialistName?: string
           thinkingSteps?: ThinkingStep[]
+          replyToMessageId?: string
         }>
         stateSnapshot?: CanonicalCaseStateSnapshot
       }
 
       if (!Array.isArray(data.messages) || data.messages.length === 0) return false
+
+      // Build content map for reply-to denormalization (same pattern as normal load)
+      const recoveryMsgMap = new Map<string, string>()
+      for (const m of data.messages) recoveryMsgMap.set(m.id, m.content)
 
       const recoveredMessages = data.messages.map((m) => ({
         id: m.id,
@@ -461,6 +466,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         domain: m.domain as Domain | undefined,
         specialistName: m.specialistName,
         thinkingSteps: m.thinkingSteps,
+        replyToMessageId: m.replyToMessageId,
+        replyToContent: m.replyToMessageId
+          ? (recoveryMsgMap.get(m.replyToMessageId) ?? undefined)
+          : undefined,
       }))
 
       setMessages(recoveredMessages)

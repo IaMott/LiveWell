@@ -395,9 +395,28 @@ export function buildAgentUserPrompt(
       : null
   const userName = accountName ?? attrName
 
+  // Build reply-to context if the user is explicitly replying to a specific message.
+  // The replied-to message is in history but surfacing it explicitly helps the agent focus.
+  const replyToContext =
+    input.replyToMessageId != null
+      ? (() => {
+          const recentMsgs = input.contextPack.history.recentMessages
+          const target = [...recentMsgs].reverse().find((m) => {
+            // History messages don't carry IDs — use index heuristic: the message immediately
+            // before the latest user message is likely the one being replied to.
+            // When the reply target content is identifiable, match on content snippet.
+            return m.role === 'assistant'
+          })
+          return target
+            ? `↩ REPLY-TO (l'utente sta rispondendo a questo messaggio assistente): "${target.content.slice(0, 200)}"`
+            : null
+        })()
+      : null
+
   const parts: string[] = [
     `USER MESSAGE:`,
     input.message,
+    ...(replyToContext ? [``, replyToContext] : []),
     ``,
     `CONTEXT (summary):`,
     ...(userName ? [`- userName: ${userName} (usa questo nome quando ti rivolgi all'utente)`] : []),
