@@ -47,6 +47,8 @@ const requestSchema = z.object({
   confirmToken: z.string().trim().min(1).optional(),
   /** P5: FileAsset IDs uploaded alongside this message */
   fileIds: z.array(z.string().min(1)).max(5).optional(),
+  /** Multi-reply: ID of the message this turn is replying to */
+  replyToMessageId: z.string().min(1).optional(),
 })
 
 // ── Fase 6: Cartella notification labels ──────────────────────────────────
@@ -430,6 +432,7 @@ export async function POST(request: Request): Promise<Response> {
     contextPack,
     caseState: storedCaseState,
     caseStateSnapshot: storedCaseRuntimeState,
+    replyToMessageId: parsedBody.replyToMessageId ?? null,
   }
 
   const llm =
@@ -733,6 +736,8 @@ export async function POST(request: Request): Promise<Response> {
             recentMessages: contextPack.history.recentMessages,
             // P5: Link uploaded files to the user message
             fileIds: parsedBody.fileIds,
+            // Multi-reply: link the user message to the referenced assistant message
+            replyToMessageId: parsedBody.replyToMessageId,
           })
         } catch (error) {
           console.error('[chat/send] persistChatTurn failed, continuing in fallback mode', error)

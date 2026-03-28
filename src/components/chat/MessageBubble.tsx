@@ -24,9 +24,10 @@ type Props = {
   conversationId?: string
   onSend?: (text: string) => void
   onEdit?: () => void
+  onReply?: (messageId: string, content: string) => void
 }
 
-export function MessageBubble({ message, conversationId, onSend, onEdit }: Props) {
+export function MessageBubble({ message, conversationId, onSend, onEdit, onReply }: Props) {
   const isUser = message.role === 'user'
   const [hovered, setHovered] = useState(false)
   // Reasoning accordion: open while streaming (no content yet), closed once content arrives
@@ -45,8 +46,8 @@ export function MessageBubble({ message, conversationId, onSend, onEdit }: Props
 
   return (
     <div
-      onMouseEnter={() => isUser && setHovered(true)}
-      onMouseLeave={() => isUser && setHovered(false)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -69,6 +70,30 @@ export function MessageBubble({ message, conversationId, onSend, onEdit }: Props
         >
           {specialistLabel}
         </span>
+      )}
+
+      {/* Reply-to quote indicator */}
+      {message.replyToContent && (
+        <div
+          style={{
+            maxWidth: '72%',
+            marginBottom: '0.25rem',
+            padding: '0.375rem 0.625rem',
+            borderLeft: '3px solid var(--color-separator)',
+            backgroundColor: 'var(--color-surface)',
+            borderRadius: '0 0.5rem 0.5rem 0',
+            fontSize: '0.75rem',
+            color: 'var(--color-text-secondary)',
+            fontStyle: 'italic',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {message.replyToContent.length > 80
+            ? message.replyToContent.slice(0, 77) + '...'
+            : message.replyToContent}
+        </div>
       )}
 
       {/* Reasoning accordion — shown above the bubble when steps exist */}
@@ -239,6 +264,52 @@ export function MessageBubble({ message, conversationId, onSend, onEdit }: Props
             <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
           </svg>
           Modifica
+        </button>
+      )}
+
+      {/* Reply button — shown on hover for completed assistant messages */}
+      {!isUser && hovered && !message.streaming && message.content && onReply && (
+        <button
+          type="button"
+          onClick={() => onReply(message.id, message.content)}
+          aria-label="Rispondi a questo messaggio"
+          style={{
+            marginTop: '0.25rem',
+            marginLeft: '0.125rem',
+            padding: '0.25rem 0.5rem',
+            border: 'none',
+            background: 'none',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            fontSize: '0.6875rem',
+            color: 'var(--color-text-secondary)',
+            borderRadius: '4px',
+            transition: 'color 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = 'var(--color-text-primary)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = 'var(--color-text-secondary)'
+          }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="11"
+            height="11"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="9 17 4 12 9 7" />
+            <path d="M20 18v-2a4 4 0 00-4-4H4" />
+          </svg>
+          Rispondi
         </button>
       )}
 

@@ -101,13 +101,15 @@ model UserAttribute {
 }
 
 model Conversation {
-  id         String    @id @default(cuid())
-  title      String?
-  userId     String    @map("user_id")
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deletedAt  DateTime? @map("deleted_at") // soft-delete: null = active
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
+  id           String    @id @default(cuid())
+  title        String?
+  userId       String    @map("user_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deletedAt    DateTime? @map("deleted_at") // soft-delete: null = active
+  caseStatus   String    @default("active") @map("case_status") // 'open' | 'active' | 'pending' | 'completed' | 'archived'
+  casePriority String    @default("normal") @map("case_priority") // 'urgent' | 'high' | 'normal' | 'low' | 'backlog'
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   messages                Message[]
   toolAuditLogs           ToolAuditLog[]
@@ -163,19 +165,23 @@ model CaseState {
 }
 
 model Message {
-  id             String       @id @default(cuid())
-  role           String       // 'user' | 'assistant'
-  content        String
-  domain         String?      // domain of the responding specialist (assistant messages only)
-  specialistName String?      @map("specialist_name") // e.g. "Nutrizionista"
-  conversationId String       @map("conversation_id")
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  attachments    Attachment[]
-  deletedAt      DateTime?    @map("deleted_at") // soft-delete: null = active
-  createdAt      DateTime     @default(now()) @map("created_at")
+  id                String       @id @default(cuid())
+  role              String       // 'user' | 'assistant'
+  content           String
+  domain            String?      // domain of the responding specialist (assistant messages only)
+  specialistName    String?      @map("specialist_name") // e.g. "Nutrizionista"
+  conversationId    String       @map("conversation_id")
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  replyToMessageId  String?      @map("reply_to_message_id")
+  replyTo           Message?     @relation("MessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies           Message[]    @relation("MessageReplies")
+  attachments       Attachment[]
+  deletedAt         DateTime?    @map("deleted_at") // soft-delete: null = active
+  createdAt         DateTime     @default(now()) @map("created_at")
 
   @@index([conversationId, deletedAt])
   @@index([conversationId, createdAt])
+  @@index([conversationId, replyToMessageId])
   @@map("messages")
 }
 

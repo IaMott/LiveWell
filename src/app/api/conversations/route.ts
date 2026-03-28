@@ -23,6 +23,8 @@ export async function GET(request: Request): Promise<Response> {
         id: true,
         title: true,
         updatedAt: true,
+        caseStatus: true,
+        casePriority: true,
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 2,
@@ -45,6 +47,8 @@ export async function GET(request: Request): Promise<Response> {
           updatedAt: c.updatedAt.toISOString(),
           preview: previewContent.slice(0, 80),
           specialist: assistantMsg?.specialistName ?? null,
+          caseStatus: c.caseStatus,
+          casePriority: c.casePriority,
         }
       }),
     })
