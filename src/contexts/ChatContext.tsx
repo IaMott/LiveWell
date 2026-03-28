@@ -41,6 +41,10 @@ export type ChatMessage = {
   streaming?: boolean
   /** Quick-reply buttons shown below the message (e.g. multi-domain triage) */
   quickReplies?: QuickReplyOption[]
+  /** ID of the message this message is replying to */
+  replyToMessageId?: string
+  /** Preview text of the referenced message (first 80 chars, denormalised client-side) */
+  replyToContent?: string
 }
 
 type ChatContextValue = {
@@ -72,6 +76,14 @@ type ChatContextValue = {
     thinkingSteps?: ThinkingStep[]
     conversationId?: string
   }) => void
+  /** ID of the message currently being replied to */
+  replyToMessageId: string | undefined
+  /** Preview text of the message being replied to (first 80 chars) */
+  replyToContent: string | undefined
+  /** Start a reply-to flow targeting a specific assistant message */
+  startReply: (messageId: string, content: string) => void
+  /** Cancel the current reply-to */
+  cancelReply: () => void
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -119,6 +131,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [stateSnapshot, setStateSnapshot] = useState<CanonicalCaseStateSnapshot | null>(null)
   const [cartellaNotifications, setCartellaNotifications] = useState<CartellaNotification[]>([])
   const [editDraft, setEditDraft] = useState<string | undefined>(undefined)
+  const [replyToMessageId, setReplyToMessageId] = useState<string | undefined>(undefined)
+  const [replyToContent, setReplyToContent] = useState<string | undefined>(undefined)
 
   const dismissCartellaNotification = useCallback((id: string) => {
     setCartellaNotifications((prev) => prev.filter((n) => n.id !== id))
@@ -236,6 +250,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setActiveSpecialistId(undefined)
     setActiveSpecialistName(undefined)
     setStateSnapshot(null)
+    setReplyToMessageId(undefined)
+    setReplyToContent(undefined)
     activeSpecialistIdRef.current = undefined
     stateSnapshotRef.current = null
 
@@ -278,9 +294,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           domain?: string
           specialistName?: string
           thinkingSteps?: ThinkingStep[]
+          replyToMessageId?: string
         }>
         stateSnapshot?: CanonicalCaseStateSnapshot
       }
+      // Build a lookup for reply-to content previews (denormalised client-side)
+      const msgMap = new Map<string, string>()
+      for (const m of data.messages) msgMap.set(m.id, m.content)
       setMessages(
         data.messages.map((m) => ({
           id: m.id,
@@ -289,6 +309,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           domain: m.domain as Domain | undefined,
           specialistName: m.specialistName,
           thinkingSteps: m.thinkingSteps,
+          replyToMessageId: m.replyToMessageId,
+          replyToContent: m.replyToMessageId
+            ? (msgMap.get(m.replyToMessageId) ?? undefined)
+            : undefined,
         })),
       )
       setConversationId(id)
@@ -380,6 +404,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const clearEditDraft = useCallback(() => {
     setEditDraft(undefined)
+  }, [])
+
+  const startReply = useCallback((messageId: string, content: string) => {
+    setReplyToMessageId(messageId)
+    setReplyToContent(content.slice(0, 80))
+  }, [])
+
+  const cancelReply = useCallback(() => {
+    setReplyToMessageId(undefined)
+    setReplyToContent(undefined)
   }, [])
 
   const exportConversation = useCallback(async (id?: string) => {
@@ -523,6 +557,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             message: trimmed,
             conversationId: conversationIdRef.current,
             fileIds: fileIds.length > 0 ? fileIds : undefined,
+            replyToMessageId: replyToMessageId ?? undefined,
           }),
           signal: sendAbort.signal,
         })
@@ -755,9 +790,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       } finally {
         setIsStreaming(false)
         isStreamingRef.current = false
+        // Clear reply-to state after each send regardless of outcome
+        setReplyToMessageId(undefined)
+        setReplyToContent(undefined)
       }
     },
-    [recoverConversationAfterSendFailure],
+    [recoverConversationAfterSendFailure, replyToMessageId],
   )
 
   const appendLiveMessage = useCallback(
@@ -819,6 +857,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     exitSpecialist,
     exportConversation,
     appendLiveMessage,
+    replyToMessageId,
+    replyToContent,
+    startReply,
+    cancelReply,
   }
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>

@@ -12,6 +12,12 @@ export type Domain =
 
 export type Role = 'OWNER' | 'ADMIN' | 'USER'
 
+/** Business lifecycle status of a conversation/case from the user's perspective */
+export type CaseStatus = 'open' | 'active' | 'pending' | 'completed' | 'archived'
+
+/** Priority level of a conversation/case for backlog management */
+export type CasePriority = 'urgent' | 'high' | 'normal' | 'low' | 'backlog'
+
 export type ToolCall = {
   id: string
   name: string
@@ -116,6 +122,8 @@ export type AgentInput = {
   caseState?: CaseState | null
   /** Canonical runtime snapshot — primary source of truth for orchestration input. */
   caseStateSnapshot?: CanonicalCaseStateSnapshot | null
+  /** ID of the message this turn is replying to. Injected into context when present. */
+  replyToMessageId?: string | null
   contextPack: ContextPack
   constraints?: {
     locale?: string

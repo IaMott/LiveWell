@@ -1,6 +1,16 @@
+import fs from 'fs'
+import path from 'path'
 import type { NextConfig } from 'next'
 
 const isDev = process.env.NODE_ENV !== 'production'
+
+/** Walk up until we find node_modules — handles git worktrees where deps live in the repo root. */
+function findModulesRoot(dir: string): string {
+  if (fs.existsSync(path.join(dir, 'node_modules'))) return dir
+  const parent = path.dirname(dir)
+  return parent === dir ? dir : findModulesRoot(parent)
+}
+const projectRoot = findModulesRoot(process.cwd())
 
 const cspDirectives = [
   "default-src 'self'",
@@ -40,7 +50,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   turbopack: {
-    root: process.cwd(),
+    root: projectRoot,
   },
   async headers() {
     return [

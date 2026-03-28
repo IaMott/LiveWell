@@ -11,9 +11,17 @@ type Props = {
   onSend?: (text: string) => void
   onEdit?: (messageId: string) => void
   activeDomain?: Domain | null
+  onReply?: (messageId: string, content: string) => void
 }
 
-export function MessageList({ messages, conversationId, onSend, onEdit, activeDomain }: Props) {
+export function MessageList({
+  messages,
+  conversationId,
+  onSend,
+  onEdit,
+  activeDomain,
+  onReply,
+}: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -76,6 +84,7 @@ export function MessageList({ messages, conversationId, onSend, onEdit, activeDo
           onSend={onSend}
           onEdit={onEdit ? () => onEdit(msg.id) : undefined}
           activeDomain={activeDomain}
+          onReply={onReply}
         />
       ))}
       <div ref={bottomRef} />

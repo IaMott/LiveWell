@@ -36,6 +36,7 @@ export async function GET(
           content: true,
           domain: true,
           specialistName: true,
+          replyToMessageId: true,
           createdAt: true,
         },
       },
@@ -63,6 +64,7 @@ export async function GET(
             role: m.role,
             domain: m.domain ?? undefined,
             specialistName: m.specialistName ?? undefined,
+            replyToMessageId: m.replyToMessageId ?? undefined,
             createdAt: m.createdAt.toISOString(),
           },
         ]
@@ -82,6 +84,7 @@ export async function GET(
           role: m.role,
           domain: m.domain ?? undefined,
           specialistName: m.specialistName ?? undefined,
+          replyToMessageId: m.replyToMessageId ?? undefined,
           createdAt: m.createdAt.toISOString(),
         },
       ]

@@ -40,6 +40,7 @@ export async function GET(
           role: true,
           content: true,
           createdAt: true,
+          replyToMessageId: true,
           attachments: {
             select: { fileName: true, mimeType: true, fileSize: true },
           },
@@ -120,6 +121,13 @@ export async function GET(
     }
   }
 
+  // Build id→content map for reply-to resolution
+  const msgContentMap = new Map<string, string>()
+  for (const m of conversation.messages) {
+    const decoded = m.role === 'assistant' ? decodeAssistantStoredContent(m.content) : null
+    msgContentMap.set(m.id, decoded?.content ?? m.content)
+  }
+
   const lines: string[] = [
     'LiveWell — Conversazione',
     `Esportata il: ${new Date().toLocaleString('it-IT')}`,
@@ -144,6 +152,16 @@ export async function GET(
       timeStyle: 'short',
     })
     lines.push(`[${ts}] ${who}:`)
+    // Reply-to indicator: show quoted snippet of the parent message
+    if (m.replyToMessageId) {
+      const parentContent = msgContentMap.get(m.replyToMessageId)
+      if (parentContent) {
+        const snippet = parentContent.replace(/\n+/g, ' ').slice(0, 80)
+        lines.push(
+          `  ↩ In risposta a: "${snippet.length < parentContent.replace(/\n+/g, ' ').length ? snippet + '…' : snippet}"`,
+        )
+      }
+    }
     // P5: Show attachments for user messages
     if (m.role === 'user' && m.attachments && m.attachments.length > 0) {
       for (const att of m.attachments) {

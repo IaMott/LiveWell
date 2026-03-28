@@ -205,6 +205,12 @@ interface Props {
   /** Real-time partial transcript from live session (growing text before turnComplete).
    * Pass empty string to clear the interim bubble for that role. */
   onInterimTranscription?: (role: 'user' | 'assistant', text: string) => void
+  /** ID of the message being replied to (shows reply banner above input) */
+  replyToMessageId?: string
+  /** Preview text of the message being replied to */
+  replyToContent?: string
+  /** Called when the user dismisses the reply-to banner */
+  onCancelReply?: () => void
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -222,6 +228,9 @@ export function ChatInput({
   editDraft,
   onLiveMessage,
   onInterimTranscription,
+  replyToMessageId,
+  replyToContent,
+  onCancelReply,
 }: Props) {
   const [text, setText] = useState('')
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(activeDomain ?? null)
@@ -580,6 +589,88 @@ export function ChatInput({
           onTranscription={handleTranscription}
           onInterimTranscription={onInterimTranscription}
         />
+      )}
+
+      {/* Reply-to banner — shown above the input when the user is replying to a message */}
+      {replyToMessageId && replyToContent && !showLive && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0.375rem 0.75rem',
+            backgroundColor: 'var(--color-surface)',
+            borderTop: '1px solid var(--color-separator, #E5E5EA)',
+            gap: '0.5rem',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              minWidth: 0,
+              overflow: 'hidden',
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="12"
+              height="12"
+              fill="none"
+              stroke="var(--color-text-secondary)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              style={{ flexShrink: 0 }}
+            >
+              <polyline points="9 17 4 12 9 7" />
+              <path d="M20 18v-2a4 4 0 00-4-4H4" />
+            </svg>
+            <span
+              style={{
+                fontSize: '0.75rem',
+                color: 'var(--color-text-secondary)',
+                fontStyle: 'italic',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {replyToContent.length > 60 ? replyToContent.slice(0, 57) + '...' : replyToContent}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            aria-label="Annulla risposta"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '0.125rem',
+              color: 'var(--color-text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
       )}
 
       {/* Normal chat input — hidden (not removed) while live is active so state is preserved */}

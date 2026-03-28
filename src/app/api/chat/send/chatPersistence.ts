@@ -78,6 +78,8 @@ export type RoutePersistenceDeps = {
     recentMessages?: Array<{ role: string; content: string }>
     /** P5: FileAsset IDs uploaded with this user message — creates Attachment records. */
     fileIds?: string[]
+    /** Multi-reply: ID of the assistant message this user message is replying to */
+    replyToMessageId?: string
   }) => Promise<void>
   buildContextPack: (input: {
     userId: string
@@ -200,6 +202,7 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       toolExecutionTrace,
       recentMessages,
       fileIds,
+      replyToMessageId,
     }) => {
       // ── Phase 1: Critical — conversation + messages ──────────────────────
       // Sequential saves (no $transaction) for maximum compatibility with Neon
@@ -235,7 +238,12 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
 
       const userMsg = await withRetry('message.create[user]', () =>
         prisma.message.create({
-          data: { conversationId, role: 'user', content: userMessage },
+          data: {
+            conversationId,
+            role: 'user',
+            content: userMessage,
+            ...(replyToMessageId ? { replyToMessageId } : {}),
+          },
           select: { id: true },
         }),
       )

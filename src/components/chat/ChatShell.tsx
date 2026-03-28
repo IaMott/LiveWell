@@ -41,6 +41,10 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
     startEdit,
     clearEditDraft,
     appendLiveMessage,
+    replyToMessageId,
+    replyToContent,
+    startReply,
+    cancelReply,
   } = useChat()
   const [historyOpen, setHistoryOpen] = useState(false)
   const [liveInterim, setLiveInterim] = useState<LiveInterim>(null)
@@ -165,6 +169,7 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         onSend={handleSend}
         onEdit={startEdit}
         activeDomain={visualActiveDomain}
+        onReply={startReply}
       />
 
       <ChatInput
@@ -180,6 +185,9 @@ export function ChatShell({ userInitials = 'ME', userName, userImage }: Props) {
         editDraft={editDraft}
         onLiveMessage={handleLiveMessage}
         onInterimTranscription={handleInterimTranscription}
+        replyToMessageId={replyToMessageId}
+        replyToContent={replyToContent}
+        onCancelReply={cancelReply}
       />
       <ConversationHistory
         open={historyOpen}
