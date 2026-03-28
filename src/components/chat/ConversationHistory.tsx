@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { X, MessageSquare, Trash2, Plus } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { X, MessageSquare, Trash2, Plus, MoreHorizontal } from 'lucide-react'
 
 type ConvPreview = {
   id: string
@@ -72,6 +72,8 @@ export function ConversationHistory({
   const [exporting, setExporting] = useState<string | null>(null)
   const [exportingFeedback, setExportingFeedback] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [patching, setPatching] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -105,6 +107,55 @@ export function ConversationHistory({
       setExporting(null)
     }
   }
+
+  /**
+   * PATCH handler — the real write path for caseStatus/casePriority.
+   * Optimistically updates local state, then syncs with server.
+   */
+  const handlePatch = useCallback(
+    async (id: string, patch: { caseStatus?: string; casePriority?: string }) => {
+      if (patching) return
+      setPatching(id)
+      // Optimistic update
+      setConvs((prev) =>
+        prev.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                ...(patch.caseStatus ? { caseStatus: patch.caseStatus } : {}),
+                ...(patch.casePriority ? { casePriority: patch.casePriority } : {}),
+              }
+            : c,
+        ),
+      )
+      try {
+        const res = await fetch(`/api/conversations/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        })
+        if (!res.ok) {
+          // Revert optimistic update on failure
+          setConvs((prev) =>
+            prev.map((c) =>
+              c.id === id
+                ? {
+                    ...c,
+                    ...(patch.caseStatus ? { caseStatus: undefined } : {}),
+                    ...(patch.casePriority ? { casePriority: undefined } : {}),
+                  }
+                : c,
+            ),
+          )
+        }
+      } catch {
+        /* best-effort — optimistic state remains */
+      } finally {
+        setPatching(null)
+      }
+    },
+    [patching],
+  )
 
   const handleExportWithFeedback = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -380,52 +431,148 @@ export function ConversationHistory({
                       {c.preview}
                     </p>
                   )}
-                  {/* Status / Priority badges */}
-                  {(c.caseStatus || c.casePriority) && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '0.25rem',
-                        marginTop: '0.25rem',
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      {c.caseStatus && c.caseStatus !== 'active' && (
+                  {/* Status / Priority badges — always show, clickable to open controls */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '0.25rem',
+                      marginTop: '0.25rem',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {c.caseStatus && c.caseStatus !== 'active' && (
+                      <span
+                        style={{
+                          fontSize: '0.625rem',
+                          fontWeight: 600,
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          color: STATUS_COLOR[c.caseStatus] ?? '#8E8E93',
+                          background: `${STATUS_COLOR[c.caseStatus] ?? '#8E8E93'}18`,
+                          borderRadius: '4px',
+                          padding: '0.1rem 0.35rem',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {STATUS_LABEL[c.caseStatus] ?? c.caseStatus}
+                      </span>
+                    )}
+                    {c.casePriority &&
+                      c.casePriority !== 'normal' &&
+                      PRIORITY_LABEL[c.casePriority] && (
                         <span
                           style={{
                             fontSize: '0.625rem',
                             fontWeight: 600,
                             letterSpacing: '0.04em',
                             textTransform: 'uppercase',
-                            color: STATUS_COLOR[c.caseStatus] ?? '#8E8E93',
-                            background: `${STATUS_COLOR[c.caseStatus] ?? '#8E8E93'}18`,
+                            color: PRIORITY_COLOR[c.casePriority] ?? '#8E8E93',
+                            background: `${PRIORITY_COLOR[c.casePriority] ?? '#8E8E93'}18`,
                             borderRadius: '4px',
                             padding: '0.1rem 0.35rem',
                             lineHeight: 1.4,
                           }}
                         >
-                          {STATUS_LABEL[c.caseStatus] ?? c.caseStatus}
+                          {PRIORITY_LABEL[c.casePriority]}
                         </span>
                       )}
-                      {c.casePriority &&
-                        c.casePriority !== 'normal' &&
-                        PRIORITY_LABEL[c.casePriority] && (
-                          <span
-                            style={{
-                              fontSize: '0.625rem',
-                              fontWeight: 600,
-                              letterSpacing: '0.04em',
-                              textTransform: 'uppercase',
-                              color: PRIORITY_COLOR[c.casePriority] ?? '#8E8E93',
-                              background: `${PRIORITY_COLOR[c.casePriority] ?? '#8E8E93'}18`,
-                              borderRadius: '4px',
-                              padding: '0.1rem 0.35rem',
-                              lineHeight: 1.4,
-                            }}
-                          >
-                            {PRIORITY_LABEL[c.casePriority]}
-                          </span>
-                        )}
+                  </div>
+                  {/* Inline editor — expanded when editingId === c.id */}
+                  {editingId === c.id && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        marginTop: '0.5rem',
+                        display: 'flex',
+                        gap: '0.5rem',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <label
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.125rem',
+                          fontSize: '0.6875rem',
+                          color: 'var(--color-text-secondary)',
+                        }}
+                      >
+                        Stato
+                        <select
+                          value={c.caseStatus ?? 'active'}
+                          disabled={patching === c.id}
+                          onChange={(e) => {
+                            void handlePatch(c.id, { caseStatus: e.target.value })
+                          }}
+                          style={{
+                            fontSize: '0.75rem',
+                            padding: '0.2rem 0.4rem',
+                            borderRadius: '6px',
+                            border: '1px solid var(--color-separator)',
+                            background: 'var(--color-surface)',
+                            color: 'var(--color-text-primary)',
+                            cursor: patching === c.id ? 'not-allowed' : 'pointer',
+                            opacity: patching === c.id ? 0.6 : 1,
+                          }}
+                        >
+                          <option value="active">Attiva</option>
+                          <option value="open">Aperta</option>
+                          <option value="pending">In attesa</option>
+                          <option value="completed">Conclusa</option>
+                          <option value="archived">Archiviata</option>
+                        </select>
+                      </label>
+                      <label
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.125rem',
+                          fontSize: '0.6875rem',
+                          color: 'var(--color-text-secondary)',
+                        }}
+                      >
+                        Priorità
+                        <select
+                          value={c.casePriority ?? 'normal'}
+                          disabled={patching === c.id}
+                          onChange={(e) => {
+                            void handlePatch(c.id, { casePriority: e.target.value })
+                          }}
+                          style={{
+                            fontSize: '0.75rem',
+                            padding: '0.2rem 0.4rem',
+                            borderRadius: '6px',
+                            border: '1px solid var(--color-separator)',
+                            background: 'var(--color-surface)',
+                            color: 'var(--color-text-primary)',
+                            cursor: patching === c.id ? 'not-allowed' : 'pointer',
+                            opacity: patching === c.id ? 0.6 : 1,
+                          }}
+                        >
+                          <option value="urgent">Urgente</option>
+                          <option value="high">Alta</option>
+                          <option value="normal">Normale</option>
+                          <option value="low">Bassa</option>
+                          <option value="backlog">Backlog</option>
+                        </select>
+                      </label>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        style={{
+                          marginTop: '0.875rem',
+                          padding: '0.2rem 0.5rem',
+                          fontSize: '0.6875rem',
+                          background: 'transparent',
+                          border: '1px solid var(--color-separator)',
+                          borderRadius: '6px',
+                          color: 'var(--color-text-secondary)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Chiudi
+                      </button>
                     </div>
                   )}
                 </div>
@@ -444,6 +591,28 @@ export function ConversationHistory({
                     minute: '2-digit',
                   })}
                 </span>
+                {/* ⋯ toggle case-editor */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setEditingId(editingId === c.id ? null : c.id)
+                  }}
+                  aria-label="Modifica stato caso"
+                  title="Stato / Priorità"
+                  style={{
+                    padding: '0.25rem',
+                    background: editingId === c.id ? 'var(--color-accent)' : 'transparent',
+                    border: 'none',
+                    borderRadius: '6px',
+                    color: editingId === c.id ? '#fff' : 'var(--color-text-secondary)',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <MoreHorizontal size={15} />
+                </button>
                 {/* Export: solo chat */}
                 <button
                   onClick={(e) => handleExport(c.id, e)}
