@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import type { ChatMessage, ThinkingStep, QuickReplyOption } from '@/hooks/useChat'
 import type { Domain } from '@/lib/ai/types'
 import { FeedbackWidget } from './FeedbackWidget'
@@ -28,7 +28,7 @@ type Props = {
   onReply?: (messageId: string, content: string) => void
 }
 
-export function MessageBubble({
+function MessageBubbleInner({
   message,
   conversationId,
   onSend,
@@ -702,3 +702,5 @@ function QuickReplies({
     </div>
   )
 }
+
+export const MessageBubble = memo(MessageBubbleInner)

@@ -97,6 +97,7 @@ model UserAttribute {
 
   @@index([userId, domain, key, recordedAt])
   @@index([userId, key, recordedAt])
+  @@index([userId, conversationId])
   @@map("user_attributes")
 }
 

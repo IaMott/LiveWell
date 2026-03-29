@@ -434,8 +434,10 @@ export function extractImageData(
 }
 
 export async function synthesizeRawResponse(input: SynthesisInput): Promise<SynthesisResult> {
-  const summaries = buildSummaries(input.proposals)
-  const topRecommendations = buildTopRecommendations(input.proposals)
+  // Cap proposals to prevent excessively long synthesis prompts (max 6 agents)
+  const cappedProposals = input.proposals.slice(0, 6)
+  const summaries = buildSummaries(cappedProposals)
+  const topRecommendations = buildTopRecommendations(cappedProposals)
   const recentHistory = buildRecentHistory(input.contextPack)
   // C1: load cross-conversation long-term memory
   const crossConversationContext = buildCrossConversationContext(input.contextPack)

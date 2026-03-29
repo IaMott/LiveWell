@@ -66,6 +66,7 @@ const healthAddMetricSchema = z.object({
   value: z.number(),
   unit: baseString.max(32).optional(),
   recordedAt: z.string().datetime().optional(),
+  notes: z.string().min(1).max(500).optional(),
 })
 
 const nutritionLogMealSchema = z.object({
@@ -80,6 +81,7 @@ const nutritionLogMealSchema = z.object({
     )
     .min(1),
   consumedAt: z.string().datetime().optional(),
+  notes: z.string().min(1).max(500).optional(),
 })
 
 const nutritionCreateFoodItemSchema = z.object({
@@ -88,6 +90,7 @@ const nutritionCreateFoodItemSchema = z.object({
   proteinPer100g: z.number().min(0).max(100).optional(),
   carbsPer100g: z.number().min(0).max(100).optional(),
   fatsPer100g: z.number().min(0).max(100).optional(),
+  notes: z.string().min(1).max(500).optional(),
 })
 
 const recipeSchema = z.object({
@@ -109,6 +112,7 @@ const workoutPlanSchema = z.object({
       }),
     )
     .min(1),
+  notes: z.string().min(1).max(500).optional(),
 })
 
 const workoutSessionSchema = z.object({
@@ -122,6 +126,7 @@ const mindfulnessEntrySchema = z.object({
   mood: z.number().int().min(1).max(10).optional(),
   stress: z.number().int().min(1).max(10).optional(),
   content: z.string().max(4000).optional(),
+  notes: z.string().min(1).max(500).optional(),
 })
 
 const artifactSchema = z.object({

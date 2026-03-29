@@ -1,6 +1,7 @@
 import { getAuthUserId } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { errorResponse } from '@/lib/security/errorSchema'
+import { checkRateLimit, getClientIp } from '@/lib/security/httpGuards'
 
 async function extractPdfText(buffer: Buffer): Promise<string | null> {
   try {
@@ -36,6 +37,12 @@ function isMimeAllowed(mime: string): boolean {
 export async function POST(request: Request): Promise<Response> {
   const userId = await getAuthUserId(request)
   if (!userId) return errorResponse(401, 'UNAUTHORIZED', 'Authentication required')
+
+  const rate = checkRateLimit({
+    key: `upload:${userId}:${getClientIp(request)}`,
+    max: 20,
+  })
+  if (!rate.ok) return errorResponse(429, 'RATE_LIMITED', 'Troppi upload — riprova tra poco')
 
   let formData: FormData
   try {
@@ -85,8 +92,12 @@ export async function POST(request: Request): Promise<Response> {
               ? pdfText.slice(0, MAX_TEXT_LENGTH) + '\n…[troncato]'
               : pdfText
         }
-      } catch {
-        // PDF parsing failed — stored as metadata-only
+      } catch (err) {
+        console.warn(
+          `[upload] PDF text extraction failed for "${file.name}":`,
+          err instanceof Error ? err.message : err,
+        )
+        // Stored as metadata-only — agents will see the file exists but without content
       }
     } else if (
       mimeType.startsWith('text/') ||

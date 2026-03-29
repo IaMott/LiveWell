@@ -200,9 +200,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return
       }
       try {
-        const parsed = JSON.parse(event.newValue) as CanonicalCaseStateSnapshot
-        setStateSnapshot(parsed)
-        stateSnapshotRef.current = parsed
+        const parsed = JSON.parse(event.newValue)
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          typeof parsed.schemaVersion === 'number' &&
+          typeof parsed.conversationId === 'string' &&
+          Array.isArray(parsed.domainPanels)
+        ) {
+          setStateSnapshot(parsed as CanonicalCaseStateSnapshot)
+          stateSnapshotRef.current = parsed as CanonicalCaseStateSnapshot
+        }
       } catch {
         /* ignore invalid storage snapshot */
       }
@@ -262,9 +270,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       if (savedStateSnapshot) {
         try {
-          const parsed = JSON.parse(savedStateSnapshot) as CanonicalCaseStateSnapshot
-          setStateSnapshot(parsed)
-          stateSnapshotRef.current = parsed
+          const parsed = JSON.parse(savedStateSnapshot)
+          // Validate minimum shape before trusting localStorage data
+          if (
+            parsed &&
+            typeof parsed === 'object' &&
+            typeof parsed.schemaVersion === 'number' &&
+            typeof parsed.conversationId === 'string' &&
+            Array.isArray(parsed.domainPanels)
+          ) {
+            setStateSnapshot(parsed as CanonicalCaseStateSnapshot)
+            stateSnapshotRef.current = parsed as CanonicalCaseStateSnapshot
+          } else {
+            localStorage.removeItem(stateSnapshotKeyForConversation(id))
+          }
         } catch {
           localStorage.removeItem(stateSnapshotKeyForConversation(id))
         }

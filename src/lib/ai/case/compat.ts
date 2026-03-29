@@ -127,6 +127,10 @@ export function toCanonicalCaseStateSnapshot(
     sharedOpenQuestions: caseState.sharedOpenQuestions ?? [],
     domainOpenQuestions: caseState.domainOpenQuestions ?? {},
     updatedAt: caseState.updatedAt ?? new Date(0).toISOString(),
+    // Preserve consultation context across snapshot conversions
+    consultReason: caseState.consultReason ?? undefined,
+    returnTargetAgentId: caseState.returnTargetAgentId ?? undefined,
+    consultTargetAgentId: caseState.consultTargetAgentId ?? undefined,
   }
 }
 

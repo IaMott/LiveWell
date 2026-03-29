@@ -267,6 +267,11 @@ export async function orchestrate(
   const nextStateSnapshot = toCanonicalCaseStateSnapshot(caseProtocol.caseState) ?? undefined
   const activeSpecialist = deriveActiveSpecialistFromCaseState(caseProtocol.caseState, deps.team)
   const domainHint = getCaseRoutingDomain(caseProtocol.caseState, deps.team, detectedDomain)
+  if (domainHint !== detectedDomain && detectedDomain !== 'general') {
+    console.info(
+      `[orchestrator] Domain mismatch: detected=${detectedDomain} routing=${domainHint} (case protocol override)`,
+    )
+  }
   const requestedSpecialistId = detectRequestedAgentId(input.message, deps.team)
   decisionTrace.push(
     buildSpecialistModeResolvedTraceEvent({
@@ -509,14 +514,19 @@ export async function orchestrate(
     teamAgentIds: deps.team.map((a) => a.id),
   })
 
+  // Deduplicate: criticalQuestions may overlap with finalInterviewQuestions
+  // since both originate from consensusOutcome.gatingQuestions.
+  const interviewSet = new Set(finalInterviewQuestions.map((q) => q.toLowerCase().trim()))
+  const dedupedCritical = (consensusOutcome.gatingQuestions ?? []).filter(
+    (q) => !interviewSet.has(q.toLowerCase().trim()),
+  )
+
   const synthesis = await synthesizeRawResponse({
     llm: deps.llm,
     userMessage: input.message,
     proposals: round2WithQueue,
     gatingQuestions: finalInterviewQuestions,
-    // S3: criticalQuestions come from consensus (baseline safety/triage), not from the
-    // interview-flow queue — passing the same array twice caused double-counting.
-    criticalQuestions: consensusOutcome.gatingQuestions ?? [],
+    criticalQuestions: dedupedCritical,
     contextPack: input.contextPack,
     activeSpecialist: effectiveSpecialist,
   })

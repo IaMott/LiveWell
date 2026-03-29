@@ -110,6 +110,12 @@ export type CanonicalCaseStateSnapshot = {
   sharedOpenQuestions: string[]
   domainOpenQuestions: Partial<Record<Domain, string[]>>
   updatedAt: string
+  /** Reason for the active consultation (preserved across snapshot conversions). */
+  consultReason?: string
+  /** Agent ID to return to after the current consultation ends. */
+  returnTargetAgentId?: string
+  /** Agent ID that initiated or is the target of the consultation. */
+  consultTargetAgentId?: string
 }
 
 export type AgentInput = {

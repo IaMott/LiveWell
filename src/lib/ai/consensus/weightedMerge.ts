@@ -52,6 +52,22 @@ export function mergeToolCallsWeighted(
     }
   }
 
+  // Fallback: if all proposals are below MIN_CONFIDENCE_FOR_TOOLS but have
+  // user.setAttribute calls, include them best-effort so user data isn't lost.
+  if (result.length === 0) {
+    const allToolCalls = proposals.flatMap((p) => p.toolCalls ?? [])
+    const attributeCalls = allToolCalls.filter(
+      (tc) => tc.name === 'user.setAttribute' || tc.name === 'user.updateProfile',
+    )
+    for (const tc of attributeCalls) {
+      const dedupeKey = `${tc.name}:${JSON.stringify(tc.args)}`
+      if (!seen.has(dedupeKey)) {
+        seen.add(dedupeKey)
+        result.push(tc)
+      }
+    }
+  }
+
   return result
 }
 

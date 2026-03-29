@@ -93,6 +93,12 @@ export async function DELETE(request: Request): Promise<Response> {
   const userId = await getAuthUserId(request)
   if (!userId) return errorResponse(401, 'UNAUTHORIZED', 'Authentication required')
 
+  const rate = checkRateLimit({
+    key: `conversations-delete:${userId}:${getClientIp(request)}`,
+    max: 30,
+  })
+  if (!rate.ok) return errorResponse(429, 'RATE_LIMITED', 'Troppe richieste — riprova tra poco')
+
   const url = new URL(request.url)
   const id = url.searchParams.get('id')
 

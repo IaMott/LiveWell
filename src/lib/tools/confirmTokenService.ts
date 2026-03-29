@@ -131,10 +131,14 @@ export async function consumeConfirmToken(input: {
           return { ok: false, reason: 'Confirm token payload mismatch' }
         }
 
-        await prisma.confirmAction.update({
-          where: { id: input.confirmToken },
+        // Atomic consume: only update if consumedAt is still null (prevents race condition)
+        const updated = await prisma.confirmAction.updateMany({
+          where: { id: input.confirmToken, consumedAt: null },
           data: { consumedAt: new Date(now) },
         })
+        if (updated.count === 0) {
+          return { ok: false, reason: 'Confirm token already consumed' }
+        }
         pendingStore.delete(input.confirmToken)
         return { ok: true }
       }

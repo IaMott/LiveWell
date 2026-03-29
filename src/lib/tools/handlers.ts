@@ -308,17 +308,44 @@ const userSetAttribute: Handler = async (args, ctx) => {
 }
 
 const healthAddMetric: Handler = async (args, ctx) => {
-  const a = args as { metricType: string; value: number; unit?: string; recordedAt?: string }
+  const a = args as {
+    metricType: string
+    value: number
+    unit?: string
+    recordedAt?: string
+    notes?: string
+  }
+  const recordedAt = toDate(a.recordedAt)
+  const normalizedNotes = ensureDynamicNote(
+    a.notes,
+    `Metrica ${a.metricType} registrata dall'agente.`,
+  )
   const entry = await prisma.bodyMetricEntry.create({
     data: {
       userId: ctx.actor.userId,
       metricType: a.metricType,
       value: a.value,
       unit: a.unit ?? null,
-      recordedAt: toDate(a.recordedAt),
+      recordedAt,
     },
     select: { id: true },
   })
+  // Mirror to UserAttribute so data is visible in Dynamic DB and agent context
+  await prisma.userAttribute
+    .create({
+      data: {
+        userId: ctx.actor.userId,
+        domain: 'health',
+        key: a.metricType,
+        value: a.value,
+        unit: a.unit ?? null,
+        source: 'agent',
+        conversationId: ctx.conversationId,
+        recordedAt,
+        notes: normalizedNotes,
+      },
+    })
+    .catch(() => undefined)
   return { saved: true, id: entry.id }
 }
 
@@ -327,16 +354,38 @@ const nutritionLogMeal: Handler = async (args, ctx) => {
     mealType: string
     items: Array<{ name: string; quantity: number; unit?: string }>
     consumedAt?: string
+    notes?: string
   }
+  const recordedAt = toDate(a.consumedAt)
+  const itemSummary = a.items.map((i) => i.name).join(', ')
+  const normalizedNotes = ensureDynamicNote(
+    a.notes,
+    `Pasto (${a.mealType}) registrato dall'agente: ${itemSummary}.`,
+  )
   const meal = await prisma.meal.create({
     data: {
       createdByUserId: ctx.actor.userId,
       mealType: a.mealType,
-      date: toDate(a.consumedAt),
+      date: recordedAt,
       items: a.items,
     },
     select: { id: true },
   })
+  // Mirror to UserAttribute so data is visible in Dynamic DB and agent context
+  await prisma.userAttribute
+    .create({
+      data: {
+        userId: ctx.actor.userId,
+        domain: 'nutrition',
+        key: `meal_${a.mealType}`,
+        value: { items: a.items },
+        source: 'agent',
+        conversationId: ctx.conversationId,
+        recordedAt,
+        notes: normalizedNotes,
+      },
+    })
+    .catch(() => undefined)
   return { saved: true, id: meal.id }
 }
 

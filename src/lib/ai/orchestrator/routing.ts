@@ -1348,6 +1348,19 @@ export function resolveRoutingCandidates(params: {
                 }
               }
             }
+            // Fallback: if no domain-specific agents found, fall back to general selection
+            if (result.length === 0) {
+              return selectAgentsForRequest(
+                team,
+                domainHint,
+                4,
+                allDomains,
+                message,
+                caseContext,
+                agentFeedbackScores,
+                { preferredAgentIds },
+              )
+            }
             return result
           })()
         : selectAgentsForRequest(
