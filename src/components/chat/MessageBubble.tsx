@@ -12,11 +12,11 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 const DOMAIN_LABELS: Partial<Record<Domain, string>> = {
-  nutrition: 'Nutrizionista',
+  nutrition: 'Dietista',
   training: 'Personal Trainer',
-  health: 'Medico',
+  health: 'Medico di Base',
   mindfulness: 'Mental Coach',
-  inspiration: 'Coach',
+  inspiration: 'Coach Motivazionale',
 }
 
 type Props = {

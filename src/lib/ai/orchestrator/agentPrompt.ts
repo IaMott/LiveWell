@@ -476,13 +476,24 @@ export function buildAgentUserPrompt(
   const filesWithContent = contextFiles.filter(
     (f) => f.extractedText && !f.extractedText.startsWith('data:'),
   )
-  if (filesWithContent.length > 0) {
+  // Files that exist but have no extractedText (PDF parse failed, unsupported format)
+  const filesMetadataOnly = contextFiles.filter(
+    (f) => !f.extractedText || f.extractedText.startsWith('data:'),
+  )
+  if (filesWithContent.length > 0 || filesMetadataOnly.length > 0) {
     parts.push(``, `ALLEGATI INVIATI DALL'UTENTE:`)
     for (const f of filesWithContent) {
       const sizeKb = Math.round((f.size ?? 0) / 1024)
       parts.push(
         `📎 ${f.filename} (${f.mimeType}, ${sizeKb}KB)${f.recordedAt ? ` — caricato il ${f.recordedAt.slice(0, 10)}` : ''}${f.notes ? ` — note: ${f.notes}` : ''}:`,
         f.extractedText!.slice(0, 4000),
+      )
+    }
+    // Show metadata-only files so agents know they exist (even if content wasn't extracted)
+    for (const f of filesMetadataOnly.filter((f) => !f.extractedText)) {
+      const sizeKb = Math.round((f.size ?? 0) / 1024)
+      parts.push(
+        `📎 ${f.filename} (${f.mimeType}, ${sizeKb}KB)${f.recordedAt ? ` — caricato il ${f.recordedAt.slice(0, 10)}` : ''}: [contenuto non estraibile — il file è stato caricato ma il testo non è stato estratto automaticamente. Riferisciti al nome del file e chiedi all'utente di descriverne il contenuto se necessario.]`,
       )
     }
     parts.push(

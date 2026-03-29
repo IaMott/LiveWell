@@ -1266,7 +1266,11 @@ export function resolveRoutingCandidates(params: {
   // NOTE: Cluster routing takes priority over generic multi-domain because it
   // is a more specific signal (symptom pattern matching).
   const significantDomains = allDomains.filter((d) => d !== 'general')
-  const isMultiDomainQuery = significantDomains.length >= 2 && !clusterMatch && !currentSpeakerId
+  // Multi-domain detection: fires even when a specialist is active, so that the
+  // specialist's domain expertise is supplemented by other domain agents.
+  // Example: Dietista active + user says "mi sento giù emotivamente e fisicamente"
+  // → nutrition + mindfulness detected → Dietista + Mental Coach both participate.
+  const isMultiDomainQuery = significantDomains.length >= 2 && !clusterMatch
 
   const selectedAgents = currentSpeakerId
     ? (() => {

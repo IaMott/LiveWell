@@ -391,9 +391,16 @@ export async function orchestrate(
   // we stay in TEAM mode so ALL relevant specialists contribute to the
   // synthesis — no single specialist is forced as the voice.
   const isMultiDomain = significantDomains.filter((d) => d !== 'general').length >= 2
-  let effectiveSpecialist = activeSpecialist
+
+  // When the message is genuinely multi-domain (e.g. user mentions both emotional
+  // state AND nutrition), we MUST synthesize in TEAM mode so every specialist's
+  // contribution is visible — even if a single specialist was previously active.
+  // The active specialist leads the routing (appears first in selectedAgents) but
+  // must NOT monopolise the synthesis voice.
+  let effectiveSpecialist =
+    isMultiDomain && selectedAgents.length >= 2 ? undefined : activeSpecialist
   if (
-    !activeSpecialist &&
+    !effectiveSpecialist &&
     domainHint !== 'general' &&
     round2Proposals.length > 0 &&
     !isMultiDomain

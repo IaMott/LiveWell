@@ -2,9 +2,12 @@ import type { AgentProposal, ContextPack } from '../types'
 
 export function buildSummaries(proposals: AgentProposal[]): string {
   return proposals
-    .filter((p) => p.summary)
+    .filter((p) => p.summary && (p.confidence ?? 0) > 0)
     .sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5))
-    .map((p) => p.summary)
+    .map((p) => {
+      const label = p.agentId ?? 'Specialista'
+      return `[${label}] ${p.summary}`
+    })
     .join('\n')
 }
 
@@ -29,18 +32,23 @@ export function buildRecentHistory(contextPack: ContextPack): string {
  * same greeting/opener/structure across consecutive turns.
  */
 export function buildAntiRepetitionBlock(contextPack: ContextPack): string {
-  const assistantOpeners = contextPack.history.recentMessages
+  const recentAssistant = contextPack.history.recentMessages
     .filter((m) => m.role === 'assistant')
-    .slice(-3)
-    .map((m) => {
-      // Extract first non-empty sentence (up to 120 chars)
-      const first = m.content.replace(/\s+/g, ' ').trim().slice(0, 120)
-      return `"${first}…"`
-    })
-  if (assistantOpeners.length === 0) return ''
+    .slice(-5)
+  if (recentAssistant.length === 0) return ''
+
+  // Include both openers AND key content summaries to prevent repeating the same advice
+  const entries = recentAssistant.map((m) => {
+    const cleaned = m.content.replace(/\s+/g, ' ').trim()
+    // Opener (first 120 chars)
+    const opener = cleaned.slice(0, 120)
+    // Content summary (next 300 chars) to catch repeated advice bodies
+    const body = cleaned.slice(120, 420)
+    return body ? `"${opener}…" | contenuto: "${body}…"` : `"${opener}…"`
+  })
   return (
-    `APERTURE GIÀ USATE NELLE ULTIME RISPOSTE (NON RIPETERE pattern simili):\n` +
-    assistantOpeners.map((o) => `- ${o}`).join('\n')
+    `RISPOSTE PRECEDENTI (NON RIPETERE consigli, strutture o aperture simili — dai contenuto NUOVO):\n` +
+    entries.map((o) => `- ${o}`).join('\n')
   )
 }
 
