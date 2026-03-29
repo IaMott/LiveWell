@@ -1259,14 +1259,47 @@ export function resolveRoutingCandidates(params: {
   const caseContext = contextPack ? buildCaseContextFromAttributes(contextPack) : ''
   const agentFeedbackScores = contextPack?.routing?.agentFeedbackScores ?? {}
 
+  // Multi-domain: when the user query spans 2+ non-general domains (e.g. body
+  // recomposition = nutrition + training + health + mindfulness) ALL relevant
+  // domain agents participate simultaneously — each domain elects its best agent
+  // independently so every specialisation is represented in every turn.
+  // NOTE: Cluster routing takes priority over generic multi-domain because it
+  // is a more specific signal (symptom pattern matching).
+  const significantDomains = allDomains.filter((d) => d !== 'general')
+  const isMultiDomainQuery = significantDomains.length >= 2 && !clusterMatch && !currentSpeakerId
+
   const selectedAgents = currentSpeakerId
     ? (() => {
-        // When a specialist is active, route exclusively to that agent.
-        // Adding other agents from caseContext scoring causes cross-domain
-        // contamination (e.g., injury keywords routing Fisioterapista into
-        // a nutrition conversation).
+        // When a specialist is active in single-domain: route exclusively.
+        // In multi-domain: include the active specialist first, then add one
+        // best agent per remaining domain so all domains stay represented.
+        if (!isMultiDomainQuery && significantDomains.length < 2) {
+          const activeAgent = team.find((agent) => agent.id === currentSpeakerId)
+          return activeAgent ? [activeAgent] : []
+        }
+        // Multi-domain with active specialist: specialist leads, others follow
         const activeAgent = team.find((agent) => agent.id === currentSpeakerId)
-        return activeAgent ? [activeAgent] : []
+        const result: AgentProfile[] = activeAgent ? [activeAgent] : []
+        const seen = new Set<string>(activeAgent ? [activeAgent.id] : [])
+        for (const domain of significantDomains) {
+          const domainBest = selectAgentsForRequest(
+            team,
+            domain,
+            2,
+            [domain],
+            message,
+            caseContext,
+            agentFeedbackScores,
+            { preferredAgentIds },
+          )
+          for (const agent of domainBest.slice(0, 1)) {
+            if (!seen.has(agent.id)) {
+              seen.add(agent.id)
+              result.push(agent)
+            }
+          }
+        }
+        return result
       })()
     : clusterMatch
       ? (() => {
@@ -1288,16 +1321,41 @@ export function resolveRoutingCandidates(params: {
           const fillers = domainScored.filter((a) => !clusterIds.has(a.id))
           return [...clusterFirst, ...fillers].slice(0, 6)
         })()
-      : selectAgentsForRequest(
-          team,
-          domainHint,
-          4,
-          allDomains,
-          message,
-          caseContext,
-          agentFeedbackScores,
-          { preferredAgentIds },
-        )
+      : isMultiDomainQuery
+        ? (() => {
+            const result: AgentProfile[] = []
+            const seen = new Set<string>()
+            // One best agent per detected significant domain
+            for (const domain of significantDomains) {
+              const domainBest = selectAgentsForRequest(
+                team,
+                domain,
+                2,
+                [domain],
+                message,
+                caseContext,
+                agentFeedbackScores,
+                { preferredAgentIds },
+              )
+              for (const agent of domainBest.slice(0, 1)) {
+                if (!seen.has(agent.id)) {
+                  seen.add(agent.id)
+                  result.push(agent)
+                }
+              }
+            }
+            return result
+          })()
+        : selectAgentsForRequest(
+            team,
+            domainHint,
+            4,
+            allDomains,
+            message,
+            caseContext,
+            agentFeedbackScores,
+            { preferredAgentIds },
+          )
 
   return {
     domainHint,
@@ -1307,12 +1365,20 @@ export function resolveRoutingCandidates(params: {
         step: 3,
         domainHint,
         selectedAgentIds: selectedAgents.map((agent) => agent.id),
-        collaborationCap: currentSpeakerId ? 3 : clusterMatch ? 6 : 4,
-        reason: currentSpeakerId
-          ? 'case_state_speaker_first'
-          : clusterMatch
-            ? `symptom_cluster_routing_urgency_${clusterMatch.urgency}`
-            : 'domain_based_selection',
+        collaborationCap: isMultiDomainQuery
+          ? significantDomains.length
+          : currentSpeakerId
+            ? 3
+            : clusterMatch
+              ? 6
+              : 4,
+        reason: isMultiDomainQuery
+          ? `multi_domain_parallel_${significantDomains.join('+')}`
+          : currentSpeakerId
+            ? 'case_state_speaker_first'
+            : clusterMatch
+              ? `symptom_cluster_routing_urgency_${clusterMatch.urgency}`
+              : 'domain_based_selection',
       }),
     ],
   }

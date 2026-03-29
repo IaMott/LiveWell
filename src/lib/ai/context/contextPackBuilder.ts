@@ -94,6 +94,7 @@ export type DbClient = {
         size: number
         extractedText?: string | null
         url?: string | null
+        conversationId?: string | null
         createdAt?: Date | string
       }>
     >
@@ -122,11 +123,11 @@ export type DbClient = {
 
 function buildAttributeMapWithHistory(rows: RawAttribute[]): {
   current: UserAttributes
-  history: Record<string, Record<string, Array<{ value: unknown; recordedAt: string }>>>
+  history: Record<string, Record<string, Array<{ value: unknown; recordedAt: string; notes?: string }>>>
 } {
   const seenCurrent = new Set<string>()
   const current: UserAttributes = {}
-  const history: Record<string, Record<string, Array<{ value: unknown; recordedAt: string }>>> = {}
+  const history: Record<string, Record<string, Array<{ value: unknown; recordedAt: string; notes?: string }>>> = {}
 
   for (const row of rows) {
     const composite = `${row.domain}:${row.key}`
@@ -139,6 +140,7 @@ function buildAttributeMapWithHistory(rows: RawAttribute[]): {
       history[row.domain][row.key].push({
         value: row.value,
         recordedAt: new Date(row.recordedAt).toISOString(),
+        notes: row.notes ?? undefined,
       })
     }
 
@@ -298,7 +300,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
   let userAttributes: UserAttributes = {}
   let userAttributeHistory: Record<
     string,
-    Record<string, Array<{ value: unknown; recordedAt: string }>>
+    Record<string, Array<{ value: unknown; recordedAt: string; notes?: string }>>
   > = {}
   let attributeRows: RawAttribute[] = []
   if (opts.db.userAttribute) {
@@ -387,9 +389,11 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
   })
 
   const files = await opts.db.fileAsset.findMany({
-    where: { conversationId: opts.conversationId },
+    // Load files from all conversations for this user so agents can consult
+    // historical documents (e.g. blood work from a previous session).
+    where: { userId: opts.userId },
     orderBy: { createdAt: 'desc' },
-    take: 10,
+    take: 20,
     select: {
       id: true,
       filename: true,
@@ -397,6 +401,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
       size: true,
       extractedText: true,
       url: true,
+      conversationId: true,
       createdAt: true,
     },
   })
@@ -560,6 +565,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
       size: f.size,
       extractedText: opts.includeFileExtracts ? (f.extractedText ?? undefined) : undefined,
       url: f.url ?? undefined,
+      conversationId: f.conversationId ?? undefined,
       recordedAt: f.createdAt ? new Date(f.createdAt).toISOString() : undefined,
       notes: fileNotesById.get(f.id),
     })),

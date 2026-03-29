@@ -105,7 +105,10 @@ export function formatUserAttributes(input: AgentInput): string[] {
           descriptor.semantics === 'observed_temporal_snapshot' && v.recordedAt
             ? ` [osservazione del ${v.recordedAt.slice(0, 10)}; non dato corrente certo senza base derivativa]`
             : ''
-        const noteStr = v.notes ? ` {notes: ${v.notes}}` : ''
+        // Show notes: prefer current-entry notes, fall back to most recent history note
+        const recentHistoryNote = historyForKey?.find((h) => h.notes)?.notes
+        const effectiveNote = v.notes ?? recentHistoryNote
+        const noteStr = effectiveNote ? ` {notes: ${effectiveNote}}` : ''
         return `${k}: ${valStr}${unitStr}${trendStr}${temporalHint}${noteStr}`
       })
     if (entries.length > 0) {
@@ -356,6 +359,17 @@ export function buildSharedAgentRules(
     `  Esempio: key:"birthDate" è un dato base reale da cui il sistema può derivare nel tempo l'età corrente.`,
     `- Quando leggi USER ATTRIBUTES, presta attenzione a recordedAt/notes: per i dati mutevoli usa latest+history, non assumere che un valore osservato settimane o mesi fa sia ancora identico oggi.`,
     ``,
+    `REGOLA CANONICA DATI TEMPORALI:`,
+    `- DATI STABILI (birthDate, gender, diagnosi permanenti): valori certi, non cambiano nel tempo.`,
+    `- DATI OSSERVATI (age, weight, BP, stress, mood): snapshot registrati in una data specifica.`,
+    `  → Non usare mai come "valore attuale certo" — potrebbero essere cambiati da quando sono stati rilevati.`,
+    `  → Mostra sempre la data di rilevamento: es. "peso 75kg (rilevato il 15 marzo)".`,
+    `- DATI DERIVABILI (età corrente da birthDate, BMI da weight+height): calcola sempre dal dato base.`,
+    `  → Se hai birthDate, calcola l'età corrente oggi (${new Date().toISOString().slice(0, 10)}) — non usare l'attributo "age" come età corrente certa.`,
+    `  → Se hai weight e height, ricalcola il BMI — non fidarti di un attributo BMI registrato mesi fa.`,
+    `- STORICO DISPONIBILE: in USER ATTRIBUTES la progressione storica include le note degli agenti per ogni rilevazione.`,
+    `  → Usa la progressione temporale per valutare tendenze cliniche, non solo il valore puntuale più recente.`,
+    ``,
     `PRIORITÀ (in ordine):`,
     `1. DAI CONSIGLI CONCRETI basati su evidenze scientifiche con i dati già disponibili`,
     `2. Se mancano dati FONDAMENTALI per sicurezza o efficacia, elencali tutti insieme in "questions" (max 3)`,
@@ -474,6 +488,26 @@ export function buildAgentUserPrompt(
     parts.push(
       `IMPORTANTE: I file sopra sono stati già inviati dall'utente. Non chiedere di inviare nuovamente documenti già presenti qui.`,
       `ESTRAI E SALVA: Per ogni dato clinico/numerico/rilevante presente nel documento (es. valori ematici, misure antropometriche, farmaci, diagnosi, date) che rientra nel tuo dominio, genera una chiamata setAttribute per salvarlo nella cartella dell'utente. Usa i dati reali del documento — non inventare valori.`,
+    )
+  }
+
+  // Historical documents from previous conversations (Dynamic DB — all-user scope)
+  const allFiles = input.contextPack.files ?? []
+  const historicalFiles = allFiles.filter(
+    (f) => f.conversationId && f.conversationId !== input.conversationId,
+  )
+  if (historicalFiles.length > 0) {
+    parts.push(``, `DOCUMENTI STORICI (caricati in sessioni precedenti — Dynamic DB):`)
+    for (const f of historicalFiles.slice(0, 5)) {
+      const sizeKb = Math.round((f.size ?? 0) / 1024)
+      const dateStr = f.recordedAt ? f.recordedAt.slice(0, 10) : '?'
+      parts.push(
+        `📁 ${f.filename} (${f.mimeType}, ${sizeKb}KB) — caricato il ${dateStr}` +
+          (f.notes ? ` — note agente: ${f.notes}` : ''),
+      )
+    }
+    parts.push(
+      `Questi documenti sono già stati analizzati in sessioni precedenti e i dati rilevanti dovrebbero essere già nei tuoi USER ATTRIBUTES. Puoi fare riferimento a questi documenti per contestualizzare la storia clinica dell'utente.`,
     )
   }
 

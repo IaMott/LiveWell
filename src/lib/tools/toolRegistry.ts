@@ -54,7 +54,11 @@ const userSetAttributeSchema = z.object({
   unit: z.string().trim().max(32).optional(),
   recordedAt: z.string().datetime().optional(),
   validUntil: z.string().datetime().optional(),
-  notes: z.string().max(500).optional(),
+  notes: z
+    .string()
+    .min(1)
+    .max(500)
+    .default('Dato registrato — valutazione in attesa di più informazioni.'),
 })
 
 const healthAddMetricSchema = z.object({
