@@ -162,7 +162,16 @@ describe('userSetAttributeSchema — notes default value', () => {
     // Import the schema indirectly by using the tool registry's validation
     // We replicate the schema shape here to test the default behavior
     const schema = z.object({
-      domain: z.enum(['health', 'nutrition', 'training', 'mindfulness', 'personal', 'general', 'career', 'financial']),
+      domain: z.enum([
+        'health',
+        'nutrition',
+        'training',
+        'mindfulness',
+        'personal',
+        'general',
+        'career',
+        'financial',
+      ]),
       key: z.string().trim().min(1).max(64),
       value: z.unknown(),
       unit: z.string().trim().max(32).optional(),
@@ -223,7 +232,15 @@ describe('attributeHistory — notes included per history entry', () => {
 
 describe('agentPrompt — historical files from other conversations', () => {
   function makeInputWithFiles(
-    files: Array<{ id: string; filename: string; mimeType: string; size: number; conversationId?: string; recordedAt?: string; notes?: string }>,
+    files: Array<{
+      id: string
+      filename: string
+      mimeType: string
+      size: number
+      conversationId?: string
+      recordedAt?: string
+      notes?: string
+    }>,
   ): AgentInput {
     return {
       requestId: 'r-t8',

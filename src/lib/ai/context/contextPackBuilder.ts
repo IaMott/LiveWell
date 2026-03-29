@@ -123,11 +123,17 @@ export type DbClient = {
 
 function buildAttributeMapWithHistory(rows: RawAttribute[]): {
   current: UserAttributes
-  history: Record<string, Record<string, Array<{ value: unknown; recordedAt: string; notes?: string }>>>
+  history: Record<
+    string,
+    Record<string, Array<{ value: unknown; recordedAt: string; notes?: string }>>
+  >
 } {
   const seenCurrent = new Set<string>()
   const current: UserAttributes = {}
-  const history: Record<string, Record<string, Array<{ value: unknown; recordedAt: string; notes?: string }>>> = {}
+  const history: Record<
+    string,
+    Record<string, Array<{ value: unknown; recordedAt: string; notes?: string }>>
+  > = {}
 
   for (const row of rows) {
     const composite = `${row.domain}:${row.key}`

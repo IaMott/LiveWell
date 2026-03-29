@@ -807,7 +807,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setReplyToContent(undefined)
       }
     },
-    [recoverConversationAfterSendFailure, replyToMessageId],
+    [recoverConversationAfterSendFailure, replyToContent, replyToMessageId],
   )
 
   const appendLiveMessage = useCallback(
