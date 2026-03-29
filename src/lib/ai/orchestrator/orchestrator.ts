@@ -429,11 +429,16 @@ export async function orchestrate(
       })
     : caseProtocol.caseState
 
-  // ── Multi-domain triage ──────────────────────────────────────────────
-  // When the message spans 2+ distinct domains and no specialist is locked in,
-  // generate a triage response with quick-reply buttons instead of a blended
-  // synthesis. This lets the user pick which topic to explore first.
-  if (isMultiDomain && !effectiveSpecialist) {
+  // ── Multi-domain triage (legacy fallback only) ───────────────────────────
+  // When routing already selected multiple domain agents (selectedAgents.length >= 2),
+  // those agents have fully reasoned in Round 1 + Round 2 and produced real domain-specific
+  // proposals. In that case we MUST synthesize their combined output — NOT interrupt the
+  // pipeline with a "pick a domain" triage.
+  //
+  // Triage only fires for the edge case where routing produced a single agent but the
+  // domain detector still sees 2+ significant domains — a mismatch that can happen with
+  // very ambiguous one-liners ("sto male"). In that scenario we fall back to quick replies.
+  if (isMultiDomain && !effectiveSpecialist && selectedAgents.length < 2) {
     const triage = buildMultiDomainTriage(round2Proposals, deps.team)
 
     // Emit triage thinking event
@@ -441,7 +446,7 @@ export async function orchestrate(
       agentId: 'orchestratore',
       displayName: 'Team',
       phase: 'synthesizing',
-      thought: 'Messaggio multi-dominio rilevato — preparo la selezione degli specialisti',
+      thought: 'Messaggio molto generico rilevato — propongo i domini disponibili',
     })
 
     const toolCallPlan = planToolCalls({
