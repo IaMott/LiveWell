@@ -223,7 +223,7 @@ describe('/api/chat/live-sync stateSnapshot response', () => {
       activeSpecialist: null,
       debug: {
         selectedAgents: ['fisioterapista'],
-        proposals: [
+        round1Proposals: [
           {
             agentId: 'fisioterapista',
             domain: 'health',
@@ -232,6 +232,7 @@ describe('/api/chat/live-sync stateSnapshot response', () => {
             confidence: 0.88,
           },
         ],
+        round2Proposals: [],
       },
     })
 

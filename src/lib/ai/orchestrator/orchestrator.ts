@@ -67,8 +67,6 @@ export type OrchestratorDeps = {
   globalTimeoutMs?: number
   /** Optional callback for real-time progress events during orchestration. */
   onProgress?: (event: ProgressEvent) => void
-  /** Per-agent average feedback scores (only populated if ≥3 ratings exist). Used for routing only. */
-  agentFeedbackScores?: Record<string, number>
 }
 
 function getRetryGuardWindowMs(): number {

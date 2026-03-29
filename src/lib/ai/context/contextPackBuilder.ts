@@ -53,7 +53,9 @@ export type DbClient = {
   message: {
     findMany: (
       args: QueryArgs,
-    ) => Promise<Array<{ role: 'user' | 'assistant'; content: string; createdAt: Date | string }>>
+    ) => Promise<
+      Array<{ id?: string; role: 'user' | 'assistant'; content: string; createdAt: Date | string }>
+    >
   }
   recommendationArtifact: {
     findMany: (args: QueryArgs) => Promise<
@@ -225,7 +227,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
     where: { conversationId: opts.conversationId },
     orderBy: { createdAt: 'desc' },
     take: 24,
-    select: { role: true, content: true, createdAt: true },
+    select: { id: true, role: true, content: true, createdAt: true },
   })
 
   const crossConversationMessages = await opts.db.message
@@ -461,6 +463,7 @@ export async function buildContextPack(opts: ContextPackBuilderOptions): Promise
         .slice()
         .reverse()
         .map((m) => ({
+          id: (m as { id?: string }).id ?? undefined,
           role: m.role,
           content: m.role === 'assistant' ? stripAssistantStoredMetadata(m.content) : m.content,
           createdAt: new Date(m.createdAt).toISOString(),

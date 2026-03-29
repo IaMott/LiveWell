@@ -12,27 +12,13 @@ import * as path from 'path'
 import { buildSharedAgentRules } from '@/lib/ai/orchestrator/agentPrompt'
 import { readCanonicalCaseRuntimeState } from '@/lib/ai/case/persistence'
 import type { CanonicalCaseStateSnapshot } from '@/lib/ai/types'
+import { normalizeEphemeralToken } from '@/lib/ai/live/ephemeralToken'
 
 const requestSchema = z.object({
   conversationId: z.string().min(1).optional(),
 })
 
 const toIsoInMinutes = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString()
-
-/**
- * Normalise the ephemeral-token name returned by authTokens.create()
- * to the `auth_tokens/<id>` format expected by the SDK as apiKey.
- */
-function normalizeEphemeralToken(name: string): string {
-  const t = name.trim()
-  if (!t) return t
-  if (t.startsWith('auth_tokens/')) return t
-  if (t.startsWith('authTokens/')) return `auth_tokens/${t.slice('authTokens/'.length)}`
-  const marker = '/authTokens/'
-  const idx = t.indexOf(marker)
-  if (idx >= 0) return `auth_tokens/${t.slice(idx + marker.length)}`
-  return t
-}
 
 function getAge(birthDate: Date): number {
   const now = new Date()

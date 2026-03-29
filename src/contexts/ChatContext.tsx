@@ -539,6 +539,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         id: crypto.randomUUID(),
         role: 'user',
         content: trimmed + filesSuffix,
+        // Immediately reflect the reply-to so the indicator renders without waiting for server roundtrip
+        replyToMessageId: replyToMessageId,
+        replyToContent: replyToContent,
       }
       const assistantId = crypto.randomUUID()
       let currentAssistantId = assistantId

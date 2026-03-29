@@ -5,6 +5,7 @@ import { GoogleGenAI, Modality } from '@google/genai'
 import type { LiveConnectConfig, LiveServerMessage, Session } from '@google/genai'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { CanonicalCaseStateSnapshot } from '@/lib/ai/types'
+import { normalizeEphemeralToken } from '@/lib/ai/live/ephemeralToken'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,17 +75,6 @@ function float32ToPcm16Bytes(samples: Float32Array): Uint8Array {
     view.setInt16(i * 2, s < 0 ? s * 32768 : s * 32767, true)
   }
   return new Uint8Array(buf)
-}
-
-function normalizeEphemeralToken(name: string): string {
-  const t = name.trim()
-  if (!t) return t
-  if (t.startsWith('auth_tokens/')) return t
-  if (t.startsWith('authTokens/')) return `auth_tokens/${t.slice('authTokens/'.length)}`
-  const marker = '/authTokens/'
-  const idx = t.indexOf(marker)
-  if (idx >= 0) return `auth_tokens/${t.slice(idx + marker.length)}`
-  return t
 }
 
 // ── Icons ─────────────────────────────────────────────────────────────────────

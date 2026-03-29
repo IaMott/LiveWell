@@ -396,19 +396,21 @@ export function buildAgentUserPrompt(
   const userName = accountName ?? attrName
 
   // Build reply-to context if the user is explicitly replying to a specific message.
-  // The replied-to message is in history but surfacing it explicitly helps the agent focus.
+  // recentMessages now carry `id` so we can do an exact match instead of a heuristic.
   const replyToContext =
     input.replyToMessageId != null
       ? (() => {
           const recentMsgs = input.contextPack.history.recentMessages
-          const target = [...recentMsgs].reverse().find((m) => {
-            // History messages don't carry IDs — use index heuristic: the message immediately
-            // before the latest user message is likely the one being replied to.
-            // When the reply target content is identifiable, match on content snippet.
-            return m.role === 'assistant'
-          })
+          // Exact match by ID (preferred — relies on id being populated in ContextPack)
+          const exactTarget = recentMsgs.find(
+            (m) => m.id === input.replyToMessageId && m.role === 'assistant',
+          )
+          const target =
+            exactTarget ??
+            // Fallback: most-recent assistant message (only when IDs are unavailable)
+            [...recentMsgs].reverse().find((m) => m.role === 'assistant')
           return target
-            ? `↩ REPLY-TO (l'utente sta rispondendo a questo messaggio assistente): "${target.content.slice(0, 200)}"`
+            ? `↩ REPLY-TO (l'utente sta rispondendo a questo messaggio assistente specifico): "${target.content.slice(0, 200)}"`
             : null
         })()
       : null
@@ -437,6 +439,14 @@ export function buildAgentUserPrompt(
   const userAttrLines = formatUserAttributes(input)
   if (userAttrLines.length > 0) {
     parts.push(``, `USER ATTRIBUTES (fonte principale dinamica):`, ...userAttrLines)
+    // G2: Signal incomplete history so agents avoid false completeness claims
+    if (input.contextPack.user.hasMoreAttributes) {
+      parts.push(
+        `⚠ CONTESTO ATTRIBUTI TRONCATO: la cronologia storica degli attributi supera il limite di caricamento (200 entries). ` +
+          `I dati più recenti sono presenti, ma dati storici più vecchi potrebbero mancare. ` +
+          `Evita affermazioni di completezza su dati storici (es. "non hai mai segnalato X") — potrebbero essere imprecise.`,
+      )
+    }
   }
 
   // 1A2 — Intake section: structured ✓/✗ checklist for known agents

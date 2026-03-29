@@ -167,18 +167,6 @@ export function toStoredCaseRuntimeState(
 }
 
 /**
- * Phase 1 canonical envelope for stores that can persist a shadow snapshot
- * alongside the legacy case-state columns. Not yet wired into Prisma callers.
- */
-export function toStoredCaseStateWithCanonicalSnapshot(
-  caseState: CaseState,
-): StoredCaseStateRecord {
-  const snapshot = toCanonicalCaseStateSnapshot(caseState)
-  if (!snapshot) return toStoredCaseState(caseState)
-  return toStoredCaseRuntimeState(snapshot, caseState)
-}
-
-/**
  * Legacy-safe facade:
  * - future callers should prefer readCanonicalCaseRuntimeState()
  * - existing callers can keep receiving CaseState while the canonical boundary

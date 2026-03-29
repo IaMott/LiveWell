@@ -34,12 +34,15 @@ export async function GET(
     where: { id, userId },
     include: {
       messages: {
+        where: { deletedAt: null },
         orderBy: { createdAt: 'asc' },
         select: {
           id: true,
           role: true,
           content: true,
           createdAt: true,
+          domain: true,
+          specialistName: true,
           replyToMessageId: true,
           attachments: {
             select: { fileName: true, mimeType: true, fileSize: true },
@@ -146,7 +149,10 @@ export async function GET(
     if (m.role === 'assistant' && !messageContent && !(decoded?.thinkingSteps?.length ?? 0)) {
       continue
     }
-    const who = m.role === 'user' ? 'Tu' : 'LiveWell'
+    const who =
+      m.role === 'user'
+        ? 'Tu'
+        : ((m as { specialistName?: string | null }).specialistName ?? 'LiveWell')
     const ts = new Date(m.createdAt).toLocaleString('it-IT', {
       dateStyle: 'short',
       timeStyle: 'short',

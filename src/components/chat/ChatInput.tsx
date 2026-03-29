@@ -273,25 +273,39 @@ export function ChatInput({
       // (macro details, habits, goals etc.) — not just the last turn.
       // Fires after a 1.5s delay to let the final transcript writes flush to DB.
       if (closingConvId && liveHasDataRef.current) {
-        setTimeout(() => {
-          void fetch('/api/chat/live-sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              conversationId: closingConvId,
-              userMessage:
-                '[FINE SESSIONE LIVE] Analizza TUTTA la conversazione live appena conclusa. ' +
-                'Estrai e salva con setAttribute TUTTI i dati clinici rilevanti menzionati: ' +
-                'macro (carboidrati, proteine, grassi in grammi), peso, altezza, età, obiettivi, ' +
-                'schema dei pasti, abitudini alimentari, attività fisica, patologie, sintomi, farmaci. ' +
-                'Per ogni setAttribute includi nel campo notes una valutazione clinica del dato ' +
-                '(es. se il macro è adeguato, se lo schema è bilanciato, cosa manca). ' +
-                'Poi salva un artifact con il tuo resoconto clinico complessivo della sessione.',
-            }),
-          }).catch(() => {
-            /* best-effort */
-          })
-        }, 1500)
+        // Wait for any in-flight transcript saves to complete (no magic timeout),
+        // then run end-of-session comprehensive extraction.
+        const runEndOfSessionExtraction = async (convId: string) => {
+          try {
+            // Drain the transcript queue before firing the extraction
+            await transcriptQueueRef.current
+          } catch {
+            /* ignore queue errors — still attempt extraction */
+          }
+          try {
+            const res = await fetch('/api/chat/live-sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                conversationId: convId,
+                userMessage:
+                  '[FINE SESSIONE LIVE] Analizza TUTTA la conversazione live appena conclusa. ' +
+                  'Estrai e salva con setAttribute TUTTI i dati clinici rilevanti menzionati: ' +
+                  'macro (carboidrati, proteine, grassi in grammi), peso, altezza, età, obiettivi, ' +
+                  'schema dei pasti, abitudini alimentari, attività fisica, patologie, sintomi, farmaci. ' +
+                  'Per ogni setAttribute includi nel campo notes una valutazione clinica del dato ' +
+                  '(es. se il macro è adeguato, se lo schema è bilanciato, cosa manca). ' +
+                  'Poi salva un artifact con il tuo resoconto clinico complessivo della sessione.',
+              }),
+            })
+            if (!res.ok) {
+              console.warn('[LiveWell] end-of-session extraction failed', res.status)
+            }
+          } catch (err) {
+            console.warn('[LiveWell] end-of-session extraction network error', err)
+          }
+        }
+        void runEndOfSessionExtraction(closingConvId)
       }
     }
   }, [showLive]) // eslint-disable-line react-hooks/exhaustive-deps

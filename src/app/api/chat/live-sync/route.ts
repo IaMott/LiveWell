@@ -230,7 +230,10 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
-  const thinkingSteps = buildProposalThinkingTrace(consensus.debug?.proposals, team)
+  const thinkingSteps = buildProposalThinkingTrace(
+    [...(consensus.debug?.round1Proposals ?? []), ...(consensus.debug?.round2Proposals ?? [])],
+    team,
+  )
 
   return new Response(
     JSON.stringify({

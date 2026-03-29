@@ -419,9 +419,14 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
               findMany: async (args) =>
                 prisma.message.findMany({
                   ...(args as object),
-                  select: { role: true, content: true, createdAt: true },
+                  select: { id: true, role: true, content: true, createdAt: true },
                 }) as Promise<
-                  Array<{ role: 'user' | 'assistant'; content: string; createdAt: Date }>
+                  Array<{
+                    id?: string
+                    role: 'user' | 'assistant'
+                    content: string
+                    createdAt: Date
+                  }>
                 >,
             },
             recommendationArtifact: {

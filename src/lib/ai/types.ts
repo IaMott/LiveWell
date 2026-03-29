@@ -181,7 +181,12 @@ export type ContextPack = {
     medicalRecord?: MedicalRecord
   }
   history: {
-    recentMessages: Array<{ role: 'user' | 'assistant'; content: string; createdAt: string }>
+    recentMessages: Array<{
+      id?: string
+      role: 'user' | 'assistant'
+      content: string
+      createdAt: string
+    }>
     crossConversationMessages?: Array<{
       role: 'user' | 'assistant'
       content: string
