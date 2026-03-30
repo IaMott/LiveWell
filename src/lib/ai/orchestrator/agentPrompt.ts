@@ -493,13 +493,15 @@ export function buildAgentUserPrompt(
     for (const f of filesMetadataOnly.filter((f) => !f.extractedText)) {
       const sizeKb = Math.round((f.size ?? 0) / 1024)
       parts.push(
-        `📎 ${f.filename} (${f.mimeType}, ${sizeKb}KB)${f.recordedAt ? ` — caricato il ${f.recordedAt.slice(0, 10)}` : ''}: [contenuto non estraibile — il file è stato caricato ma il testo non è stato estratto automaticamente. Riferisciti al nome del file e chiedi all'utente di descriverne il contenuto se necessario.]`,
+        `📎 ${f.filename} (${f.mimeType}, ${sizeKb}KB)${f.recordedAt ? ` — caricato il ${f.recordedAt.slice(0, 10)}` : ''}: [CONTENUTO_NON_DISPONIBILE — il sistema non ha estratto il testo di questo file. NON inventare, ipotizzare o indovinare il contenuto. NON usare esempi come se fossero fatti reali. Quando il documento è rilevante per la tua risposta, dichiara ESPLICITAMENTE "Non ho potuto leggere il documento" e chiedi all'utente di descrivere i dati specifici che ti servono.]`,
       )
     }
-    parts.push(
-      `IMPORTANTE: I file sopra sono stati già inviati dall'utente. Non chiedere di inviare nuovamente documenti già presenti qui.`,
-      `ESTRAI E SALVA: Per ogni dato clinico/numerico/rilevante presente nel documento (es. valori ematici, misure antropometriche, farmaci, diagnosi, date) che rientra nel tuo dominio, genera una chiamata setAttribute per salvarlo nella cartella dell'utente. Usa i dati reali del documento — non inventare valori.`,
-    )
+    if (filesWithContent.length > 0) {
+      parts.push(
+        `IMPORTANTE: I file sopra sono stati già inviati dall'utente. Non chiedere di inviare nuovamente documenti già presenti qui.`,
+        `ESTRAI E SALVA: Per ogni dato clinico/numerico/rilevante presente nel documento (es. valori ematici, misure antropometriche, farmaci, diagnosi, date) che rientra nel tuo dominio, genera una chiamata setAttribute per salvarlo nella cartella dell'utente. Usa i dati reali del documento — non inventare valori.`,
+      )
+    }
   }
 
   // Historical documents from previous conversations (Dynamic DB — all-user scope)
@@ -617,11 +619,12 @@ export function buildAgentUserPrompt(
     `Aggiorna "{tuoAgentId}_status":"completed" o "extended" quando il programma cambia fase.`,
     ``,
     `INSTRUCTIONS:`,
-    `- Respond ONLY within your domain scope.`,
-    `- Provide evidence-based analysis and recommendations. Assume reasonable defaults if minor data missing.`,
-    `- If user data is sparse, start with general best-practice advice + list essential missing data.`,
-    `- Propose tool calls only if clearly helpful; do not claim execution.`,
-    `- Output must be valid JSON matching the schema below.`,
+    `- Rispondi SOLO nel tuo ambito di competenza.`,
+    `- Fornisci analisi e raccomandazioni basate su evidenze. Usa best practice generali se mancano dati minori.`,
+    `- Se i dati utente sono scarsi, inizia con consigli generali + elenca i dati essenziali mancanti.`,
+    `- Proponi tool call solo se chiaramente utili; non dichiararne l'esecuzione.`,
+    `- L'output deve essere JSON valido che rispetta lo schema seguente.`,
+    `- LINGUA: scrivi il campo "reasoning" IN ITALIANO. Non usare mai l'inglese nel reasoning.`,
     ``,
     `CONSULENZA PIRAMIDALE (suggerisci altri specialisti se servono):`,
     `- Se dopo la tua analisi ritieni che per una valutazione completa serva il parere di un altro specialista,`,
@@ -638,7 +641,7 @@ export function buildAgentUserPrompt(
     `{`,
     `  "domain": "nutrizione|allenamento|salute|mindfulness|idee|general",`,
     `  "summary": "analisi e raccomandazioni concrete in italiano, con consigli scientifici diretti",`,
-    `  "reasoning": "analisi interna non visibile all'utente",`,
+    `  "reasoning": "analisi interna IN ITALIANO — non visibile all'utente",`,
     `  "questions": ["domanda essenziale 1 se mancano dati critici", "domanda 2 se necessario"],`,
     `  "recommendations": [],`,
     `  "toolCalls": [{"id":"uuid","name":"user.setAttribute","args":{"domain":"health","key":"weight","value":80,"unit":"kg"}}],`,

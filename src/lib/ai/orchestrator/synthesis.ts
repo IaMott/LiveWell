@@ -375,17 +375,31 @@ function buildUserPrompt(params: {
             : `Dai una risposta diretta, concreta e personalizzata basandoti sui dati disponibili.`
 
   // P5: Build file attachment block for non-image files
-  const filesWithContent = (contextPack.files ?? []).filter(
+  const allContextFiles = contextPack.files ?? []
+  const filesWithContent = allContextFiles.filter(
     (f) => f.extractedText && !f.extractedText.startsWith('data:'),
   )
-  const fileBlock =
-    filesWithContent.length > 0
-      ? `ALLEGATI DELL'UTENTE (già inviati — NON chiedere di reinviarli):\n` +
-        filesWithContent
-          .map((f) => `📎 ${f.filename}:\n${f.extractedText!.slice(0, 3000)}`)
-          .join('\n\n') +
-        `\n\nISTRUZIONE ALLEGATI: Comportati come un professionista che riceve un documento dal proprio paziente/cliente. Analizza il contenuto, formula una valutazione professionale basata sui dati presenti (valori, date, diagnosi, farmaci, misure, referti) e integra quella valutazione nella tua risposta. Non limitarti a dichiarare di aver ricevuto il documento — esprimi il tuo parere professionale sul suo contenuto, come faresti leggendolo in studio.`
-      : ''
+  const filesWithoutContent = allContextFiles.filter(
+    (f) => !f.extractedText || f.extractedText.startsWith('data:'),
+  )
+
+  let fileBlock = ''
+  if (filesWithContent.length > 0) {
+    fileBlock +=
+      `ALLEGATI DELL'UTENTE (testo estratto — usa questi dati reali):\n` +
+      filesWithContent
+        .map((f) => `📎 ${f.filename}:\n${f.extractedText!.slice(0, 3000)}`)
+        .join('\n\n') +
+      `\n\nISTRUZIONE ALLEGATI: Comportati come un professionista che riceve un documento dal proprio paziente/cliente. Analizza il contenuto, formula una valutazione professionale basata sui dati presenti (valori, date, diagnosi, farmaci, misure, referti) e integra quella valutazione nella tua risposta. Non limitarti a dichiarare di aver ricevuto il documento — esprimi il tuo parere professionale sul suo contenuto, come faresti leggendolo in studio.`
+  }
+  if (filesWithoutContent.length > 0) {
+    // ANTI-HALLUCINATION: the synthesis LLM must NOT invent document content
+    fileBlock +=
+      (fileBlock ? '\n\n' : '') +
+      `⚠️ DOCUMENTI ALLEGATI SENZA CONTENUTO ESTRATTO (il sistema NON ha potuto leggere questi file):\n` +
+      filesWithoutContent.map((f) => `📎 ${f.filename}`).join('\n') +
+      `\n\nREGOLA ASSOLUTA: Per i documenti elencati sopra il contenuto NON è disponibile. NON dichiarare di aver letto questi documenti. NON inventare dati, diagnosi, valori o localizzazioni presenti in essi. Se l'utente chiede informazioni contenute in questi documenti, rispondi: "Non ho potuto leggere automaticamente il documento — puoi descrivermi i dati rilevanti?" Non usare esempi (es. C5-C6) come se fossero fatti reali.`
+  }
 
   return [
     // C1: long-term memory from past sessions shown first so model has full context

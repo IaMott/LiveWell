@@ -641,6 +641,15 @@ export function selectAgentsForRequest(
         if (caseMatches > 0) s += caseMatches
       }
 
+      // RELEVANCE PENALTY: Specialist has many specific competence keywords but NONE
+      // match the current message. This prevents off-domain specialists (e.g. allergologo
+      // on a back-pain/spine message) from being selected purely on domain score.
+      // Only applied when the message is non-trivial (> 20 chars) to avoid penalising
+      // short greetings where competence detection is unreliable.
+      if (competenceHints.length > 5 && msgMatches === 0 && lowerMessage.length > 20) {
+        s -= 3
+      }
+
       // Feedback scoring: +2 if highly rated (≥4.0), -2 if poorly rated (≤2.0)
       // Only applies if user has given ≥3 ratings for this agent
       const avgRating = agentFeedbackScores[a.id]

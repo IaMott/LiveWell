@@ -564,8 +564,8 @@ function ThinkingDots({ steps, animating = true }: { steps: ThinkingStep[]; anim
                 <span style={{ fontWeight: 400 }}>{step.title}</span>
               </span>
             </div>
-            {/* FIX-1: Show full specialist reasoning — wrap text, no truncation */}
-            {step.thought && (
+            {/* Show thought only when it adds info beyond the title (prevents duplication) */}
+            {step.thought && step.thought.trim() !== step.title.trim() && (
               <span
                 style={{
                   marginLeft: '17px',

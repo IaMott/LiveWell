@@ -101,6 +101,16 @@ function keyLabel(key: string): string {
 
 function formatVal(value: unknown, unit: string | null): string {
   if (value === null || value === undefined) return '—'
+  // Handle JSON objects — extract meaningful display value
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const obj = value as Record<string, unknown>
+    // attachment_file: show filename
+    if (typeof obj.filename === 'string') return obj.filename
+    // generated_artifact or other objects with title
+    if (typeof obj.title === 'string') return obj.title
+    // fallback: compact JSON
+    return JSON.stringify(obj)
+  }
   return unit ? `${value} ${unit}` : String(value)
 }
 

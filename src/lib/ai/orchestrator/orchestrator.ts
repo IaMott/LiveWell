@@ -540,7 +540,18 @@ export async function orchestrate(
     (p) =>
       (p.confidence ?? 0) > 0.3 && p.summary && !p.summary.toLowerCase().includes('[unavailable]'),
   )
-  const shouldUseMultiAgent = relevantProposals.length >= 2 && !effectiveSpecialist
+  // Multi-agent: trigger when ≥2 relevant proposals exist.
+  // Even with an active specialist, show per-agent responses when at least one OTHER
+  // specialist has meaningful confidence (>= 0.5) — this covers interdisciplinary cases
+  // like spine + sport medicine + physio all contributing to a training question.
+  const otherHighConfidenceProposals = effectiveSpecialist
+    ? relevantProposals.filter(
+        (p) => (p.confidence ?? 0) >= 0.5 && p.agentId !== effectiveSpecialist.id,
+      )
+    : []
+  const shouldUseMultiAgent =
+    relevantProposals.length >= 2 &&
+    (!effectiveSpecialist || otherHighConfidenceProposals.length >= 1)
 
   // A1 FIX: use allSettled so per-agent responses are not lost if unified synthesis fails.
   // If synthesis fails we fall back to a joined summary of per-agent content (or a static message).
