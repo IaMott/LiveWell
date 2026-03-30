@@ -542,7 +542,9 @@ export async function orchestrate(
   )
   const shouldUseMultiAgent = relevantProposals.length >= 2 && !effectiveSpecialist
 
-  const [synthesis, perAgentResponses] = await Promise.all([
+  // A1 FIX: use allSettled so per-agent responses are not lost if unified synthesis fails.
+  // If synthesis fails we fall back to a joined summary of per-agent content (or a static message).
+  const [synthesisResult, perAgentResult] = await Promise.allSettled([
     synthesizeRawResponse({
       llm: deps.llm,
       userMessage: input.message,
@@ -562,6 +564,27 @@ export async function orchestrate(
         })
       : Promise.resolve([]),
   ])
+
+  if (synthesisResult.status === 'rejected') {
+    console.error('[orchestrator] synthesizeRawResponse failed', synthesisResult.reason)
+  }
+  if (perAgentResult.status === 'rejected') {
+    console.error('[orchestrator] synthesizePerAgentResponses failed', perAgentResult.reason)
+  }
+
+  const perAgentResponses =
+    perAgentResult.status === 'fulfilled' ? perAgentResult.value : []
+
+  const synthesis =
+    synthesisResult.status === 'fulfilled'
+      ? synthesisResult.value
+      : perAgentResponses.length > 0
+        ? {
+            rawText: perAgentResponses
+              .map((r) => `**${r.agentName}**: ${r.content}`)
+              .join('\n\n'),
+          }
+        : { rawText: 'Mi dispiace, si è verificato un errore durante l\'elaborazione. Riprova.' }
 
   const finalAnswer = hardenFinalAnswer({
     rawText: synthesis.rawText,

@@ -563,7 +563,23 @@ export async function resolveConversationId(
 ): Promise<string> {
   if (input.conversationId) {
     const existing = await deps.findConversationById(input.conversationId)
-    if (existing && existing.userId === input.userId) return existing.id
+    if (existing) {
+      // A2 FIX: Ownership check — if the conversation belongs to a different user,
+      // do NOT grant access. Create a new conversation for this user instead.
+      if (existing.userId !== input.userId) {
+        console.warn(
+          `[chatPersistence] resolveConversationId: unauthorized access attempt — ` +
+            `conversationId=${input.conversationId} belongs to a different userId`,
+        )
+        const created = await deps.createConversation({
+          userId: input.userId,
+          title: input.message.slice(0, 80),
+        })
+        return created.id
+      }
+      return existing.id
+    }
+    // Conversation not found — create it with the requested ID
     const created = await deps.createConversation({
       id: input.conversationId,
       userId: input.userId,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import type React from 'react'
@@ -31,10 +31,45 @@ function getSavedSettings(): Record<string, unknown> {
   }
 }
 
+/** Persist to localStorage AND dispatch change event (visual-only, no SSR). */
+function saveLocal(updates: Record<string, unknown>) {
+  if (typeof window === 'undefined') return
+  try {
+    const current = JSON.parse(localStorage.getItem('lw_settings') ?? '{}') as Record<
+      string,
+      unknown
+    >
+    localStorage.setItem('lw_settings', JSON.stringify({ ...current, ...updates }))
+    dispatchSettingsChanged()
+  } catch {}
+}
+
+/** Debounced PATCH to /api/user/preferences — persists to DB for cross-device sync. */
+function usePrefsSyncer() {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  return (updates: Record<string, unknown>) => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      fetch('/api/user/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      }).catch(() => {
+        // Best-effort; localStorage is the immediate fallback
+      })
+    }, 600)
+  }
+}
+
 export function SettingsSection({ user }: Props) {
   const router = useRouter()
+  const syncPrefs = usePrefsSyncer()
+
   const [resetLoading, setResetLoading] = useState(false)
   const [resetMessage, setResetMessage] = useState<string | null>(null)
+
+  // ── Appearance ─────────────────────────────────────────────────────────
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(() => {
     const s = getSavedSettings()
     return (s.theme as 'light' | 'dark' | 'system') ?? 'system'
@@ -43,42 +78,144 @@ export function SettingsSection({ user }: Props) {
     const s = getSavedSettings()
     return (s.accentColor as string) ?? '#007AFF'
   })
-  const [notifInApp, setNotifInApp] = useState<boolean>(() => {
-    const s = getSavedSettings()
-    return s.notifInApp !== undefined ? (s.notifInApp as boolean) : true
-  })
-  const [notifPush, setNotifPush] = useState<boolean>(() => {
-    const s = getSavedSettings()
-    return s.notifPush !== undefined ? (s.notifPush as boolean) : false
-  })
-  const [geoEnabled, setGeoEnabled] = useState<boolean>(() => {
-    const s = getSavedSettings()
-    return s.geoEnabled !== undefined ? (s.geoEnabled as boolean) : false
-  })
   const [reduceAnim, setReduceAnim] = useState<boolean>(() => {
     const s = getSavedSettings()
     return s.reduceAnim !== undefined ? (s.reduceAnim as boolean) : false
   })
 
-  function save(updates: Record<string, unknown>) {
-    try {
-      const current = JSON.parse(localStorage.getItem('lw_settings') ?? '{}') as Record<
-        string,
-        unknown
-      >
-      localStorage.setItem('lw_settings', JSON.stringify({ ...current, ...updates }))
-      dispatchSettingsChanged()
-    } catch {}
-  }
+  // ── Notifications ───────────────────────────────────────────────────────
+  const [notifInApp, setNotifInApp] = useState<boolean>(() => {
+    const s = getSavedSettings()
+    return s.notifInApp !== undefined ? (s.notifInApp as boolean) : true
+  })
 
+  // ── Geolocation ─────────────────────────────────────────────────────────
+  const [geoEnabled, setGeoEnabled] = useState<boolean>(() => {
+    const s = getSavedSettings()
+    return s.geoEnabled !== undefined ? (s.geoEnabled as boolean) : false
+  })
+  const [geoStatus, setGeoStatus] = useState<
+    'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable'
+  >('idle')
+
+  // ── Hydrate from DB on mount (cross-device sync) ────────────────────────
+  useEffect(() => {
+    fetch('/api/user/preferences')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((prefs: Record<string, unknown> | null) => {
+        if (!prefs) return
+        if (prefs.theme) {
+          setTheme(prefs.theme as 'light' | 'dark' | 'system')
+          saveLocal({ theme: prefs.theme })
+        }
+        if (prefs.accentColor) {
+          setAccentColor(prefs.accentColor as string)
+          saveLocal({ accentColor: prefs.accentColor })
+        }
+        if (prefs.reduceAnim !== undefined) {
+          setReduceAnim(prefs.reduceAnim as boolean)
+          saveLocal({ reduceAnim: prefs.reduceAnim })
+        }
+        if (prefs.notifInApp !== undefined) {
+          setNotifInApp(prefs.notifInApp as boolean)
+          saveLocal({ notifInApp: prefs.notifInApp })
+        }
+        dispatchSettingsChanged()
+      })
+      .catch(() => {})
+  }, [])
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
   function handleTheme(t: 'light' | 'dark' | 'system') {
     setTheme(t)
-    save({ theme: t })
+    saveLocal({ theme: t })
+    syncPrefs({ theme: t })
   }
 
   function handleAccent(c: string) {
     setAccentColor(c)
-    save({ accentColor: c })
+    saveLocal({ accentColor: c })
+    syncPrefs({ accentColor: c })
+  }
+
+  function handleReduceAnim(v: boolean) {
+    setReduceAnim(v)
+    saveLocal({ reduceAnim: v })
+    syncPrefs({ reduceAnim: v })
+  }
+
+  function handleNotifInApp(v: boolean) {
+    setNotifInApp(v)
+    saveLocal({ notifInApp: v })
+    syncPrefs({ notifInApp: v })
+  }
+
+  // C FIX: request actual browser geolocation when the user enables the toggle
+  async function handleGeoToggle(v: boolean) {
+    setGeoEnabled(v)
+    saveLocal({ geoEnabled: v })
+
+    if (v) {
+      if (!('geolocation' in navigator)) {
+        setGeoStatus('unavailable')
+        // Still save preference to DB (IP-based fallback will be used)
+        void fetch('/api/geo/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: true }),
+        }).catch(() => {
+          setGeoEnabled(false)
+          saveLocal({ geoEnabled: false })
+        })
+        return
+      }
+
+      setGeoStatus('requesting')
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          // Precise GPS coordinates — backend rounds to ~1km before storage
+          setGeoStatus('granted')
+          void fetch('/api/geo/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              enabled: true,
+              lat: pos.coords.latitude,
+              lon: pos.coords.longitude,
+              accuracy: 'browser-gps',
+            }),
+          }).catch(() => {
+            setGeoEnabled(false)
+            saveLocal({ geoEnabled: false })
+            setGeoStatus('idle')
+          })
+        },
+        () => {
+          // Permission denied — fall back to IP-based location (coarse)
+          setGeoStatus('denied')
+          void fetch('/api/geo/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: true }),
+          }).catch(() => {
+            setGeoEnabled(false)
+            saveLocal({ geoEnabled: false })
+            setGeoStatus('idle')
+          })
+        },
+        { timeout: 8000, maximumAge: 5 * 60 * 1000 },
+      )
+    } else {
+      setGeoStatus('idle')
+      void fetch('/api/geo/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false }),
+      }).catch(() => {
+        setGeoEnabled(true)
+        saveLocal({ geoEnabled: true })
+      })
+    }
   }
 
   async function handleResetMemory() {
@@ -102,6 +239,17 @@ export function SettingsSection({ user }: Props) {
       setResetLoading(false)
     }
   }
+
+  const geoHintText =
+    geoStatus === 'requesting'
+      ? 'Richiesta permesso posizione in corso…'
+      : geoStatus === 'granted'
+        ? '✓ Posizione GPS acquisita (arrotondata a ~1 km per la privacy)'
+        : geoStatus === 'denied'
+          ? 'Permesso negato — useremo la posizione approssimativa tramite IP'
+          : geoStatus === 'unavailable'
+            ? 'Geolocalizzazione non disponibile su questo dispositivo'
+            : 'Abilitazione della posizione per usare normative, alimenti e dati sanitari nazionali.'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -199,14 +347,7 @@ export function SettingsSection({ user }: Props) {
             </div>
           </div>
 
-          <ToggleRow
-            label="Riduci animazioni"
-            value={reduceAnim}
-            onChange={(v) => {
-              setReduceAnim(v)
-              save({ reduceAnim: v })
-            }}
-          />
+          <ToggleRow label="Riduci animazioni" value={reduceAnim} onChange={handleReduceAnim} />
         </Card>
       </section>
 
@@ -214,23 +355,39 @@ export function SettingsSection({ user }: Props) {
       <section>
         <SectionLabel>Notifiche</SectionLabel>
         <Card>
-          <ToggleRow
-            label="Notifiche in-app"
-            value={notifInApp}
-            onChange={(v) => {
-              setNotifInApp(v)
-              save({ notifInApp: v })
-            }}
-          />
+          <ToggleRow label="Notifiche in-app" value={notifInApp} onChange={handleNotifInApp} />
           <Divider />
-          <ToggleRow
-            label="Push web"
-            value={notifPush}
-            onChange={(v) => {
-              setNotifPush(v)
-              save({ notifPush: v })
-            }}
-          />
+          {/* Push web: not yet implemented — shown as disabled with tooltip */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span
+              style={{
+                fontSize: '0.875rem',
+                color: 'var(--color-text-secondary, #8E8E93)',
+                opacity: 0.5,
+              }}
+            >
+              Push web{' '}
+              <span
+                style={{
+                  fontSize: '0.7rem',
+                  background: 'var(--color-separator, #E5E5EA)',
+                  padding: '0.1rem 0.4rem',
+                  borderRadius: '4px',
+                }}
+              >
+                In arrivo
+              </span>
+            </span>
+            <span
+              style={{
+                fontSize: '0.75rem',
+                color: 'var(--color-text-secondary, #8E8E93)',
+                opacity: 0.4,
+              }}
+            >
+              —
+            </span>
+          </div>
           <p
             style={{
               fontSize: '0.75rem',
@@ -239,7 +396,7 @@ export function SettingsSection({ user }: Props) {
               lineHeight: 1.4,
             }}
           >
-            Le notifiche sono inviate solo per messaggi importanti dei professionisti.
+            Le notifiche in-app sono inviate solo per messaggi importanti dei professionisti.
           </p>
         </Card>
       </section>
@@ -251,30 +408,23 @@ export function SettingsSection({ user }: Props) {
           <ToggleRow
             label="Abilita la rilevazione"
             value={geoEnabled}
-            onChange={(v) => {
-              setGeoEnabled(v)
-              save({ geoEnabled: v })
-              // M8: Sync preference to DB. Revert toggle if API call fails so
-              // the UI reflects the actual persisted state.
-              void fetch('/api/geo/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enabled: v }),
-              }).catch(() => {
-                setGeoEnabled(!v)
-                save({ geoEnabled: !v })
-              })
-            }}
+            onChange={(v) => void handleGeoToggle(v)}
           />
           <p
             style={{
               fontSize: '0.75rem',
-              color: 'var(--color-text-secondary, #8E8E93)',
+              color:
+                geoStatus === 'granted'
+                  ? '#34C759'
+                  : geoStatus === 'denied'
+                    ? '#FF9F0A'
+                    : 'var(--color-text-secondary, #8E8E93)',
               margin: '0.625rem 0 0',
               lineHeight: 1.4,
+              transition: 'color 0.2s',
             }}
           >
-            Abilitazione della posizione per usare normative, alimenti e dati sanitari nazionali.
+            {geoHintText}
           </p>
         </Card>
       </section>

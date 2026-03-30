@@ -650,6 +650,34 @@ export async function POST(request: Request): Promise<Response> {
           }
         }
 
+        // ── A3 FIX: Early audit flush ─────────────────────────────────────
+        // Write audit events to DB immediately after tool execution completes,
+        // BEFORE streaming starts. This ensures they survive a client disconnect
+        // or a subsequent persistChatTurn failure.
+        // pendingAuditEvents is then cleared so persistChatTurn doesn't double-write.
+        if (isDbPersistenceEnabled() && pendingAuditEvents.length > 0) {
+          const { prisma: auditPrisma } = await import('@/lib/prisma')
+          await Promise.allSettled(
+            pendingAuditEvents.map((event) =>
+              auditPrisma.toolAuditLog.create({
+                data: {
+                  userId: event.actorUserId,
+                  conversationId: event.conversationId ?? null,
+                  toolCallId: event.toolCallId,
+                  toolName: event.toolName,
+                  inputSummary: event.inputSummary,
+                  inputHash: event.inputHash,
+                  status: event.status,
+                  requestId: event.requestId,
+                  errorCode: event.errorCode ?? null,
+                },
+              }),
+            ),
+          )
+          // Clear so persistChatTurn receives an empty array and won't duplicate
+          pendingAuditEvents.length = 0
+        }
+
         const cpUserName = (contextPack.user?.profile as Record<string, unknown> | undefined)
           ?.name as string | undefined
         const protocolThinkingEvents = buildCaseThinkingEvents(consensus.protocolEvents ?? [], team)
