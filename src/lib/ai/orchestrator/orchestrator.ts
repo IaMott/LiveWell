@@ -572,19 +572,16 @@ export async function orchestrate(
     console.error('[orchestrator] synthesizePerAgentResponses failed', perAgentResult.reason)
   }
 
-  const perAgentResponses =
-    perAgentResult.status === 'fulfilled' ? perAgentResult.value : []
+  const perAgentResponses = perAgentResult.status === 'fulfilled' ? perAgentResult.value : []
 
   const synthesis =
     synthesisResult.status === 'fulfilled'
       ? synthesisResult.value
       : perAgentResponses.length > 0
         ? {
-            rawText: perAgentResponses
-              .map((r) => `**${r.agentName}**: ${r.content}`)
-              .join('\n\n'),
+            rawText: perAgentResponses.map((r) => `**${r.agentName}**: ${r.content}`).join('\n\n'),
           }
-        : { rawText: 'Mi dispiace, si è verificato un errore durante l\'elaborazione. Riprova.' }
+        : { rawText: "Mi dispiace, si è verificato un errore durante l'elaborazione. Riprova." }
 
   const finalAnswer = hardenFinalAnswer({
     rawText: synthesis.rawText,
