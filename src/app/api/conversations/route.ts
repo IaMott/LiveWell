@@ -31,6 +31,9 @@ export async function GET(request: Request): Promise<Response> {
           take: 2,
           select: { role: true, content: true, domain: true, specialistName: true },
         },
+        summary: {
+          select: { summary: true },
+        },
       },
     })
 
@@ -48,6 +51,7 @@ export async function GET(request: Request): Promise<Response> {
           updatedAt: c.updatedAt.toISOString(),
           preview: previewContent.slice(0, 80),
           specialist: assistantMsg?.specialistName ?? null,
+          summary: c.summary?.summary ?? null,
           caseStatus: c.caseStatus,
           casePriority: c.casePriority,
         }

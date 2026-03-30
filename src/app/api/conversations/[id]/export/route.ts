@@ -29,6 +29,7 @@ export async function GET(
   const { id } = await params
   const url = new URL(request.url)
   const includeFeedback = url.searchParams.get('includeFeedback') === 'true'
+  const format = url.searchParams.get('format') ?? 'txt' // 'txt' | 'csv'
 
   const conversation = await prisma.conversation.findFirst({
     where: { id, userId },
@@ -205,6 +206,52 @@ export async function GET(
     lines.push('')
   }
 
+  // ── CSV format ──────────────────────────────────────────────────────────
+  if (format === 'csv') {
+    const csvEscape = (s: string) => `"${s.replace(/"/g, '""').replace(/\n/g, ' ')}"`
+    const csvHeaders = ['Data', 'Ora', 'Chi', 'Dominio', 'Messaggio']
+    if (includeFeedback) csvHeaders.push('Voto', 'Commento feedback')
+    const csvRows = [csvHeaders.join(',')]
+
+    for (const m of conversation.messages) {
+      const decoded = m.role === 'assistant' ? decodeAssistantStoredContent(m.content) : null
+      const messageContent =
+        m.role === 'assistant'
+          ? sanitizeAssistantVisibleContent(decoded?.content ?? m.content)
+          : m.content
+      if (m.role === 'assistant' && !messageContent) continue
+
+      const who =
+        m.role === 'user'
+          ? 'Tu'
+          : ((m as { specialistName?: string | null }).specialistName ?? 'LiveWell')
+      const date = new Date(m.createdAt)
+      const dateStr = date.toLocaleDateString('it-IT')
+      const timeStr = date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+      const domain = (m as { domain?: string | null }).domain ?? ''
+
+      const row = [dateStr, timeStr, who, domain, csvEscape(messageContent)]
+      if (includeFeedback && m.role === 'assistant') {
+        const review = feedbackMap.get(m.id)
+        row.push(review ? String(review.rating) : '')
+        row.push(review?.comment ? csvEscape(review.comment) : '')
+      } else if (includeFeedback) {
+        row.push('', '')
+      }
+      csvRows.push(row.join(','))
+    }
+
+    const csvText = '\uFEFF' + csvRows.join('\n') // BOM for Excel UTF-8
+    const csvSuffix = includeFeedback ? '-feedback' : ''
+    return new Response(csvText, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="livewell-${id.slice(0, 8)}${csvSuffix}.csv"`,
+      },
+    })
+  }
+
+  // ── TXT format (default) ──────────────────────────────────────────────
   const text = lines.join('\n')
   const suffix = includeFeedback ? '-feedback' : ''
 

@@ -818,12 +818,38 @@ export async function POST(request: Request): Promise<Response> {
         }
 
         // ── Step 6: Stream response ────────────────────────────────────────
+        // Multi-agent mode: emit individual agent responses BEFORE the unified response.
+        // Each agent gets its own message bubble in the frontend.
+        const agentResponses = consensus.agentResponses ?? []
+        if (agentResponses.length >= 2) {
+          for (const agentResp of agentResponses) {
+            const agentMsgId = crypto.randomUUID()
+            controller.enqueue(
+              encoder.encode(
+                toSse({
+                  type: 'agent.response',
+                  id: agentMsgId,
+                  agentId: agentResp.agentId,
+                  agentName: agentResp.agentName,
+                  domain: agentResp.domain,
+                  content: agentResp.content,
+                }),
+              ),
+            )
+          }
+        }
+
         // C2: Use [\s\S] so newlines inside markdown are not dropped.
-        const chunks = responseText.match(/[\s\S]{1,32}/g) ?? [responseText]
-        for (let i = 0; i < chunks.length; i += 1) {
-          controller.enqueue(
-            encoder.encode(toSse({ type: 'message.delta', id: assistantId, delta: chunks[i] })),
-          )
+        // In multi-agent mode, skip streaming the unified response — individual
+        // agent bubbles have already been sent. The unified text is still persisted
+        // in the DB as a backup/summary.
+        if (agentResponses.length < 2) {
+          const chunks = responseText.match(/[\s\S]{1,32}/g) ?? [responseText]
+          for (let i = 0; i < chunks.length; i += 1) {
+            controller.enqueue(
+              encoder.encode(toSse({ type: 'message.delta', id: assistantId, delta: chunks[i] })),
+            )
+          }
         }
 
         // ── Step 7: ui.state, tool results, complete ───────────────────────

@@ -9,6 +9,7 @@ type ConvPreview = {
   preview: string
   updatedAt: string
   specialist?: string | null
+  summary?: string | null
   caseStatus?: string | null
   casePriority?: string | null
 }
@@ -70,6 +71,7 @@ export function ConversationHistory({
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [exporting, setExporting] = useState<string | null>(null)
+  const [exportingCsv, setExportingCsv] = useState<string | null>(null)
   const [exportingFeedback, setExportingFeedback] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -156,6 +158,27 @@ export function ConversationHistory({
     },
     [patching],
   )
+
+  const handleExportCsv = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (exportingCsv) return
+    setExportingCsv(id)
+    try {
+      const res = await fetch(`/api/conversations/${id}/export?format=csv&includeFeedback=true`)
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `livewell-${id.slice(0, 8)}.csv`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExportingCsv(null)
+    }
+  }
 
   const handleExportWithFeedback = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -417,18 +440,21 @@ export function ConversationHistory({
                   >
                     {c.title}
                   </p>
-                  {c.preview && (
+                  {(c.summary || c.preview) && (
                     <p
                       style={{
                         margin: '0.125rem 0 0',
                         fontSize: '0.8125rem',
-                        color: 'var(--color-text-secondary)',
+                        color: c.summary
+                          ? 'var(--color-text-primary)'
+                          : 'var(--color-text-secondary)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
+                        fontStyle: c.summary ? 'italic' : 'normal',
                       }}
                     >
-                      {c.preview}
+                      {c.summary ?? c.preview}
                     </p>
                   )}
                   {/* Status / Priority badges — always show, clickable to open controls */}
@@ -658,6 +684,28 @@ export function ConversationHistory({
                   }}
                 >
                   {exportingFeedback === c.id ? '…' : '↓ ★'}
+                </button>
+                {/* Export: CSV (Excel-friendly) */}
+                <button
+                  onClick={(e) => handleExportCsv(c.id, e)}
+                  aria-label="Scarica CSV"
+                  title="Scarica come CSV (Excel)"
+                  style={{
+                    padding: '0.2rem 0.4rem',
+                    background: 'transparent',
+                    border: '1px solid var(--color-separator)',
+                    borderRadius: '6px',
+                    color:
+                      exportingCsv === c.id ? 'var(--color-text-secondary)' : 'var(--color-accent)',
+                    cursor: exportingCsv === c.id ? 'not-allowed' : 'pointer',
+                    flexShrink: 0,
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    lineHeight: 1,
+                    opacity: exportingCsv === c.id ? 0.5 : 1,
+                  }}
+                >
+                  {exportingCsv === c.id ? '…' : '↓ csv'}
                 </button>
                 <button
                   onClick={(e) => handleDelete(c.id, e)}

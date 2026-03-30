@@ -1289,21 +1289,23 @@ export function resolveRoutingCandidates(params: {
           const domainBest = selectAgentsForRequest(
             team,
             domain,
-            2,
+            4,
             [domain],
             message,
             caseContext,
             agentFeedbackScores,
             { preferredAgentIds },
           )
-          for (const agent of domainBest.slice(0, 1)) {
+          // Up to 2 agents per domain — enables multi-specialist consultations
+          // within the same domain (e.g. oculista + allergologo for eye symptoms)
+          for (const agent of domainBest.slice(0, 2)) {
             if (!seen.has(agent.id)) {
               seen.add(agent.id)
               result.push(agent)
             }
           }
         }
-        return result
+        return result.slice(0, 6)
       })()
     : clusterMatch
       ? (() => {
@@ -1329,19 +1331,20 @@ export function resolveRoutingCandidates(params: {
         ? (() => {
             const result: AgentProfile[] = []
             const seen = new Set<string>()
-            // One best agent per detected significant domain
+            // Up to 2 best agents per detected significant domain — enables
+            // multi-specialist consultations within the same domain.
             for (const domain of significantDomains) {
               const domainBest = selectAgentsForRequest(
                 team,
                 domain,
-                2,
+                4,
                 [domain],
                 message,
                 caseContext,
                 agentFeedbackScores,
                 { preferredAgentIds },
               )
-              for (const agent of domainBest.slice(0, 1)) {
+              for (const agent of domainBest.slice(0, 2)) {
                 if (!seen.has(agent.id)) {
                   seen.add(agent.id)
                   result.push(agent)

@@ -23,6 +23,9 @@ export function normalizeAgentProposal(params: NormalizeAgentProposalParams): Ag
       toolCalls,
       confidence: typeof obj.confidence === 'number' ? obj.confidence : 0.6,
       citations: Array.isArray(obj.citations) ? obj.citations : [],
+      suggestedConsultants: Array.isArray(obj.suggestedConsultants)
+        ? obj.suggestedConsultants.map(String).slice(0, 3)
+        : [],
       flags: obj.flags ?? {},
     }
   } catch {

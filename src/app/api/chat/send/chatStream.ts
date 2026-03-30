@@ -4,6 +4,15 @@ import { resolveAgentRuntimeDomain } from '@/lib/ai/team/domainMapping'
 export type ChatStreamEvent =
   | { type: 'message.delta'; id: string; delta: string }
   | {
+      /** Multi-agent response: individual specialist messages when ≥2 relevant agents */
+      type: 'agent.response'
+      id: string
+      agentId: string
+      agentName: string
+      domain?: Domain
+      content: string
+    }
+  | {
       type: 'agent.thinking'
       specialistName: string
       title: string

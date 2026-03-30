@@ -55,10 +55,10 @@ describe('resolveRoutingCandidates — production path', () => {
     })
 
     expect(selectedAgents[0]?.id).toBe('fisioterapista')
-    expect(selectedAgents.length).toBeLessThanOrEqual(3)
+    expect(selectedAgents.length).toBeLessThanOrEqual(6)
   })
 
-  it('caps collaboration to 3 when currentSpeakerId is set', () => {
+  it('caps collaboration to 6 when currentSpeakerId is set in multi-domain', () => {
     const { selectedAgents } = resolveRoutingCandidates({
       team,
       message: 'ho mal di schiena e vorrei capire come allenarmi',
@@ -68,7 +68,9 @@ describe('resolveRoutingCandidates — production path', () => {
     })
 
     expect(selectedAgents[0]?.id).toBe('fisioterapista')
-    expect(selectedAgents.length).toBeLessThanOrEqual(3)
+    // Multi-domain with active speaker: up to 2 agents per domain + active
+    expect(selectedAgents.length).toBeLessThanOrEqual(6)
+    expect(selectedAgents.length).toBeGreaterThanOrEqual(2)
   })
 
   // ─── Domain-based selection (no active speaker) ─────────────────────────

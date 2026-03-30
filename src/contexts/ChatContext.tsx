@@ -630,7 +630,31 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 )
               }
 
-              if (event.type === 'message.delta') {
+              if (event.type === 'agent.response') {
+                // Multi-agent mode: insert individual agent response as a separate message
+                // BEFORE the unified response. Each gets its own bubble.
+                const agentMsgId = String(event.id ?? crypto.randomUUID())
+                const agentName = String(event.agentName ?? '')
+                const agentDomain = event.domain as Domain | undefined
+                const agentContent = String(event.content ?? '')
+                if (agentContent.length > 0) {
+                  setMessages((prev) => {
+                    // Insert BEFORE the current streaming assistant message
+                    const insertIdx = prev.findIndex((m) => m.id === currentAssistantId)
+                    const agentMsg: ChatMessage = {
+                      id: agentMsgId,
+                      role: 'assistant',
+                      content: agentContent,
+                      domain: agentDomain,
+                      specialistName: agentName,
+                    }
+                    if (insertIdx >= 0) {
+                      return [...prev.slice(0, insertIdx), agentMsg, ...prev.slice(insertIdx)]
+                    }
+                    return [...prev, agentMsg]
+                  })
+                }
+              } else if (event.type === 'message.delta') {
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === currentAssistantId
@@ -646,8 +670,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   formatAgentIdLabel(
                     completedLeadPanel?.selectedAgentId ?? activeSpecialistIdRef.current,
                   )
-                setMessages((prev) =>
-                  prev.map((m) =>
+                setMessages((prev) => {
+                  // In multi-agent mode, the placeholder assistant message has empty content.
+                  // Remove it instead of updating it — individual agent bubbles are the real UI.
+                  const placeholder = prev.find((m) => m.id === currentAssistantId)
+                  if (placeholder && !placeholder.content.trim()) {
+                    return prev.filter((m) => m.id !== currentAssistantId)
+                  }
+                  return prev.map((m) =>
                     m.id === currentAssistantId
                       ? {
                           ...m,
@@ -657,8 +687,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                           streaming: false,
                         }
                       : m,
-                  ),
-                )
+                  )
+                })
               } else if (event.type === 'ui.state') {
                 const domain = event.domain as Domain | undefined
                 const specialistName = event.specialistName as string | undefined

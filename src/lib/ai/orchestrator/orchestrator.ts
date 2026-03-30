@@ -31,7 +31,7 @@ import { tryAgeQuestionFastPath, isGenericMessage } from './fastPaths'
 import { applyInterviewFlow } from './interviewFlow'
 import { inferRoutingWithLlm, resolveContextualRouting } from './contextualRouting'
 import { resolveRoutingCandidates } from './routing'
-import { synthesizeRawResponse } from './synthesis'
+import { synthesizePerAgentResponses, synthesizeRawResponse } from './synthesis'
 import { hardenFinalAnswer } from './finalAnswer'
 import { planToolCalls } from './toolCallPlan'
 import { buildMultiDomainTriage } from './multiDomainTriage'
@@ -315,18 +315,30 @@ export async function orchestrate(
   const skipAgents = !activeSpecialist && isGenericMessage(input)
   const globalTimeoutMs = deps.globalTimeoutMs ?? ORCHESTRATION_BUDGET_MS
 
-  const { round1Proposals, round2Proposals } = skipAgents
-    ? { round1Proposals: [], round2Proposals: [] }
+  const {
+    round1Proposals,
+    round2Proposals,
+    expandedAgentIds = [],
+  } = skipAgents
+    ? { round1Proposals: [], round2Proposals: [], expandedAgentIds: [] }
     : await withGlobalTimeout(
         executeAgentRounds({
           llm: deps.llm,
           selectedAgents,
           input,
           domainHint,
+          fullTeam: deps.team,
         }),
         globalTimeoutMs,
         'executeAgentRounds',
       )
+
+  // Log pyramidal expansion for observability
+  if (expandedAgentIds.length > 0) {
+    console.info(
+      `[orchestrator] Pyramidal expansion: ${expandedAgentIds.join(', ')} added by Round 1 suggestions`,
+    )
+  }
 
   // FIX-1: Show the FULL proposal reasoning, not truncated to 100 chars
   // P3: Only emit thinking events for agents with meaningful confidence (> 0.3)
@@ -521,15 +533,36 @@ export async function orchestrate(
     (q) => !interviewSet.has(q.toLowerCase().trim()),
   )
 
-  const synthesis = await synthesizeRawResponse({
-    llm: deps.llm,
-    userMessage: input.message,
-    proposals: round2WithQueue,
-    gatingQuestions: finalInterviewQuestions,
-    criticalQuestions: dedupedCritical,
-    contextPack: input.contextPack,
-    activeSpecialist: effectiveSpecialist,
-  })
+  // ── Multi-agent per-agent synthesis (when ≥2 relevant specialists) ────
+  // Generate individual responses in parallel with the unified synthesis.
+  // The unified response is always produced as fallback.
+  const relevantProposals = round2WithQueue.filter(
+    (p) =>
+      (p.confidence ?? 0) > 0.3 && p.summary && !p.summary.toLowerCase().includes('[unavailable]'),
+  )
+  const shouldUseMultiAgent = relevantProposals.length >= 2 && !effectiveSpecialist
+
+  const [synthesis, perAgentResponses] = await Promise.all([
+    synthesizeRawResponse({
+      llm: deps.llm,
+      userMessage: input.message,
+      proposals: round2WithQueue,
+      gatingQuestions: finalInterviewQuestions,
+      criticalQuestions: dedupedCritical,
+      contextPack: input.contextPack,
+      activeSpecialist: effectiveSpecialist,
+    }),
+    shouldUseMultiAgent
+      ? synthesizePerAgentResponses({
+          llm: deps.llm,
+          proposals: relevantProposals,
+          userMessage: input.message,
+          contextPack: input.contextPack,
+          team: deps.team,
+        })
+      : Promise.resolve([]),
+  ])
+
   const finalAnswer = hardenFinalAnswer({
     rawText: synthesis.rawText,
     criticalQuestions: finalInterviewQuestions,
@@ -560,6 +593,15 @@ export async function orchestrate(
     gatingQuestions: finalInterviewQuestions,
     toolCallsToExecute: toolCallPlan.toolCallsToExecute,
     finalMessageMarkdown: finalAnswer.finalText,
+    agentResponses:
+      perAgentResponses.length >= 2
+        ? perAgentResponses.map((r) => ({
+            agentId: r.agentId,
+            agentName: r.agentName,
+            domain: r.domain as import('../types').Domain,
+            content: r.content,
+          }))
+        : undefined,
     activeSpecialist: effectiveSpecialist,
     ui: {
       ...consensusOutcome.baseConsensus.ui,

@@ -160,6 +160,8 @@ export type AgentProposal = {
   toolCalls?: ToolCall[] // proposed, not executed by agents
   confidence?: number // 0..1
   citations?: Array<{ title: string; url?: string; note?: string }> // optional
+  /** Pyramidal consultation: agents can suggest additional specialists after Round 1 */
+  suggestedConsultants?: string[] // agent IDs to add in Round 2
   flags?: {
     needsMoreInfo?: boolean
     potentialRisk?: boolean
@@ -319,9 +321,19 @@ export type QuickReply = {
   domain?: Domain
 }
 
+/** Individual agent response for multi-agent mode */
+export type AgentResponse = {
+  agentId: AgentId
+  agentName: string
+  domain: Domain
+  content: string
+}
+
 export type ConsensusResult = {
   domain: Domain
   finalMessageMarkdown: string
+  /** When ≥2 specialists respond, their individual responses are here */
+  agentResponses?: AgentResponse[]
   toolCallsToExecute: ToolCall[]
   /** Active specialist for this turn (set by orchestrator) */
   activeSpecialist?: ActiveSpecialist

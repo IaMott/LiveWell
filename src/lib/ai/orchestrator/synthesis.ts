@@ -1,4 +1,4 @@
-import { ActiveSpecialist, AgentProposal, ContextPack } from '../types'
+import { ActiveSpecialist, AgentProposal, ContextPack, Domain } from '../types'
 import { buildProfessionalOutputInstructions } from '../artifacts/contracts'
 import { LlmClient } from './agentExecution'
 import {
@@ -431,6 +431,119 @@ export function extractImageData(
       const data = raw.slice(comma + 1)
       return { mimeType, data }
     })
+}
+
+/**
+ * Per-agent synthesis: generates a separate response for each relevant specialist.
+ * Used when ≥2 agents have meaningful contributions (confidence > 0.3).
+ * Each agent gets its own LLM call to produce a first-person response.
+ */
+export type AgentSynthesisResult = {
+  agentId: string
+  agentName: string
+  domain: Domain
+  content: string
+}
+
+export async function synthesizePerAgentResponses(input: {
+  llm: LlmClient
+  proposals: AgentProposal[]
+  userMessage: string
+  contextPack: ContextPack
+  team: Array<{ id: string; displayName: string; domainTags: string[] }>
+}): Promise<AgentSynthesisResult[]> {
+  const { llm, proposals, userMessage, contextPack, team } = input
+
+  // Only relevant proposals (confidence > 0.3, non-unavailable)
+  const relevant = proposals
+    .filter(
+      (p) =>
+        (p.confidence ?? 0) > 0.3 &&
+        p.summary &&
+        !p.summary.toLowerCase().includes('[unavailable]'),
+    )
+    .sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5))
+    .slice(0, 4)
+
+  if (relevant.length < 2) return [] // Not enough for multi-agent mode
+
+  const userName = getUserName(contextPack)
+  const nameRef = userName ?? "l'utente"
+  const recentHistory = buildRecentHistory(contextPack)
+
+  // Build peer summaries for cross-reference
+  const peerSummaries = relevant
+    .map((p) => {
+      const agent = team.find((a) => a.id === p.agentId)
+      return `${agent?.displayName ?? p.agentId}: ${p.summary}`
+    })
+    .join('\n')
+
+  const results = await Promise.allSettled(
+    relevant.map(async (proposal) => {
+      const agent = team.find((a) => a.id === proposal.agentId)
+      const agentName = agent?.displayName ?? proposal.agentId
+
+      const system = [
+        `Sei ${agentName} del team LiveWell. Stai rispondendo a ${nameRef}.`,
+        `Parla in italiano, prima persona singolare (io). Tono diretto e professionale.`,
+        `NON usare mai nomi propri inventati. NON iniziare con "Ciao, sono il/la ${agentName}".`,
+        `Rispondi SOLO nel tuo dominio di competenza. Sii conciso: max 150 parole.`,
+        `Se suggerisci di consultare un altro specialista, dillo brevemente a fine risposta.`,
+      ].join('\n')
+
+      const user = [
+        recentHistory ? `CONVERSAZIONE RECENTE:\n${recentHistory}\n` : '',
+        `MESSAGGIO UTENTE: "${userMessage}"`,
+        ``,
+        `LA TUA ANALISI (round 2):`,
+        proposal.summary,
+        proposal.reasoning ? `\nRAGIONAMENTO: ${proposal.reasoning}` : '',
+        proposal.questions?.length ? `\nDOMANDE DA PORRE: ${proposal.questions.join('; ')}` : '',
+        ``,
+        `CONTRIBUTI DEI COLLEGHI:`,
+        peerSummaries,
+        ``,
+        `Scrivi la tua risposta personale basata sulla tua analisi. Sii specifico e utile.`,
+        `Se i colleghi hanno punti rilevanti, puoi integrarli brevemente nel tuo ambito.`,
+      ]
+        .filter(Boolean)
+        .join('\n')
+
+      const res = await llm.complete({ system, user, format: 'text' })
+      const content = res.text.trim()
+
+      // If LLM returned JSON instead of text, extract summary
+      if (content.startsWith('{')) {
+        try {
+          const obj = JSON.parse(content)
+          return {
+            agentId: proposal.agentId,
+            agentName,
+            domain: proposal.domain,
+            content: String(obj.summary ?? obj.content ?? proposal.summary),
+          }
+        } catch {
+          return {
+            agentId: proposal.agentId,
+            agentName,
+            domain: proposal.domain,
+            content: proposal.summary,
+          }
+        }
+      }
+
+      return { agentId: proposal.agentId, agentName, domain: proposal.domain, content }
+    }),
+  )
+
+  const fulfilled: AgentSynthesisResult[] = []
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value.content.length > 10) {
+      fulfilled.push(r.value)
+    }
+  }
+  return fulfilled
 }
 
 export async function synthesizeRawResponse(input: SynthesisInput): Promise<SynthesisResult> {

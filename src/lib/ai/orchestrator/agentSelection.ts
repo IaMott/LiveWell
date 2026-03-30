@@ -561,6 +561,25 @@ function textToTokens(text: string): Set<string> {
   )
 }
 
+/**
+ * Italian-aware stem match: handles plurals, conjugation, gender suffixes.
+ * E.g. "occhi" ↔ "occhio", "muscoli" ↔ "muscolo", "allergia" ↔ "allergie"
+ * Constraints:
+ * - Both words must be ≥ 4 chars (avoids false positives on short words)
+ * - Length difference ≤ 2 (Italian inflections change at most 1-2 chars)
+ * - Shared prefix of at least (shorter.length - 1) chars
+ */
+function stemMatch(token: string, hint: string): boolean {
+  if (token === hint) return true
+  if (token.length < 4 || hint.length < 4) return false
+  // Italian inflections differ by at most 1-2 chars (o→i, a→e, e→i, +ne, etc.)
+  if (Math.abs(token.length - hint.length) > 2) return false
+  const shorter = token.length <= hint.length ? token : hint
+  const longer = token.length > hint.length ? token : hint
+  const stemLen = Math.max(3, shorter.length - 1)
+  return longer.startsWith(shorter.slice(0, stemLen))
+}
+
 export function selectAgentsForRequest(
   team: AgentProfile[],
   domain: Domain,
@@ -602,17 +621,22 @@ export function selectAgentsForRequest(
 
       const competenceHints = a.competenceKeywords ?? AGENT_COMPETENCE_HINTS[a.id] ?? []
       // Competence hints remain a booster, not the main routing driver.
+      // Uses stemMatch for Italian morphology: "occhi" matches "occhio", etc.
       const msgMatches = competenceHints.filter((h) =>
-        h.includes(' ') ? lowerMessage.includes(h) : msgTokens.has(h),
+        h.includes(' ')
+          ? lowerMessage.includes(h)
+          : [...msgTokens].some((tok) => stemMatch(tok, h)),
       ).length
-      if (msgMatches > 0) s += msgMatches
+      if (msgMatches > 0) s += msgMatches * 2
 
       // Case-context matches are stabilizers, not the core selection engine.
       if (caseContext) {
         const lowerCase = caseContext.toLowerCase()
         const caseTokens = textToTokens(caseContext)
         const caseMatches = competenceHints.filter((h) =>
-          h.includes(' ') ? lowerCase.includes(h) : caseTokens.has(h),
+          h.includes(' ')
+            ? lowerCase.includes(h)
+            : [...caseTokens].some((tok) => stemMatch(tok, h)),
         ).length
         if (caseMatches > 0) s += caseMatches
       }

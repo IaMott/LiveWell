@@ -412,7 +412,7 @@ describe('resolveRoutingCandidates', () => {
     expect(ids).toContain('sleep-coach')
   })
 
-  it('con currentSpeakerId → quel agente è primo, max 3 totali', () => {
+  it('con currentSpeakerId → quel agente è primo, multi-domain permette più agenti', () => {
     const { selectedAgents } = resolveRoutingCandidates({
       team: FULL_TEAM,
       message: 'ho mal di schiena e voglio capire come allenarmi meglio',
@@ -421,7 +421,9 @@ describe('resolveRoutingCandidates', () => {
       currentSpeakerId: 'fisioterapista',
     })
     expect(selectedAgents[0]?.id).toBe('fisioterapista')
-    expect(selectedAgents.length).toBeLessThanOrEqual(3)
+    // Multi-domain with active speaker: up to 2 agents per domain + active, max 6
+    expect(selectedAgents.length).toBeLessThanOrEqual(6)
+    expect(selectedAgents.length).toBeGreaterThanOrEqual(2)
   })
 
   it('preferisce gli agenti indicati dal contesto anche senza keyword forti nel messaggio', () => {
