@@ -218,8 +218,9 @@ describe('orchestrator deterministic domain persistence', () => {
         contextPack: withDob,
       },
     )
-    expect(outKnown.finalMessageMarkdown).toMatch(/Hai \d+ anni\./)
-    expect((outKnown.gatingQuestions ?? []).length).toBe(0)
+    // Fast path età rimosso: l'LLM ora risponde direttamente (risposta non vuota)
+    expect(outKnown.finalMessageMarkdown).toBeTruthy()
+    expect(outKnown.finalMessageMarkdown.length).toBeGreaterThan(0)
 
     const outMissing = await orchestrate(
       { llm, team, orchestratorToolsAllowed: ['user.setAttribute'] },
@@ -231,10 +232,9 @@ describe('orchestrator deterministic domain persistence', () => {
         contextPack,
       },
     )
-    expect(outMissing.finalMessageMarkdown.toLowerCase()).toContain('data di nascita')
-    expect(outMissing.gatingQuestions).toEqual([
-      'Per calcolare la tua età mi serve la tua data di nascita (gg/mm/aaaa).',
-    ])
+    // Fast path età rimosso: l'LLM risponde liberamente (risposta non vuota)
+    expect(outMissing.finalMessageMarkdown).toBeTruthy()
+    expect(outMissing.finalMessageMarkdown.length).toBeGreaterThan(0)
   })
 
   it('infers mindfulness attributes from natural chat when agents do not emit tool calls', async () => {

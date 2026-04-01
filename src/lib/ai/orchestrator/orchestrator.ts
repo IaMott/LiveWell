@@ -27,7 +27,7 @@ import {
   buildDomainDetectedTraceEvent,
   buildSpecialistModeResolvedTraceEvent,
 } from './decisionTrace'
-import { tryAgeQuestionFastPath, isGenericMessage } from './fastPaths'
+// fastPaths: all fast-paths disabled — pipeline is fully LLM-driven
 import { applyInterviewFlow } from './interviewFlow'
 import { inferRoutingWithLlm, resolveContextualRouting } from './contextualRouting'
 import { resolveRoutingCandidates } from './routing'
@@ -203,9 +203,6 @@ export async function orchestrate(
   deps: OrchestratorDeps,
   input: AgentInput,
 ): Promise<ConsensusResult> {
-  const fastPath = tryAgeQuestionFastPath(input)
-  if (fastPath.handled) return fastPath.result
-
   const heuristicDetectedDomain = input.domainHint ?? detectDomainFromText(input.message)
   const heuristicAllDomains = detectDomainsMulti(input.message).map((d) => d.domain)
 
@@ -312,7 +309,7 @@ export async function orchestrate(
 
   // Skip agent rounds for generic messages (greetings, short no-context messages)
   // to prevent any specialist from contaminating the synthesis response.
-  const skipAgents = !activeSpecialist && isGenericMessage(input)
+  const skipAgents = false // Tutti i messaggi passano attraverso il pipeline agenti
   const globalTimeoutMs = deps.globalTimeoutMs ?? ORCHESTRATION_BUDGET_MS
 
   const {
@@ -328,6 +325,9 @@ export async function orchestrate(
           input,
           domainHint,
           fullTeam: deps.team,
+          onProgress: (agentId, phase, thought, displayName) => {
+            deps.onProgress?.({ agentId, displayName, phase: phase as ProgressEvent['phase'], thought })
+          },
         }),
         globalTimeoutMs,
         'executeAgentRounds',

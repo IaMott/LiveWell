@@ -23,14 +23,25 @@ function buildIntakeSection(agentId: string, input: AgentInput): string[] {
     input.contextPack.user.profile as Record<string, unknown> | undefined,
   )
 
-  const lines: string[] = ['INTAKE SPECIALISTICO MINIMO (dati necessari per il tuo dominio):']
+  const lines: string[] = ['DATI UTENTE DISPONIBILI (raccolti nelle sessioni precedenti):']
 
-  for (const key of intakeKeys.required) {
-    const val = attrMap.get(key)
-    if (val) {
-      lines.push(`✓ ${key}: ${val}`)
-    } else {
-      lines.push(`✗ ${key} — non ancora raccolto`)
+  const collectedRequired = intakeKeys.required.filter(key => attrMap.get(key))
+  const collectedOptional = intakeKeys.optional.filter(key => attrMap.get(key))
+
+  if (collectedRequired.length === 0 && collectedOptional.length === 0) {
+    lines.push('(Nessun dato specifico ancora raccolto — usa il contesto della conversazione)')
+    return lines
+  }
+
+  for (const key of collectedRequired) {
+    lines.push(`✓ ${key}: ${attrMap.get(key)}`)
+  }
+
+  if (collectedOptional.length > 0) {
+    lines.push('')
+    lines.push('Dati opzionali disponibili:')
+    for (const key of collectedOptional) {
+      lines.push(`  ${key}: ${attrMap.get(key)}`)
     }
   }
 
@@ -133,14 +144,15 @@ function detectSessionMode(
 function buildSessionModeBlock(mode: 'first_session' | 'follow_up'): string[] {
   if (mode === 'first_session') {
     return [
-      'SESSION MODE: PRIMA SESSIONE',
-      '→ Raccogli i dati mancanti (vedi INTAKE SPECIALISTICO), poni UNA domanda aperta.',
+      'CONTESTO: Prima sessione con questo specialista.',
+      '→ Accogli la richiesta in modo naturale e rispondi al contesto attuale della conversazione.',
+      '→ Chiedi solo ciò che è strettamente necessario per rispondere, non fare domande di routine.',
     ]
   }
   return [
-    'SESSION MODE: FOLLOW-UP',
-    "→ L'utente ha già lavorato con te. Usa il framework di follow-up:",
-    '  apertura → dati oggettivi → aderenza → analisi 4 aree → cambiamenti percepiti → revisione obiettivi',
+    'CONTESTO: Follow-up — hai già interagito con questo utente.',
+    '→ Usa i dati già disponibili e concentrati sulla progressione e sulle nuove esigenze.',
+    '→ Non ripetere domande già poste in precedenza.',
   ]
 }
 
