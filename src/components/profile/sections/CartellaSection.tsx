@@ -59,40 +59,6 @@ const DOMAIN_ORDER = [
   'financial',
 ]
 
-// Completeness config — must match what agents save
-const COMPLETENESS = [
-  {
-    domain: 'personal',
-    label: 'Dati Personali',
-    keys: ['weight', 'height', 'gender', 'birthDate', 'age'],
-    color: '#8E8E93',
-  },
-  {
-    domain: 'health',
-    label: 'Salute',
-    keys: ['blood_pressure', 'symptoms', 'diagnosis', 'medications', 'complaint'],
-    color: '#FF3B30',
-  },
-  {
-    domain: 'nutrition',
-    label: 'Nutrizione',
-    keys: ['allergy', 'goal', 'meal_pattern', 'metabolic_condition', 'food_triggers'],
-    color: '#34C759',
-  },
-  {
-    domain: 'training',
-    label: 'Allenamento',
-    keys: ['training_frequency_per_week', 'fitness_level', 'goal', 'injury', 'sport'],
-    color: '#007AFF',
-  },
-  {
-    domain: 'mindfulness',
-    label: 'Benessere Mentale',
-    keys: ['stress_level', 'sleep_hours', 'sleep_quality', 'complaint', 'distress_intensity'],
-    color: '#AF52DE',
-  },
-]
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function keyLabel(key: string): string {
@@ -141,34 +107,11 @@ export function CartellaSection({ data }: Props) {
   const {
     user,
     profile,
-    attributesByDomain,
     attributesByDomainHistory,
     derivedFacts,
     dynamicDocuments,
     clinicalEvents,
   } = data
-
-  // Completeness — cross-domain check
-  const allDomains = attributesByDomain ?? {}
-  const completeness = COMPLETENESS.map(({ domain, label, keys, color }) => {
-    const hasKey = (k: string) =>
-      allDomains[domain]?.[k] !== undefined ||
-      allDomains['personal']?.[k] !== undefined ||
-      allDomains['general']?.[k] !== undefined ||
-      allDomains['health']?.[k] !== undefined
-
-    if (domain === 'personal') {
-      const filled =
-        (hasKey('weight') ? 1 : 0) +
-        (hasKey('height') ? 1 : 0) +
-        (hasKey('gender') ? 1 : 0) +
-        (hasKey('birthDate') || hasKey('age') ? 1 : 0)
-      return { label, pct: Math.round((filled / 4) * 100), color }
-    }
-
-    const filled = keys.filter(hasKey).length
-    return { label, pct: Math.round((filled / keys.length) * 100), color }
-  })
 
   // User header biometrics
   const age = derivedFacts?.currentAge ?? null
@@ -202,45 +145,10 @@ export function CartellaSection({ data }: Props) {
         </p>
       </div>
 
-      {/* ── Completezza ── */}
-      <div>
-        <p style={sectionLabel}>Completezza Cartella</p>
-        <div
-          style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem', marginTop: '0.5rem' }}
-        >
-          {completeness.map(({ label, pct, color }) => (
-            <div key={label}>
-              <div
-                style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}
-              >
-                <span style={fieldLabel}>{label}</span>
-                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color }}>{pct}%</span>
-              </div>
-              <div
-                style={{
-                  height: '5px',
-                  backgroundColor: '#E5E5EA',
-                  borderRadius: '3px',
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${pct}%`,
-                    backgroundColor: color,
-                    borderRadius: '3px',
-                  }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* ── Tutti i dati ── */}
       <div>
-        <p style={sectionLabel}>Tutti i dati raccolti</p>
+        <p style={sectionLabel}>Dati del profilo</p>
         {orderedDomains.length === 0 ? (
           <p style={emptyStyle}>Nessun dato ancora — parla con il team in chat.</p>
         ) : (
@@ -351,7 +259,7 @@ export function CartellaSection({ data }: Props) {
                     {typeof meta.userMessageExcerpt === 'string' &&
                       meta.userMessageExcerpt.length > 0 && (
                         <p style={assessmentExcerptStyle}>
-                          <em>Contesto:</em> "{meta.userMessageExcerpt}"
+                          <em>Contesto:</em> &ldquo;{meta.userMessageExcerpt}&rdquo;
                         </p>
                       )}
                   </div>

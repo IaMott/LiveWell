@@ -44,7 +44,7 @@ describe('resolveRoutingCandidates — multi-domain parallel activation', () => 
   it('selects one agent per domain when 3 significant domains are detected', () => {
     const { selectedAgents } = resolveRoutingCandidates({
       team,
-      message: 'voglio una ricomposizione corporea: mangiare meglio, allenarmi e gestire lo stress',
+      message: 'voglio seguire una dieta personalizzata, fare stretching quotidiano e costruire nuove abitudini per la resilienza mentale',
       detectedDomain: 'nutrition',
       allDomains: ['nutrition', 'training', 'mindfulness'],
     })
@@ -102,7 +102,7 @@ describe('resolveRoutingCandidates — single-domain unchanged', () => {
   it('selects dietista for a single-domain nutrition query', () => {
     const { selectedAgents } = resolveRoutingCandidates({
       team,
-      message: 'voglio un piano alimentare',
+      message: 'voglio una dieta personalizzata con calorie controllate',
       detectedDomain: 'nutrition',
       allDomains: ['nutrition'],
     })

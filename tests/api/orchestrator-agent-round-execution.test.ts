@@ -44,7 +44,7 @@ describe('agent round execution boundary', () => {
       complete: vi
         .fn()
         .mockImplementation(async ({ system, user }: { system: string; user: string }) => {
-          const isRound2 = user.includes('PEER REVIEW (round 2):')
+          const isRound2 = user.includes('=== ANALISI DEI COLLEGHI SPECIALISTI')
           const summaryBase = system === 'system-mmg' ? 'mmg' : 'dietista'
           return {
             text: JSON.stringify({
@@ -69,7 +69,8 @@ describe('agent round execution boundary', () => {
 
     expect(out.round1Proposals.map((p) => p.summary)).toEqual(['mmg-round1', 'dietista-round1'])
     expect(out.round2Proposals.map((p) => p.summary)).toEqual(['mmg-round2', 'dietista-round2'])
-    expect(llm.complete).toHaveBeenCalledTimes(4)
+    // MAX_PEER_REVIEW_PHASES=2 → 3 total phases: 1 briefing + 2 peer review = 6 calls
+    expect(llm.complete).toHaveBeenCalledTimes(6)
   })
 
   it('packages peer insights into round2 execution prompts', async () => {
@@ -77,13 +78,14 @@ describe('agent round execution boundary', () => {
       complete: vi
         .fn()
         .mockImplementation(async ({ system, user }: { system: string; user: string }) => {
-          const isRound2 = user.includes('PEER REVIEW (round 2):')
-          const summaryBase = system === 'system-mmg' ? 'mmg' : 'dietista'
+          const isRound2 = user.includes('=== ANALISI DEI COLLEGHI SPECIALISTI')
+          const agentId = system === 'system-mmg' ? 'mmg' : 'dietista'
           return {
             text: JSON.stringify({
               domain: 'health',
-              summary: isRound2 ? `${summaryBase}-round2` : `${summaryBase}-round1`,
-              reasoning: 'ok',
+              summary: isRound2 ? `${agentId}-round2` : `${agentId}-round1`,
+              // Reasoning univoco e > 10 chars → verrà incluso nei peer insights del collega
+              reasoning: `REASONING_FROM_${agentId}_R1`,
               questions: [],
               recommendations: [],
               toolCalls: [],
@@ -103,13 +105,18 @@ describe('agent round execution boundary', () => {
     const calls = vi.mocked(llm.complete).mock.calls
     const round2Users = calls.slice(2).map((call) => call[0].user)
 
-    expect(round2Users[0]).toContain('PEER REVIEW (round 2):')
-    expect(round2Users[0]).toContain('- dietista: dietista-round1')
-    expect(round2Users[0]).not.toContain('- mmg: mmg-round1')
+    // Nuovo formato: usa "=== ANALISI DEI COLLEGHI SPECIALISTI" e "### AGENTID"
+    expect(round2Users[0]).toContain('=== ANALISI DEI COLLEGHI SPECIALISTI')
+    // mmg vede il peer dietista (il reasoning di dietista appare nel suo prompt)
+    expect(round2Users[0]).toContain('REASONING_FROM_dietista_R1')
+    // mmg NON vede se stesso
+    expect(round2Users[0]).not.toContain('REASONING_FROM_mmg_R1')
 
-    expect(round2Users[1]).toContain('PEER REVIEW (round 2):')
-    expect(round2Users[1]).toContain('- mmg: mmg-round1')
-    expect(round2Users[1]).not.toContain('- dietista: dietista-round1\n- dietista')
+    expect(round2Users[1]).toContain('=== ANALISI DEI COLLEGHI SPECIALISTI')
+    // dietista vede il peer mmg (il reasoning di mmg appare nel suo prompt)
+    expect(round2Users[1]).toContain('REASONING_FROM_mmg_R1')
+    // dietista NON vede se stesso
+    expect(round2Users[1]).not.toContain('REASONING_FROM_dietista_R1')
   })
 
   it('does not inject peer review when there are no peer summaries', async () => {
@@ -135,6 +142,6 @@ describe('agent round execution boundary', () => {
     })
 
     const round2User = vi.mocked(llm.complete).mock.calls[1]?.[0].user ?? ''
-    expect(round2User).not.toContain('PEER REVIEW (round 2):')
+    expect(round2User).not.toContain('=== ANALISI DEI COLLEGHI SPECIALISTI')
   })
 })

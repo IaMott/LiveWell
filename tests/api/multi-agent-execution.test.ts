@@ -97,18 +97,18 @@ describe('executeAgentRounds — esecuzione two-round', () => {
 
   it('round2: ogni agente riceve esattamente N-1 peer insight (self-exclusion)', async () => {
     // Con 2 agenti selezionati, ogni round2 call deve contenere ESATTAMENTE 1 peer entry
-    // (non 2). Se buildPeerInsights fosse rotto e includesse se stesso, il count sarebbe 2.
-    // Le entry sono formattate come "- agentId: summary" → regex `^- \S+:` le individua.
+    // (non 2). Se buildRichPeerInsights fosse rotto e includesse se stesso, il count sarebbe 2.
+    // Il nuovo formato usa "### AGENTID" per ogni peer → regex `^### \S+` le individua.
     const round2PeerCounts: number[] = []
 
     const llm = {
       complete: async ({ user }: { system: string; user: string }) => {
-        if (user.includes('PEER REVIEW')) {
-          // Estrai SOLO la sezione tra "PEER REVIEW (round 2):\n" e la riga successiva
-          // (le entry peer sono "- agentId: summary", seguite da "Integra o correggi...")
-          const peerSection = user.match(/PEER REVIEW \(round 2\):\n([\s\S]*?)\nIntegra/)?.[1] ?? ''
-          // Conta le entry "- agentId: ..." nella sola sezione peer
-          const peerEntries = peerSection.match(/^- \S+:/gm) ?? []
+        if (user.includes('=== ANALISI DEI COLLEGHI SPECIALISTI')) {
+          // Estrai la sezione dopo "=== ANALISI DEI COLLEGHI SPECIALISTI"
+          const peerSection =
+            user.match(/=== ANALISI DEI COLLEGHI SPECIALISTI[^=]*===([\s\S]*?)---/)?.[1] ?? ''
+          // Conta le entry "### AGENTID ..." nel formato nuovo
+          const peerEntries = peerSection.match(/^### \S+/gm) ?? []
           round2PeerCounts.push(peerEntries.length)
         }
         return {
@@ -139,13 +139,18 @@ describe('executeAgentRounds — esecuzione two-round', () => {
       domainHint: 'health',
     })
 
-    // Round2 deve essere stato invocato per entrambi gli agenti
-    expect(round2PeerCounts).toHaveLength(2)
-    // Ogni agente deve vedere ESATTAMENTE 1 peer insight (N-1 = 2-1 = 1)
-    // Se ci fosse self-inclusion, il count sarebbe 2
-    for (const count of round2PeerCounts) {
-      expect(count).toBe(1)
-    }
+    // MAX_PEER_REVIEW_PHASES=2 → 2 peer-review phases × 2 agenti = 4 chiamate con peer insights
+    expect(round2PeerCounts).toHaveLength(4)
+    // Fase 2 (primi 2 conteggi): ogni agente vede ESATTAMENTE 1 peer (N-1 = 2-1 = 1)
+    // Fase 3 (ultimi 2 conteggi): ogni agente vede 2 peer entries per l'unico collega
+    // (una dall'analisi Fase 1 e una dalla Fase 2, entrambe accumulate)
+    const [phase2A, phase2B, phase3A, phase3B] = round2PeerCounts
+    // Self-exclusion: nella fase 2 ogni agente vede solo 1 entry (il suo unico collega)
+    expect(phase2A).toBe(1)
+    expect(phase2B).toBe(1)
+    // Nella fase 3 ci sono 2 entries per l'unico collega (fasi 1+2 accumulate)
+    expect(phase3A).toBe(2)
+    expect(phase3B).toBe(2)
   })
 
   it('agente che va in timeout → fallback proposal con confidence=0 e motivo timeout', async () => {
@@ -221,10 +226,10 @@ describe('executeAgentRounds — esecuzione two-round', () => {
   })
 
   it("peer insights contengono il summary dell'altro agente e non il proprio", async () => {
-    // Strategia: round1 ogni agente ritorna un summary con il proprio agentId univoco.
-    // Nel round2, ogni agente riceve peer insights: deve contenere il summary dell'ALTRO
-    // e NON contenere il prefisso "- {propioAgentId}:" (= self-exclusion).
-    // Gli agentId TEAM[0]=mmg e TEAM[1]=fisioterapista non hanno trattini → regex \S+ li cattura.
+    // Strategia: round1 ogni agente ritorna un reasoning univoco con il proprio agentId.
+    // Nel round2 (nuovo formato), ogni agente riceve peer insights che includono il reasoning
+    // dell'ALTRO agente (se length > 10) e NON il proprio (self-exclusion).
+    // Il nuovo formato usa "### AGENTID.TOUPPERCASE() — dominio..." per ogni peer.
     const agentA = TEAM[0]! // mmg
     const agentB = TEAM[1]! // fisioterapista
 
@@ -233,7 +238,7 @@ describe('executeAgentRounds — esecuzione two-round', () => {
 
     const llm = {
       complete: async ({ user }: { system: string; user: string }) => {
-        const isRound2 = user.includes('PEER REVIEW')
+        const isRound2 = user.includes('=== ANALISI DEI COLLEGHI SPECIALISTI')
 
         if (isRound2) {
           round2Prompts.push(user)
@@ -242,7 +247,7 @@ describe('executeAgentRounds — esecuzione two-round', () => {
             text: JSON.stringify({
               domain: 'health',
               summary: 'round2 risposta',
-              reasoning: '',
+              reasoning: 'ragionamento round2',
               questions: [],
               recommendations: [],
               toolCalls: [],
@@ -251,14 +256,15 @@ describe('executeAgentRounds — esecuzione two-round', () => {
           }
         }
 
-        // Round1: ogni agente ritorna un summary con il suo agentId incorporato
+        // Round1: ogni agente ritorna un reasoning univoco con il suo agentId incorporato
+        // Il reasoning > 10 chars viene incluso nei peer insights del round2 (nuovo formato)
         const n = ++round1CallCount.value
         const agentId = n === 1 ? agentA.id : agentB.id
         return {
           text: JSON.stringify({
             domain: 'health',
-            summary: `SUMMARY_FROM_${agentId}_R1`,
-            reasoning: '',
+            summary: `summary-${agentId}`,
+            reasoning: `REASONING_FROM_${agentId}_R1`,
             questions: [],
             recommendations: [],
             toolCalls: [],
@@ -281,27 +287,29 @@ describe('executeAgentRounds — esecuzione two-round', () => {
       domainHint: 'health',
     })
 
-    // Devono esserci 2 round2 prompts (uno per ogni agente)
-    expect(round2Prompts).toHaveLength(2)
+    // MAX_PEER_REVIEW_PHASES=2 → 2 fasi × 2 agenti = 4 prompt con peer insights totali
+    expect(round2Prompts).toHaveLength(4)
 
-    // Ogni round2 prompt deve contenere il summary dell'ALTRO agente (presente nei peer)
-    // e NON deve contenere il prefisso "- agentId:" per l'agente stesso
-    for (const prompt of round2Prompts) {
-      const containsA = prompt.includes(`SUMMARY_FROM_${agentA.id}_R1`)
-      const containsB = prompt.includes(`SUMMARY_FROM_${agentB.id}_R1`)
+    // I primi 2 prompt (fase 2) devono contenere il reasoning R1 dell'ALTRO agente (self-exclusion).
+    // Il nuovo formato usa "### AGENTID.TOUPPERCASE() — dominio..." per ogni peer,
+    // e include il reasoning (se > 10 chars) sotto "**Ragionamento clinico:**".
+    const phase2Prompts = round2Prompts.slice(0, 2)
+    for (const prompt of phase2Prompts) {
+      const containsA = prompt.includes(`REASONING_FROM_${agentA.id}_R1`)
+      const containsB = prompt.includes(`REASONING_FROM_${agentB.id}_R1`)
 
-      // Deve contenere esattamente UNO dei due summary, non entrambi
+      // Deve contenere esattamente UNO dei due reasoning, non entrambi
       // (self-exclusion: il proprio non deve essere incluso)
       expect(containsA !== containsB).toBe(true) // XOR: esattamente uno
     }
 
     // Verifica incrociata: uno dei prompt contiene agentA e non agentB, l'altro viceversa
-    const promptWithA = round2Prompts.find((p) => p.includes(`SUMMARY_FROM_${agentA.id}_R1`))
-    const promptWithB = round2Prompts.find((p) => p.includes(`SUMMARY_FROM_${agentB.id}_R1`))
-    expect(promptWithA).toBeDefined() // il round2 di agentB vede il summary di agentA
-    expect(promptWithB).toBeDefined() // il round2 di agentA vede il summary di agentB
-    expect(promptWithA).not.toContain(`SUMMARY_FROM_${agentB.id}_R1`)
-    expect(promptWithB).not.toContain(`SUMMARY_FROM_${agentA.id}_R1`)
+    const promptWithA = round2Prompts.find((p) => p.includes(`REASONING_FROM_${agentA.id}_R1`))
+    const promptWithB = round2Prompts.find((p) => p.includes(`REASONING_FROM_${agentB.id}_R1`))
+    expect(promptWithA).toBeDefined() // il round2 di agentB vede il reasoning di agentA
+    expect(promptWithB).toBeDefined() // il round2 di agentA vede il reasoning di agentB
+    expect(promptWithA).not.toContain(`REASONING_FROM_${agentB.id}_R1`)
+    expect(promptWithB).not.toContain(`REASONING_FROM_${agentA.id}_R1`)
   })
 })
 
@@ -468,6 +476,7 @@ describe('isGenericMessage — fast path detection', () => {
   }
 
   it('"ciao" → generic (greeting)', () => {
+    // Fast path disabilitato: isGenericMessage restituisce sempre false (LLM-driven)
     expect(
       isGenericMessage({
         requestId: 'r',
@@ -476,10 +485,11 @@ describe('isGenericMessage — fast path detection', () => {
         message: 'ciao',
         contextPack: noHistoryCtx,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('"buongiorno!" → generic (greeting)', () => {
+    // Fast path disabilitato: isGenericMessage restituisce sempre false (LLM-driven)
     expect(
       isGenericMessage({
         requestId: 'r',
@@ -488,10 +498,11 @@ describe('isGenericMessage — fast path detection', () => {
         message: 'buongiorno!',
         contextPack: noHistoryCtx,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('"ok" con history → generic (filler mid-conversation)', () => {
+    // Fast path disabilitato: isGenericMessage restituisce sempre false (LLM-driven)
     expect(
       isGenericMessage({
         requestId: 'r',
@@ -500,10 +511,11 @@ describe('isGenericMessage — fast path detection', () => {
         message: 'ok',
         contextPack: withHistoryCtx,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('"perfetto" con history → generic (filler)', () => {
+    // Fast path disabilitato: isGenericMessage restituisce sempre false (LLM-driven)
     expect(
       isGenericMessage({
         requestId: 'r',
@@ -512,7 +524,7 @@ describe('isGenericMessage — fast path detection', () => {
         message: 'perfetto',
         contextPack: withHistoryCtx,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('"ho dolore alla schiena" → non generic', () => {
@@ -540,6 +552,7 @@ describe('isGenericMessage — fast path detection', () => {
   })
 
   it('messaggio corto ≤4 parole senza dominio e senza history → generic', () => {
+    // Fast path disabilitato: isGenericMessage restituisce sempre false (LLM-driven)
     expect(
       isGenericMessage({
         requestId: 'r',
@@ -548,7 +561,7 @@ describe('isGenericMessage — fast path detection', () => {
         message: 'ok come va',
         contextPack: noHistoryCtx,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   // A4 regression — clinical short messages must NOT be skipped even if ≤4 words and no history.
@@ -579,6 +592,7 @@ describe('isGenericMessage — fast path detection', () => {
 
 describe('tryAgeQuestionFastPath', () => {
   it('domanda età senza birthDate → handled + gating question', () => {
+    // Fast path rimosso: tryAgeQuestionFastPath restituisce sempre { handled: false }
     const result = tryAgeQuestionFastPath({
       requestId: 'r',
       userId: 'u',
@@ -586,14 +600,11 @@ describe('tryAgeQuestionFastPath', () => {
       message: 'quanti anni ho?',
       contextPack: BASE_CONTEXT,
     })
-    expect(result.handled).toBe(true)
-    if (result.handled) {
-      expect(result.result.finalMessageMarkdown).toContain('data di nascita')
-      expect(result.result.gatingQuestions?.length).toBeGreaterThan(0)
-    }
+    expect(result.handled).toBe(false)
   })
 
   it('domanda età con birthDate → handled + risponde con età', () => {
+    // Fast path rimosso: tryAgeQuestionFastPath restituisce sempre { handled: false }
     const ctxWithBirth: ContextPack = {
       ...BASE_CONTEXT,
       user: {
@@ -612,14 +623,11 @@ describe('tryAgeQuestionFastPath', () => {
       message: 'quanti anni ho?',
       contextPack: ctxWithBirth,
     })
-    expect(result.handled).toBe(true)
-    if (result.handled) {
-      expect(result.result.finalMessageMarkdown).toMatch(/\d+ anni/)
-      expect(result.result.gatingQuestions).toBeUndefined()
-    }
+    expect(result.handled).toBe(false)
   })
 
   it('domanda età con snapshot canonico e legacy in conflitto → usa il panel canonico', () => {
+    // Fast path rimosso: tryAgeQuestionFastPath restituisce sempre { handled: false }
     const result = tryAgeQuestionFastPath({
       requestId: 'r',
       userId: 'u',
@@ -669,10 +677,8 @@ describe('tryAgeQuestionFastPath', () => {
       contextPack: BASE_CONTEXT,
     })
 
-    expect(result.handled).toBe(true)
-    if (result.handled) {
-      expect(result.result.activeSpecialist?.id).toBe('dietista')
-    }
+    // Fast path rimosso: restituisce sempre { handled: false }
+    expect(result.handled).toBe(false)
   })
 
   it('messaggio normale → not handled', () => {

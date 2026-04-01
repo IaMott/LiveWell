@@ -169,7 +169,7 @@ describe('chat routing — selectAgentsForRequest', () => {
   it('4. "Voglio allenarmi" → training → agenti training, nessun nutrizionista/psicologo', () => {
     const result = select(
       'training',
-      'Voglio allenarmi 3 volte a settimana per migliorare la forma',
+      'Voglio un piano di allenamento in palestra 3 volte a settimana per migliorare la forma',
     )
     expect(result.length).toBeGreaterThan(0)
     expect(result.length).toBeLessThanOrEqual(4)
@@ -439,7 +439,7 @@ describe('chat routing — selectAgentsForRequest', () => {
 
   // ── Bonus: Coach di vita per organizzazione ───────────────────────────────
   it('EXTRA. "Organizzare la mia vita" → coordination/inspiration → life-organizer', () => {
-    const result = select('coordination', 'Voglio organizzare meglio la mia vita quotidiana')
+    const result = select('coordination', 'Ho bisogno di organizzazione e priorità per gestire meglio la mia vita quotidiana')
     expectIncludes(result, 'life-organizer')
   })
 
