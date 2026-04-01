@@ -189,8 +189,22 @@ export function CartellaSection({ data }: Props) {
 
       {/* ── Valutazioni Specialistiche ── */}
       {(() => {
-        const assessments = (clinicalEvents ?? []).filter(
-          (e) => e.eventType === 'agent_assessment',
+        // Dedup: per ogni coppia (agentId, summaryPart) mostra solo la valutazione più recente
+        const raw = (clinicalEvents ?? []).filter((e) => e.eventType === 'agent_assessment')
+        const seen = new Map<string, (typeof raw)[0]>()
+        for (const ev of raw) {
+          const t = ev.title ?? ''
+          const s = t.includes(' — ') ? t.slice(t.indexOf(' — ') + 3) : t
+          const k = `${ev.agentId ?? ''}::${s.slice(0, 60).toLowerCase().trim()}`
+          const ex = seen.get(k)
+          const evT = new Date((ev.eventDate ?? ev.createdAt) as Date).getTime()
+          const exT = ex ? new Date((ex.eventDate ?? ex.createdAt) as Date).getTime() : 0
+          if (!ex || evT > exT) seen.set(k, ev)
+        }
+        const assessments = Array.from(seen.values()).sort(
+          (a, b) =>
+            new Date((b.eventDate ?? b.createdAt) as Date).getTime() -
+            new Date((a.eventDate ?? a.createdAt) as Date).getTime(),
         )
         if (assessments.length === 0) return null
         return (
