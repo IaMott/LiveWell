@@ -126,6 +126,17 @@ function formatDateTime(d: Date | string): string {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+const DOMAIN_COLORS: Record<string, string> = {
+  health: '#FF3B30',
+  nutrition: '#34C759',
+  training: '#007AFF',
+  mindfulness: '#AF52DE',
+  personal: '#8E8E93',
+  general: '#8E8E93',
+  career: '#FF9500',
+  financial: '#FFCC00',
+}
+
 export function CartellaSection({ data }: Props) {
   const {
     user,
@@ -134,6 +145,7 @@ export function CartellaSection({ data }: Props) {
     attributesByDomainHistory,
     derivedFacts,
     dynamicDocuments,
+    clinicalEvents,
   } = data
 
   // Completeness — cross-domain check
@@ -266,6 +278,89 @@ export function CartellaSection({ data }: Props) {
           </div>
         )}
       </div>
+
+      {/* ── Valutazioni Specialistiche ── */}
+      {(() => {
+        const assessments = (clinicalEvents ?? []).filter(
+          (e) => e.eventType === 'agent_assessment',
+        )
+        if (assessments.length === 0) return null
+        return (
+          <div>
+            <p style={sectionLabel}>Valutazioni Specialistiche</p>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
+                marginTop: '0.5rem',
+              }}
+            >
+              {assessments.map((ev) => {
+                const meta =
+                  ev.metadata && typeof ev.metadata === 'object' && !Array.isArray(ev.metadata)
+                    ? (ev.metadata as Record<string, unknown>)
+                    : {}
+                const displayName =
+                  typeof meta.displayName === 'string' ? meta.displayName : ev.agentId ?? '—'
+                const confidence =
+                  typeof meta.confidence === 'number'
+                    ? `${Math.round(meta.confidence * 100)}%`
+                    : null
+                const domainColor = DOMAIN_COLORS[ev.domain ?? 'general'] ?? '#8E8E93'
+                // Extract just the summary part (after "DisplayName — ")
+                const rawTitle = ev.title ?? ''
+                const summaryPart = rawTitle.includes(' — ')
+                  ? rawTitle.slice(rawTitle.indexOf(' — ') + 3)
+                  : rawTitle
+                return (
+                  <div key={ev.id} style={assessmentCardStyle}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        gap: '0.5rem',
+                        marginBottom: '0.375rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            background: domainColor,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span style={assessmentAgentStyle}>{displayName}</span>
+                        {confidence && (
+                          <span style={{ ...assessmentConfStyle, color: domainColor }}>
+                            {confidence}
+                          </span>
+                        )}
+                      </div>
+                      <span style={dateStyle}>{formatDateTime(ev.eventDate ?? ev.createdAt)}</span>
+                    </div>
+                    <p style={assessmentSummaryStyle}>{summaryPart}</p>
+                    {ev.description && ev.description.length > 0 && (
+                      <p style={assessmentDescStyle}>{ev.description}</p>
+                    )}
+                    {typeof meta.userMessageExcerpt === 'string' &&
+                      meta.userMessageExcerpt.length > 0 && (
+                        <p style={assessmentExcerptStyle}>
+                          <em>Contesto:</em> "{meta.userMessageExcerpt}"
+                        </p>
+                      )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       <div>
         <p style={sectionLabel}>Documenti e Artifact</p>
@@ -424,6 +519,44 @@ const linkStyle: React.CSSProperties = {
   fontWeight: 600,
   color: 'var(--color-accent, #007AFF)',
   textDecoration: 'none',
+}
+const assessmentCardStyle: React.CSSProperties = {
+  border: '1px solid var(--color-separator, #E5E5EA)',
+  borderRadius: '0.875rem',
+  padding: '0.75rem 0.875rem',
+  background: 'var(--color-surface, #fff)',
+}
+const assessmentAgentStyle: React.CSSProperties = {
+  fontSize: '0.8125rem',
+  fontWeight: 600,
+  color: 'var(--color-text-primary, #1C1C1E)',
+}
+const assessmentConfStyle: React.CSSProperties = {
+  fontSize: '0.6875rem',
+  fontWeight: 600,
+  background: 'var(--color-bg, #F2F2F7)',
+  borderRadius: '0.375rem',
+  padding: '0.1rem 0.35rem',
+}
+const assessmentSummaryStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: '0.8125rem',
+  fontWeight: 500,
+  color: 'var(--color-text-primary, #1C1C1E)',
+  lineHeight: 1.45,
+}
+const assessmentDescStyle: React.CSSProperties = {
+  margin: '0.375rem 0 0',
+  fontSize: '0.75rem',
+  color: 'var(--color-text-secondary, #3C3C43)',
+  lineHeight: 1.45,
+  whiteSpace: 'pre-wrap',
+}
+const assessmentExcerptStyle: React.CSSProperties = {
+  margin: '0.375rem 0 0',
+  fontSize: '0.6875rem',
+  color: 'var(--color-text-secondary, #8E8E93)',
+  fontStyle: 'italic',
 }
 
 import type React from 'react'

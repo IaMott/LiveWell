@@ -544,9 +544,14 @@ export async function orchestrate(
   // Even with an active specialist, show per-agent responses when at least one OTHER
   // specialist has meaningful confidence (>= 0.5) — this covers interdisciplinary cases
   // like spine + sport medicine + physio all contributing to a training question.
+  // Multi-agent synthesis: fire when ≥2 relevant proposals exist.
+  // Even with an active specialist, show per-agent responses when at least one
+  // OTHER specialist has meaningful confidence (≥ 0.35) — lowered from 0.5
+  // because intra-domain specialists (e.g. fisiatra, neurologo, fisioterapista
+  // all in `health`) typically share the same domain score budget.
   const otherHighConfidenceProposals = effectiveSpecialist
     ? relevantProposals.filter(
-        (p) => (p.confidence ?? 0) >= 0.5 && p.agentId !== effectiveSpecialist.id,
+        (p) => (p.confidence ?? 0) >= 0.35 && p.agentId !== effectiveSpecialist.id,
       )
     : []
   const shouldUseMultiAgent =

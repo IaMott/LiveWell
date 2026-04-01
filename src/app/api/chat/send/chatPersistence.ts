@@ -80,6 +80,12 @@ export type RoutePersistenceDeps = {
     fileIds?: string[]
     /** Multi-reply: ID of the assistant message this user message is replying to */
     replyToMessageId?: string
+    /**
+     * Map agentId → displayName for creating ClinicalEvent annotations.
+     * When provided, significant agent proposals are stored as agent_assessment events
+     * so the specialist's reasoning is visible in the user's clinical profile.
+     */
+    agentDisplayNames?: Record<string, string>
   }) => Promise<void>
   buildContextPack: (input: {
     userId: string
@@ -203,6 +209,7 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       recentMessages,
       fileIds,
       replyToMessageId,
+      agentDisplayNames,
     }) => {
       // ── Phase 1: Critical — conversation + messages ──────────────────────
       // Sequential saves (no $transaction) for maximum compatibility with Neon
@@ -382,6 +389,46 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
           })
         } catch {
           // non-critical
+        }
+      }
+
+      // ── Phase 2.5: Specialist annotations — ClinicalEvent per significant proposal ──
+      // Stores a human-readable specialist assessment in the user's clinical profile,
+      // contextualising every stored data point with the specialist's reasoning.
+      // Non-critical: failures are silently swallowed so messages always persist.
+      const EXCLUDED_AGENT_IDS = ['orchestratore', 'intervistatore', 'analista-contesto']
+      const significantProposals = (round2Proposals ?? []).filter(
+        (p) =>
+          (p.confidence ?? 0) >= 0.4 &&
+          p.summary &&
+          p.summary.length > 30 &&
+          !p.summary.toLowerCase().includes('[unavailable]') &&
+          !EXCLUDED_AGENT_IDS.includes(p.agentId),
+      )
+      for (const proposal of significantProposals.slice(0, 3)) {
+        try {
+          const displayName = agentDisplayNames?.[proposal.agentId] ?? proposal.agentId
+          await prisma.clinicalEvent.create({
+            data: {
+              userId,
+              eventType: 'agent_assessment',
+              title: `${displayName} — ${proposal.summary.slice(0, 120)}`,
+              description: proposal.reasoning?.slice(0, 800) ?? null,
+              domain: proposal.domain ?? domain ?? 'general',
+              agentId: proposal.agentId,
+              conversationId,
+              eventDate: new Date(),
+              status: 'active',
+              metadata: {
+                confidence: proposal.confidence,
+                displayName,
+                userMessageExcerpt: userMessage.slice(0, 100),
+                round: 2,
+              } as Prisma.InputJsonValue,
+            },
+          })
+        } catch {
+          // non-critical — annotation failure must never block message persistence
         }
       }
 

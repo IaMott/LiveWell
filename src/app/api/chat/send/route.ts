@@ -775,6 +775,8 @@ export async function POST(request: Request): Promise<Response> {
             fileIds: parsedBody.fileIds,
             // Multi-reply: link the user message to the referenced assistant message
             replyToMessageId: parsedBody.replyToMessageId,
+            // Phase 2.5: specialist display names for ClinicalEvent annotations
+            agentDisplayNames: Object.fromEntries(team.map((a) => [a.id, a.displayName])),
           })
         } catch (error) {
           console.error('[chat/send] persistChatTurn failed, continuing in fallback mode', error)

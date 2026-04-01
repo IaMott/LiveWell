@@ -1274,31 +1274,52 @@ export function resolveRoutingCandidates(params: {
 
   const selectedAgents = currentSpeakerId
     ? (() => {
-        // When a specialist is active in single-domain: route exclusively.
-        // In multi-domain: include the active specialist first, then add one
-        // best agent per remaining domain so all domains stay represented.
-        if (!isMultiDomainQuery && significantDomains.length < 2) {
-          const activeAgent = team.find((agent) => agent.id === currentSpeakerId)
-          return activeAgent ? [activeAgent] : []
-        }
-        // Multi-domain with active specialist: specialist leads, others follow
+        // Active specialist always leads, but additional agents are included
+        // when the message has intra-domain relevance for multiple specialists
+        // (e.g. fisioterapista active + message about cervicale + formicolio →
+        // also include fisiatra, neurologo).
+        // The OLD exclusive-routing path (returning only the active agent for
+        // single-domain messages) was the primary cause of "always one agent"
+        // responses even for complex multi-specialist cases.
         const activeAgent = team.find((agent) => agent.id === currentSpeakerId)
         const result: AgentProfile[] = activeAgent ? [activeAgent] : []
         const seen = new Set<string>(activeAgent ? [activeAgent.id] : [])
-        for (const domain of significantDomains) {
-          const domainBest = selectAgentsForRequest(
+
+        if (isMultiDomainQuery) {
+          // Multi-domain: one best agent per detected significant domain
+          for (const domain of significantDomains) {
+            const domainBest = selectAgentsForRequest(
+              team,
+              domain,
+              4,
+              [domain],
+              message,
+              caseContext,
+              agentFeedbackScores,
+              { preferredAgentIds },
+            )
+            for (const agent of domainBest.slice(0, 2)) {
+              if (!seen.has(agent.id)) {
+                seen.add(agent.id)
+                result.push(agent)
+              }
+            }
+          }
+        } else {
+          // Single-domain (or no significant domain detected): run full scoring
+          // within the detected domain and add agents that score high enough.
+          // Active specialist is guaranteed first; others follow by score.
+          const domainScored = selectAgentsForRequest(
             team,
-            domain,
+            domainHint,
             4,
-            [domain],
+            allDomains,
             message,
             caseContext,
             agentFeedbackScores,
             { preferredAgentIds },
           )
-          // Up to 2 agents per domain — enables multi-specialist consultations
-          // within the same domain (e.g. oculista + allergologo for eye symptoms)
-          for (const agent of domainBest.slice(0, 2)) {
+          for (const agent of domainScored) {
             if (!seen.has(agent.id)) {
               seen.add(agent.id)
               result.push(agent)
