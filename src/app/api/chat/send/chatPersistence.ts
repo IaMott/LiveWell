@@ -88,6 +88,12 @@ export type RoutePersistenceDeps = {
      * so the specialist's reasoning is visible in the user's clinical profile.
      */
     agentDisplayNames?: Record<string, string>
+    /**
+     * Map agentId → primary domain (from AgentProfile.domainTags[0]).
+     * Used to store ClinicalEvent with the agent's own specialization domain,
+     * not the conversation's primary domain.
+     */
+    agentDomainMap?: Record<string, string>
   }) => Promise<void>
   buildContextPack: (input: {
     userId: string
@@ -213,6 +219,7 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       fileIds,
       replyToMessageId,
       agentDisplayNames,
+      agentDomainMap,
     }) => {
       // ── Phase 1: Critical — conversation + messages ──────────────────────
       // Sequential saves (no $transaction) for maximum compatibility with Neon
@@ -466,9 +473,9 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
             data: {
               userId,
               eventType: 'agent_assessment',
-              title: `${displayName} — ${proposal.summary.slice(0, 120)}`,
+              title: `${displayName} — ${proposal.summary.slice(0, 300)}`,
               description: proposal.reasoning?.slice(0, 800) ?? null,
-              domain: proposal.domain ?? domain ?? 'general',
+              domain: agentDomainMap?.[proposal.agentId] ?? proposal.domain ?? domain ?? 'general',
               agentId: proposal.agentId,
               conversationId,
               eventDate: new Date(),

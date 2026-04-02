@@ -135,6 +135,9 @@ export function MindfulnessSection({ data }: Props) {
                         </span>
                       </div>
                       <p style={assessmentTextStyle}>{summaryPart}</p>
+                      {ev.description && ev.description.trim().length > 0 && (
+                        <p style={assessmentDescStyle}>{ev.description}</p>
+                      )}
                     </div>
                   )
                 })}
@@ -206,6 +209,13 @@ const assessmentTextStyle: React.CSSProperties = {
   fontSize: '0.8125rem',
   color: 'var(--color-text-primary, #1C1C1E)',
   lineHeight: 1.4,
+}
+const assessmentDescStyle: React.CSSProperties = {
+  margin: '0.25rem 0 0',
+  fontSize: '0.75rem',
+  color: 'var(--color-text-secondary, #3C3C43)',
+  lineHeight: 1.45,
+  whiteSpace: 'pre-wrap',
 }
 const emptyStyle: React.CSSProperties = {
   fontSize: '0.875rem',

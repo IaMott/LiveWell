@@ -805,6 +805,9 @@ export async function POST(request: Request): Promise<Response> {
             replyToMessageId: parsedBody.replyToMessageId,
             // Phase 2.5: specialist display names for ClinicalEvent annotations
             agentDisplayNames: Object.fromEntries(team.map((a) => [a.id, a.displayName])),
+            agentDomainMap: Object.fromEntries(
+              team.map((a) => [a.id, (a.domainTags as string[])[0] ?? 'general']),
+            ),
           })
         } catch (error) {
           console.error('[chat/send] persistChatTurn failed, continuing in fallback mode', error)
