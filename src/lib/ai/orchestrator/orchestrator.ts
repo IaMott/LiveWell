@@ -20,7 +20,7 @@ import {
   detectSignificantDomains,
 } from '../domain/domainDetection'
 import { LlmClient } from './agentExecution'
-import { executeAgentRounds } from './agentRoundExecution'
+import { executeAgentRounds, MAX_TOTAL_AGENTS } from './agentRoundExecution'
 import { executeConsensusFlow } from './consensusFlow'
 import { adaptConsensusOutcome } from './consensusOutcome'
 import {
@@ -286,18 +286,55 @@ export async function orchestrate(
     }),
   )
 
-  const { selectedAgents, decisionTrace: routingDecisionTrace } = resolveRoutingCandidates({
-    team: deps.team,
-    message: input.message,
-    detectedDomain: domainHint,
-    allDomains,
-    currentSpeakerId: activeSpecialist?.id,
-    contextPack: input.contextPack,
-    preferredAgentIds: routingResolution.preferredAgentIds,
-  })
+  const { selectedAgents: baseSelectedAgents, decisionTrace: routingDecisionTrace } =
+    resolveRoutingCandidates({
+      team: deps.team,
+      message: input.message,
+      detectedDomain: domainHint,
+      allDomains,
+      currentSpeakerId: activeSpecialist?.id,
+      contextPack: input.contextPack,
+      preferredAgentIds: routingResolution.preferredAgentIds,
+    })
   decisionTrace.push(...routingDecisionTrace)
 
-  // FIX-1: Emit meaningful phase title, not an echo of the user's text
+  // ── POINT 4 FIX: Cross-domain seeding ────────────────────────────────────────
+  // Se il routing ha selezionato agenti solo per il dominio primario ma heuristicamente
+  // sono stati rilevati altri domini (allDomains), aggiungiamo almeno 1 agente per
+  // ciascun dominio non ancora rappresentato. Questo garantisce che il Briefing (Fase 1)
+  // sia genuinamente cross-dominio — gli agenti ragionano in parallelo su tutti i domini
+  // rilevati PRIMA che il sistema isoli il dominio primario.
+  //
+  // Cap seeding iniziale = ceil(MAX_TOTAL_AGENTS / 2) = 3: lascia almeno metà degli slot
+  // per l'espansione dinamica nelle fasi di peer review.
+  const MAX_INITIAL_BREADTH = Math.ceil(MAX_TOTAL_AGENTS / 2)
+  const selectedAgents = [...baseSelectedAgents]
+  const coveredDomains = new Set(selectedAgents.flatMap((a) => a.domainTags as Domain[]))
+  const unseededDomains = allDomains.filter((d) => d !== 'general' && !coveredDomains.has(d))
+  for (const unseeded of unseededDomains) {
+    if (selectedAgents.length >= MAX_INITIAL_BREADTH) break
+    const bestForDomain = deps.team
+      .filter(
+        (a) =>
+          (a.domainTags as Domain[]).includes(unseeded) &&
+          !selectedAgents.find((s) => s.id === a.id),
+      )
+      .sort((a, b) => {
+        // Preferisci agenti specializzati (domainTags più corti = più specifici)
+        const aSpec = (a.domainTags as Domain[]).filter((d) => d !== 'general').length
+        const bSpec = (b.domainTags as Domain[]).filter((d) => d !== 'general').length
+        return aSpec - bSpec
+      })
+    const seedAgent = bestForDomain[0]
+    if (seedAgent) {
+      selectedAgents.push(seedAgent)
+      console.info(
+        `[orchestrator] Cross-domain seed: added ${seedAgent.id} for uncovered domain '${unseeded}'`,
+      )
+    }
+  }
+
+  // Emit initial thinking events for all selected agents (including seeded ones)
   for (const agent of selectedAgents) {
     deps.onProgress?.({
       agentId: agent.id,
@@ -316,8 +353,16 @@ export async function orchestrate(
     round1Proposals,
     round2Proposals,
     expandedAgentIds = [],
+    retiredAgentIds = [],
+    allPhaseProposals = [],
   } = skipAgents
-    ? { round1Proposals: [], round2Proposals: [], expandedAgentIds: [] }
+    ? {
+        round1Proposals: [],
+        round2Proposals: [],
+        expandedAgentIds: [],
+        retiredAgentIds: [],
+        allPhaseProposals: [],
+      }
     : await withGlobalTimeout(
         executeAgentRounds({
           llm: deps.llm,
@@ -326,56 +371,26 @@ export async function orchestrate(
           domainHint,
           fullTeam: deps.team,
           onProgress: (agentId, phase, thought, displayName) => {
-            deps.onProgress?.({ agentId, displayName, phase: phase as ProgressEvent['phase'], thought })
+            deps.onProgress?.({
+              agentId,
+              displayName,
+              phase: phase as ProgressEvent['phase'],
+              thought,
+            })
           },
         }),
         globalTimeoutMs,
         'executeAgentRounds',
       )
 
-  // Log pyramidal expansion for observability
+  // Log pyramidal expansion and retirements for observability
   if (expandedAgentIds.length > 0) {
     console.info(
-      `[orchestrator] Pyramidal expansion: ${expandedAgentIds.join(', ')} added by Round 1 suggestions`,
+      `[orchestrator] Pyramidal expansion: ${expandedAgentIds.join(', ')} — ${allPhaseProposals.length} fasi totali`,
     )
   }
-
-  // FIX-1: Show the FULL proposal reasoning, not truncated to 100 chars
-  // P3: Only emit thinking events for agents with meaningful confidence (> 0.3)
-  //     to avoid showing irrelevant specialists in the streaming UI.
-  for (const proposal of round1Proposals) {
-    const agent = deps.team.find((a) => a.id === proposal.agentId)
-    const isRelevant = (proposal.confidence ?? 0) > 0.3
-    if (
-      agent &&
-      isRelevant &&
-      proposal.summary &&
-      !proposal.summary.toLowerCase().includes('[unavailable]')
-    ) {
-      const thought =
-        proposal.reasoning && proposal.reasoning.length > 5
-          ? proposal.reasoning.replace(/\n/g, ' ')
-          : proposal.summary.replace(/\n/g, ' ')
-      deps.onProgress?.({
-        agentId: agent.id,
-        displayName: agent.displayName,
-        phase: 'analyzing',
-        thought,
-      })
-    }
-  }
-
-  // Emit peer-review progress when multiple agents contributed
-  if (round2Proposals.length > 1) {
-    const primary = deps.team.find((a) => a.id === round2Proposals[0]?.agentId)
-    if (primary) {
-      deps.onProgress?.({
-        agentId: primary.id,
-        displayName: primary.displayName,
-        phase: 'peer-review',
-        thought: 'Confronto tra specialisti',
-      })
-    }
+  if (retiredAgentIds.length > 0) {
+    console.info(`[orchestrator] Retired agents: ${retiredAgentIds.join(', ')}`)
   }
 
   const { consensus } = executeConsensusFlow({
@@ -384,6 +399,7 @@ export async function orchestrate(
     domainHint,
     contextPack: input.contextPack,
     orchestratorToolsAllowed: deps.orchestratorToolsAllowed,
+    allPhaseProposals: allPhaseProposals.length > 0 ? allPhaseProposals : undefined,
   })
   const consensusOutcome = adaptConsensusOutcome({ consensus })
 
@@ -512,6 +528,9 @@ export async function orchestrate(
         proposals: round2Proposals,
         round1Proposals,
         round2Proposals,
+        allPhaseProposals,
+        expandedAgentIds,
+        retiredAgentIds,
       },
     }
   }
@@ -577,6 +596,7 @@ export async function orchestrate(
           userMessage: input.message,
           contextPack: input.contextPack,
           team: deps.team,
+          allPhaseProposals: allPhaseProposals.length > 0 ? allPhaseProposals : undefined,
         })
       : Promise.resolve([]),
   ])
@@ -655,6 +675,9 @@ export async function orchestrate(
       proposals: round2ForPersistence,
       round1Proposals,
       round2Proposals: round2ForPersistence,
+      allPhaseProposals,
+      expandedAgentIds,
+      retiredAgentIds,
     },
   }
 }

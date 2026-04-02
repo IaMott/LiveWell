@@ -751,6 +751,10 @@ export function applyInterviewFlow(input: InterviewFlowInput): InterviewFlowResu
     userMessage,
     activeSpecialist,
   )
+  // LLM-driven priority: le domande del consensus (proposte dal LLM) hanno la precedenza.
+  // Come fallback si usano le domande dalla workspace queue (accumulate in round precedenti)
+  // o le domande di intake baseline (quando il profilo è incompleto).
+  // Le domande di buildCriticalQuestions (regex/pattern) vengono usate solo se la queue è vuota.
   const mergedInterviewQuestions = mergeInterviewQuestions(
     consensusGatingQuestions,
     queue.askNow.length > 0 ? queue.askNow : interviewCriticalQuestions,

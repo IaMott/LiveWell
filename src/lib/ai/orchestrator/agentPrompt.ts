@@ -25,8 +25,8 @@ function buildIntakeSection(agentId: string, input: AgentInput): string[] {
 
   const lines: string[] = ['DATI UTENTE DISPONIBILI (raccolti nelle sessioni precedenti):']
 
-  const collectedRequired = intakeKeys.required.filter(key => attrMap.get(key))
-  const collectedOptional = intakeKeys.optional.filter(key => attrMap.get(key))
+  const collectedRequired = intakeKeys.required.filter((key) => attrMap.get(key))
+  const collectedOptional = intakeKeys.optional.filter((key) => attrMap.get(key))
 
   if (collectedRequired.length === 0 && collectedOptional.length === 0) {
     lines.push('(Nessun dato specifico ancora raccolto — usa il contesto della conversazione)')

@@ -31,6 +31,10 @@ export type ChatStreamEvent =
       stateSnapshot?: CanonicalCaseStateSnapshot
       /** S1: Sent so the client can sync the conversationId for newly-created conversations. */
       conversationId?: string
+      /** Multi-agent: IDs of agents dynamically added during peer review */
+      expandedAgentIds?: string[]
+      /** Multi-agent: IDs of agents retired due to low confidence */
+      retiredAgentIds?: string[]
     }
   | {
       type: 'tool.result'

@@ -4,7 +4,7 @@ import { executeAgent, LlmClient } from './agentExecution'
 export const AGENT_TIMEOUT_MS = 8_000
 
 /** Max agenti totali (iniziali + espansioni dinamiche) */
-const MAX_TOTAL_AGENTS = 6
+export const MAX_TOTAL_AGENTS = 6
 
 /** Max fasi di peer-review oltre il briefing iniziale */
 const MAX_PEER_REVIEW_PHASES = 2
@@ -66,6 +66,14 @@ function buildRichPeerInsights(
 ): string | undefined {
   const peers = accumulatedProposals
     .filter((p) => p.agentId !== agentId && (p.confidence ?? 0) > 0.05)
+    // Ordina per rilevanza: confidence più alta prima, poi ha suggestedConsultants
+    .sort((a, b) => {
+      const aHasSuggested = (a.suggestedConsultants?.length ?? 0) > 0 ? 1 : 0
+      const bHasSuggested = (b.suggestedConsultants?.length ?? 0) > 0 ? 1 : 0
+      const confDiff = (b.confidence ?? 0) - (a.confidence ?? 0)
+      if (Math.abs(confDiff) > 0.1) return confDiff
+      return bHasSuggested - aHasSuggested
+    })
     .slice(0, 4) // max 4 peer per evitare token explosion
 
   if (peers.length === 0) return undefined
@@ -172,9 +180,17 @@ export async function executeAgentRounds(
   // Accumula TUTTE le proposte di tutte le fasi per peer insights ricchi
   let allAccumulatedProposals: AgentProposal[] = []
 
+  // Traccia quale fase è la "prima apparizione" di ciascun agente.
+  // Gli agenti aggiunti dinamicamente ricevono un briefing autonomo (senza peer insights)
+  // nella loro prima apparizione, esattamente come gli agenti originali in Fase 1.
+  const agentFirstPhase = new Map<string, number>()
+  for (const agent of activeAgents) {
+    agentFirstPhase.set(agent.id, 1)
+  }
+
   // ─── Fase 1: Briefing — analisi indipendenti ─────────────────────────────────
   for (const agent of activeAgents) {
-    onProgress?.(agent.id, 'analyzing', 'Valutazione del caso in corso', agent.displayName)
+    onProgress?.(agent.id, 'analyzing', 'Briefing · Analisi autonoma del caso', agent.displayName)
   }
 
   const phase1Results = await Promise.allSettled(
@@ -198,7 +214,7 @@ export async function executeAgentRounds(
   allPhaseProposals.push(phase1Proposals)
   allAccumulatedProposals = [...phase1Proposals]
 
-  // Emetti eventi di progresso per Phase 1
+  // Emetti eventi di progresso per Fase 1 (reasoning reale, non generico)
   for (const proposal of phase1Proposals) {
     if ((proposal.confidence ?? 0) > 0.3 && proposal.reasoning && proposal.reasoning.length > 5) {
       const agent = activeAgents.find((a) => a.id === proposal.agentId)
@@ -206,14 +222,14 @@ export async function executeAgentRounds(
         onProgress?.(
           agent.id,
           'analyzing',
-          proposal.reasoning.replace(/\n/g, ' ').slice(0, 300),
+          `Fase 1 · ${proposal.reasoning.replace(/\n/g, ' ').slice(0, 280)}`,
           agent.displayName,
         )
       }
     }
   }
 
-  // Espansione dinamica dopo Fase 1
+  // Espansione dinamica dopo Fase 1: agenti suggeriti dai colleghi
   const phase1Suggested = collectSuggestedAgentIds(phase1Proposals, existingIds)
   const slotsAfterPhase1 = MAX_TOTAL_AGENTS - activeAgents.length
   for (const id of phase1Suggested) {
@@ -223,7 +239,15 @@ export async function executeAgentRounds(
       expandedAgentIds.push(id)
       activeAgents = [...activeAgents, agent]
       existingIds.add(id)
-      console.info(`[agentRoundExecution] Espansione Fase 1: aggiunto ${id}`)
+      // Registra la prima fase di apparizione per questo agente (farà briefing autonomo)
+      agentFirstPhase.set(id, 2)
+      onProgress?.(
+        id,
+        'analyzing',
+        `Nuovo specialista · ${agent.displayName} — briefing autonomo`,
+        agent.displayName,
+      )
+      console.info(`[agentRoundExecution] Espansione Fase 1→2: aggiunto ${id}`)
     }
   }
 
@@ -233,6 +257,18 @@ export async function executeAgentRounds(
   for (let phase = 2; phase <= 1 + MAX_PEER_REVIEW_PHASES; phase++) {
     // Agenti attivi in questa fase (esclusi i ritirati)
     const phaseAgents = activeAgents.filter((a) => !retiredAgentIds.includes(a.id))
+
+    // Timeout adattivo per le fasi di peer review: con molti agenti e più fasi, il timeout
+    // fisso di 8s per agente può saturare il budget globale di 30s.
+    // Budget disponibile: 30s totali - ~5s overhead, distribuito su (MAX_PEER_REVIEW_PHASES + 1) fasi.
+    const agentCount = phaseAgents.length
+    const adaptiveTimeout = Math.max(
+      3000,
+      Math.min(
+        AGENT_TIMEOUT_MS,
+        Math.floor(25000 / (MAX_PEER_REVIEW_PHASES + 1) / Math.max(1, agentCount)),
+      ),
+    )
 
     if (phaseAgents.length === 0) break
 
@@ -244,20 +280,27 @@ export async function executeAgentRounds(
 
     const phaseResults = await Promise.allSettled(
       phaseAgents.map((agent) => {
-        // Se confidenza=0 in fase 1 e non è un agente espanso, skip
-        const prevProposal = allAccumulatedProposals.find(
-          (p) => p.agentId === agent.id && p.confidence === 0,
-        )
+        // Se confidenza=0 in fase precedente e non è espanso, non ritentare
+        const prevProposal = allAccumulatedProposals.find((p) => p.agentId === agent.id)
         const isOriginal = selectedAgents.some((a) => a.id === agent.id)
-        if (prevProposal && isOriginal && phase === 2) {
+        if (prevProposal && prevProposal.confidence === 0 && isOriginal && phase === 2) {
           return Promise.resolve(prevProposal)
         }
 
-        const peerInsights = buildRichPeerInsights(agent.id, allAccumulatedProposals, phase - 1)
+        // PUNTO 2 FIX: agenti aggiunti dinamicamente eseguono un briefing autonomo
+        // nella loro PRIMA fase di apparizione (senza peer insights).
+        // Solo dalla fase successiva partecipano al peer review con i contributi dei colleghi.
+        const firstPhase = agentFirstPhase.get(agent.id) ?? 1
+        const isFirstAppearance =
+          phase === firstPhase || !allAccumulatedProposals.some((p) => p.agentId === agent.id)
+
+        const peerInsights = isFirstAppearance
+          ? undefined // Briefing autonomo: analisi indipendente senza influenze esterne
+          : buildRichPeerInsights(agent.id, allAccumulatedProposals, phase - 1)
 
         return withTimeout(
           executeAgent({ llm, agent, input: executionInput, domainHint, peerInsights }),
-          timeoutMs,
+          adaptiveTimeout,
           agent.id,
         )
       }),
@@ -279,15 +322,20 @@ export async function executeAgentRounds(
     allAccumulatedProposals = [...allAccumulatedProposals, ...phaseProposals]
     finalProposals = phaseProposals
 
-    // Emetti reasoning events per questa fase
+    // Emetti reasoning events per questa fase con etichetta
     for (const proposal of phaseProposals) {
       if ((proposal.confidence ?? 0) > 0.3 && proposal.reasoning && proposal.reasoning.length > 5) {
         const agent = phaseAgents.find((a) => a.id === proposal.agentId)
         if (agent) {
+          const firstPhase = agentFirstPhase.get(agent.id) ?? 1
+          const isThisAgentsBriefing = phase === firstPhase
+          const phaseLabel = isThisAgentsBriefing
+            ? `Fase ${phase} · Briefing`
+            : `Fase ${phase} · Peer Review`
           onProgress?.(
             agent.id,
-            'peer-review',
-            proposal.reasoning.replace(/\n/g, ' ').slice(0, 300),
+            isThisAgentsBriefing ? 'analyzing' : 'peer-review',
+            `${phaseLabel} · ${proposal.reasoning.replace(/\n/g, ' ').slice(0, 270)}`,
             agent.displayName,
           )
         }
@@ -320,7 +368,17 @@ export async function executeAgentRounds(
           expandedAgentIds.push(id)
           activeAgents = [...activeAgents, agent]
           existingIds.add(id)
-          console.info(`[agentRoundExecution] Espansione Fase ${phase}: aggiunto ${id}`)
+          // Il nuovo agente farà briefing autonomo nella prossima fase
+          agentFirstPhase.set(id, phase + 1)
+          onProgress?.(
+            id,
+            'analyzing',
+            `Nuovo specialista · ${agent.displayName} — briefing autonomo in arrivo`,
+            agent.displayName,
+          )
+          console.info(
+            `[agentRoundExecution] Espansione Fase ${phase}→${phase + 1}: aggiunto ${id}`,
+          )
         }
       }
     }

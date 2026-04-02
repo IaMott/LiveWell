@@ -230,10 +230,25 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
-  const thinkingSteps = buildProposalThinkingTrace(
-    [...(consensus.debug?.round1Proposals ?? []), ...(consensus.debug?.round2Proposals ?? [])],
-    team,
-  )
+  const allPhases = consensus.debug?.allPhaseProposals
+  const thinkingSteps =
+    allPhases && allPhases.length > 0
+      ? dedupeThinkingSteps(
+          allPhases.flatMap((phaseProposals, i) => {
+            const label = i === 0 ? 'Fase 1 · Briefing' : `Fase ${i + 1} · Peer Review`
+            return buildProposalThinkingTrace(phaseProposals, team).map((s) => ({
+              ...s,
+              title: `${label} · ${s.title}`,
+            }))
+          }),
+        )
+      : buildProposalThinkingTrace(
+          [
+            ...(consensus.debug?.round1Proposals ?? []),
+            ...(consensus.debug?.round2Proposals ?? []),
+          ],
+          team,
+        )
 
   return new Response(
     JSON.stringify({

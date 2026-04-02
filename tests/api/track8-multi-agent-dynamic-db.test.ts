@@ -44,7 +44,8 @@ describe('resolveRoutingCandidates — multi-domain parallel activation', () => 
   it('selects one agent per domain when 3 significant domains are detected', () => {
     const { selectedAgents } = resolveRoutingCandidates({
       team,
-      message: 'voglio seguire una dieta personalizzata, fare stretching quotidiano e costruire nuove abitudini per la resilienza mentale',
+      message:
+        'voglio seguire una dieta personalizzata, fare stretching quotidiano e costruire nuove abitudini per la resilienza mentale',
       detectedDomain: 'nutrition',
       allDomains: ['nutrition', 'training', 'mindfulness'],
     })

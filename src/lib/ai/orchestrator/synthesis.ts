@@ -375,12 +375,21 @@ function buildUserPrompt(params: {
             : `Dai una risposta diretta, concreta e personalizzata basandoti sui dati disponibili.`
 
   // P5: Build file attachment block for non-image files
+  const INLINE_MIME_TYPES = ['application/pdf', 'text/plain', 'text/csv', 'text/markdown']
   const allContextFiles = contextPack.files ?? []
   const filesWithContent = allContextFiles.filter(
     (f) => f.extractedText && !f.extractedText.startsWith('data:'),
   )
+  // Files passed as inline multimodal data (images with data: URI, or PDFs/docs with URL)
+  const filesPassedInline = allContextFiles.filter(
+    (f) =>
+      (f.mimeType?.startsWith('image/') && f.extractedText?.startsWith('data:')) ||
+      (INLINE_MIME_TYPES.includes(f.mimeType ?? '') && f.url && !f.extractedText),
+  )
+  const inlineFilenames = new Set(filesPassedInline.map((f) => f.filename))
+  // Only warn about files that are truly unreadable (no content AND not passed inline)
   const filesWithoutContent = allContextFiles.filter(
-    (f) => !f.extractedText || f.extractedText.startsWith('data:'),
+    (f) => !f.extractedText && !f.url && !inlineFilenames.has(f.filename),
   )
 
   let fileBlock = ''
@@ -391,6 +400,13 @@ function buildUserPrompt(params: {
         .map((f) => `📎 ${f.filename}:\n${f.extractedText!.slice(0, 3000)}`)
         .join('\n\n') +
       `\n\nISTRUZIONE ALLEGATI: Comportati come un professionista che riceve un documento dal proprio paziente/cliente. Analizza il contenuto, formula una valutazione professionale basata sui dati presenti (valori, date, diagnosi, farmaci, misure, referti) e integra quella valutazione nella tua risposta. Non limitarti a dichiarare di aver ricevuto il documento — esprimi il tuo parere professionale sul suo contenuto, come faresti leggendolo in studio.`
+  }
+  if (filesPassedInline.length > 0) {
+    const inlineNames = filesPassedInline.map((f) => `📎 ${f.filename}`).join('\n')
+    fileBlock +=
+      (fileBlock ? '\n\n' : '') +
+      `ALLEGATI PASSATI DIRETTAMENTE AL MODELLO (immagini/PDF inline):\n${inlineNames}\n` +
+      `ISTRUZIONE: Analizza il contenuto di questi file direttamente — li stai ricevendo come dati multimediali. Fornisci una valutazione professionale basata su ciò che vedi/leggi.`
   }
   if (filesWithoutContent.length > 0) {
     // ANTI-HALLUCINATION: the synthesis LLM must NOT invent document content
@@ -430,7 +446,51 @@ function buildFallbackText(proposals: AgentProposal[]): string {
   return proposals.find((p) => p.summary)?.summary ?? 'Come posso aiutarti?'
 }
 
-/** Extract inline image data from contextPack files (stored as data:mime;base64,...) */
+/**
+ * Extract inline file data for Gemini multimodal from contextPack files.
+ * Handles images (stored as data: URIs in extractedText) and PDFs/documents
+ * (fetched from Vercel Blob URL and converted to base64).
+ */
+export async function extractInlineFileData(
+  contextPack: ContextPack,
+): Promise<Array<{ mimeType: string; data: string }>> {
+  const files = contextPack.files ?? []
+  const results: Array<{ mimeType: string; data: string }> = []
+
+  for (const f of files) {
+    // Images: already stored as data: URIs in extractedText
+    if (f.mimeType?.startsWith('image/') && f.extractedText?.startsWith('data:')) {
+      const raw = f.extractedText
+      const comma = raw.indexOf(',')
+      const header = raw.slice(0, comma) // "data:image/jpeg;base64"
+      const mimeType = header.split(':')[1]?.split(';')[0] ?? f.mimeType
+      const data = raw.slice(comma + 1)
+      results.push({ mimeType, data })
+      continue
+    }
+
+    // PDFs and other supported documents: fetch from Blob URL, convert to base64
+    const INLINE_MIME_TYPES = ['application/pdf', 'text/plain', 'text/csv', 'text/markdown']
+    const mime = f.mimeType ?? ''
+    if (INLINE_MIME_TYPES.includes(mime) && f.url && !f.extractedText) {
+      try {
+        const response = await fetch(f.url)
+        if (response.ok) {
+          const buffer = await response.arrayBuffer()
+          const base64 = Buffer.from(buffer).toString('base64')
+          results.push({ mimeType: mime, data: base64 })
+        }
+      } catch {
+        // Silently skip — the "filesWithoutContent" warning will still cover this
+      }
+      continue
+    }
+  }
+
+  return results
+}
+
+/** @deprecated Use extractInlineFileData (async) instead */
 export function extractImageData(
   contextPack: ContextPack,
 ): Array<{ mimeType: string; data: string }> {
@@ -438,9 +498,8 @@ export function extractImageData(
     .filter((f) => f.mimeType?.startsWith('image/') && f.extractedText?.startsWith('data:'))
     .map((f) => {
       const raw = f.extractedText!
-      // Format: "data:image/jpeg;base64,<base64data>"
       const comma = raw.indexOf(',')
-      const header = raw.slice(0, comma) // "data:image/jpeg;base64"
+      const header = raw.slice(0, comma)
       const mimeType = header.split(':')[1]?.split(';')[0] ?? f.mimeType
       const data = raw.slice(comma + 1)
       return { mimeType, data }
@@ -465,8 +524,10 @@ export async function synthesizePerAgentResponses(input: {
   userMessage: string
   contextPack: ContextPack
   team: Array<{ id: string; displayName: string; domainTags: string[] }>
+  /** Tutte le proposte per fase — per mostrare l'evoluzione del ragionamento nel prompt */
+  allPhaseProposals?: AgentProposal[][]
 }): Promise<AgentSynthesisResult[]> {
-  const { llm, proposals, userMessage, contextPack, team } = input
+  const { llm, proposals, userMessage, contextPack, team, allPhaseProposals } = input
 
   // Only relevant proposals (confidence > 0.3, non-unavailable)
   const relevant = proposals
@@ -506,6 +567,16 @@ export async function synthesizePerAgentResponses(input: {
         `Se suggerisci di consultare un altro specialista, dillo brevemente a fine risposta.`,
       ].join('\n')
 
+      // Costruisci l'evoluzione del ragionamento per fasi se disponibile
+      const agentPhaseHistory = allPhaseProposals
+        ?.map((phaseProposals, i) => {
+          const phaseProp = phaseProposals.find((p) => p.agentId === proposal.agentId)
+          if (!phaseProp || (phaseProp.confidence ?? 0) === 0) return null
+          return `Fase ${i + 1} (certezza: ${Math.round((phaseProp.confidence ?? 0) * 100)}%): ${phaseProp.summary?.slice(0, 120) ?? ''}`
+        })
+        .filter(Boolean)
+        .join('\n')
+
       const user = [
         recentHistory ? `CONVERSAZIONE RECENTE:\n${recentHistory}\n` : '',
         `MESSAGGIO UTENTE: "${userMessage}"`,
@@ -514,6 +585,9 @@ export async function synthesizePerAgentResponses(input: {
         proposal.summary,
         proposal.reasoning ? `\nRAGIONAMENTO: ${proposal.reasoning}` : '',
         proposal.questions?.length ? `\nDOMANDE DA PORRE: ${proposal.questions.join('; ')}` : '',
+        agentPhaseHistory && agentPhaseHistory.length > 0
+          ? `\nEVOLUZIONE DEL TUO RAGIONAMENTO:\n${agentPhaseHistory}`
+          : '',
         ``,
         `CONTRIBUTI DEI COLLEGHI:`,
         peerSummaries,
@@ -524,7 +598,8 @@ export async function synthesizePerAgentResponses(input: {
         .filter(Boolean)
         .join('\n')
 
-      const res = await llm.complete({ system, user, format: 'text' })
+      const agentFileData = await extractInlineFileData(contextPack)
+      const res = await llm.complete({ system, user, format: 'text', imageData: agentFileData })
       const content = res.text.trim()
 
       // If LLM returned JSON instead of text, extract summary
@@ -606,7 +681,8 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
   const missingQuestions = hasMissingData ? rawMissingQuestions.slice(0, 3) : []
 
   const imageData =
-    input.imageData ?? (input.contextPack.files ? extractImageData(input.contextPack) : [])
+    input.imageData ??
+    (input.contextPack.files ? await extractInlineFileData(input.contextPack) : [])
   const hasImages = imageData.length > 0
 
   const system = buildSystemPrompt(

@@ -486,56 +486,189 @@ function renderInline(text: string): React.ReactNode {
   return parts.length === 1 ? parts[0] : parts
 }
 
+type AgentStepsGroup = {
+  specialistName: string
+  domain?: string
+  steps: ThinkingStep[]
+  isExpanded: boolean
+}
+
+function groupStepsByAgent(steps: ThinkingStep[]): AgentStepsGroup[] {
+  const groups: AgentStepsGroup[] = []
+  for (const step of steps) {
+    const existing = groups.find((g) => g.specialistName === step.specialistName)
+    if (existing) {
+      existing.steps.push(step)
+    } else {
+      groups.push({
+        specialistName: step.specialistName,
+        domain: step.domain as string | undefined,
+        steps: [step],
+        isExpanded: false,
+      })
+    }
+  }
+  return groups
+}
+
 /**
  * ThinkingDots — shows accumulated reasoning steps while the AI is thinking.
  *
- * Format (as requested):
- *   • Previous steps: faded out (opacity 0.3), no dots
- *   • Latest step: full opacity, with bouncing dots to the left
- *   • Each step: [SpecialistName] → [title]
- *                  [thought (italic, smaller)]
+ * When animating (streaming): shows last 5 steps sequentially with live dots.
+ * When complete: groups steps by agent, each group collapsible with step count.
+ *
+ * Backward compat: if all steps have the same specialistName, falls back to flat view.
  */
 function ThinkingDots({ steps, animating = true }: { steps: ThinkingStep[]; animating?: boolean }) {
-  // While streaming: show last 5 to follow live progress.
-  // Once complete (animating=false): show ALL steps so the user can read the full reasoning.
-  const visible = animating ? steps.slice(-5) : steps
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '3px 0' }}>
-      {visible.map((step, i) => {
-        const isLatest = animating && i === visible.length - 1
-        return (
+  const toggleGroup = (name: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) {
+        next.delete(name)
+      } else {
+        next.add(name)
+      }
+      return next
+    })
+  }
+
+  // While streaming: show last 5 to follow live progress (flat view)
+  if (animating) {
+    const visible = steps.slice(-5)
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '3px 0' }}>
+        {visible.map((step, i) => {
+          const isLatest = i === visible.length - 1
+          return (
+            <div
+              key={`${i}-${step.specialistName}-${step.title}`}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                opacity: isLatest ? 1 : 0.7,
+                animation: isLatest ? 'lw-step-in 0.3s ease forwards' : undefined,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {isLatest && (
+                  <div style={{ display: 'flex', gap: '3px', alignItems: 'center', flexShrink: 0 }}>
+                    {[0, 1, 2].map((j) => (
+                      <span
+                        key={j}
+                        style={{
+                          width: '5px',
+                          height: '5px',
+                          borderRadius: '50%',
+                          backgroundColor: 'var(--color-text-secondary)',
+                          animation: `lw-bounce 1.4s ease-in-out ${j * 0.2}s infinite`,
+                          display: 'inline-block',
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--color-text-secondary)',
+                    letterSpacing: '0.02em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '5px',
+                    minWidth: 0,
+                    flex: 1,
+                    marginLeft: isLatest ? 0 : '17px',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      fontSize: '0.6875rem',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    {step.specialistName}
+                  </span>
+                  <span style={{ opacity: 0.5, fontWeight: 400 }}>→</span>
+                  <span style={{ fontWeight: 400 }}>{step.title}</span>
+                </span>
+              </div>
+              {step.thought && step.thought.trim() !== step.title.trim() && (
+                <span
+                  style={{
+                    marginLeft: '17px',
+                    fontSize: '0.6875rem',
+                    color: 'var(--color-text-secondary)',
+                    fontStyle: 'italic',
+                    opacity: isLatest ? undefined : 0.7,
+                    animation: isLatest ? 'lw-thought-in 0.4s ease 0.2s forwards' : undefined,
+                    display: 'block',
+                    lineHeight: 1.4,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'anywhere',
+                  }}
+                >
+                  {step.thought}
+                </span>
+              )}
+            </div>
+          )
+        })}
+        {visible.length === 0 && (
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center', padding: '4px 0' }}>
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--color-text-secondary)',
+                  animation: `lw-bounce 1.4s ease-in-out ${i * 0.2}s infinite`,
+                  display: 'inline-block',
+                }}
+              />
+            ))}
+          </div>
+        )}
+        <style>{`
+          @keyframes lw-bounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+            30% { transform: translateY(-5px); opacity: 1; }
+          }
+          @keyframes lw-step-in {
+            from { opacity: 0; transform: translateY(3px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes lw-thought-in {
+            from { opacity: 0; }
+            to { opacity: 0.75; }
+          }
+        `}</style>
+      </div>
+    )
+  }
+
+  // Completed: group by agent, each group collapsible
+  const groups = groupStepsByAgent(steps)
+
+  // Backward compat: if only one unique specialist, flat view
+  const allSameName = groups.length <= 1
+  if (allSameName) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '3px 0' }}>
+        {steps.map((step, i) => (
           <div
             key={`${i}-${step.specialistName}-${step.title}`}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '2px',
-              opacity: animating ? (isLatest ? 1 : 0.7) : 1,
-              animation: isLatest ? 'lw-step-in 0.3s ease forwards' : undefined,
-            }}
+            style={{ display: 'flex', flexDirection: 'column', gap: '2px', opacity: 1 }}
           >
-            {/* Row: [dots if latest+animating] [Name → title] */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {/* Bouncing dots only on latest step when actively streaming */}
-              {isLatest && animating && (
-                <div style={{ display: 'flex', gap: '3px', alignItems: 'center', flexShrink: 0 }}>
-                  {[0, 1, 2].map((j) => (
-                    <span
-                      key={j}
-                      style={{
-                        width: '5px',
-                        height: '5px',
-                        borderRadius: '50%',
-                        backgroundColor: 'var(--color-text-secondary)',
-                        animation: `lw-bounce 1.4s ease-in-out ${j * 0.2}s infinite`,
-                        display: 'inline-block',
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-              {/* Name → title */}
               <span
                 style={{
                   fontSize: '0.75rem',
@@ -547,7 +680,7 @@ function ThinkingDots({ steps, animating = true }: { steps: ThinkingStep[]; anim
                   gap: '5px',
                   minWidth: 0,
                   flex: 1,
-                  marginLeft: isLatest && animating ? 0 : '17px', // align with dots offset
+                  marginLeft: '17px',
                 }}
               >
                 <span
@@ -564,7 +697,6 @@ function ThinkingDots({ steps, animating = true }: { steps: ThinkingStep[]; anim
                 <span style={{ fontWeight: 400 }}>{step.title}</span>
               </span>
             </div>
-            {/* Show thought only when it adds info beyond the title (prevents duplication) */}
             {step.thought && step.thought.trim() !== step.title.trim() && (
               <span
                 style={{
@@ -572,8 +704,7 @@ function ThinkingDots({ steps, animating = true }: { steps: ThinkingStep[]; anim
                   fontSize: '0.6875rem',
                   color: 'var(--color-text-secondary)',
                   fontStyle: 'italic',
-                  opacity: isLatest ? undefined : 0.7,
-                  animation: isLatest ? 'lw-thought-in 0.4s ease 0.2s forwards' : undefined,
+                  opacity: 0.7,
                   display: 'block',
                   lineHeight: 1.4,
                   whiteSpace: 'pre-wrap',
@@ -585,28 +716,107 @@ function ThinkingDots({ steps, animating = true }: { steps: ThinkingStep[]; anim
               </span>
             )}
           </div>
+        ))}
+        <style>{`
+          @keyframes lw-bounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+            30% { transform: translateY(-5px); opacity: 1; }
+          }
+        `}</style>
+      </div>
+    )
+  }
+
+  // Multi-agent grouped view
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '3px 0' }}>
+      {groups.map((group) => {
+        const isExpanded = expandedGroups.has(group.specialistName)
+        return (
+          <div key={group.specialistName}>
+            {/* Group header — click to expand/collapse */}
+            <button
+              type="button"
+              onClick={() => toggleGroup(group.specialistName)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '2px 4px',
+                borderRadius: '4px',
+                fontSize: '0.6875rem',
+                color: 'var(--color-text-secondary)',
+                width: '100%',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ opacity: 0.6, fontSize: '0.625rem' }}>{isExpanded ? '▼' : '▶'}</span>
+              <span
+                style={{
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  fontSize: '0.6875rem',
+                }}
+              >
+                {group.specialistName}
+              </span>
+              <span style={{ opacity: 0.5 }}>—</span>
+              <span style={{ opacity: 0.6 }}>
+                {group.steps.length} step{group.steps.length !== 1 ? 's' : ''}
+              </span>
+            </button>
+
+            {/* Expanded steps */}
+            {isExpanded && (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '3px',
+                  marginLeft: '16px',
+                  marginTop: '2px',
+                  paddingLeft: '8px',
+                  borderLeft: '1px solid var(--color-separator)',
+                }}
+              >
+                {group.steps.map((step, i) => (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                    <span
+                      style={{
+                        fontSize: '0.6875rem',
+                        color: 'var(--color-text-secondary)',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {step.title}
+                    </span>
+                    {step.thought && step.thought.trim() !== step.title.trim() && (
+                      <span
+                        style={{
+                          fontSize: '0.625rem',
+                          color: 'var(--color-text-secondary)',
+                          fontStyle: 'italic',
+                          opacity: 0.7,
+                          lineHeight: 1.4,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {step.thought}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )
       })}
-
-      {/* Fallback: plain dots when no steps yet — only during active streaming */}
-      {visible.length === 0 && animating && (
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', padding: '4px 0' }}>
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--color-text-secondary)',
-                animation: `lw-bounce 1.4s ease-in-out ${i * 0.2}s infinite`,
-                display: 'inline-block',
-              }}
-            />
-          ))}
-        </div>
-      )}
-
       <style>{`
         @keyframes lw-bounce {
           0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }

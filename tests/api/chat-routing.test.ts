@@ -439,7 +439,10 @@ describe('chat routing — selectAgentsForRequest', () => {
 
   // ── Bonus: Coach di vita per organizzazione ───────────────────────────────
   it('EXTRA. "Organizzare la mia vita" → coordination/inspiration → life-organizer', () => {
-    const result = select('coordination', 'Ho bisogno di organizzazione e priorità per gestire meglio la mia vita quotidiana')
+    const result = select(
+      'coordination',
+      'Ho bisogno di organizzazione e priorità per gestire meglio la mia vita quotidiana',
+    )
     expectIncludes(result, 'life-organizer')
   })
 
