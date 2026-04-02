@@ -235,13 +235,17 @@ function buildProposalThinkingTrace(
 
     if (!title) continue
 
-    // Prepend phase label if provided (e.g. "Fase 1 · Briefing")
-    const labeledTitle = phaseLabel ? `${phaseLabel} · ${title}` : title
+    // Il titolo del passo nel reasoning accordion è la fase (breve) +
+    // il summary dello specialista (max 80 chars per leggibilità).
+    // Il "thought" è il ragionamento esteso (fino a 500 chars).
+    const shortTitle = title.length > 80 ? `${title.slice(0, 77)}…` : title
+    const labeledTitle = phaseLabel ? `${phaseLabel} · ${shortTitle}` : shortTitle
+    const fullThought = thought && thought.length > 0 ? thought : title
 
     steps.push({
       specialistName: agent.displayName,
       title: labeledTitle,
-      thought: thought ?? title,
+      thought: fullThought,
       domain: proposal.domain,
     })
   }
@@ -976,7 +980,14 @@ export async function POST(request: Request): Promise<Response> {
 
         controller.enqueue(
           encoder.encode(
-            toSse({ type: 'message.complete', id: assistantId, content: responseText }),
+            toSse({
+              type: 'message.complete',
+              id: assistantId,
+              content: responseText,
+              // Invia il trace finale al client: sostituisce gli step live generici
+              // con il ragionamento reale degli specialisti (summary + reasoning da Gemini).
+              thinkingSteps: persistedThinkingTrace.length > 0 ? persistedThinkingTrace : undefined,
+            }),
           ),
         )
 

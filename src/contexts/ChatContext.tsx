@@ -678,6 +678,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   if (placeholder && !placeholder.content.trim()) {
                     return prev.filter((m) => m.id !== currentAssistantId)
                   }
+                  const finalThinkingSteps = Array.isArray(event.thinkingSteps)
+                    ? (event.thinkingSteps as ThinkingStep[])
+                    : null
                   return prev.map((m) =>
                     m.id === currentAssistantId
                       ? {
@@ -686,6 +689,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                           domain: m.domain ?? completedDomain ?? undefined,
                           specialistName: m.specialistName ?? completedSpecialistName,
                           streaming: false,
+                          // Sostituisce gli step live (generici) con il ragionamento
+                          // reale degli specialisti (summary + reasoning da Gemini).
+                          ...(finalThinkingSteps && finalThinkingSteps.length > 0
+                            ? { thinkingSteps: finalThinkingSteps }
+                            : {}),
                         }
                       : m,
                   )

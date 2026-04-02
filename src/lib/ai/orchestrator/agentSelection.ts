@@ -664,10 +664,12 @@ export function selectAgentsForRequest(
   // F3: Filter out low-confidence specialists. With the base domain score of +4,
   // a specialist that ONLY matches on domain (no competence hints, no name mention)
   // scores exactly 4. We keep them but cap the total to avoid flooding the pipeline.
-  // Agents scoring ≤ 2 (only from secondary domain or 'general') are excluded to
-  // prevent out-of-scope specialists (e.g. endocrinologo on a nutrition-only query).
+  // Soglia >= 2: include specialisti con almeno 1 keyword match esplicito nel messaggio
+  // (es. gastroenterologo per "gastrite" = score 2 = secondary_domain + keyword_match).
+  // Score 0-1 = solo match molto debole (solo secondary senza keyword) → escluso.
+  // Questo era > 2 ma filtrava ingiustamente "gastroenterologo per gastrite" (score=2).
   const sorted = scored.sort((a, b) => b.score - a.score || a.agent.id.localeCompare(b.agent.id))
-  const filtered = sorted.filter((x) => x.score > 2).slice(0, maxAgents)
+  const filtered = sorted.filter((x) => x.score >= 2).slice(0, maxAgents)
 
   // Garantisce che almeno 1 agente sia sempre selezionato per messaggi generici/saluti.
   // Fallback: se nessun agente specialista supera la soglia, usa l'orchestratore o il
