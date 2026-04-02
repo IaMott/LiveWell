@@ -666,9 +666,19 @@ export function selectAgentsForRequest(
   // scores exactly 4. We keep them but cap the total to avoid flooding the pipeline.
   // Agents scoring ≤ 2 (only from secondary domain or 'general') are excluded to
   // prevent out-of-scope specialists (e.g. endocrinologo on a nutrition-only query).
-  return scored
-    .filter((x) => x.score > 2)
-    .sort((a, b) => b.score - a.score || a.agent.id.localeCompare(b.agent.id))
-    .slice(0, maxAgents)
-    .map((x) => x.agent)
+  const sorted = scored.sort((a, b) => b.score - a.score || a.agent.id.localeCompare(b.agent.id))
+  const filtered = sorted.filter((x) => x.score > 2).slice(0, maxAgents)
+
+  // Garantisce che almeno 1 agente sia sempre selezionato per messaggi generici/saluti.
+  // Fallback: se nessun agente specialista supera la soglia, usa l'orchestratore o il
+  // coordinatore (agente con domainTag 'coordination') se presente nel team.
+  // In questo modo il fallback è selettivo: non si attiva su team mock senza coordinatori.
+  if (filtered.length === 0) {
+    const coordinator = sorted.find((x) =>
+      (x.agent.domainTags as string[]).includes('coordination'),
+    )
+    if (coordinator) return [coordinator.agent]
+  }
+
+  return filtered.map((x) => x.agent)
 }

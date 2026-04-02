@@ -195,11 +195,19 @@ function buildProposalThinkingTrace(
 ): PersistedThinkingStep[] {
   const steps: PersistedThinkingStep[] = []
 
-  const EXCLUDED_TRACE_AGENTS = new Set(['orchestratore', 'intervistatore', 'analista-contesto'])
+  // Agenti secondari: esclusi dal trace solo se ci sono altri agenti con contributi validi.
+  // In questo modo il trace non è mai vuoto (es. in mock mode dove solo orchestratore risponde).
+  const SECONDARY_TRACE_AGENTS = new Set(['intervistatore', 'analista-contesto'])
+
+  const meaningfulProposals = (proposals ?? []).filter(
+    (p) => !SECONDARY_TRACE_AGENTS.has(p.agentId) && (p.confidence ?? 0) > 0,
+  )
+  const hasPrimaryAgents = meaningfulProposals.length > 0
 
   for (const proposal of proposals ?? []) {
     if ((proposal.confidence ?? 0) === 0) continue
-    if (EXCLUDED_TRACE_AGENTS.has(proposal.agentId)) continue
+    // Escludi agenti secondari solo se ci sono agenti primari nel trace
+    if (SECONDARY_TRACE_AGENTS.has(proposal.agentId) && hasPrimaryAgents) continue
 
     const agent = team.find((a) => a.id === proposal.agentId)
     if (!agent) continue
