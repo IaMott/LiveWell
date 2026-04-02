@@ -145,7 +145,6 @@ export function CartellaSection({ data }: Props) {
         </p>
       </div>
 
-
       {/* ── Tutti i dati ── */}
       <div>
         <p style={sectionLabel}>Dati del profilo</p>
@@ -224,7 +223,7 @@ export function CartellaSection({ data }: Props) {
                     ? (ev.metadata as Record<string, unknown>)
                     : {}
                 const displayName =
-                  typeof meta.displayName === 'string' ? meta.displayName : ev.agentId ?? '—'
+                  typeof meta.displayName === 'string' ? meta.displayName : (ev.agentId ?? '—')
                 const confidence =
                   typeof meta.confidence === 'number'
                     ? `${Math.round(meta.confidence * 100)}%`

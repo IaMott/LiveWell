@@ -326,7 +326,12 @@ export async function orchestrate(
           domainHint,
           fullTeam: deps.team,
           onProgress: (agentId, phase, thought, displayName) => {
-            deps.onProgress?.({ agentId, displayName, phase: phase as ProgressEvent['phase'], thought })
+            deps.onProgress?.({
+              agentId,
+              displayName,
+              phase: phase as ProgressEvent['phase'],
+              thought,
+            })
           },
         }),
         globalTimeoutMs,

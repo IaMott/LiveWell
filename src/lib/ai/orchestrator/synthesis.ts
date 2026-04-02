@@ -389,10 +389,7 @@ function buildUserPrompt(params: {
   const inlineFilenames = new Set(filesPassedInline.map((f) => f.filename))
   // Only warn about files that are truly unreadable (no content AND not passed inline)
   const filesWithoutContent = allContextFiles.filter(
-    (f) =>
-      !f.extractedText &&
-      !f.url &&
-      !inlineFilenames.has(f.filename),
+    (f) => !f.extractedText && !f.url && !inlineFilenames.has(f.filename),
   )
 
   let fileBlock = ''
@@ -669,7 +666,8 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
   const missingQuestions = hasMissingData ? rawMissingQuestions.slice(0, 3) : []
 
   const imageData =
-    input.imageData ?? (input.contextPack.files ? await extractInlineFileData(input.contextPack) : [])
+    input.imageData ??
+    (input.contextPack.files ? await extractInlineFileData(input.contextPack) : [])
   const hasImages = imageData.length > 0
 
   const system = buildSystemPrompt(

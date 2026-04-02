@@ -49,7 +49,9 @@ function dedupAssessments(
     const key = `${ev.agentId ?? ''}::${summary.slice(0, 60).toLowerCase().trim()}`
     const existing = seen.get(key)
     const evTime = new Date((ev.eventDate ?? ev.createdAt) as Date).getTime()
-    const exTime = existing ? new Date((existing.eventDate ?? existing.createdAt) as Date).getTime() : 0
+    const exTime = existing
+      ? new Date((existing.eventDate ?? existing.createdAt) as Date).getTime()
+      : 0
     if (!existing || evTime > exTime) seen.set(key, ev)
   }
   return Array.from(seen.values()).sort(
@@ -99,7 +101,14 @@ export function NutritionSection({ data }: Props) {
           {assessments.length > 0 && (
             <div>
               <p style={subLabel}>Valutazioni</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem',
+                  marginTop: '0.25rem',
+                }}
+              >
                 {assessments.map((ev) => {
                   const meta =
                     ev.metadata && typeof ev.metadata === 'object' && !Array.isArray(ev.metadata)
@@ -115,10 +124,20 @@ export function NutritionSection({ data }: Props) {
                   const summaryPart = raw.includes(' — ') ? raw.slice(raw.indexOf(' — ') + 3) : raw
                   return (
                     <div key={ev.id} style={assessmentRowStyle}>
-                      <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.125rem' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: '0.375rem',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          marginBottom: '0.125rem',
+                        }}
+                      >
                         <span style={assessmentNameStyle}>{displayName}</span>
                         {confidence && <span style={assessmentConfStyle}>{confidence}</span>}
-                        <span style={dateStyle}>{formatDateTime(ev.eventDate ?? ev.createdAt)}</span>
+                        <span style={dateStyle}>
+                          {formatDateTime(ev.eventDate ?? ev.createdAt)}
+                        </span>
                       </div>
                       <p style={assessmentTextStyle}>{summaryPart}</p>
                     </div>
