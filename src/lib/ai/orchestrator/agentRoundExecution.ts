@@ -161,18 +161,20 @@ function collectSuggestedAgentIds(
  */
 function needsPeerReview(proposals: AgentProposal[], activeAgentCount: number): boolean {
   const meaningful = proposals.filter((p) => (p.confidence ?? 0) > 0.1)
+  // Solo 1 agente → nessun peer da consultare
   if (meaningful.length <= 1 || activeAgentCount <= 1) return false
 
+  // Skip solo quando il consenso è eccezionalmente solido:
+  // tutti >= 0.92, spread < 0.08, nessuna domanda aperta, nessun consulto suggerito
   const confidences = meaningful.map((p) => p.confidence ?? 0)
   const minConf = Math.min(...confidences)
   const maxConf = Math.max(...confidences)
-  const allHighConf = minConf >= 0.72
-  const smallSpread = maxConf - minConf <= 0.18
+  const allVeryHighConf = minConf >= 0.92
+  const tinySpread = maxConf - minConf <= 0.08
   const hasSuggestions = meaningful.some((p) => (p.suggestedConsultants?.length ?? 0) > 0)
-  const hasLowConf = meaningful.some((p) => (p.confidence ?? 0) < 0.5)
+  const hasOpenQuestions = meaningful.some((p) => (p.questions?.length ?? 0) > 0)
 
-  if (hasLowConf || hasSuggestions) return true
-  if (allHighConf && smallSpread) return false
+  if (allVeryHighConf && tinySpread && !hasSuggestions && !hasOpenQuestions) return false
   return true
 }
 

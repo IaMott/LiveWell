@@ -45,7 +45,18 @@ export type ChatStreamEvent =
       requiresUserConfirmation?: boolean
       confirmToken?: string
     }
-  | { type: 'message.complete'; id: string; content: string }
+  | {
+      type: 'message.complete'
+      id: string
+      content: string
+      /** Trace finale del ragionamento degli specialisti — sostituisce gli step live generici */
+      thinkingSteps?: Array<{
+        specialistName: string
+        title: string
+        thought?: string
+        domain?: string
+      }>
+    }
   | {
       type: 'message.suggestions'
       suggestions: Array<{

@@ -642,11 +642,23 @@ export function selectAgentsForRequest(
       }
 
       // RELEVANCE PENALTY: Specialist has many specific competence keywords but NONE
-      // match the current message. This prevents off-domain specialists (e.g. allergologo
+      // match the current message. Prevents off-domain specialists (e.g. allergologo
       // on a back-pain/spine message) from being selected purely on domain score.
       // Only applied when the message is non-trivial (> 20 chars) to avoid penalising
       // short greetings where competence detection is unreliable.
-      if (competenceHints.length > 5 && msgMatches === 0 && lowerMessage.length > 20) {
+      // NOT applied to secondary-domain-only agents: they already scored only +2 from
+      // the secondary bonus; the penalty would unfairly cancel that when the user uses
+      // synonyms not in the keyword list (e.g. "stomaco" instead of "gastrite").
+      // Primary-domain agents still get the penalty — if health is the PRIMARY domain
+      // and an agent has 0 keyword matches, it's likely not the right specialist.
+      const hasSecondaryOnly =
+        !a.domainTags.includes(domain) && secondary.some((d) => a.domainTags.includes(d))
+      if (
+        competenceHints.length > 5 &&
+        msgMatches === 0 &&
+        lowerMessage.length > 20 &&
+        !hasSecondaryOnly
+      ) {
         s -= 3
       }
 
@@ -664,11 +676,23 @@ export function selectAgentsForRequest(
   // F3: Filter out low-confidence specialists. With the base domain score of +4,
   // a specialist that ONLY matches on domain (no competence hints, no name mention)
   // scores exactly 4. We keep them but cap the total to avoid flooding the pipeline.
-  // Agents scoring ≤ 2 (only from secondary domain or 'general') are excluded to
-  // prevent out-of-scope specialists (e.g. endocrinologo on a nutrition-only query).
-  return scored
-    .filter((x) => x.score > 2)
-    .sort((a, b) => b.score - a.score || a.agent.id.localeCompare(b.agent.id))
-    .slice(0, maxAgents)
-    .map((x) => x.agent)
+  // Soglia >= 2: include specialisti con almeno 1 keyword match esplicito nel messaggio
+  // (es. gastroenterologo per "gastrite" = score 2 = secondary_domain + keyword_match).
+  // Score 0-1 = solo match molto debole (solo secondary senza keyword) → escluso.
+  // Questo era > 2 ma filtrava ingiustamente "gastroenterologo per gastrite" (score=2).
+  const sorted = scored.sort((a, b) => b.score - a.score || a.agent.id.localeCompare(b.agent.id))
+  const filtered = sorted.filter((x) => x.score >= 2).slice(0, maxAgents)
+
+  // Garantisce che almeno 1 agente sia sempre selezionato per messaggi generici/saluti.
+  // Fallback: se nessun agente specialista supera la soglia, usa l'orchestratore o il
+  // coordinatore (agente con domainTag 'coordination') se presente nel team.
+  // In questo modo il fallback è selettivo: non si attiva su team mock senza coordinatori.
+  if (filtered.length === 0) {
+    const coordinator = sorted.find((x) =>
+      (x.agent.domainTags as string[]).includes('coordination'),
+    )
+    if (coordinator) return [coordinator.agent]
+  }
+
+  return filtered.map((x) => x.agent)
 }
