@@ -184,9 +184,60 @@ function MessageBubbleInner({
           style={{
             display: 'flex',
             justifyContent: isUser ? 'flex-end' : 'flex-start',
+            alignItems: 'center',
             width: '100%',
+            gap: '0.375rem',
           }}
         >
+          {/* Reply button — LEFT side for assistant messages */}
+          {!isUser && !message.streaming && message.content && onReply && (
+            <button
+              type="button"
+              onClick={() => onReply(message.id, message.content)}
+              aria-label="Rispondi a questo messaggio"
+              style={{
+                padding: '0.25rem',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--color-text-secondary)',
+                borderRadius: '4px',
+                flexShrink: 0,
+                opacity: hovered ? 1 : 0,
+                visibility: hovered ? 'visible' : 'hidden',
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-primary)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)'
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="13"
+                height="13"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="9 17 4 12 9 7" />
+                <path d="M20 18v-2a4 4 0 00-4-4H4" />
+              </svg>
+            </button>
+          )}
+          {/* Assistant spacer on left (keeps layout stable) */}
+          {!isUser && (message.streaming || !message.content || !onReply) && (
+            <div style={{ width: '21px', flexShrink: 0 }} />
+          )}
+
           <div
             data-testid={!isUser ? 'assistant-bubble' : 'user-bubble'}
             data-domain={resolvedDomain ?? ''}
@@ -205,7 +256,6 @@ function MessageBubbleInner({
             }}
           >
             {message.streaming && !hasContent ? (
-              // Show bouncing dots while waiting for content and no reasoning steps yet
               !isUser && thinkingSteps.length === 0 ? (
                 <div
                   style={{ display: 'flex', gap: '4px', alignItems: 'center', padding: '2px 0' }}
@@ -229,99 +279,56 @@ function MessageBubbleInner({
               <MarkdownContent content={message.content} streaming={message.streaming} />
             )}
           </div>
+
+          {/* Edit button — RIGHT side for user messages */}
+          {isUser && !message.streaming && onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              aria-label="Modifica messaggio"
+              style={{
+                padding: '0.25rem',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--color-text-secondary)',
+                borderRadius: '4px',
+                flexShrink: 0,
+                opacity: hovered ? 1 : 0,
+                visibility: hovered ? 'visible' : 'hidden',
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-primary)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-secondary)'
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="13"
+                height="13"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </button>
+          )}
+          {/* User spacer on right (keeps layout stable) */}
+          {isUser && (message.streaming || !onEdit) && (
+            <div style={{ width: '21px', flexShrink: 0 }} />
+          )}
         </div>
-      )}
-
-      {/* Edit button — shown on hover for user messages */}
-      {isUser && hovered && !message.streaming && onEdit && (
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-label="Modifica messaggio"
-          style={{
-            marginTop: '0.25rem',
-            marginRight: '0.125rem',
-            padding: '0.25rem 0.5rem',
-            border: 'none',
-            background: 'none',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.25rem',
-            fontSize: '0.6875rem',
-            color: 'var(--color-text-secondary)',
-            borderRadius: '4px',
-            transition: 'color 0.15s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = 'var(--color-text-primary)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = 'var(--color-text-secondary)'
-          }}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="11"
-            height="11"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-          Modifica
-        </button>
-      )}
-
-      {/* Reply button — shown on hover for completed assistant messages */}
-      {!isUser && hovered && !message.streaming && message.content && onReply && (
-        <button
-          type="button"
-          onClick={() => onReply(message.id, message.content)}
-          aria-label="Rispondi a questo messaggio"
-          style={{
-            marginTop: '0.25rem',
-            marginLeft: '0.125rem',
-            padding: '0.25rem 0.5rem',
-            border: 'none',
-            background: 'none',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.25rem',
-            fontSize: '0.6875rem',
-            color: 'var(--color-text-secondary)',
-            borderRadius: '4px',
-            transition: 'color 0.15s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = 'var(--color-text-primary)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = 'var(--color-text-secondary)'
-          }}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="11"
-            height="11"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <polyline points="9 17 4 12 9 7" />
-            <path d="M20 18v-2a4 4 0 00-4-4H4" />
-          </svg>
-          Rispondi
-        </button>
       )}
 
       {/* Quick-reply buttons (multi-domain triage, specialist suggestions) */}

@@ -9,6 +9,9 @@ import { IdeasSection } from '@/components/profile/sections/IdeasSection'
 import { CartellaSection } from '@/components/profile/sections/CartellaSection'
 import { computeAgeFromBirthDate } from '@/lib/dynamicDb/semantics'
 
+// Force dynamic rendering — prevents stale Next.js cache after data changes
+export const dynamic = 'force-dynamic'
+
 // Profile domains map to TEAM agent groups:
 //   nutrizione  → TEAM/nutrizione  (dietista, chef, endocrinologo)
 //   salute      → TEAM/salute-biologica (mmg, gastroenterologo, cardiologo, dermatologo)

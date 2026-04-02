@@ -195,8 +195,11 @@ function buildProposalThinkingTrace(
 ): PersistedThinkingStep[] {
   const steps: PersistedThinkingStep[] = []
 
+  const EXCLUDED_TRACE_AGENTS = new Set(['orchestratore', 'intervistatore', 'analista-contesto'])
+
   for (const proposal of proposals ?? []) {
     if ((proposal.confidence ?? 0) === 0) continue
+    if (EXCLUDED_TRACE_AGENTS.has(proposal.agentId)) continue
 
     const agent = team.find((a) => a.id === proposal.agentId)
     if (!agent) continue
@@ -540,8 +543,12 @@ export async function POST(request: Request): Promise<Response> {
           'Valutazione del caso in corso',
           'Confronto tra specialisti',
         ])
+        const isGenericOrchThought = (thought: string) =>
+          GENERIC_ORCHESTRATOR_THOUGHTS.has(thought) ||
+          thought.startsWith('Consenso raggiunto') ||
+          thought.startsWith('Analisi autonoma')
         const onProgress = (event: ProgressEvent) => {
-          const isGeneric = GENERIC_ORCHESTRATOR_THOUGHTS.has(event.thought)
+          const isGeneric = isGenericOrchThought(event.thought)
           emitThinkingEvent(
             {
               specialistName: event.displayName,

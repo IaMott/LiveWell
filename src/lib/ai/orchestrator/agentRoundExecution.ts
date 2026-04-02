@@ -154,6 +154,29 @@ function collectSuggestedAgentIds(
 }
 
 /**
+ * Valuta se è necessaria un'ulteriore fase di peer review.
+ * Ritorna false (skip) quando:
+ * - meno di 2 agenti attivi con proposte significative
+ * - tutti gli agenti hanno alta confidenza E spread basso E nessuno suggerisce consulti
+ */
+function needsPeerReview(proposals: AgentProposal[], activeAgentCount: number): boolean {
+  const meaningful = proposals.filter((p) => (p.confidence ?? 0) > 0.1)
+  if (meaningful.length <= 1 || activeAgentCount <= 1) return false
+
+  const confidences = meaningful.map((p) => p.confidence ?? 0)
+  const minConf = Math.min(...confidences)
+  const maxConf = Math.max(...confidences)
+  const allHighConf = minConf >= 0.72
+  const smallSpread = maxConf - minConf <= 0.18
+  const hasSuggestions = meaningful.some((p) => (p.suggestedConsultants?.length ?? 0) > 0)
+  const hasLowConf = meaningful.some((p) => (p.confidence ?? 0) < 0.5)
+
+  if (hasLowConf || hasSuggestions) return true
+  if (allHighConf && smallSpread) return false
+  return true
+}
+
+/**
  * Esegue il pipeline multi-fase di consultazione tra agenti.
  *
  * Fase 1 (Briefing): tutti gli agenti analizzano il caso indipendentemente.
@@ -222,7 +245,7 @@ export async function executeAgentRounds(
         onProgress?.(
           agent.id,
           'analyzing',
-          `Fase 1 · ${proposal.reasoning.replace(/\n/g, ' ').slice(0, 280)}`,
+          `Fase 1 · ${proposal.reasoning.replace(/\n/g, ' ').slice(0, 500)}`,
           agent.displayName,
         )
       }
@@ -257,6 +280,17 @@ export async function executeAgentRounds(
   for (let phase = 2; phase <= 1 + MAX_PEER_REVIEW_PHASES; phase++) {
     // Agenti attivi in questa fase (esclusi i ritirati)
     const phaseAgents = activeAgents.filter((a) => !retiredAgentIds.includes(a.id))
+
+    // Skip this peer review phase if consensus is already strong
+    if (phase > 1) {
+      const prevPhaseProposals = allPhaseProposals[allPhaseProposals.length - 1] ?? []
+      if (!needsPeerReview(prevPhaseProposals, phaseAgents.length)) {
+        console.info(
+          `[agentRoundExecution] Fase ${phase}: peer review skippata (consenso sufficiente)`,
+        )
+        break
+      }
+    }
 
     // Timeout adattivo per le fasi di peer review: con molti agenti e più fasi, il timeout
     // fisso di 8s per agente può saturare il budget globale di 30s.
@@ -335,7 +369,7 @@ export async function executeAgentRounds(
           onProgress?.(
             agent.id,
             isThisAgentsBriefing ? 'analyzing' : 'peer-review',
-            `${phaseLabel} · ${proposal.reasoning.replace(/\n/g, ' ').slice(0, 270)}`,
+            `${phaseLabel} · ${proposal.reasoning.replace(/\n/g, ' ').slice(0, 500)}`,
             agent.displayName,
           )
         }
