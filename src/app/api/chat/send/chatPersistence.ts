@@ -67,6 +67,8 @@ export type RoutePersistenceDeps = {
     auditEvents: MutationAuditEvent[]
     round1Proposals?: AgentProposal[]
     round2Proposals?: AgentProposal[]
+    /** Tutte le proposte per fase: [fase1[], fase2[], ...] — per trace completo per agente in DB */
+    allPhaseProposals?: AgentProposal[][]
     toolExecutionTrace?: Array<{
       toolCallId: string
       name: string
@@ -205,6 +207,7 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       auditEvents,
       round1Proposals,
       round2Proposals,
+      allPhaseProposals,
       toolExecutionTrace,
       recentMessages,
       fileIds,
@@ -324,7 +327,10 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
 
       // ── Phase 2: Best-effort — agent workspace upserts ───────────────────
       // These are non-critical; failures are tolerated so messages are always saved.
-      const byAgent = new Map<string, { round1?: AgentProposal; round2?: AgentProposal }>()
+      const byAgent = new Map<
+        string,
+        { round1?: AgentProposal; round2?: AgentProposal; phases?: AgentProposal[] }
+      >()
       for (const p of round1Proposals ?? []) {
         const cur = byAgent.get(p.agentId) ?? {}
         cur.round1 = p
@@ -336,8 +342,41 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
         byAgent.set(p.agentId, cur)
       }
 
+      // Costruisci la history per fase per ogni agente da allPhaseProposals
+      // (tutte le proposte prodotte in ogni fase, in ordine cronologico)
+      if (allPhaseProposals && allPhaseProposals.length > 0) {
+        for (const phaseProposals of allPhaseProposals) {
+          for (const p of phaseProposals) {
+            const cur = byAgent.get(p.agentId) ?? {}
+            cur.phases = cur.phases ?? []
+            cur.phases.push(p)
+            byAgent.set(p.agentId, cur)
+          }
+        }
+      }
+
       for (const [agentId, rounds] of byAgent.entries()) {
         try {
+          // Embedding phase history in round2Proposal JSON (no schema change required):
+          // { ...proposal, _phaseCount: N, _phaseHistory: [fase1, fase2, ...lastExcluded] }
+          const round2Value = rounds.round2
+            ? {
+                ...rounds.round2,
+                _phaseCount: rounds.phases?.length ?? 1,
+                // Tutte le fasi tranne l'ultima (che è rounds.round2 stesso)
+                _phaseHistory:
+                  rounds.phases && rounds.phases.length > 1
+                    ? rounds.phases.slice(0, -1).map((p) => ({
+                        agentId: p.agentId,
+                        domain: p.domain,
+                        summary: p.summary?.slice(0, 300),
+                        reasoning: p.reasoning?.slice(0, 500),
+                        confidence: p.confidence,
+                      }))
+                    : [],
+              }
+            : undefined
+
           await prisma.agentWorkspace.upsert({
             where: { conversationId_agentId: { conversationId, agentId } },
             create: {
@@ -347,16 +386,16 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
               round1Proposal: rounds.round1
                 ? (rounds.round1 as unknown as Prisma.InputJsonValue)
                 : undefined,
-              round2Proposal: rounds.round2
-                ? (rounds.round2 as unknown as Prisma.InputJsonValue)
+              round2Proposal: round2Value
+                ? (round2Value as unknown as Prisma.InputJsonValue)
                 : undefined,
             },
             update: {
               round1Proposal: rounds.round1
                 ? (rounds.round1 as unknown as Prisma.InputJsonValue)
                 : undefined,
-              round2Proposal: rounds.round2
-                ? (rounds.round2 as unknown as Prisma.InputJsonValue)
+              round2Proposal: round2Value
+                ? (round2Value as unknown as Prisma.InputJsonValue)
                 : undefined,
             },
           })

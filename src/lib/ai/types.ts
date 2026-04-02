@@ -368,5 +368,11 @@ export type ConsensusResult = {
     round1Proposals?: AgentProposal[]
     round2Proposals?: AgentProposal[]
     blockedToolCalls?: ToolCall[]
+    /** Tutte le proposte per ogni fase: [fase1[], fase2[], fase3[]] — per trace completo nel frontend e in DB */
+    allPhaseProposals?: AgentProposal[][]
+    /** IDs agenti aggiunti dinamicamente durante il peer review */
+    expandedAgentIds?: string[]
+    /** IDs agenti ritirati dopo peer review (analisi precedenti mantenute) */
+    retiredAgentIds?: string[]
   }
 }

@@ -191,6 +191,7 @@ function dedupeThinkingSteps(steps: PersistedThinkingStep[]): PersistedThinkingS
 function buildProposalThinkingTrace(
   proposals: AgentProposal[] | undefined,
   team: AgentProfile[],
+  phaseLabel?: string,
 ): PersistedThinkingStep[] {
   const steps: PersistedThinkingStep[] = []
 
@@ -223,14 +224,34 @@ function buildProposalThinkingTrace(
 
     if (!title) continue
 
+    // Prepend phase label if provided (e.g. "Fase 1 · Briefing")
+    const labeledTitle = phaseLabel ? `${phaseLabel} · ${title}` : title
+
     steps.push({
       specialistName: agent.displayName,
-      title,
+      title: labeledTitle,
       thought: thought ?? title,
       domain: proposal.domain,
     })
   }
 
+  return dedupeThinkingSteps(steps)
+}
+
+/**
+ * Costruisce il trace completo di tutte le fasi del pipeline multi-agente.
+ * Ogni fase è etichettata (Fase 1 · Briefing, Fase 2 · Peer Review, ecc.)
+ * in modo che il reasoning accordion mostri l'intero ragionamento inter-agente.
+ */
+function buildAllPhasesThinkingTrace(
+  allPhaseProposals: AgentProposal[][],
+  team: AgentProfile[],
+): PersistedThinkingStep[] {
+  const steps: PersistedThinkingStep[] = []
+  for (let i = 0; i < allPhaseProposals.length; i++) {
+    const phaseLabel = i === 0 ? `Fase 1 · Briefing` : `Fase ${i + 1} · Peer Review`
+    steps.push(...buildProposalThinkingTrace(allPhaseProposals[i], team, phaseLabel))
+  }
   return dedupeThinkingSteps(steps)
 }
 
@@ -697,10 +718,16 @@ export async function POST(request: Request): Promise<Response> {
         // Fall back to proposal events only when no protocol events exist.
         const thinkingEvents =
           protocolThinkingEvents.length > 0 ? protocolThinkingEvents : proposalThinkingEvents
-        const proposalTrace = dedupeThinkingSteps([
-          ...buildProposalThinkingTrace(consensus.debug?.round1Proposals, team),
-          ...buildProposalThinkingTrace(consensus.debug?.round2Proposals, team),
-        ])
+        // Usa allPhaseProposals se disponibile (trace completo per fase),
+        // altrimenti fallback a round1 + round2 (backward compat)
+        const allPhaseProposals = consensus.debug?.allPhaseProposals
+        const proposalTrace =
+          allPhaseProposals && allPhaseProposals.length > 0
+            ? buildAllPhasesThinkingTrace(allPhaseProposals, team)
+            : dedupeThinkingSteps([
+                ...buildProposalThinkingTrace(consensus.debug?.round1Proposals, team),
+                ...buildProposalThinkingTrace(consensus.debug?.round2Proposals, team),
+              ])
         const protocolTrace = dedupeThinkingSteps(
           protocolThinkingEvents.map((event) => ({
             specialistName: event.specialistName,
@@ -768,6 +795,7 @@ export async function POST(request: Request): Promise<Response> {
             auditEvents: pendingAuditEvents,
             round1Proposals: consensus.debug?.round1Proposals,
             round2Proposals: consensus.debug?.round2Proposals,
+            allPhaseProposals: consensus.debug?.allPhaseProposals,
             toolExecutionTrace: persistedToolExecutionTrace,
             // C1: Pass full history so the long-term memory summary covers the whole arc.
             recentMessages: contextPack.history.recentMessages,
