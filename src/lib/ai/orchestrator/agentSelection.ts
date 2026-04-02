@@ -642,11 +642,23 @@ export function selectAgentsForRequest(
       }
 
       // RELEVANCE PENALTY: Specialist has many specific competence keywords but NONE
-      // match the current message. This prevents off-domain specialists (e.g. allergologo
+      // match the current message. Prevents off-domain specialists (e.g. allergologo
       // on a back-pain/spine message) from being selected purely on domain score.
       // Only applied when the message is non-trivial (> 20 chars) to avoid penalising
       // short greetings where competence detection is unreliable.
-      if (competenceHints.length > 5 && msgMatches === 0 && lowerMessage.length > 20) {
+      // NOT applied to secondary-domain-only agents: they already scored only +2 from
+      // the secondary bonus; the penalty would unfairly cancel that when the user uses
+      // synonyms not in the keyword list (e.g. "stomaco" instead of "gastrite").
+      // Primary-domain agents still get the penalty — if health is the PRIMARY domain
+      // and an agent has 0 keyword matches, it's likely not the right specialist.
+      const hasSecondaryOnly =
+        !a.domainTags.includes(domain) && secondary.some((d) => a.domainTags.includes(d))
+      if (
+        competenceHints.length > 5 &&
+        msgMatches === 0 &&
+        lowerMessage.length > 20 &&
+        !hasSecondaryOnly
+      ) {
         s -= 3
       }
 
