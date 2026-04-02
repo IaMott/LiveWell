@@ -16,6 +16,7 @@ export type ThinkingStep = {
   specialistName: string
   title: string
   thought?: string
+  domain?: string
 }
 
 export type CartellaNotification = {

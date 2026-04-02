@@ -524,8 +524,10 @@ export async function synthesizePerAgentResponses(input: {
   userMessage: string
   contextPack: ContextPack
   team: Array<{ id: string; displayName: string; domainTags: string[] }>
+  /** Tutte le proposte per fase — per mostrare l'evoluzione del ragionamento nel prompt */
+  allPhaseProposals?: AgentProposal[][]
 }): Promise<AgentSynthesisResult[]> {
-  const { llm, proposals, userMessage, contextPack, team } = input
+  const { llm, proposals, userMessage, contextPack, team, allPhaseProposals } = input
 
   // Only relevant proposals (confidence > 0.3, non-unavailable)
   const relevant = proposals
@@ -565,6 +567,16 @@ export async function synthesizePerAgentResponses(input: {
         `Se suggerisci di consultare un altro specialista, dillo brevemente a fine risposta.`,
       ].join('\n')
 
+      // Costruisci l'evoluzione del ragionamento per fasi se disponibile
+      const agentPhaseHistory = allPhaseProposals
+        ?.map((phaseProposals, i) => {
+          const phaseProp = phaseProposals.find((p) => p.agentId === proposal.agentId)
+          if (!phaseProp || (phaseProp.confidence ?? 0) === 0) return null
+          return `Fase ${i + 1} (certezza: ${Math.round((phaseProp.confidence ?? 0) * 100)}%): ${phaseProp.summary?.slice(0, 120) ?? ''}`
+        })
+        .filter(Boolean)
+        .join('\n')
+
       const user = [
         recentHistory ? `CONVERSAZIONE RECENTE:\n${recentHistory}\n` : '',
         `MESSAGGIO UTENTE: "${userMessage}"`,
@@ -573,6 +585,9 @@ export async function synthesizePerAgentResponses(input: {
         proposal.summary,
         proposal.reasoning ? `\nRAGIONAMENTO: ${proposal.reasoning}` : '',
         proposal.questions?.length ? `\nDOMANDE DA PORRE: ${proposal.questions.join('; ')}` : '',
+        agentPhaseHistory && agentPhaseHistory.length > 0
+          ? `\nEVOLUZIONE DEL TUO RAGIONAMENTO:\n${agentPhaseHistory}`
+          : '',
         ``,
         `CONTRIBUTI DEI COLLEGHI:`,
         peerSummaries,

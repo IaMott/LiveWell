@@ -436,7 +436,22 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
       // contextualising every stored data point with the specialist's reasoning.
       // Non-critical: failures are silently swallowed so messages always persist.
       const EXCLUDED_AGENT_IDS = ['orchestratore', 'intervistatore', 'analista-contesto']
-      const significantProposals = (round2Proposals ?? []).filter(
+
+      // Costruisci "best proposal per agente" da allPhaseProposals o fallback a round2Proposals.
+      // Questo garantisce che agenti ritirati dopo Fase 1 lascino comunque traccia in ClinicalEvents.
+      const allProposalsFlat = allPhaseProposals
+        ? allPhaseProposals.flat()
+        : (round2Proposals ?? [])
+
+      const bestByAgent = new Map<string, AgentProposal>()
+      for (const p of allProposalsFlat) {
+        const existing = bestByAgent.get(p.agentId)
+        if (!existing || (p.confidence ?? 0) > (existing.confidence ?? 0)) {
+          bestByAgent.set(p.agentId, p)
+        }
+      }
+
+      const significantProposals = Array.from(bestByAgent.values()).filter(
         (p) =>
           (p.confidence ?? 0) >= 0.4 &&
           p.summary &&
@@ -468,6 +483,50 @@ export function createDbPersistenceDeps(enabled: boolean): RoutePersistenceDeps 
           })
         } catch {
           // non-critical — annotation failure must never block message persistence
+        }
+      }
+
+      // ── Phase 2.6: agentFeedbackScores — EMA per agente basata sulla confidence ──
+      // Aggiorna incrementalmente i feedback scores degli agenti nel profilo utente.
+      // Usa media esponenziale (alpha=0.3) così agenti più utili scalano nel tempo.
+      // Non-critical: i fallback non bloccano il salvataggio del messaggio.
+      const phaseProposalsForScoring = (allPhaseProposals ?? [round2Proposals ?? []]).flat()
+      if (phaseProposalsForScoring.length > 0) {
+        try {
+          const existing = await prisma.userAttribute.findFirst({
+            where: { userId, domain: 'general', key: 'agent_feedback_score' },
+            orderBy: { recordedAt: 'desc' },
+          })
+          const prevScores: Record<string, number> =
+            existing &&
+            typeof existing.value === 'object' &&
+            !Array.isArray(existing.value) &&
+            existing.value !== null
+              ? (((existing.value as Record<string, unknown>).scores as Record<string, number>) ??
+                {})
+              : {}
+
+          const alpha = 0.3
+          const newScores = { ...prevScores }
+          for (const p of phaseProposalsForScoring) {
+            const prev = newScores[p.agentId] ?? 0.5
+            newScores[p.agentId] = parseFloat(
+              (prev * (1 - alpha) + (p.confidence ?? 0) * alpha).toFixed(3),
+            )
+          }
+
+          await prisma.userAttribute.create({
+            data: {
+              userId,
+              domain: 'general',
+              key: 'agent_feedback_score',
+              value: { scores: newScores },
+              source: 'system',
+              recordedAt: new Date(),
+            },
+          })
+        } catch {
+          // non-critical
         }
       }
 

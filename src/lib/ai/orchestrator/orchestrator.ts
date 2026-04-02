@@ -20,7 +20,7 @@ import {
   detectSignificantDomains,
 } from '../domain/domainDetection'
 import { LlmClient } from './agentExecution'
-import { executeAgentRounds } from './agentRoundExecution'
+import { executeAgentRounds, MAX_TOTAL_AGENTS } from './agentRoundExecution'
 import { executeConsensusFlow } from './consensusFlow'
 import { adaptConsensusOutcome } from './consensusOutcome'
 import {
@@ -304,7 +304,10 @@ export async function orchestrate(
   // ciascun dominio non ancora rappresentato. Questo garantisce che il Briefing (Fase 1)
   // sia genuinamente cross-dominio — gli agenti ragionano in parallelo su tutti i domini
   // rilevati PRIMA che il sistema isoli il dominio primario.
-  const MAX_INITIAL_BREADTH = 5
+  //
+  // Cap seeding iniziale = ceil(MAX_TOTAL_AGENTS / 2) = 3: lascia almeno metà degli slot
+  // per l'espansione dinamica nelle fasi di peer review.
+  const MAX_INITIAL_BREADTH = Math.ceil(MAX_TOTAL_AGENTS / 2)
   const selectedAgents = [...baseSelectedAgents]
   const coveredDomains = new Set(selectedAgents.flatMap((a) => a.domainTags as Domain[]))
   const unseededDomains = allDomains.filter((d) => d !== 'general' && !coveredDomains.has(d))
@@ -396,6 +399,7 @@ export async function orchestrate(
     domainHint,
     contextPack: input.contextPack,
     orchestratorToolsAllowed: deps.orchestratorToolsAllowed,
+    allPhaseProposals: allPhaseProposals.length > 0 ? allPhaseProposals : undefined,
   })
   const consensusOutcome = adaptConsensusOutcome({ consensus })
 
@@ -592,6 +596,7 @@ export async function orchestrate(
           userMessage: input.message,
           contextPack: input.contextPack,
           team: deps.team,
+          allPhaseProposals: allPhaseProposals.length > 0 ? allPhaseProposals : undefined,
         })
       : Promise.resolve([]),
   ])

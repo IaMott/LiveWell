@@ -924,6 +924,9 @@ export async function POST(request: Request): Promise<Response> {
               stateSnapshot,
               // S1: Include conversationId so the client can sync newly-created conversations.
               conversationId,
+              // Multi-agent expansion/retirement info for frontend display
+              expandedAgentIds: consensus.debug?.expandedAgentIds ?? [],
+              retiredAgentIds: consensus.debug?.retiredAgentIds ?? [],
             }),
           ),
         )

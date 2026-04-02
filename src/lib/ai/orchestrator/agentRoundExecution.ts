@@ -4,7 +4,7 @@ import { executeAgent, LlmClient } from './agentExecution'
 export const AGENT_TIMEOUT_MS = 8_000
 
 /** Max agenti totali (iniziali + espansioni dinamiche) */
-const MAX_TOTAL_AGENTS = 6
+export const MAX_TOTAL_AGENTS = 6
 
 /** Max fasi di peer-review oltre il briefing iniziale */
 const MAX_PEER_REVIEW_PHASES = 2
@@ -66,6 +66,14 @@ function buildRichPeerInsights(
 ): string | undefined {
   const peers = accumulatedProposals
     .filter((p) => p.agentId !== agentId && (p.confidence ?? 0) > 0.05)
+    // Ordina per rilevanza: confidence più alta prima, poi ha suggestedConsultants
+    .sort((a, b) => {
+      const aHasSuggested = (a.suggestedConsultants?.length ?? 0) > 0 ? 1 : 0
+      const bHasSuggested = (b.suggestedConsultants?.length ?? 0) > 0 ? 1 : 0
+      const confDiff = (b.confidence ?? 0) - (a.confidence ?? 0)
+      if (Math.abs(confDiff) > 0.1) return confDiff
+      return bHasSuggested - aHasSuggested
+    })
     .slice(0, 4) // max 4 peer per evitare token explosion
 
   if (peers.length === 0) return undefined
@@ -250,6 +258,18 @@ export async function executeAgentRounds(
     // Agenti attivi in questa fase (esclusi i ritirati)
     const phaseAgents = activeAgents.filter((a) => !retiredAgentIds.includes(a.id))
 
+    // Timeout adattivo per le fasi di peer review: con molti agenti e più fasi, il timeout
+    // fisso di 8s per agente può saturare il budget globale di 30s.
+    // Budget disponibile: 30s totali - ~5s overhead, distribuito su (MAX_PEER_REVIEW_PHASES + 1) fasi.
+    const agentCount = phaseAgents.length
+    const adaptiveTimeout = Math.max(
+      3000,
+      Math.min(
+        AGENT_TIMEOUT_MS,
+        Math.floor(25000 / (MAX_PEER_REVIEW_PHASES + 1) / Math.max(1, agentCount)),
+      ),
+    )
+
     if (phaseAgents.length === 0) break
 
     // Emetti evento peer-review
@@ -280,7 +300,7 @@ export async function executeAgentRounds(
 
         return withTimeout(
           executeAgent({ llm, agent, input: executionInput, domainHint, peerInsights }),
-          timeoutMs,
+          adaptiveTimeout,
           agent.id,
         )
       }),
