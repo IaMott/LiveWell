@@ -282,7 +282,18 @@ export function resolveContextualRouting(params: {
     }
   }
 
-  if (llmRouting) {
+  // Pure-greeting guard: very short messages with no substantive content are always
+  // routed to 'general', regardless of what the LLM router returns.
+  // Without this, the LLM infers 'inspiration' from a greeting on a coaching app
+  // (plausible in context) which activates coaches/consultants/etc. on "Buongiorno".
+  const trimmed = input.message.trim()
+  const isPureGreeting =
+    trimmed.length <= 20 &&
+    /^(ciao|buongiorno|buonasera|buonanotte|salve|hey|hello|hi|ehilà|ehi|ok|sì|si|no|grazie|prego|bene|perfetto|capito|dai|forza|avanti|benissimo|ottimo|va bene|vai|ok!|sì!|)\s*[!.]?\s*$/i.test(
+      trimmed,
+    )
+
+  if (llmRouting && !isPureGreeting) {
     const mergedDomains = uniqueDomains([
       llmRouting.primaryDomain,
       ...llmRouting.allDomains,
