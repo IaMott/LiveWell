@@ -40,11 +40,28 @@ type AttrRow = {
   notes?: string | null
 }
 
+// Attribute keys that are internal/system and must not be shown in the profile UI.
+const HIDDEN_ATTRIBUTE_KEY_PATTERNS = [
+  'agent feedback score',
+  'agent_feedback',
+  'feedback score',
+  'routing score',
+  'agent score',
+  'confidence score',
+  'agent_score',
+]
+
+function isHiddenAttributeKey(key: string): boolean {
+  const lower = key.toLowerCase()
+  return HIDDEN_ATTRIBUTE_KEY_PATTERNS.some((p) => lower.includes(p))
+}
+
 function groupAttributesByDomain(
   attrs: AttrRow[],
 ): Record<string, Record<string, { value: unknown; unit: string | null }>> {
   const result: Record<string, Record<string, { value: unknown; unit: string | null }>> = {}
   for (const attr of attrs) {
+    if (isHiddenAttributeKey(attr.key)) continue
     if (!result[attr.domain]) result[attr.domain] = {}
     if (!result[attr.domain][attr.key]) {
       // First occurrence wins (already ordered by recordedAt desc)
@@ -75,6 +92,7 @@ function groupAttributesByDomainWithHistory(
 ): Record<string, Record<string, AttrHistory[]>> {
   const result: Record<string, Record<string, AttrHistory[]>> = {}
   for (const attr of attrs) {
+    if (isHiddenAttributeKey(attr.key)) continue
     if (!result[attr.domain]) result[attr.domain] = {}
     if (!result[attr.domain][attr.key]) result[attr.domain][attr.key] = []
     result[attr.domain][attr.key].push({

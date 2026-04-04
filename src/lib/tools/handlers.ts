@@ -200,6 +200,17 @@ const userUpdateProfile: Handler = async (args, ctx) => {
   return { saved: true }
 }
 
+// System/internal attribute keys that must never be persisted by LLM tool calls.
+const BLOCKED_ATTRIBUTE_KEY_PATTERNS = [
+  'agent feedback score',
+  'agent_feedback',
+  'feedback score',
+  'routing score',
+  'agent score',
+  'confidence score',
+  'agent_score',
+]
+
 const userSetAttribute: Handler = async (args, ctx) => {
   const a = args as {
     domain: string
@@ -209,6 +220,12 @@ const userSetAttribute: Handler = async (args, ctx) => {
     recordedAt?: string
     validUntil?: string
     notes?: string
+  }
+
+  // Block system/internal keys that should never appear in user data.
+  const rawKeyLower = (a.key ?? '').toLowerCase()
+  if (BLOCKED_ATTRIBUTE_KEY_PATTERNS.some((p) => rawKeyLower.includes(p))) {
+    return { saved: false, blocked: true }
   }
 
   let normalizedDomain = normalizeDomain(a.domain)

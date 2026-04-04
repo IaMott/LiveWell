@@ -601,87 +601,92 @@ export function selectAgentsForRequest(
   //   +1  'general' domain tag
   //   +2  each secondary domain match
   //   +2  agent id or displayName mentioned in message
-  //   +3  per competence-hint keyword match (current message)
-  //   +2  per competence-hint keyword match (accumulated case context)
+  //   +2  per competence-hint keyword match (current message)
+  //   +1  per competence-hint keyword match (accumulated case context)
   //   ±2  feedback score adjustment (only if ≥3 ratings)
   // No hardcoded bonus for any specific agent group.
-  const scored = team.map((a) => ({
-    agent: a,
-    score: (() => {
-      let s = 0
-      if (a.domainTags.includes(domain)) s += 4
-      if (a.domainTags.includes('general')) s += 1
-      for (const d of secondary) if (a.domainTags.includes(d)) s += 2
-      const preferredRank = preferredAgentRanks.get(a.id)
-      if (preferredRank !== undefined) {
-        s += Math.max(6, 10 - preferredRank * 2)
-      }
-      if (lowerMessage.includes(a.id.toLowerCase())) s += 2
-      if (lowerMessage.includes(a.displayName.toLowerCase())) s += 2
+  const scored = team.map((a) => {
+    let s = 0
+    let msgMatchCount = 0
 
-      const competenceHints = a.competenceKeywords ?? AGENT_COMPETENCE_HINTS[a.id] ?? []
-      // Competence hints remain a booster, not the main routing driver.
-      // Uses stemMatch for Italian morphology: "occhi" matches "occhio", etc.
-      const msgMatches = competenceHints.filter((h) =>
+    if (a.domainTags.includes(domain)) s += 4
+    if (a.domainTags.includes('general')) s += 1
+    for (const d of secondary) if (a.domainTags.includes(d)) s += 2
+    const preferredRank = preferredAgentRanks.get(a.id)
+    if (preferredRank !== undefined) {
+      s += Math.max(6, 10 - preferredRank * 2)
+    }
+    if (lowerMessage.includes(a.id.toLowerCase())) s += 2
+    if (lowerMessage.includes(a.displayName.toLowerCase())) s += 2
+
+    const competenceHints = a.competenceKeywords ?? AGENT_COMPETENCE_HINTS[a.id] ?? []
+    // Competence hints remain a booster, not the main routing driver.
+    // Uses stemMatch for Italian morphology: "occhi" matches "occhio", etc.
+    msgMatchCount = competenceHints.filter((h) =>
+      h.includes(' ')
+        ? lowerMessage.includes(h)
+        : [...msgTokens].some((tok) => stemMatch(tok, h)),
+    ).length
+    if (msgMatchCount > 0) s += msgMatchCount * 2
+
+    // Case-context matches are stabilizers, not the core selection engine.
+    if (caseContext) {
+      const lowerCase = caseContext.toLowerCase()
+      const caseTokens = textToTokens(caseContext)
+      const caseMatches = competenceHints.filter((h) =>
         h.includes(' ')
-          ? lowerMessage.includes(h)
-          : [...msgTokens].some((tok) => stemMatch(tok, h)),
+          ? lowerCase.includes(h)
+          : [...caseTokens].some((tok) => stemMatch(tok, h)),
       ).length
-      if (msgMatches > 0) s += msgMatches * 2
+      if (caseMatches > 0) s += caseMatches
+    }
 
-      // Case-context matches are stabilizers, not the core selection engine.
-      if (caseContext) {
-        const lowerCase = caseContext.toLowerCase()
-        const caseTokens = textToTokens(caseContext)
-        const caseMatches = competenceHints.filter((h) =>
-          h.includes(' ')
-            ? lowerCase.includes(h)
-            : [...caseTokens].some((tok) => stemMatch(tok, h)),
-        ).length
-        if (caseMatches > 0) s += caseMatches
-      }
+    // RELEVANCE PENALTY: Specialist has many specific competence keywords but NONE
+    // match the current message. Prevents off-domain specialists (e.g. allergologo
+    // on a back-pain/spine message) from being selected purely on domain score.
+    // Only applied when the message is non-trivial (> 20 chars) to avoid penalising
+    // short greetings where competence detection is unreliable.
+    // NOT applied to secondary-domain-only agents: they already scored only +2 from
+    // the secondary bonus; the penalty would unfairly cancel that when the user uses
+    // synonyms not in the keyword list (e.g. "stomaco" instead of "gastrite").
+    // Primary-domain agents still get the penalty — if health is the PRIMARY domain
+    // and an agent has 0 keyword matches, it's likely not the right specialist.
+    const hasSecondaryOnly =
+      !a.domainTags.includes(domain) && secondary.some((d) => a.domainTags.includes(d))
+    if (
+      competenceHints.length > 5 &&
+      msgMatchCount === 0 &&
+      lowerMessage.length > 20 &&
+      !hasSecondaryOnly
+    ) {
+      s -= 3
+    }
 
-      // RELEVANCE PENALTY: Specialist has many specific competence keywords but NONE
-      // match the current message. Prevents off-domain specialists (e.g. allergologo
-      // on a back-pain/spine message) from being selected purely on domain score.
-      // Only applied when the message is non-trivial (> 20 chars) to avoid penalising
-      // short greetings where competence detection is unreliable.
-      // NOT applied to secondary-domain-only agents: they already scored only +2 from
-      // the secondary bonus; the penalty would unfairly cancel that when the user uses
-      // synonyms not in the keyword list (e.g. "stomaco" instead of "gastrite").
-      // Primary-domain agents still get the penalty — if health is the PRIMARY domain
-      // and an agent has 0 keyword matches, it's likely not the right specialist.
-      const hasSecondaryOnly =
-        !a.domainTags.includes(domain) && secondary.some((d) => a.domainTags.includes(d))
-      if (
-        competenceHints.length > 5 &&
-        msgMatches === 0 &&
-        lowerMessage.length > 20 &&
-        !hasSecondaryOnly
-      ) {
-        s -= 3
-      }
+    // Feedback scoring: +2 if highly rated (≥4.0), -2 if poorly rated (≤2.0)
+    // Only applies if user has given ≥3 ratings for this agent
+    const avgRating = agentFeedbackScores[a.id]
+    if (avgRating !== undefined) {
+      s += Math.round((avgRating - 3) * 1.0) // 5★ → +2, 3★ → 0, 1★ → -2
+    }
 
-      // Feedback scoring: +2 if highly rated (≥4.0), -2 if poorly rated (≤2.0)
-      // Only applies if user has given ≥3 ratings for this agent
-      const avgRating = agentFeedbackScores[a.id]
-      if (avgRating !== undefined) {
-        s += Math.round((avgRating - 3) * 1.0) // 5★ → +2, 3★ → 0, 1★ → -2
-      }
+    return { agent: a, score: s, msgMatchCount }
+  })
 
-      return s
-    })(),
-  }))
-
-  // F3: Filter out low-confidence specialists. With the base domain score of +4,
-  // a specialist that ONLY matches on domain (no competence hints, no name mention)
-  // scores exactly 4. We keep them but cap the total to avoid flooding the pipeline.
-  // Soglia >= 2: include specialisti con almeno 1 keyword match esplicito nel messaggio
-  // (es. gastroenterologo per "gastrite" = score 2 = secondary_domain + keyword_match).
-  // Score 0-1 = solo match molto debole (solo secondary senza keyword) → escluso.
-  // Questo era > 2 ma filtrava ingiustamente "gastroenterologo per gastrite" (score=2).
+  // F3: Filter out low-confidence specialists.
+  // Rule: score > 2 always passes. score === 2 passes ONLY if there is at least 1
+  // explicit keyword match in the current message. This distinction is critical:
+  //
+  //   gastroenterologo + "gastrite" message (no secondary health domain detected):
+  //     score = 0 (no domain) + 2 (gastrite keyword) = 2, msgMatchCount = 1 → INCLUDED ✅
+  //
+  //   relationship-coach on nutrition message (secondary mindfulness detected):
+  //     score = 2 (secondary mindfulness), msgMatchCount = 0 → EXCLUDED ✅
+  //
+  // Score 0-1 = too weak regardless of keyword matches → always excluded.
   const sorted = scored.sort((a, b) => b.score - a.score || a.agent.id.localeCompare(b.agent.id))
-  const filtered = sorted.filter((x) => x.score >= 2).slice(0, maxAgents)
+  const filtered = sorted
+    .filter((x) => x.score > 2 || (x.score === 2 && x.msgMatchCount > 0))
+    .slice(0, maxAgents)
 
   // Garantisce che almeno 1 agente sia sempre selezionato per messaggi generici/saluti.
   // Fallback: se nessun agente specialista supera la soglia, usa l'orchestratore o il
