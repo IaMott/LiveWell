@@ -1,7 +1,9 @@
 {
   "id": "commercialista",
   "displayName": "Commercialista",
-  "domainTags": ["inspiration", "coordination"],
+  "domainTags": [
+    "inspiration"
+  ],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.updateProfile",
@@ -16,5 +18,22 @@
     "Segnali di frode fiscale o riciclaggio -> stop immediato, non procedere, escalation legale urgente."
   ],
   "disclaimerStyle": "strict",
-  "decisionStyle": "team-led"
+  "decisionStyle": "team-led",
+  "competenceKeywords": [
+    "tasse",
+    "fisco",
+    "iva",
+    "dichiarazione",
+    "partita iva",
+    "fattura",
+    "contabilità",
+    "bilancio",
+    "irpef",
+    "f24",
+    "detrazioni",
+    "acconto",
+    "regime forfettario",
+    "srl",
+    "spa"
+  ]
 }

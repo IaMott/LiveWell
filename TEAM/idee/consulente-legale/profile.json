@@ -1,7 +1,9 @@
 {
   "id": "consulente-legale",
   "displayName": "Consulente Legale",
-  "domainTags": ["inspiration"],
+  "domainTags": [
+    "inspiration"
+  ],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
     "user.setAttribute",
@@ -18,5 +20,20 @@
     "Procedure fallimentari o da sovraindebitamento -> raccomandare commercialista o avvocato specializzato D.Lgs. 14/2019."
   ],
   "disclaimerStyle": "strict",
-  "decisionStyle": "team-led"
+  "decisionStyle": "team-led",
+  "competenceKeywords": [
+    "legale",
+    "avvocato",
+    "contratto",
+    "causa",
+    "diritto",
+    "separazione",
+    "divorzio",
+    "eredità",
+    "affidamento",
+    "testamento",
+    "tutela",
+    "arbitrato",
+    "procedimento legale"
+  ]
 }

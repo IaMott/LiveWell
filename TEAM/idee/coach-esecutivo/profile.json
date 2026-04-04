@@ -2,8 +2,7 @@
   "id": "executive-coach",
   "displayName": "Executive Coach",
   "domainTags": [
-    "inspiration",
-    "coordination"
+    "inspiration"
   ],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
@@ -18,5 +17,19 @@
     "Decisioni strategiche con impatti finanziari rilevanti (exit, equity, compensi dirigenziali) -> co-gestione con financial planner e commercialista del team."
   ],
   "disclaimerStyle": "strict",
-  "decisionStyle": "team-led"
+  "decisionStyle": "team-led",
+  "competenceKeywords": [
+    "leadership",
+    "manager",
+    "dirigente",
+    "azienda",
+    "team",
+    "organizzazione",
+    "strategia aziendale",
+    "executive",
+    "ceo",
+    "ruolo dirigenziale",
+    "performance aziendale",
+    "coaching manageriale"
+  ]
 }
