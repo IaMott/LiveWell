@@ -549,6 +549,108 @@ const AGENT_COMPETENCE_HINTS: Record<string, string[]> = {
     'età avanzata',
     'cure fine vita',
   ],
+
+  // ── Gruppo Idee ────────────────────────────────────────────────────────────
+  // These agents are ONLY relevant when the user explicitly mentions their domain.
+  // Without keywords they would score ≥2 on any 'inspiration' message, flooding
+  // the pipeline with irrelevant specialists.
+
+  commercialista: [
+    'tasse',
+    'fisco',
+    'iva',
+    'dichiarazione',
+    'partita iva',
+    'fattura',
+    'contabilità',
+    'bilancio',
+    'irpef',
+    'f24',
+    'detrazioni',
+    'acconto',
+    'regime forfettario',
+    'srl',
+    'spa',
+  ],
+
+  'financial-planner': [
+    'investimenti',
+    'risparmio',
+    'mutuo',
+    'finanziamento',
+    'pensione',
+    'portafoglio',
+    'debiti',
+    'borsa',
+    'azioni',
+    'fondo',
+    'etf',
+    'rendimento',
+    'patrimonio',
+    'budget familiare',
+  ],
+
+  'career-coach': [
+    'carriera',
+    'lavoro',
+    'professione',
+    'colloquio',
+    'cv',
+    'licenziamento',
+    'promozione',
+    'cambio lavoro',
+    'settore',
+    'networking',
+    'linkedin',
+    'stipendio',
+    'offerta di lavoro',
+  ],
+
+  'executive-coach': [
+    'leadership',
+    'manager',
+    'dirigente',
+    'azienda',
+    'team',
+    'organizzazione',
+    'strategia aziendale',
+    'executive',
+    'ceo',
+    'ruolo dirigenziale',
+    'performance aziendale',
+    'coaching manageriale',
+  ],
+
+  'consulente-legale': [
+    'legale',
+    'avvocato',
+    'contratto',
+    'causa',
+    'diritto',
+    'separazione',
+    'divorzio',
+    'eredità',
+    'affidamento',
+    'testamento',
+    'tutela',
+    'arbitrato',
+    'procedimento legale',
+  ],
+
+  'analista-contesto': [
+    'analisi',
+    'dati',
+    'requisiti',
+    'progetto',
+    'processo',
+    'ricerca',
+    'assessment',
+    'report',
+    'scenario',
+    'benchmarking',
+    'decisione strategica',
+    'audit',
+  ],
 }
 
 function textToTokens(text: string): Set<string> {
@@ -689,9 +791,13 @@ export function selectAgentsForRequest(
   // coordinatore (agente con domainTag 'coordination') se presente nel team.
   // In questo modo il fallback è selettivo: non si attiva su team mock senza coordinatori.
   if (filtered.length === 0) {
-    const coordinator = sorted.find((x) =>
-      (x.agent.domainTags as string[]).includes('coordination'),
-    )
+    // Prefer the main coordinator by id ('orchestratore') before falling back to any
+    // agent that happens to have a 'coordination' domainTag. Multiple agents carry
+    // 'coordination' (analista-contesto, commercialista, life-organizer, etc.) and
+    // alphabetical ordering would pick analista-contesto ahead of orchestratore.
+    const coordinator =
+      sorted.find((x) => x.agent.id === 'orchestratore') ??
+      sorted.find((x) => (x.agent.domainTags as string[]).includes('coordination'))
     if (coordinator) return [coordinator.agent]
   }
 

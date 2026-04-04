@@ -2,7 +2,7 @@
   "id": "analista-contesto",
   "displayName": "Analista di Contesto",
   "domainTags": [
-    "coordination"
+    "inspiration"
   ],
   "systemPromptPath": "prompt.md",
   "toolsAllowed": [
@@ -16,5 +16,19 @@
     "Se emergono segnali di rischio da qualsiasi dominio -> attivare escalation sicurezza e coordinare risposta del team."
   ],
   "disclaimerStyle": "strict",
-  "decisionStyle": "team-led"
+  "decisionStyle": "team-led",
+  "competenceKeywords": [
+    "analisi",
+    "dati",
+    "requisiti",
+    "progetto",
+    "processo",
+    "ricerca",
+    "assessment",
+    "report",
+    "strategia",
+    "decisione",
+    "scenario",
+    "benchmarking"
+  ]
 }
