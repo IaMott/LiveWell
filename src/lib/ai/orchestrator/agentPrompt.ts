@@ -343,6 +343,8 @@ export function buildSharedAgentRules(
     `DOMAIN MAPPING — REGOLA ASSOLUTA PER setAttribute (errori di dominio = dato inutilizzabile):`,
     `- Pasti, macro (carboidrati/proteine/grassi/calorie), alimenti, dieta, schema alimentare → domain:"nutrition"`,
     `- Attività fisica, sport, allenamento, sessioni, intensità, frequenza settimanale → domain:"training"`,
+    `  key:"sport" = SOLO il nome di uno sport/attività (es. "calcio", "nuoto", "corsa"). MAI una frase, ostacolo o sensazione.`,
+    `  Se l'utente descrive un ostacolo o un problema legato all'allenamento (es. "fatica con la fame"), salvalo come domain:"general" key:"main_complaint" — NON come sport.`,
     `- Peso, altezza, BMI, composizione corporea, parametri biometrici → domain:"health"`,
     `- Età, sesso, nome → domain:"personal"`,
     `- Obiettivi dichiarati, motivo consulto, sintomi generali → domain:"general"`,
