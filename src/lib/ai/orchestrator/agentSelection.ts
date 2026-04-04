@@ -623,9 +623,7 @@ export function selectAgentsForRequest(
     // Competence hints remain a booster, not the main routing driver.
     // Uses stemMatch for Italian morphology: "occhi" matches "occhio", etc.
     msgMatchCount = competenceHints.filter((h) =>
-      h.includes(' ')
-        ? lowerMessage.includes(h)
-        : [...msgTokens].some((tok) => stemMatch(tok, h)),
+      h.includes(' ') ? lowerMessage.includes(h) : [...msgTokens].some((tok) => stemMatch(tok, h)),
     ).length
     if (msgMatchCount > 0) s += msgMatchCount * 2
 
@@ -634,9 +632,7 @@ export function selectAgentsForRequest(
       const lowerCase = caseContext.toLowerCase()
       const caseTokens = textToTokens(caseContext)
       const caseMatches = competenceHints.filter((h) =>
-        h.includes(' ')
-          ? lowerCase.includes(h)
-          : [...caseTokens].some((tok) => stemMatch(tok, h)),
+        h.includes(' ') ? lowerCase.includes(h) : [...caseTokens].some((tok) => stemMatch(tok, h)),
       ).length
       if (caseMatches > 0) s += caseMatches
     }
