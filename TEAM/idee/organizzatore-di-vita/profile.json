@@ -2,7 +2,6 @@
   "id": "life-organizer",
   "displayName": "Life Organizer",
   "domainTags": [
-    "coordination",
     "inspiration"
   ],
   "systemPromptPath": "prompt.md",

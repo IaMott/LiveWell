@@ -17,5 +17,21 @@
     "Segnali di frode, truffa finanziaria o situazioni legali -> attivare escalation e raccomandare professionista legale."
   ],
   "disclaimerStyle": "strict",
-  "decisionStyle": "team-led"
+  "decisionStyle": "team-led",
+  "competenceKeywords": [
+    "investimenti",
+    "risparmio",
+    "mutuo",
+    "finanziamento",
+    "pensione",
+    "portafoglio",
+    "debiti",
+    "borsa",
+    "azioni",
+    "fondo",
+    "etf",
+    "rendimento",
+    "patrimonio",
+    "budget familiare"
+  ]
 }
