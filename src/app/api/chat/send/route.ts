@@ -796,7 +796,10 @@ export async function POST(request: Request): Promise<Response> {
           stateSnapshot?.leadDomain ?? consensus.activeSpecialist?.domain ?? consensus.ui.domainIcon
         const activeSpecialistId = leadPanel?.selectedAgentId ?? consensus.activeSpecialist?.id
         const specialistName =
-          consensus.activeSpecialist?.displayName ?? formatAgentIdLabel(leadPanel?.selectedAgentId)
+          consensus.activeSpecialist?.displayName ??
+          team.find((a) => a.id === (leadPanel?.selectedAgentId ?? activeSpecialistId))
+            ?.displayName ??
+          formatAgentIdLabel(leadPanel?.selectedAgentId)
         const specialistDomains = leadPanel?.domain
           ? [leadPanel.domain]
           : consensus.activeSpecialist?.domains
