@@ -84,6 +84,55 @@ function formatAgentIdLabel(agentId?: string | null): string | undefined {
   return normalized.replace(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
+/**
+ * Post-generation guard for the first message.
+ *
+ * Gemini's strong health-app training prior causes it to ask for age / biological sex
+ * even when the system prompt explicitly forbids it. This function strips those sentences
+ * before the response reaches the user.
+ */
+function sanitizeFirstMessageResponse(text: string): string {
+  if (!text) return text
+
+  // Patterns that must never appear in a first-message response
+  const FORBIDDEN = [
+    /quanti anni hai/i,
+    /che et[àa] hai/i,
+    /la tua et[àa]/i,
+    /sesso biologico/i,
+    /genere biologico/i,
+    /ci servirebbero.{0,80}info/i,
+    /ho bisogno di.{0,60}(et[àa]|sesso|peso|altezza)/i,
+    /dimmi.{0,60}(et[àa]|sesso|peso|altezza)/i,
+    /fornisci.{0,60}(et[àa]|sesso|peso|altezza)/i,
+  ]
+
+  const hasForbidden = FORBIDDEN.some((p) => p.test(text))
+  if (!hasForbidden) return text
+
+  // Split into sentences and keep only those before the first forbidden one
+  const sentences = text.split(/(?<=[.!?])\s+/)
+  const clean: string[] = []
+  for (const sentence of sentences) {
+    if (FORBIDDEN.some((p) => p.test(sentence))) break
+    clean.push(sentence)
+  }
+
+  const base = clean.join(' ').trim()
+
+  // If nothing clean remains, return a minimal safe response
+  if (base.length < 15) {
+    return 'Ciao! Sono qui per aiutarti. Di cosa vorresti parlare oggi?'
+  }
+
+  // Ensure the response ends with an open question
+  if (!base.includes('?')) {
+    return base.replace(/[.,]?\s*$/, '') + ' Di cosa vorresti parlare?'
+  }
+
+  return base
+}
+
 function parseToolDirective(message: string): ToolCall[] {
   const direct = message.match(/^\/tool\s+([a-zA-Z0-9._-]+)\s+([\s\S]+)$/)
   if (!direct) return []
@@ -781,8 +830,13 @@ export async function POST(request: Request): Promise<Response> {
         const persistedToolExecutionTrace = [...toolExecutionTrace, ...blockedToolExecutionTrace]
 
         const rawResponseText = consensus.finalMessageMarkdown
+        const isFirstMessageTurn =
+          (contextPack.history.recentMessages?.length ?? 0) === 0 &&
+          (contextPack.history.crossConversationMessages?.length ?? 0) === 0
         const responseText =
-          sanitizeAssistantVisibleContent(rawResponseText) ||
+          (isFirstMessageTurn
+            ? sanitizeFirstMessageResponse(sanitizeAssistantVisibleContent(rawResponseText))
+            : sanitizeAssistantVisibleContent(rawResponseText)) ||
           'Ho registrato le informazioni principali. Possiamo continuare.'
         const nextCaseState = consensus.caseState ?? null
         const canonicalStateSnapshot =
