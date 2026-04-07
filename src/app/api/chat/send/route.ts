@@ -85,32 +85,55 @@ function formatAgentIdLabel(agentId?: string | null): string | undefined {
 }
 
 /**
- * Post-generation guard for the first message.
+ * Post-generation intake guard.
  *
- * Gemini's strong health-app training prior causes it to ask for age / biological sex
- * even when the system prompt explicitly forbids it. This function strips those sentences
- * before the response reaches the user.
+ * Gemini's health-app training prior makes it ask for age / biological sex
+ * as a paired intake question even when the system prompt forbids it.
+ * This guard strips the offending sentences before the response reaches the user.
+ *
+ * Two tiers:
+ *  ALWAYS_FORBIDDEN – phrases that are NEVER acceptable in any response.
+ *  EARLY_FORBIDDEN  – phrases forbidden in the first 5 assistant turns, when
+ *                     the model hasn't yet earned the right to collect demographics.
+ *
+ * @param text          the sanitized response text
+ * @param assistantTurns number of prior assistant messages in this conversation
  */
-function sanitizeFirstMessageResponse(text: string): string {
+function sanitizeIntakePatterns(text: string, assistantTurns: number): string {
   if (!text) return text
 
-  // Patterns that must never appear in a first-message response
-  const FORBIDDEN = [
-    /quanti anni hai/i,
-    /che et[àa] hai/i,
-    /la tua et[àa]/i,
+  // These patterns must never appear in any response
+  const ALWAYS_FORBIDDEN = [
     /sesso biologico/i,
     /genere biologico/i,
-    /ci servirebbero.{0,80}info/i,
-    /ho bisogno di.{0,60}(et[àa]|sesso|peso|altezza)/i,
-    /dimmi.{0,60}(et[àa]|sesso|peso|altezza)/i,
-    /fornisci.{0,60}(et[àa]|sesso|peso|altezza)/i,
+    // "ci servirebbe(ro) (solo )? un paio di (info|dettagli|dati)"
+    /ci servirebbe(?:ro)?.{0,40}(informazioni di base|info veloci|info essenziali|dettagli importanti|dati essenziali)/i,
+    // "dettagli/info che non ci hai ancora detto"
+    /(?:dettagli|informazioni|info|dati).{0,40}non ci hai ancora/i,
+    // "ho bisogno / abbiamo bisogno / necessitiamo di … età/sesso/peso/altezza"
+    /(?:ho|abbiamo|necessitiamo).{0,50}bisogno.{0,60}(et[àa]|sesso|peso|altezza)/i,
   ]
+
+  // These patterns are forbidden only early in the conversation
+  const EARLY_FORBIDDEN =
+    assistantTurns < 5
+      ? [
+          /quanti anni hai/i,
+          /che et[àa] hai/i,
+          /la tua et[àa]/i,
+          /dimmi.{0,60}(et[àa]|sesso|peso|altezza)/i,
+          /fornisci.{0,60}(et[àa]|sesso|peso|altezza)/i,
+          /potremmo chiederti.{0,80}(et[àa]|sesso)/i,
+          /ci servirebbe(?:ro)?.{0,80}(et[àa]|sesso|peso|altezza)/i,
+        ]
+      : []
+
+  const FORBIDDEN = [...ALWAYS_FORBIDDEN, ...EARLY_FORBIDDEN]
 
   const hasForbidden = FORBIDDEN.some((p) => p.test(text))
   if (!hasForbidden) return text
 
-  // Split into sentences and keep only those before the first forbidden one
+  // Split into sentences, keep only those before the first forbidden one
   const sentences = text.split(/(?<=[.!?])\s+/)
   const clean: string[] = []
   for (const sentence of sentences) {
@@ -120,14 +143,12 @@ function sanitizeFirstMessageResponse(text: string): string {
 
   const base = clean.join(' ').trim()
 
-  // If nothing clean remains, return a minimal safe response
   if (base.length < 15) {
-    return 'Ciao! Sono qui per aiutarti. Di cosa vorresti parlare oggi?'
+    return 'Sono qui per aiutarti. Di cosa vorresti parlare?'
   }
 
-  // Ensure the response ends with an open question
   if (!base.includes('?')) {
-    return base.replace(/[.,]?\s*$/, '') + ' Di cosa vorresti parlare?'
+    return base.replace(/[.,]?\s*$/, '') + ' Come posso aiutarti?'
   }
 
   return base
@@ -830,14 +851,15 @@ export async function POST(request: Request): Promise<Response> {
         const persistedToolExecutionTrace = [...toolExecutionTrace, ...blockedToolExecutionTrace]
 
         const rawResponseText = consensus.finalMessageMarkdown
-        const isFirstMessageTurn =
-          (contextPack.history.recentMessages?.length ?? 0) === 0 &&
-          (contextPack.history.crossConversationMessages?.length ?? 0) === 0
+        // Count prior assistant turns to calibrate the intake guard
+        const priorAssistantTurns = (contextPack.history.recentMessages ?? []).filter(
+          (m: { role: string }) => m.role === 'assistant',
+        ).length
         const responseText =
-          (isFirstMessageTurn
-            ? sanitizeFirstMessageResponse(sanitizeAssistantVisibleContent(rawResponseText))
-            : sanitizeAssistantVisibleContent(rawResponseText)) ||
-          'Ho registrato le informazioni principali. Possiamo continuare.'
+          sanitizeIntakePatterns(
+            sanitizeAssistantVisibleContent(rawResponseText),
+            priorAssistantTurns,
+          ) || 'Ho registrato le informazioni principali. Possiamo continuare.'
         const nextCaseState = consensus.caseState ?? null
         const canonicalStateSnapshot =
           consensus.stateSnapshot ??
