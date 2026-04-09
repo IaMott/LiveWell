@@ -443,7 +443,13 @@ function buildUserPrompt(params: {
 }
 
 function buildFallbackText(proposals: AgentProposal[]): string {
-  return proposals.find((p) => p.summary)?.summary ?? 'Come posso aiutarti?'
+  const valid = proposals.find(
+    (p) => p.summary && !p.summary.toLowerCase().includes('[unavailable]'),
+  )
+  return (
+    valid?.summary ??
+    'Mi dispiace, il servizio è momentaneamente sovraccarico. Riprova tra qualche momento.'
+  )
 }
 
 /**

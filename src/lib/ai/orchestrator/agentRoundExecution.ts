@@ -41,12 +41,23 @@ function withTimeout<T>(promise: Promise<T>, ms: number, agentId: string): Promi
   return Promise.race([promise, timeout])
 }
 
+function sanitizeErrorReason(reason: string): string {
+  try {
+    const parsed = JSON.parse(reason) as Record<string, unknown>
+    const err = parsed?.error as Record<string, unknown> | undefined
+    if (typeof err?.message === 'string') return err.message
+  } catch {
+    // not JSON, use as-is
+  }
+  return reason
+}
+
 function buildFallbackProposal(agentId: string, domainHint: Domain, reason: string): AgentProposal {
   return {
     agentId,
     domain: domainHint,
-    summary: `[Unavailable] Agent ${agentId} could not respond: ${reason}`,
-    reasoning: '',
+    summary: `[Unavailable] Agent ${agentId} could not respond: ${sanitizeErrorReason(reason)}`,
+    reasoning: reason,
     questions: [],
     recommendations: [],
     toolCalls: [],

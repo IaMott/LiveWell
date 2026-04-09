@@ -10,7 +10,23 @@ export function normalizeAgentProposal(params: NormalizeAgentProposalParams): Ag
   const { text, agentId, domainHint } = params
 
   try {
-    const obj = JSON.parse(text)
+    const obj = JSON.parse(text) as Record<string, unknown>
+
+    // Detect Gemini API error responses (e.g. 503 returned as JSON text)
+    const err = obj?.error as Record<string, unknown> | undefined
+    if (err?.code && err?.message) {
+      return {
+        agentId,
+        domain: domainHint,
+        summary: `[Unavailable] Agent ${agentId} could not respond: ${String(err.message)}`,
+        reasoning: JSON.stringify(err),
+        questions: [],
+        recommendations: [],
+        toolCalls: [],
+        confidence: 0,
+      }
+    }
+
     const toolCalls = Array.isArray(obj.toolCalls) ? obj.toolCalls : []
 
     return {
