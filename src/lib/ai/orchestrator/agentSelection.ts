@@ -1,5 +1,16 @@
 import { AgentProfile, Domain } from '../types'
 
+/**
+ * P6 — DEPRECATION NOTICE: AGENT_COMPETENCE_HINTS is a hardcoded fallback for
+ * agents whose `profile.json` does NOT declare `competenceKeywords`. New agents
+ * MUST declare their competence keywords in their profile.json (see
+ * `team/schema.ts → AgentProfileSchema.competenceKeywords`). When ALL agents have
+ * migrated their hints into profile.json this constant should be deleted —
+ * `selectAgentsForRequest` already prefers `agent.competenceKeywords` over this map.
+ *
+ * Rationale: keeping competence hints in TEAM/ keeps the data layer self-contained
+ * and lets new specialists be added without touching application code.
+ */
 const AGENT_COMPETENCE_HINTS: Record<string, string[]> = {
   fisioterapista: [
     'schiena',

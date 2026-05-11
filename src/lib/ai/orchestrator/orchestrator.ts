@@ -203,6 +203,14 @@ export async function orchestrate(
   deps: OrchestratorDeps,
   input: AgentInput,
 ): Promise<ConsensusResult> {
+  // P12 — Minimal observability: emit phase-timing logs so latency regressions
+  // and timeout-driven fallbacks are diagnosable from production logs.
+  const orchStart = Date.now()
+  const phaseTimings: Record<string, number> = {}
+  const markPhase = (name: string) => {
+    phaseTimings[name] = Date.now() - orchStart
+  }
+
   const heuristicDetectedDomain = input.domainHint ?? detectDomainFromText(input.message)
   const heuristicAllDomains = detectDomainsMulti(input.message).map((d) => d.domain)
 
@@ -226,6 +234,7 @@ export async function orchestrate(
     llmExtractionPromise,
     llmRoutingPromise,
   ])
+  markPhase('llm_extraction_and_routing')
   const routingResolution = resolveContextualRouting({
     input,
     heuristicDetectedDomain,
@@ -305,12 +314,23 @@ export async function orchestrate(
   // sia genuinamente cross-dominio — gli agenti ragionano in parallelo su tutti i domini
   // rilevati PRIMA che il sistema isoli il dominio primario.
   //
+  // P5 — Conservative seeding: only seed an agent when its competence keywords have
+  // an actual match in the message. Without this guard, vague multi-domain inputs
+  // ("voglio star meglio") seeded ultra-specialised agents (e.g. endocrinologo on a
+  // generic metabolism mention) that produced low-confidence noise polluting consensus.
+  //
   // Cap seeding iniziale = ceil(MAX_TOTAL_AGENTS / 2) = 3: lascia almeno metà degli slot
   // per l'espansione dinamica nelle fasi di peer review.
   const MAX_INITIAL_BREADTH = Math.ceil(MAX_TOTAL_AGENTS / 2)
   const selectedAgents = [...baseSelectedAgents]
   const coveredDomains = new Set(selectedAgents.flatMap((a) => a.domainTags as Domain[]))
   const unseededDomains = allDomains.filter((d) => d !== 'general' && !coveredDomains.has(d))
+  const lowerMessage = input.message.toLowerCase()
+  const hasCompetenceMatchForAgent = (agent: AgentProfile): boolean => {
+    const hints = agent.competenceKeywords ?? []
+    if (hints.length === 0) return true // no hints declared → cannot exclude
+    return hints.some((h) => lowerMessage.includes(h.toLowerCase()))
+  }
   for (const unseeded of unseededDomains) {
     if (selectedAgents.length >= MAX_INITIAL_BREADTH) break
     const bestForDomain = deps.team
@@ -325,11 +345,18 @@ export async function orchestrate(
         const bSpec = (b.domainTags as Domain[]).filter((d) => d !== 'general').length
         return aSpec - bSpec
       })
-    const seedAgent = bestForDomain[0]
-    if (seedAgent) {
+    // P5 — Prefer an agent that has a competence keyword in the message.
+    // Fall back to the most-specialised agent only if none match (preserves
+    // legacy behaviour for vague but genuinely multi-domain queries).
+    const seedAgent = bestForDomain.find((a) => hasCompetenceMatchForAgent(a)) ?? bestForDomain[0]
+    if (seedAgent && hasCompetenceMatchForAgent(seedAgent)) {
       selectedAgents.push(seedAgent)
       console.info(
-        `[orchestrator] Cross-domain seed: added ${seedAgent.id} for uncovered domain '${unseeded}'`,
+        `[orchestrator] Cross-domain seed: added ${seedAgent.id} for uncovered domain '${unseeded}' (keyword-matched)`,
+      )
+    } else if (seedAgent) {
+      console.info(
+        `[orchestrator] Cross-domain seed SKIPPED for '${unseeded}': no keyword match in message`,
       )
     }
   }
@@ -382,6 +409,7 @@ export async function orchestrate(
         globalTimeoutMs,
         'executeAgentRounds',
       )
+  markPhase('agent_rounds')
 
   // Log pyramidal expansion and retirements for observability
   if (expandedAgentIds.length > 0) {
@@ -475,10 +503,16 @@ export async function orchestrate(
   // proposals. In that case we MUST synthesize their combined output — NOT interrupt the
   // pipeline with a "pick a domain" triage.
   //
-  // Triage only fires for the edge case where routing produced a single agent but the
-  // domain detector still sees 2+ significant domains — a mismatch that can happen with
-  // very ambiguous one-liners ("sto male"). In that scenario we fall back to quick replies.
+  // P13 — This branch fires only for the edge case where routing produced a single agent
+  // but the domain detector still sees 2+ significant domains — a mismatch that can happen
+  // with very ambiguous one-liners ("sto male"). In that scenario we fall back to quick
+  // replies. With P5's keyword-gated cross-domain seeding, this path is more likely to
+  // trigger than before (we no longer seed agents on noise) — instrumenting the trigger
+  // for observability.
   if (isMultiDomain && !effectiveSpecialist && selectedAgents.length < 2) {
+    console.info(
+      `[orchestrator] Multi-domain triage fallback fired: significantDomains=${significantDomains.join('+')} selectedAgents=${selectedAgents.length}`,
+    )
     const triage = buildMultiDomainTriage(round2Proposals, deps.team)
 
     // Emit triage thinking event
@@ -579,6 +613,8 @@ export async function orchestrate(
 
   // A1 FIX: use allSettled so per-agent responses are not lost if unified synthesis fails.
   // If synthesis fails we fall back to a joined summary of per-agent content (or a static message).
+  // P2 — when shouldUseMultiAgent is true we pass multiAgentMode=true so the team-voice
+  // synthesis emits a brief connective intro instead of duplicating the per-agent bubbles.
   const [synthesisResult, perAgentResult] = await Promise.allSettled([
     synthesizeRawResponse({
       llm: deps.llm,
@@ -588,6 +624,7 @@ export async function orchestrate(
       criticalQuestions: dedupedCritical,
       contextPack: input.contextPack,
       activeSpecialist: effectiveSpecialist,
+      multiAgentMode: shouldUseMultiAgent,
     }),
     shouldUseMultiAgent
       ? synthesizePerAgentResponses({
@@ -601,12 +638,19 @@ export async function orchestrate(
       : Promise.resolve([]),
   ])
 
+  markPhase('synthesis')
   if (synthesisResult.status === 'rejected') {
     console.error('[orchestrator] synthesizeRawResponse failed', synthesisResult.reason)
   }
   if (perAgentResult.status === 'rejected') {
     console.error('[orchestrator] synthesizePerAgentResponses failed', perAgentResult.reason)
   }
+  // P12 — Final timing summary: pipe phase deltas + total in one log line
+  console.info(
+    `[orchestrator] timings(ms): total=${Date.now() - orchStart} ${Object.entries(phaseTimings)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(' ')} agents=${selectedAgents.length}`,
+  )
 
   const perAgentResponses = perAgentResult.status === 'fulfilled' ? perAgentResult.value : []
 

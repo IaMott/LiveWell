@@ -312,7 +312,8 @@ describe('synthesis boundary', () => {
     })
 
     expect(result).toEqual({
-      rawText: 'Mi dispiace, il servizio è momentaneamente sovraccarico. Riprova tra qualche momento.',
+      rawText:
+        'Mi dispiace, il servizio è momentaneamente sovraccarico. Riprova tra qualche momento.',
       fallbackUsed: true,
     })
   })

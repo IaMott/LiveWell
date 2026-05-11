@@ -103,10 +103,13 @@ function buildRichPeerInsights(
 
     if (peer.reasoning && peer.reasoning.trim().length > 10) {
       lines.push(`**Ragionamento clinico:**`)
-      // Cap a 700 char per non saturare il contesto
-      lines.push(peer.reasoning.slice(0, 700).replace(/\n{3,}/g, '\n\n'))
+      // P8 — cap raised from 700 → 1500: peer reasoning is the primary signal for
+      // genuine inter-specialist integration in phase 2. Truncating at 700 chars
+      // routinely cut protocol descriptions and clinical reasoning in half. Gemini
+      // Flash has a 1M-token window; the bottleneck is signal density, not budget.
+      lines.push(peer.reasoning.slice(0, 1500).replace(/\n{3,}/g, '\n\n'))
     } else if (peer.summary) {
-      lines.push(`**Sintesi:** ${peer.summary.slice(0, 400)}`)
+      lines.push(`**Sintesi:** ${peer.summary.slice(0, 600)}`)
     }
 
     if (peer.recommendations && peer.recommendations.length > 0) {
@@ -307,10 +310,14 @@ export async function executeAgentRounds(
 
     // Timeout adattivo per le fasi di peer review: con molti agenti e più fasi, il timeout
     // fisso di 8s per agente può saturare il budget globale di 30s.
-    // Budget disponibile: 30s totali - ~5s overhead, distribuito su (MAX_PEER_REVIEW_PHASES + 1) fasi.
+    //
+    // P7 — floor raised from 3000 → 4000ms: a 3s budget for an LLM call doing peer review
+    // (with 1500-char × 4 peer insights) was producing systematic timeouts. The agents in
+    // each phase run in parallel via Promise.allSettled, so the timeout is per-agent — total
+    // wall time per phase is governed by the slowest agent, not the sum.
     const agentCount = phaseAgents.length
     const adaptiveTimeout = Math.max(
-      3000,
+      4000,
       Math.min(
         AGENT_TIMEOUT_MS,
         Math.floor(25000 / (MAX_PEER_REVIEW_PHASES + 1) / Math.max(1, agentCount)),
