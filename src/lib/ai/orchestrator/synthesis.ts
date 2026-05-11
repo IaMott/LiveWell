@@ -21,6 +21,9 @@ export type SynthesisInput = {
   activeSpecialist?: ActiveSpecialist
   /** Base64-encoded images to pass as multimodal content (data:mime;base64,...) */
   imageData?: Array<{ mimeType: string; data: string }>
+  /** P2 — when true, the per-agent renderer will display individual specialist
+   *  bubbles, so this synthesis must produce only a brief connective intro. */
+  multiAgentMode?: boolean
 }
 
 export type SynthesisResult = {
@@ -134,6 +137,9 @@ function buildSystemPrompt(
   /** BUG-B: whether the plan request is in the active specialist's domain */
   planRequest: boolean,
   hasKnownCaseContext: boolean,
+  /** P2 — when true, per-agent bubbles will be rendered alongside this synthesis,
+   *  so the team voice should emit a brief connective intro, not a full answer. */
+  multiAgentMode = false,
 ): string {
   const nameRef = userName ? `${userName}` : "l'utente"
 
@@ -143,7 +149,14 @@ function buildSystemPrompt(
 
   const effectivelyHasMissingData = hasMissingData
 
-  if (activeSpecialist) {
+  // P4 — Receptionist (orchestratore, domain "coordination") has its own routing/intake
+  // role and must NOT speak as a clinical specialist. When the Receptionist is the active
+  // speaker the synthesis prompt routes to the team-mode prompts below (no "I'm Dr. X"
+  // framing), letting its prompt.md drive intake L1→L7 naturally.
+  const isReceptionist =
+    activeSpecialist?.id === 'orchestratore' || activeSpecialist?.domain === 'coordination'
+
+  if (activeSpecialist && !isReceptionist) {
     const firstPersonRule = `Parla SEMPRE in prima persona singolare (io, mi, ti consiglio, penso). NON usare MAI "noi", "il team", "siamo", "il nostro team" o qualsiasi altra forma plurale — sei un singolo specialista.`
 
     // Anti-pattern: ban robotic openers and self-referential phrases that sound pre-set
@@ -248,6 +261,13 @@ function buildSystemPrompt(
   // Team mode — anti-pattern block applies to all variants
   const teamAntiPattern = `NON iniziare MAI con: "Il team LiveWell", "Siamo il team LiveWell", "Caro utente", "Gentile utente", "Il team LiveWell ti ringrazia", "Il team LiveWell comprende". Varia sempre l'apertura — rispondi come persone reali, non come un'istituzione formale.`
 
+  // P2 — When the per-agent renderer will display individual specialist bubbles below,
+  // the team-mode synthesis must NOT repeat their content. It becomes a brief connective
+  // intro (1-3 sentences) that frames who is contributing and what the user is about to read.
+  const multiAgentBriefRule = multiAgentMode
+    ? `\n⚠ MODALITÀ MULTI-AGENTE ATTIVA: subito sotto la tua risposta verranno mostrate le risposte individuali di ${proposals.length} specialisti del team. La tua risposta deve essere SOLO un breve cappello introduttivo (1-3 frasi): inquadra il caso e annuncia chi contribuisce, NON anticipare il contenuto degli specialisti. Niente liste, niente raccomandazioni: lascia spazio alle voci individuali.`
+    : ''
+
   // Virtual-team rule — same constraint for team mode
   const teamVirtualRule = `REGOLA FONDAMENTALE: Gli specialisti del team LiveWell sono agenti virtuali presenti in questa conversazione ADESSO. Non esistono agende, disponibilità da verificare o appuntamenti da fissare. Non inventare mai nomi propri di professionisti reali. Quando il percorso richiede uno specialista specifico, la conversazione passa DIRETTAMENTE a quello specialista — senza scheduling, senza simulare processi di prenotazione.`
 
@@ -258,11 +278,14 @@ function buildSystemPrompt(
       `Rispondi a nome del gruppo usando "noi". NON presentarti come singolo specialista.`,
       teamAntiPattern,
       teamVirtualRule,
+      multiAgentBriefRule,
       ``,
       `Primo contatto: il tuo obiettivo è CONOSCERE ${nameRef}, non dare consigli.`,
       `Fai UNA sola domanda aperta — quella che ti permette di capire cosa sta cercando.`,
       `Niente consigli generici. Niente liste. Puoi iniziare direttamente con la domanda.`,
-    ].join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n')
   }
 
   // BUG-E: No-repetition rule for team mode too
@@ -290,6 +313,7 @@ function buildSystemPrompt(
       teamNoRepetitionRule,
       noFillerRule,
       noRepeatedQuestionRule,
+      multiAgentBriefRule,
       ``,
       `Stai raccogliendo le informazioni per costruire un percorso personalizzato per ${nameRef}.`,
       teamQuestionInstruction,
@@ -297,7 +321,9 @@ function buildSystemPrompt(
       planRequest
         ? `Se ${nameRef} vuole un piano completo subito, NON finalizzarlo: raccogli prima i dati mancanti o al massimo anticipa una struttura parziale dichiarata come incompleta.`
         : `Se ${nameRef} vuole consigli senza rispondere: dai consigli con le assunzioni che hai, esplicitandole.`,
-    ].join('\n')
+    ]
+      .filter(Boolean)
+      .join('\n')
   }
 
   return [
@@ -309,13 +335,16 @@ function buildSystemPrompt(
     teamNoRepetitionRule,
     noFillerRule,
     noRepeatedQuestionRule,
+    multiAgentBriefRule,
     `Ogni specialista contribuisce solo nel proprio ambito. Non riportare consigli di un dominio attraverso la voce di un altro — ogni indicazione specialistica proviene dallo specialista corretto.`,
     ``,
     `Hai informazioni sufficienti su ${nameRef}. Fornisci analisi e consigli concreti, personali, basati sui dati reali.`,
     `Sii diretto. Se ${nameRef} ha bisogno di qualcosa di specifico, affrontalo.`,
     `Solo se manca UN dato davvero critico, fai una sola domanda alla fine.`,
     `Gestisci tutti gli aspetti emersi — non lasciare temi aperti senza risposta.`,
-  ].join('\n')
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 function buildUserPrompt(params: {
@@ -701,6 +730,7 @@ export async function synthesizeRawResponse(input: SynthesisInput): Promise<Synt
     missingQuestions.length, // BUG-A: count for singular/plural instruction
     planRequest, // BUG-B: domain-aware flag
     hasKnownCaseContext,
+    input.multiAgentMode ?? false, // P2 — keep team voice short when per-agent fires
   )
   const user = buildUserPrompt({
     userMessage: input.userMessage,

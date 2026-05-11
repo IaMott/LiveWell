@@ -2,7 +2,14 @@ import { AgentProposal, ContextPack, Domain } from '../types'
 import { applyQuestionPolicy } from '../policy/questionPolicy'
 import { uniq } from './merger'
 
-/** Collect gating questions with semantic dedup + known-data filtering. */
+/** Collect gating questions with semantic dedup + known-data filtering.
+ *
+ * P9 — maxQuestions raised from 1 to 3 so the downstream synthesis batch logic
+ * (synthesis.ts → rawMissingQuestions.slice(0, 3)) actually has multiple questions
+ * to pose in a single turn when MVD is missing. Previous value of 1 made the
+ * `gatingQuestionCount > 1` branch in buildSystemPrompt unreachable, so the
+ * "ask 3 baseline questions naturally" behavior was dead code.
+ */
 export function collectGatingQuestions(
   proposals: AgentProposal[],
   contextPack: ContextPack,
@@ -13,7 +20,7 @@ export function collectGatingQuestions(
     raw.map((question) => ({ question })),
     {
       domain,
-      maxQuestions: 1,
+      maxQuestions: 3,
       dedupeStrategy: 'semantic',
       knownData: {
         profile: (contextPack.user.profile ?? {}) as Record<string, unknown>,

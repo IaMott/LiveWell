@@ -1235,6 +1235,39 @@ type RoutingCandidateResolution = {
   decisionTrace: DecisionTraceEvent[]
 }
 
+// P1 — Pure greeting / first-contact patterns. When the message looks like a
+// greeting AND there's no conversation history, the Receptionist (orchestratore)
+// must lead the turn so its PARTE B (intake L1→L7) prompt actually drives the
+// behaviour. Previously these messages were silently dispatched to a domain
+// specialist who had to guess what the user wanted.
+const PURE_GREETING_PATTERN =
+  /^\s*(ciao|buongiorno|buonasera|buonanotte|salve|hey|hello|hi|ehilà|ehi|ok|sì|si|no|grazie|prego|bene|perfetto|capito|dai|forza|avanti|benissimo|ottimo|va bene|vai|aiuto|help|info|informazioni)\b[\s!.,?]*$/i
+
+function isFirstContact(message: string, contextPack?: ContextPack): boolean {
+  if (!contextPack) return false
+  const recent = contextPack.history?.recentMessages ?? []
+  const cross = contextPack.history?.crossConversationMessages ?? []
+  const summaries = contextPack.history?.recentConversationSummaries ?? []
+  const hasNoHistory = recent.length === 0 && cross.length === 0 && summaries.length === 0
+  if (!hasNoHistory) return false
+  const trimmed = message.trim()
+  // First contact = no prior history AND a clear greeting.
+  // We intentionally require a pure greeting (not any short message) so that
+  // brief continuation messages like "continuiamo da dove eravamo rimasti" do
+  // NOT yank routing back to the receptionist when a caseStateSnapshot already
+  // exists — that path is handled in `resolveRoutingCandidates`.
+  return PURE_GREETING_PATTERN.test(trimmed) || (trimmed.length <= 30 && /^\W*$/.test(trimmed))
+}
+
+function findReceptionist(team: AgentProfile[]): AgentProfile | undefined {
+  // Prefer the canonical orchestratore id; fall back to any agent with the
+  // 'coordination' domain tag (kept for compatibility with custom team layouts).
+  return (
+    team.find((a) => a.id === 'orchestratore') ??
+    team.find((a) => (a.domainTags as string[]).includes('coordination'))
+  )
+}
+
 export function resolveRoutingCandidates(params: {
   team: AgentProfile[]
   message: string
@@ -1255,6 +1288,35 @@ export function resolveRoutingCandidates(params: {
   } = params
   const clusterMatch = detectMultiSpecialistNeed(message, team)
   const domainHint = detectedDomain
+
+  // P1 — First-contact / pure-greeting routing: hand the turn to the Receptionist.
+  // Skip if:
+  // - a specialist is already active in the case state, OR
+  // - the caller provided preferred agent ids (LLM routing or snapshot continuation)
+  // Both signals indicate we are mid-conversation and should NOT yank control back
+  // to the receptionist on a short greeting-like follow-up.
+  const hasActivePanels =
+    preferredAgentIds.length > 0 ||
+    (contextPack as unknown as { caseStateSnapshot?: { domainPanels?: unknown[] } })
+      ?.caseStateSnapshot?.domainPanels?.length
+  if (!currentSpeakerId && !hasActivePanels && isFirstContact(message, contextPack)) {
+    const receptionist = findReceptionist(team)
+    if (receptionist) {
+      return {
+        domainHint,
+        selectedAgents: [receptionist],
+        decisionTrace: [
+          buildAgentsSelectedTraceEvent({
+            step: 3,
+            domainHint,
+            selectedAgentIds: [receptionist.id],
+            collaborationCap: 1,
+            reason: 'first_contact_or_greeting_receptionist',
+          }),
+        ],
+      }
+    }
+  }
 
   const caseContext = contextPack ? buildCaseContextFromAttributes(contextPack) : ''
   const agentFeedbackScores = contextPack?.routing?.agentFeedbackScores ?? {}
