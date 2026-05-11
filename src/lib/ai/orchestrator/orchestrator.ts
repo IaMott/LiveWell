@@ -348,8 +348,7 @@ export async function orchestrate(
     // P5 — Prefer an agent that has a competence keyword in the message.
     // Fall back to the most-specialised agent only if none match (preserves
     // legacy behaviour for vague but genuinely multi-domain queries).
-    const seedAgent =
-      bestForDomain.find((a) => hasCompetenceMatchForAgent(a)) ?? bestForDomain[0]
+    const seedAgent = bestForDomain.find((a) => hasCompetenceMatchForAgent(a)) ?? bestForDomain[0]
     if (seedAgent && hasCompetenceMatchForAgent(seedAgent)) {
       selectedAgents.push(seedAgent)
       console.info(
